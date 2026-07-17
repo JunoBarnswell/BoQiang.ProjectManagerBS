@@ -1,0 +1,273 @@
+﻿{
+  "AppCode": "MES",
+  "Artifact": {
+    "artifactHash": "sha256:b68cf4aad1a4d13f1eadb4fa1e102999372e3b43343c2b26e03a36b0db8cf278",
+    "compilerVersion": "runtime-1",
+    "description": "\u7531\u5B8C\u6574\u4F4E\u4EE3\u7801\u5143\u7D20\u8BBE\u8BA1\u5668\u751F\u6210\u7684\u9875\u9762\u3002",
+    "detail": {},
+    "document": {
+      "actions": [],
+      "apiBindings": [],
+      "dataSources": [],
+      "documentId": "1d77fd8dee5941aeba46fd19a650c360",
+      "elements": {
+        "page_mr7xi5jk_root": {
+          "bindings": {},
+          "children": [],
+          "events": [],
+          "id": "page_mr7xi5jk_root",
+          "layout": {
+            "minHeight": "720px",
+            "width": "100%"
+          },
+          "name": "11",
+          "parentId": null,
+          "permission": {},
+          "props": {
+            "title": "11"
+          },
+          "style": {
+            "backgroundColor": "#ffffff",
+            "borderColor": "#e2e8f0",
+            "borderRadius": "2px",
+            "borderWidth": "1px",
+            "padding": "14px"
+          },
+          "type": "layout.page",
+          "validation": []
+        }
+      },
+      "metadata": {
+        "pageCode": "page_mr7xi5jk",
+        "pageName": "11"
+      },
+      "modals": [],
+      "modelOperations": [],
+      "models": [],
+      "pageParameters": [],
+      "pageType": "standard",
+      "pages": [
+        {
+          "id": "page_mr7xi5jk",
+          "name": "11",
+          "rootElementId": "page_mr7xi5jk_root"
+        }
+      ],
+      "permissions": {},
+      "printBindings": [],
+      "revision": 7,
+      "runtimeContext": {
+        "dataSourceId": null,
+        "menuCode": "page_mr7xi5jk-menu",
+        "modelCode": null,
+        "pageCode": "page_mr7xi5jk",
+        "pageName": "11",
+        "pageParameters": [],
+        "pageType": "standard",
+        "permissionPrefix": "app:runtime-page:page-mr7xi5jk",
+        "tableName": null
+      },
+      "sqlBindings": [],
+      "styleTokens": {},
+      "variables": [
+        {
+          "id": "system.currentUser",
+          "name": "\u5F53\u524D\u7528\u6237",
+          "source": "system",
+          "valueType": "json"
+        },
+        {
+          "id": "row.current",
+          "name": "\u5F53\u524D\u884C",
+          "source": "currentRow",
+          "valueType": "json"
+        },
+        {
+          "id": "form.values",
+          "name": "\u8868\u5355\u5B57\u6BB5",
+          "source": "formField",
+          "valueType": "json"
+        }
+      ],
+      "workflowBindings": []
+    },
+    "form": {
+      "fields": []
+    },
+    "grid": {
+      "columns": [],
+      "keyField": "id",
+      "masterDetail": {
+        "detailSections": [],
+        "enabled": false,
+        "relations": []
+      }
+    },
+    "id": "page_mr7xi5jk",
+    "manifest": [
+      {
+        "binding": {
+          "acceptedSources": [],
+          "acceptedTypes": [],
+          "supportsConversion": false
+        },
+        "defaults": {
+          "layout": {},
+          "props": {},
+          "style": {}
+        },
+        "events": [],
+        "inspector": {
+          "sections": [
+            "component"
+          ]
+        },
+        "migration": {
+          "revision": "latest",
+          "strategy": "none"
+        },
+        "renderer": {
+          "preview": "ComponentRuntimeHost",
+          "runtime": "ComponentRuntimeHost"
+        },
+        "responsive": {
+          "supportedLayouts": [
+            "inherited"
+          ],
+          "supportsOverrides": true
+        },
+        "security": {
+          "actionPermissions": [],
+          "requiresPermission": false
+        },
+        "type": "layout.page"
+      }
+    ],
+    "manifestTypes": [
+      "layout.page"
+    ],
+    "migrationRevision": "latest",
+    "pageType": "standard",
+    "relations": [],
+    "renderer": "designerDocument",
+    "revision": 7,
+    "runtimeContext": {
+      "dataSourceId": null,
+      "menuCode": "page_mr7xi5jk-menu",
+      "modelCode": null,
+      "pageCode": "page_mr7xi5jk",
+      "pageName": "11",
+      "pageParameters": [],
+      "pageType": "standard",
+      "permissionPrefix": "app:runtime-page:page-mr7xi5jk",
+      "tableName": null
+    },
+    "sections": [],
+    "signature": "c4bbcbb2edd184098ef2df6f70e922996e194b167456e8c268da2fd2e079f0f4",
+    "title": "11"
+  },
+  "ArtifactHash": "sha256:2949831e2ae80c9d35b0b1b2e17c21d785573de0062b7e8c5e4ee1e1429b37cf",
+  "Document": {
+    "actions": [],
+    "apiBindings": [],
+    "dataSources": [],
+    "documentId": "1d77fd8dee5941aeba46fd19a650c360",
+    "elements": {
+      "page_mr7xi5jk_root": {
+        "bindings": {},
+        "children": [],
+        "events": [],
+        "id": "page_mr7xi5jk_root",
+        "layout": {
+          "minHeight": "720px",
+          "width": "100%"
+        },
+        "name": "11",
+        "parentId": null,
+        "permission": {},
+        "props": {
+          "title": "11"
+        },
+        "style": {
+          "backgroundColor": "#ffffff",
+          "borderColor": "#e2e8f0",
+          "borderRadius": "2px",
+          "borderWidth": "1px",
+          "padding": "14px"
+        },
+        "type": "layout.page",
+        "validation": []
+      }
+    },
+    "metadata": {
+      "pageCode": "page_mr7xi5jk",
+      "pageName": "11"
+    },
+    "modals": [],
+    "modelOperations": [],
+    "models": [],
+    "pageParameters": [],
+    "pageType": "standard",
+    "pages": [
+      {
+        "id": "page_mr7xi5jk",
+        "name": "11",
+        "rootElementId": "page_mr7xi5jk_root"
+      }
+    ],
+    "permissions": {},
+    "printBindings": [],
+    "revision": 7,
+    "runtimeContext": {
+      "dataSourceId": null,
+      "menuCode": "page_mr7xi5jk-menu",
+      "modelCode": null,
+      "pageCode": "page_mr7xi5jk",
+      "pageName": "11",
+      "pageParameters": [],
+      "pageType": "standard",
+      "permissionPrefix": "app:runtime-page:page-mr7xi5jk",
+      "tableName": null
+    },
+    "sqlBindings": [],
+    "styleTokens": {},
+    "variables": [
+      {
+        "id": "system.currentUser",
+        "name": "\u5F53\u524D\u7528\u6237",
+        "source": "system",
+        "valueType": "json"
+      },
+      {
+        "id": "row.current",
+        "name": "\u5F53\u524D\u884C",
+        "source": "currentRow",
+        "valueType": "json"
+      },
+      {
+        "id": "form.values",
+        "name": "\u8868\u5355\u5B57\u6BB5",
+        "source": "formField",
+        "valueType": "json"
+      }
+    ],
+    "workflowBindings": []
+  },
+  "DocumentHash": "sha256:aa4fb8fb73634c72c85942a3ec038d3cb7cc352040ff5ede2a74ede6489881b5",
+  "PageCode": "page_mr7xi5jk",
+  "PageName": "11",
+  "PermissionConfig": {
+    "allowAdd": true,
+    "allowDelete": true,
+    "allowEdit": true,
+    "allowExport": true,
+    "allowImport": true,
+    "menuCode": null,
+    "menuName": null,
+    "parentMenuCode": "dev-center",
+    "roleCodes": []
+  },
+  "SourceArtifactHash": "sha256:b68cf4aad1a4d13f1eadb4fa1e102999372e3b43343c2b26e03a36b0db8cf278",
+  "SourceDocumentHash": "sha256:aa4fb8fb73634c72c85942a3ec038d3cb7cc352040ff5ede2a74ede6489881b5",
+  "TenantId": "tenant-a"
+}

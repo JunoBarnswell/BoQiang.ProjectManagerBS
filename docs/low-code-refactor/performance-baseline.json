@@ -1,0 +1,14 @@
+{
+  "format": "astererp.low-code.performance-baseline.v1",
+  "measurementPolicy": {"runs":5,"discardWarmup":1,"requiredStatistics":["p50Ms","p95Ms","p99Ms","peakWorkingSetBytes","failureRate"],"passRequiresRawEvidence":true,"missingRuntimeOrDatabase":"Blocked"},
+  "scenarios": [
+    {"id":"document-parse-validate-100","kind":"document-parse-validate","nodes":100,"p95BudgetMs":100,"status":"Measured","evidencePath":"artifacts/phase0/performance/designer-operations-100.json"},
+    {"id":"document-parse-validate-500","kind":"document-parse-validate","nodes":500,"p95BudgetMs":250,"status":"Measured","evidencePath":"artifacts/phase0/performance/designer-operations-500.json"},
+    {"id":"document-parse-validate-1000","kind":"document-parse-validate","nodes":1000,"p95BudgetMs":500,"status":"Measured","evidencePath":"artifacts/phase0/performance/designer-operations-1000.json"},
+    {"id":"document-parse-validate-2000","kind":"document-parse-validate","nodes":2000,"p95BudgetMs":1000,"status":"Measured","evidencePath":"artifacts/phase0/performance/designer-operations-2000.json"},
+    {"id":"canvas-interaction","kind":"browser-pointer-up-transaction","nodeSizes":[100,500,1000,2000],"p95FrameBudgetMs":16.7,"status":"Blocked","blockedReason":"Requires a controlled browser capture; no browser evidence is present in this worker scope.","evidencePath":"artifacts/phase0/performance/canvas-interaction.json"},
+    {"id":"wide-table-browse","kind":"bounded-first-page","columns":100,"rows":10000,"p95BudgetMs":2000,"status":"Blocked","blockedReason":"Requires a real provider dataset and query plan evidence.","evidencePath":"artifacts/phase0/performance/wide-table-browse.json"},
+    {"id":"million-row-browse","kind":"bounded-first-page","columns":20,"rows":1000000,"p95BudgetMs":3000,"status":"Blocked","blockedReason":"Requires a real provider dataset and query plan evidence.","evidencePath":"artifacts/phase0/performance/million-row-browse.json"},
+    {"id":"query-cancel","kind":"cancellation-to-server-stop","providers":["SqlServer","MySql","PostgreSql","Sqlite"],"p95BudgetMs":2000,"status":"Blocked","blockedReason":"Provider containers/credentials are not available to this worker.","evidencePath":"artifacts/phase0/performance/query-cancel.json"}
+  ]
+}

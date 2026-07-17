@@ -1,0 +1,45 @@
+{
+  "schemaVersion": "1.0",
+  "defaults": {
+    "timeoutSeconds": 15,
+    "poolSize": 20
+  },
+  "providers": [
+    {
+      "provider": "MySql",
+      "supportedSslModes": ["Disabled", "Preferred", "Required", "VerifyCA", "VerifyFull"],
+      "defaultSslMode": "Preferred",
+      "supportsConnectionTimeout": true,
+      "supportsPoolSize": true,
+      "supportsCharset": true,
+      "defaultCharset": "utf8mb4"
+    },
+    {
+      "provider": "PostgreSQL",
+      "supportedSslModes": ["Disabled", "Allow", "Preferred", "Required", "VerifyCA", "VerifyFull"],
+      "defaultSslMode": "Preferred",
+      "supportsConnectionTimeout": true,
+      "supportsPoolSize": true,
+      "supportsCharset": true,
+      "defaultCharset": "UTF8"
+    },
+    {
+      "provider": "SqlServer",
+      "supportedSslModes": [],
+      "defaultSslMode": null,
+      "supportsConnectionTimeout": true,
+      "supportsPoolSize": true,
+      "supportsCharset": false,
+      "defaultCharset": null
+    },
+    {
+      "provider": "Sqlite",
+      "supportedSslModes": [],
+      "defaultSslMode": null,
+      "supportsConnectionTimeout": false,
+      "supportsPoolSize": false,
+      "supportsCharset": false,
+      "defaultCharset": null
+    }
+  ]
+}

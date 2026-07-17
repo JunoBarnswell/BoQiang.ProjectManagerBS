@@ -1,0 +1,32 @@
+{
+  "generatedAt": "2026-07-11T12:04:54.7306038Z",
+  "commit": "1a6a0390553247388daabd92415ebe83ddeca9f4",
+  "toolchain": {
+    "dotnet": "10.0.301",
+    "node": "v24.18.0",
+    "npm": "11.16.0"
+  },
+  "trackedInputs": [
+    { "path": "frontend/AsterERP.Web/package-lock.json", "sha256": "16c666e8171fdc6284147230b1b32e356e70ea24a8c690c93f878c08bb360e34", "bytes": 468535 },
+    { "path": "backend/AsterERP.Api/AsterERP.Api.csproj", "sha256": "6273b518561fc46de15f495f8a47897e1bfc61a319b8cf81146658fbc96d3ff1", "bytes": 4117 },
+    { "path": "global.json", "sha256": "e794332850542676121af6570e03e35809300de921ec77a1463a3295445b1ad6", "bytes": 87 },
+    { "path": "NuGet.Config", "sha256": "2ea2e2eab17ad922dee270a3e309f688dd57ae9341bf3aa4d796cfe14217581d", "bytes": 276 }
+  ],
+  "debugDatabase": {
+    "path": "D:\\Code\\AsterERP\\backend\\AsterERP.Api\\data\\application-databases\\tenant-a\\MES\\mes11.db",
+    "sha256": "1c73e465607f07b4526a2ee3318b256e129c2590adfd31e1fe1966922072619c",
+    "bytes": 2420736,
+    "source": "AGENTS.md fixed application database path"
+  },
+  "baselineCommands": [
+    "dotnet build AsterERP.sln",
+    "dotnet test backend/AsterERP.Api.Tests/AsterERP.Api.Tests.csproj",
+    "npm run typecheck",
+    "npm run build"
+  ],
+  "rules": {
+    "databaseSnapshotIsReadOnly": true,
+    "longLivedDualWrite": false,
+    "rollbackRequiresBackupAndArtifactPointer": true
+  }
+}

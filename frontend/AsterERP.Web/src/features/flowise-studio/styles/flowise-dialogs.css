@@ -1,0 +1,1745 @@
+.flowise-canvas-inspector {
+  border-left: 1px solid var(--app-border);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.flowise-inspector-body {
+  display: grid;
+  gap: 12px;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
+}
+
+.flowise-inspector-body h3,
+.flowise-inspector-body p {
+  margin: 0;
+}
+
+.flowise-config-row {
+  display: grid;
+  gap: 6px;
+}
+
+.flowise-config-row span {
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.flowise-config-row .MuiFormControl-root,
+.flowise-config-row .MuiTextField-root,
+.flowise-config-row .MuiButton-root {
+  font-size: 13px;
+}
+
+.flowise-config-row .MuiInputBase-root,
+.flowise-config-row .MuiSelect-select,
+.flowise-config-row .MuiButton-root {
+  border-radius: 6px;
+}
+
+.flowise-config-row .MuiButton-root {
+  justify-self: start;
+  min-height: 34px;
+  text-transform: none;
+}
+
+.flowise-config-row input,
+.flowise-config-row select,
+.flowise-config-row textarea,
+.flowise-chat-test-panel input,
+.flowise-chat-test-panel textarea {
+  background: #fff;
+  border: 1px solid var(--app-border);
+  border-radius: 6px;
+  color: var(--app-text);
+  min-height: 34px;
+  padding: 7px 9px;
+}
+
+.flowise-config-row--inline {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.flowise-config-row--inline.MuiFormControlLabel-root {
+  margin: 0;
+}
+
+.flowise-config-row--inline .MuiFormControlLabel-label,
+.flowise-config-row--options .MuiFormControlLabel-label {
+  color: var(--app-text);
+  font-size: 13px;
+}
+
+.flowise-config-row--options {
+  border: 0;
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+}
+
+.flowise-config-row--options legend {
+  color: var(--app-muted);
+  font-size: 12px;
+  padding: 0;
+}
+
+.flowise-config-row--options label {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid var(--app-border);
+  border-radius: 6px;
+  display: flex;
+  gap: 8px;
+  min-height: 32px;
+  padding: 0 8px;
+}
+
+.flowise-config-row--options .MuiFormControlLabel-root {
+  margin: 0;
+}
+
+.flowise-config-row small {
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.flowise-config-row .flowise-config-row__invalid {
+  border-color: #ef4444;
+}
+
+.flowise-config-row .flowise-config-row__invalid + small {
+  color: #b91c1c;
+}
+
+.flowise-variable-insert {
+  background: #f8fafc;
+  border: 1px dashed var(--app-border);
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+}
+
+.flowise-variable-insert__menu {
+  background: #fff;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgb(15 23 42 / 10%);
+  display: grid;
+  gap: 4px;
+  max-height: 180px;
+  overflow: auto;
+  padding: 4px;
+}
+
+.flowise-variable-insert__option {
+  align-items: flex-start;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: var(--app-text);
+  cursor: pointer;
+  display: grid;
+  gap: 2px;
+  padding: 7px 8px;
+  text-align: left;
+}
+
+.flowise-variable-insert__option:hover,
+.flowise-variable-insert__option:focus-visible {
+  background: #eef6ff;
+  outline: none;
+}
+
+.flowise-variable-insert__option code {
+  color: #475569;
+  font-size: 11px;
+  white-space: normal;
+  word-break: break-all;
+}
+
+.flowise-variable-insert small {
+  color: #64748b;
+  margin-top: 4px;
+}
+
+.flowise-variable-trigger,
+.flowise-variable-trigger-empty {
+  margin-top: -2px;
+}
+
+.flowise-variable-trigger {
+  background: #fff;
+  border: 1px solid #14b8a6;
+  border-radius: 8px;
+  box-shadow: 0 12px 30px rgb(20 184 166 / 16%);
+  display: grid;
+  gap: 4px;
+  max-height: 180px;
+  overflow: auto;
+  padding: 4px;
+}
+
+.flowise-variable-trigger__option {
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: var(--app-text);
+  cursor: pointer;
+  display: grid;
+  gap: 2px;
+  padding: 7px 8px;
+  text-align: left;
+}
+
+.flowise-variable-trigger__option:hover,
+.flowise-variable-trigger__option:focus-visible {
+  background: #ecfeff;
+  outline: none;
+}
+
+.flowise-variable-trigger__option code {
+  color: #0f766e;
+  font-size: 11px;
+  white-space: normal;
+  word-break: break-all;
+}
+
+.flowise-variable-trigger-empty {
+  color: #64748b;
+}
+
+.flowise-config-password {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.flowise-config-password button {
+  border: 1px solid var(--app-border);
+  border-radius: 6px;
+  padding: 0 10px;
+}
+
+.flowise-validation-panel {
+  border-top: 1px solid var(--app-border);
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+}
+
+.flowise-validation-panel h3 {
+  align-items: center;
+  display: flex;
+  font-size: 13px;
+  gap: 6px;
+  margin: 0;
+}
+
+.flowise-validation-panel ul {
+  display: grid;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.flowise-validation-panel__issue {
+  border: 1px solid var(--app-border);
+  border-radius: 6px;
+  display: grid;
+  gap: 2px;
+  padding: 8px;
+}
+
+.flowise-validation-panel__issue--error {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #991b1b;
+}
+
+.flowise-validation-panel__issue--warning {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #92400e;
+}
+
+.flowise-chat-popup {
+  height: 42px;
+  position: absolute;
+  right: clamp(calc(16px * var(--app-ui-scale)), calc(var(--erp-raw-viewport-width) * 0.28), calc(360px * var(--app-ui-scale)));
+  top: 20px;
+  width: 216px;
+  z-index: 8;
+}
+
+.flowise-chat-popup__fab,
+.flowise-chat-popup__tool {
+  align-items: center;
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.18);
+  display: inline-flex;
+  height: 42px;
+  justify-content: center;
+  position: absolute !important;
+  width: 42px;
+}
+
+.flowise-chat-popup__fab {
+  background: var(--app-primary);
+  color: #fff;
+  right: 0 !important;
+  top: 0;
+  z-index: 1050;
+}
+
+.flowise-chat-popup__tool {
+  background: #fff;
+  color: #334155;
+  top: 0;
+  z-index: 1052;
+}
+
+.flowise-chat-popup__tool--clear {
+  right: 54px !important;
+}
+
+.flowise-chat-popup__tool--expand {
+  right: 108px !important;
+}
+
+.flowise-chat-popup__tool--validation {
+  right: 162px !important;
+}
+
+.flowise-chat-test-panel {
+  background: #fff;
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  position: absolute;
+  right: 0;
+  top: 54px;
+  width: min(calc(380px * var(--app-ui-scale)), calc(var(--erp-raw-viewport-width) - calc(32px * var(--app-ui-scale))));
+  height: min(calc(620px * var(--app-ui-scale)), calc(var(--erp-raw-viewport-height) - calc(120px * var(--app-ui-scale))));
+  z-index: 3;
+}
+
+.flowise-chat-test-panel--popup {
+  bottom: 16px;
+  height: min(calc(620px * var(--app-ui-scale)), calc(var(--erp-raw-viewport-height) - calc(96px * var(--app-ui-scale))));
+  position: fixed;
+  right: 16px;
+  top: auto;
+  width: min(calc(490px * var(--app-ui-scale)), calc(var(--erp-raw-viewport-width) - calc(32px * var(--app-ui-scale))));
+}
+
+@media (max-width: 900px) {
+  .flowise-chat-popup {
+    right: 16px;
+  }
+}
+
+@media (max-width: 560px) {
+  .flowise-chat-popup {
+    left: 12px;
+    right: 12px;
+    width: auto;
+  }
+
+  .flowise-chat-popup__fab {
+    right: 0 !important;
+  }
+
+  .flowise-chat-popup__tool--clear {
+    right: 54px !important;
+  }
+
+  .flowise-chat-popup__tool--expand {
+    right: 108px !important;
+  }
+
+  .flowise-chat-popup__tool--validation {
+    right: 162px !important;
+  }
+
+  .flowise-chat-test-panel {
+    left: 0;
+    right: 0;
+    width: 100%;
+  }
+
+  .flowise-chat-test-panel--popup {
+    bottom: 12px;
+    left: 12px;
+    right: 12px;
+    width: auto;
+  }
+}
+
+.flowise-chat-test-panel header,
+.flowise-chat-test-panel footer {
+  align-items: center;
+  border-bottom: 1px solid var(--app-border);
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  padding: 10px;
+}
+
+.flowise-chat-test-panel footer {
+  align-items: stretch;
+  border-bottom: 0;
+  border-top: 1px solid var(--app-border);
+  flex-direction: column;
+}
+
+.flowise-chat-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.flowise-chat-actions .active {
+  border-color: #ef4444;
+  color: #b91c1c;
+}
+
+.flowise-start-form {
+  align-items: center;
+  background: var(--flowise-dialog-surface);
+  display: flex;
+  min-height: 100%;
+  padding: 18px;
+}
+
+.flowise-start-form__card {
+  background: color-mix(in srgb, var(--flowise-dialog-surface) 94%, #ffffff 6%);
+  border: 1px solid var(--flowise-dialog-border);
+  border-radius: 18px;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.16);
+  display: grid;
+  gap: 14px;
+  margin: auto;
+  max-height: min(calc(560px * var(--app-ui-scale)), calc(var(--erp-raw-viewport-height) * 0.92));
+  max-width: 560px;
+  overflow: auto;
+  padding: 22px;
+  width: 100%;
+}
+
+.flowise-start-form__card strong {
+  color: var(--flowise-dialog-text);
+  font-size: 1.2rem;
+  text-align: center;
+}
+
+.flowise-start-form__card p {
+  color: var(--flowise-dialog-muted);
+  margin: 0;
+  text-align: center;
+}
+
+.flowise-chat-file-input {
+  display: none;
+}
+
+.flowise-chat-test-panel__messages {
+  align-content: start;
+  display: grid;
+  gap: 10px;
+  overflow: auto;
+  padding: 12px;
+}
+
+.flowise-chat-bubble {
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.flowise-chat-bubble--user {
+  background: #eff6ff;
+  color: #1e3a8a;
+  justify-self: end;
+  max-width: 82%;
+}
+
+.flowise-chat-bubble--assistant {
+  background: #f8fafc;
+  border: 1px solid var(--app-border);
+  max-width: 92%;
+}
+
+.flowise-chat-bubble--streaming pre::after {
+  animation: flowise-stream-caret 1s steps(1) infinite;
+  background: currentcolor;
+  content: '';
+  display: inline-block;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  width: 6px;
+}
+
+.flowise-starter-prompts {
+  display: grid;
+  gap: 8px;
+}
+
+.flowise-follow-up-prompts {
+  border-top: 1px solid var(--app-border);
+  display: grid;
+  gap: 6px;
+  padding-top: 10px;
+}
+
+.flowise-starter-prompts > span,
+.flowise-follow-up-prompts > span {
+  color: var(--app-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.flowise-starter-prompts-card {
+  -webkit-overflow-scrolling: touch;
+}
+
+.flowise-starter-prompts-card::-webkit-scrollbar {
+  display: none;
+}
+
+.flowise-starter-prompts-card__button {
+  background: #fff !important;
+  border: 1px solid var(--app-border) !important;
+  border-radius: 999px !important;
+  color: #334155 !important;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.flowise-starter-prompts-card__button:hover {
+  border-color: var(--app-primary);
+  color: var(--app-primary);
+}
+
+@keyframes flowise-stream-caret {
+  50% {
+    opacity: 0;
+  }
+}
+
+.flowise-chat-bubble pre {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.flowise-file-uploads {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.flowise-file-upload {
+  align-items: center;
+  background: #fff;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  display: inline-flex;
+  gap: 6px;
+  max-width: 100%;
+  min-height: 42px;
+  padding: 6px;
+}
+
+.flowise-file-upload img {
+  border-radius: 6px;
+  height: 64px;
+  object-fit: cover;
+  width: 96px;
+}
+
+.flowise-file-upload span {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flowise-file-upload button {
+  align-items: center;
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  display: inline-flex;
+  height: 24px;
+  justify-content: center;
+  width: 24px;
+}
+
+.flowise-audio-waveform {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  min-width: 220px;
+  width: 260px;
+}
+
+.flowise-audio-waveform audio {
+  display: none;
+}
+
+.flowise-audio-waveform > button {
+  background: var(--app-primary);
+  border: none;
+  color: #fff;
+  flex: 0 0 auto;
+  height: 32px;
+  width: 32px;
+}
+
+.flowise-audio-waveform > button.is-playing {
+  background: #fff;
+  border: 1px solid var(--app-primary);
+  color: var(--app-primary);
+}
+
+.flowise-audio-waveform-canvas {
+  background: transparent;
+  cursor: pointer;
+  display: block;
+  flex: 1;
+  height: 32px;
+  min-width: 0;
+  width: 100%;
+}
+
+.flowise-chat-bubble__tools {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.flowise-chat-bubble__tools button {
+  align-items: center;
+  background: #fff;
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px 8px;
+}
+
+.flowise-chat-bubble__tools button.is-active {
+  border-color: var(--app-primary);
+  color: var(--app-primary);
+}
+
+.flowise-chat-feedback-reason,
+.flowise-chat-lead {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.flowise-chat-lead {
+  background: #f8fafc;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.flowise-chat-source-docs {
+  margin-top: 8px;
+}
+
+.flowise-agent-reasoning,
+.flowise-agent-executed,
+.flowise-json-details {
+  margin-top: 8px;
+}
+
+.flowise-agent-reasoning summary,
+.flowise-agent-executed summary,
+.flowise-json-details summary,
+.flowise-used-tools summary,
+.flowise-chat-source-docs summary {
+  color: var(--app-primary);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.flowise-agent-reasoning__card {
+  background: linear-gradient(to top, #f6f3fb, #f2f8fc);
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 10px;
+}
+
+.flowise-agent-reasoning__card header {
+  align-items: center;
+  border: 0;
+  display: flex;
+  justify-content: space-between;
+  padding: 0;
+}
+
+.flowise-agent-reasoning__card header span {
+  color: var(--app-muted);
+  font-size: 11px;
+}
+
+.flowise-agent-reasoning__card p,
+.flowise-agent-reasoning__card ul {
+  margin: 0;
+}
+
+.flowise-agent-reasoning__card ul {
+  display: grid;
+  gap: 4px;
+  padding-left: 18px;
+}
+
+.flowise-agent-reasoning-card,
+.flowise-agent-executed-card,
+.flowise-thinking-card {
+  margin-top: 8px;
+}
+
+.flowise-agent-reasoning-card--next {
+  background: linear-gradient(to top, #f6f3fb, #f2f8fc);
+}
+
+.flowise-agent-reasoning-card__messages {
+  background: #f8fafc;
+  border-radius: 8px;
+  margin: 8px 0 0;
+  overflow-wrap: anywhere;
+  padding: 8px;
+  white-space: pre-wrap;
+}
+
+.flowise-agent-executed__cards {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.flowise-agent-runtime-trail {
+  background: linear-gradient(135deg, #ecfeff, #f8fafc);
+  border: 1px solid #bae6fd;
+  border-radius: 10px;
+  display: grid;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding: 10px;
+}
+
+.flowise-agent-runtime-trail strong {
+  color: #0f172a;
+  font-size: 12px;
+}
+
+.flowise-agent-runtime-trail ol {
+  display: grid;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.flowise-agent-runtime-trail li {
+  align-items: center;
+  background: rgb(255 255 255 / 78%);
+  border: 1px solid rgb(186 230 253 / 75%);
+  border-radius: 8px;
+  display: grid;
+  gap: 5px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 7px 9px;
+}
+
+.flowise-agent-runtime-trail li span {
+  color: #334155;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.flowise-agent-runtime-trail li small {
+  color: #991b1b;
+  grid-column: 1 / -1;
+}
+
+.flowise-agent-runtime-trail__status {
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  color: #334155;
+  font-size: 10px;
+  padding: 2px 7px;
+}
+
+.flowise-agent-runtime-trail__status--finished {
+  background: #ecfdf5;
+  border-color: #86efac;
+  color: #166534;
+}
+
+.flowise-agent-runtime-trail__status--inprogress {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+}
+
+.flowise-agent-runtime-trail__status--error,
+.flowise-agent-runtime-trail__status--terminated {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #991b1b;
+}
+
+.flowise-agent-executed-card__header,
+.flowise-agent-executed-card__title {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.flowise-agent-executed-card__header {
+  justify-content: space-between;
+}
+
+.flowise-agent-executed-card__title {
+  min-width: 0;
+}
+
+.flowise-agent-executed-card__title svg {
+  color: #0f766e;
+  flex: 0 0 auto;
+}
+
+.flowise-agent-executed-card__chain {
+  display: block;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+
+.flowise-agent-executed-card__sections {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.flowise-agent-executed-card__json {
+  background: #f8fafc;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  padding: 7px 9px;
+}
+
+.flowise-agent-executed-card__json summary {
+  color: #334155;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.flowise-agent-executed-card__json pre {
+  background: #0f172a;
+  border-radius: 7px;
+  color: #e2e8f0;
+  font-size: 11px;
+  margin: 7px 0 0;
+  max-height: 220px;
+  overflow: auto;
+  padding: 8px;
+}
+
+.flowise-thinking-card {
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.flowise-thinking-card__header {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+}
+
+.flowise-thinking-card__content {
+  border-top: 1px solid var(--app-border);
+  max-height: 300px;
+  overflow: auto;
+  padding: 10px 12px;
+}
+
+.flowise-thinking-card__content ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.flowise-agent-executed ol {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.flowise-agent-executed li {
+  background: #fff;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  display: grid;
+  gap: 5px;
+  padding: 8px;
+}
+
+.flowise-agent-executed small {
+  color: var(--app-muted);
+  overflow-wrap: anywhere;
+}
+
+.flowise-agent-executed__status {
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  color: #334155;
+  font-size: 11px;
+  justify-self: start;
+  padding: 2px 7px;
+}
+
+.flowise-agent-executed__status--finished {
+  background: #ecfdf5;
+  border-color: #bbf7d0;
+  color: #166534;
+}
+
+.flowise-agent-executed__status--error,
+.flowise-agent-executed__status--timeout,
+.flowise-agent-executed__status--stopped {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #991b1b;
+}
+
+.flowise-used-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.flowise-used-tools > span {
+  color: var(--app-muted);
+  flex-basis: 100%;
+  font-size: 12px;
+}
+
+.flowise-used-tools details {
+  background: #fff;
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  padding: 4px 8px;
+}
+
+.flowise-used-tools details[open] {
+  border-radius: 8px;
+  flex-basis: 100%;
+}
+
+.flowise-used-tools details summary {
+  align-items: center;
+  display: inline-flex;
+  gap: 4px;
+}
+
+.flowise-json-details pre {
+  background: #0f172a;
+  border-radius: 8px;
+  color: #e2e8f0;
+  font-size: 11px;
+  margin: 6px 0 0;
+  max-height: 180px;
+  overflow: auto;
+  padding: 8px;
+}
+
+.flowise-chat-source-docs section {
+  border-top: 1px solid var(--app-border);
+  margin-top: 8px;
+  padding-top: 8px;
+}
+
+.flowise-source-doc-dialog__title {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.flowise-source-doc-dialog__content {
+  display: grid;
+  gap: 12px;
+}
+
+.flowise-source-doc-dialog__content section {
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+}
+
+.flowise-source-doc-dialog__content p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.flowise-source-doc-dialog__content pre {
+  background: #0f172a;
+  border-radius: 8px;
+  color: #e2e8f0;
+  font-size: 11px;
+  margin: 0;
+  max-height: 260px;
+  overflow: auto;
+  padding: 8px;
+}
+
+.flowise-chat-validation-popup {
+  background: #fff;
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18);
+  display: grid;
+  gap: 10px;
+  max-height: min(calc(460px * var(--app-ui-scale)), calc(var(--erp-raw-viewport-height) - calc(160px * var(--app-ui-scale))));
+  overflow: auto;
+  padding: 12px;
+  position: absolute;
+  right: 0;
+  top: 108px;
+  width: min(calc(360px * var(--app-ui-scale)), calc(var(--erp-raw-viewport-width) - calc(32px * var(--app-ui-scale))));
+  z-index: 9;
+}
+
+.flowise-chat-validation-popup header {
+  align-items: center;
+  border: 0;
+  display: flex;
+  justify-content: space-between;
+  padding: 0;
+}
+
+.flowise-chat-validation-popup p,
+.flowise-chat-validation-popup ul {
+  margin: 0;
+}
+
+.flowise-chat-validation-popup ul {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  padding: 0;
+}
+
+.flowise-chat-validation-popup__issue {
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+}
+
+.flowise-chat-validation-popup__issue--error {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #991b1b;
+}
+
+.flowise-chat-validation-popup__issue--warning {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #92400e;
+}
+
+.flowise-chat-validation-popup__issue small {
+  opacity: 0.72;
+}
+
+.flowise-chat-session {
+  color: #64748b;
+  font-size: 11px;
+}
+
+.flowise-chat-thinking {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.flowise-chat-expand-dialog .MuiDialog-paper {
+  height: min(calc(760px * var(--app-ui-scale)), calc(var(--erp-raw-viewport-height) - calc(48px * var(--app-ui-scale))));
+  overflow: hidden;
+}
+
+.flowise-chat-expand-dialog__title {
+  align-items: center;
+  border-bottom: 1px solid var(--app-border);
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 10px 12px !important;
+}
+
+.flowise-chat-expand-dialog__title > div {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.flowise-chat-expand-dialog__content {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0 !important;
+}
+
+.flowise-chat-expand-dialog .flowise-chat-test-panel__messages {
+  min-height: 0;
+}
+
+.flowise-native-dialog-backdrop {
+  align-items: center;
+  background: rgba(15, 23, 42, 0.35);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  position: fixed;
+  z-index: 60;
+}
+
+.flowise-agent-edit-dialog-backdrop {
+  z-index: 72;
+}
+
+.flowise-agent-edit-dialog {
+  background: #fff;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.25);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  max-height: min(calc(720px * var(--app-ui-scale)), calc(var(--erp-raw-viewport-height) - calc(48px * var(--app-ui-scale))));
+  max-width: min(calc(640px * var(--app-ui-scale)), calc(var(--erp-raw-viewport-width) - calc(32px * var(--app-ui-scale))));
+  min-width: min(calc(560px * var(--app-ui-scale)), calc(var(--erp-raw-viewport-width) - calc(32px * var(--app-ui-scale))));
+  overflow: hidden;
+}
+
+.flowise-agent-edit-dialog > header {
+  align-items: center;
+  border-bottom: 1px solid var(--app-border);
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 54px;
+  padding: 10px 14px;
+}
+
+.flowise-agent-edit-dialog__title {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.flowise-agent-edit-dialog__title h3 {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flowise-agent-edit-dialog__title--editing {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
+.flowise-agent-edit-dialog .MuiIconButton-root {
+  border-radius: 8px;
+  height: 30px;
+  width: 30px;
+}
+
+.flowise-agent-edit-dialog > .flowise-inspector-body {
+  border: 0;
+  max-height: none;
+  overflow: auto;
+  padding: 14px 18px 18px;
+}
+
+.flowise-agent-edit-dialog > .flowise-inspector-body > h3,
+.flowise-agent-edit-dialog > .flowise-inspector-body > p {
+  display: none;
+}
+
+.flowise-canvas-header-dialog {
+  background: #fff;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.25);
+  display: grid;
+  max-height: min(calc(760px * var(--app-ui-scale)), calc(var(--erp-raw-viewport-height) - calc(48px * var(--app-ui-scale))));
+  max-width: min(calc(760px * var(--app-ui-scale)), calc(var(--erp-raw-viewport-width) - calc(32px * var(--app-ui-scale))));
+  min-width: min(calc(640px * var(--app-ui-scale)), calc(var(--erp-raw-viewport-width) - calc(32px * var(--app-ui-scale))));
+  overflow: hidden;
+}
+
+.flowise-canvas-header-dialog header {
+  align-items: center;
+  border-bottom: 1px solid var(--app-border);
+  display: flex;
+  justify-content: space-between;
+  min-height: 48px;
+  padding: 0 14px;
+}
+
+.flowise-canvas-header-dialog h3 {
+  font-size: 15px;
+  margin: 0;
+}
+
+.flowise-canvas-header-dialog header button {
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  display: inline-flex;
+  height: 28px;
+  justify-content: center;
+  width: 28px;
+}
+
+.flowise-canvas-header-dialog header .MuiIconButton-root {
+  color: var(--app-muted);
+  height: 28px;
+  width: 28px;
+}
+
+.flowise-canvas-header-dialog .MuiButton-root {
+  border-radius: 6px;
+  justify-self: start;
+  min-height: 34px;
+  text-transform: none;
+}
+
+.flowise-dialog-section {
+  display: grid;
+  gap: 14px;
+  max-height: calc(var(--erp-raw-viewport-height) - calc(140px * var(--app-ui-scale)));
+  overflow: auto;
+  padding: 16px;
+}
+
+.flowise-dialog-section label {
+  display: grid;
+  gap: 6px;
+}
+
+.flowise-dialog-section input,
+.flowise-dialog-section select,
+.flowise-dialog-section textarea {
+  background: #fff;
+  border: 1px solid var(--app-border);
+  border-radius: 6px;
+  color: var(--app-text);
+  font: inherit;
+  min-height: 34px;
+  padding: 7px 9px;
+}
+
+.flowise-dialog-section textarea {
+  font-family: Consolas, SFMono-Regular, monospace;
+  resize: vertical;
+}
+
+.flowise-dialog-section label span,
+.flowise-dialog-section dt {
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.flowise-dialog-section code {
+  background: #f8fafc;
+  border: 1px solid var(--app-border);
+  border-radius: 6px;
+  color: #334155;
+  padding: 8px 10px;
+}
+
+.flowise-dialog-section pre {
+  background: #0f172a;
+  border-radius: 8px;
+  color: #e2e8f0;
+  font-size: 12px;
+  margin: 0;
+  overflow: auto;
+  padding: 12px;
+}
+
+.flowise-api-code-tabs {
+  border-bottom: 1px solid var(--app-border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.flowise-api-code-tabs button {
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--app-muted);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  padding: 8px 10px;
+}
+
+.flowise-api-code-tabs button[aria-selected="true"] {
+  border-bottom-color: #2563eb;
+  color: #1d4ed8;
+}
+
+.flowise-api-embed-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.flowise-api-embed-panel p {
+  color: var(--app-muted);
+  margin: 0;
+}
+
+.flowise-history-toolbar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.flowise-message-explorer {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(220px, 0.36fr) minmax(0, 1fr);
+}
+
+.flowise-message-explorer .flowise-history-toolbar {
+  grid-column: 1 / -1;
+}
+
+.flowise-message-session-list {
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  display: grid;
+  gap: 6px;
+  max-height: 520px;
+  overflow: auto;
+  padding: 8px;
+}
+
+.flowise-message-session-list button {
+  background: #fff;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  text-align: left;
+}
+
+.flowise-message-session-list button[aria-selected="true"] {
+  background: #eff6ff;
+  border-color: #93c5fd;
+}
+
+.flowise-message-session-list strong,
+.flowise-message-session-list span,
+.flowise-message-session-list small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flowise-message-session-list strong {
+  color: #0f172a;
+}
+
+.flowise-message-session-list span,
+.flowise-message-session-list small {
+  color: var(--app-muted);
+}
+
+.flowise-message-detail {
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.flowise-message-detail__meta {
+  background: #f8fafc;
+  border-bottom: 1px solid var(--app-border);
+  display: grid;
+  gap: 8px;
+  grid-template-columns: max-content minmax(0, 1fr);
+  padding: 10px;
+}
+
+.flowise-message-detail__meta span {
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.flowise-message-thread {
+  display: grid;
+  gap: 10px;
+  max-height: 460px;
+  overflow: auto;
+  padding: 12px;
+}
+
+.flowise-message-thread__item {
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+}
+
+.flowise-message-thread__item--assistant {
+  background: #f8fafc;
+}
+
+.flowise-message-thread__item--user {
+  background: #fff7ed;
+  border-color: #fed7aa;
+}
+
+.flowise-message-thread__item header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.flowise-message-thread__item header span,
+.flowise-message-evidence {
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.flowise-message-thread__item p {
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.flowise-message-evidence {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.flowise-message-evidence span {
+  background: #eef2ff;
+  border-radius: 999px;
+  color: #3730a3;
+  padding: 3px 8px;
+}
+
+.flowise-leads-explorer {
+  display: grid;
+  gap: 12px;
+}
+
+@media (max-width: 900px) {
+  .flowise-message-explorer {
+    grid-template-columns: 1fr;
+  }
+}
+
+.flowise-dialog-section dl {
+  display: grid;
+  gap: 8px 12px;
+  grid-template-columns: 140px minmax(0, 1fr);
+  margin: 0;
+}
+
+.flowise-dialog-section dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.flowise-dialog-form-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.flowise-dialog-check-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.flowise-dialog-check-row label {
+  align-items: center;
+  border: 1px solid var(--app-border);
+  border-radius: 6px;
+  display: inline-flex;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 10px;
+}
+
+.flowise-dialog-check-row input {
+  min-height: 0;
+  padding: 0;
+}
+
+.flowise-dialog-check-inline.MuiFormControlLabel-root {
+  align-items: center;
+  border: 1px solid var(--app-border);
+  border-radius: 6px;
+  display: inline-flex;
+  gap: 4px;
+  margin: 0;
+  min-height: 34px;
+  padding: 0 10px 0 2px;
+  width: fit-content;
+}
+
+.flowise-dialog-check-inline .MuiTypography-root {
+  color: var(--app-text);
+  font-size: 12px;
+}
+
+.flowise-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.flowise-configuration-sections {
+  display: grid;
+  gap: 12px;
+}
+
+.flowise-config-section {
+  background: #f8fafc;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+}
+
+.flowise-config-section header {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.flowise-config-section header strong {
+  font-size: 13px;
+}
+
+.flowise-config-section__grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.flowise-config-section__grid label:has(textarea) {
+  grid-column: 1 / -1;
+}
+
+.flowise-config-section__error {
+  color: #dc2626;
+  grid-column: 1 / -1;
+}
+
+.flowise-config-section__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  grid-column: 1 / -1;
+}
+
+.flowise-config-toggle-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  grid-column: 1 / -1;
+}
+
+.flowise-switch-row {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+}
+
+.flowise-switch-row input[type="checkbox"] {
+  min-height: 0;
+  padding: 0;
+}
+
+.flowise-switch-row.MuiFormControlLabel-root {
+  margin: 0;
+}
+
+.flowise-switch-row .MuiTypography-root {
+  color: var(--app-text);
+  font-size: 12px;
+}
+
+.flowise-dynamic-list {
+  display: grid;
+  gap: 8px;
+}
+
+.flowise-dynamic-list__row {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.flowise-dynamic-list__row button {
+  align-items: center;
+  border: 1px solid var(--app-border);
+  border-radius: 6px;
+  display: inline-flex;
+  justify-content: center;
+  min-height: 34px;
+  width: 34px;
+}
+
+.flowise-file-type-grid {
+  display: grid;
+  gap: 8px 12px;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+}
+
+.flowise-configuration-advanced {
+  border: 1px dashed var(--app-border);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 10px 12px;
+}
+
+.flowise-configuration-advanced summary {
+  color: var(--app-muted);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.flowise-dialog-table-wrap {
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  overflow: auto;
+}
+
+.flowise-dialog-table {
+  border-collapse: collapse;
+  min-width: 100%;
+}
+
+.flowise-dialog-table th,
+.flowise-dialog-table td {
+  border-bottom: 1px solid var(--app-border);
+  font-size: 12px;
+  padding: 9px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.flowise-dialog-table th {
+  background: #f8fafc;
+  color: var(--app-muted);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.flowise-dialog-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.flowise-dialog-table .MuiCheckbox-root {
+  padding: 0;
+}
+
+.flowise-dialog-table td:has(.MuiCheckbox-root) {
+  vertical-align: middle;
+}
+
+.flowise-dialog-message-text {
+  -webkit-box-orient: vertical;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  max-width: 360px;
+  overflow: hidden;
+  white-space: pre-wrap;
+}
+
+.flowise-dialog-inline-json {
+  background: transparent;
+  color: var(--app-text);
+  max-height: 160px;
+  min-width: 360px;
+  padding: 0;
+  white-space: pre-wrap;
+}
+
+.flowise-human-input-action {
+  align-self: flex-start;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 14px;
+  color: #7c2d12;
+  display: grid;
+  gap: 12px;
+  max-width: min(560px, 92%);
+  padding: 14px;
+}
+
+.flowise-human-input-action p {
+  color: #9a3412;
+  margin: 6px 0 0;
+  white-space: pre-wrap;
+}
+
+.flowise-human-input-action__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

@@ -1,0 +1,3 @@
+namespace AsterERP.Api.Application.ApplicationDataCenter.SqlScripts;
+
+public sealed record ApplicationDataCenterSqlScriptBareIdentifierExpression(string Identifier) : ApplicationDataCenterSqlScriptExpression;

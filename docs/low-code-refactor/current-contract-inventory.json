@@ -1,0 +1,91 @@
+{
+  "generatedAt": "2026-07-12",
+  "purpose": "Auditable inventory after the frontend latest-only boundary cut. The removed full-designer tree is migration history, not a production or test dependency.",
+  "audit": {
+    "legacyDirectory": "frontend/AsterERP.Web/src/pages/application-console/development-center/full-designer",
+    "filesAtStart": 147,
+    "filesDeleted": 146,
+    "filesMovedToMigration": 1,
+    "remainingFiles": [],
+    "externalProductionReferences": [],
+    "externalTestReferences": [],
+    "verification": [
+      "rg --files frontend/AsterERP.Web/src/pages/application-console/development-center/full-designer",
+      "rg -n 'full-designer|elementRegistry|DesignerComponentRegistry|DesignerRuntimeRenderer' frontend/AsterERP.Web/src",
+      "npm run typecheck",
+      "npm test -- --run",
+      "npm run lint"
+    ]
+  },
+  "migrationInputs": [
+    {
+      "path": "frontend/AsterERP.Web/src/pages/application-console/development-center/low-code-studio/migration/LegacyDocumentInput.ts",
+      "movedFrom": "frontend/AsterERP.Web/src/pages/application-console/development-center/full-designer/types.ts",
+      "status": "retained",
+      "reason": "The old persisted input shape is required by the one-time document migration.",
+      "allowedUse": "CurrentDocumentMigration source typing only",
+      "excludedResponsibilities": ["editor session", "selection", "viewport ownership", "undo history", "component registry", "renderer", "inspector", "runtime artifact"]
+    },
+    {
+      "path": "frontend/AsterERP.Web/src/pages/application-console/development-center/low-code-studio/migration/CurrentDocumentMigration.ts",
+      "status": "latest migration boundary",
+      "reason": "Converts persisted legacy input into the current DesignerDocument and DesignerEditorSession plus an explicitly marked runtimeArtifactDraft. Only the latest compiler creates the formal RuntimeArtifact with required integrityPayload, artifactHash, and signature; migration has no dual-write or runtime compatibility behavior."
+    }
+  ],
+  "deletedLegacyImplementation": {
+    "ui": {
+      "paths": ["DesignerWorkbench.tsx", "DesignerCanvas.tsx", "DesignerToolbar.tsx", "ElementOutlinePanel.tsx", "ElementPalettePanel.tsx", "*Panel.tsx", "visual-authoring/**"],
+      "reason": "Replaced by low-code-studio PageStudioHost, Canvas, Inspector, Binding, Layout, Responsive, and Shortcut modules."
+    },
+    "registryAndManifest": {
+      "paths": ["elementRegistry.ts", "component-system/**"],
+      "reason": "Replaced by low-code-studio/components/ComponentRegistry and latestComponentManifestCatalog plus runtime-kernel/RuntimeComponentRegistry."
+    },
+    "renderers": {
+      "paths": ["canvas/DesignerCanvasRuntimeRenderer.tsx", "components/**"],
+      "reason": "The old renderer tree duplicated runtime behavior and is physically removed."
+    },
+    "inspectorAndBinding": {
+      "paths": ["PropertyInspector.tsx", "PropertyValueEditor.tsx", "inspector/**", "designerExpression*.ts", "*Binding*.tsx", "designer*Binding*.ts"],
+      "reason": "Replaced by low-code-studio/inspector, binding, expression, and workflow binding modules."
+    },
+    "parserValidatorCompilerBranch": {
+      "paths": ["designerDocumentCodec.ts", "designerDocumentValidator.ts", "schema/**", "useDesignerDocumentStore.ts"],
+      "reason": "The latest document codec, validator, store, command bus, and runtime artifact boundary are authoritative."
+    },
+    "oldSemanticsTests": {
+      "paths": ["**/*.test.ts", "**/*.test.tsx"],
+      "reason": "Tests coupled to the removed implementation were deleted; latest behavior is covered by low-code-studio and runtime-kernel tests, including the rewritten runtime parity test."
+    }
+  },
+  "latestSources": {
+    "document": "frontend/AsterERP.Web/src/pages/application-console/development-center/low-code-studio/document/DesignerDocument.ts",
+    "editorSession": "frontend/AsterERP.Web/src/pages/application-console/development-center/low-code-studio/document/DesignerEditorSession.ts",
+    "commands": "frontend/AsterERP.Web/src/pages/application-console/development-center/low-code-studio/commands/DesignerCommandBus.ts",
+    "componentManifest": "frontend/AsterERP.Web/src/pages/application-console/development-center/low-code-studio/components/ComponentManifest.ts",
+    "componentRegistry": "frontend/AsterERP.Web/src/pages/application-console/development-center/low-code-studio/components/ComponentRegistry.ts",
+    "runtimeRegistry": "frontend/AsterERP.Web/src/runtime-kernel/RuntimeComponentRegistry.ts",
+    "runtimeParityTest": "frontend/AsterERP.Web/src/shared/runtime/designer-document/runtimeRendererParity.test.tsx"
+  },
+  "runtime": {
+    "artifact": "frontend/AsterERP.Web/src/pages/application-console/development-center/low-code-studio/document/RuntimeArtifact.ts",
+    "formalRequiredFields": ["documentId", "revision", "artifactHash", "signature", "compilerVersion", "manifestTypes", "integrityPayload", "elements", "actions", "bindings", "pageMicroflows", "pageParameters", "permissions", "variables", "runtimeContext"],
+    "entryPoint": "frontend/AsterERP.Web/src/runtime-kernel/RuntimeKernel.ts",
+    "editorSessionAllowed": false,
+    "legacyRendererAllowed": false
+  },
+  "migrationPlan": {
+    "source": "persisted document input typed by LegacyDocumentInput",
+    "steps": ["validate source", "remove editor-only fields", "normalize ids and parent relationships", "map legacy resource expressions to ResourceRef", "create latest document/session/runtimeArtifactDraft", "compile the document into a signed formal RuntimeArtifact", "validate and persist latest revision"],
+    "outputContract": {
+      "sourceHash": "sha256(raw persisted source JSON)",
+      "targetHash": "sha256(canonical latest DesignerDocument JSON)",
+      "revision": "ApplicationDesignerRevisionEntity.RevisionNumber and document.revision remain aligned",
+      "rollbackPointer": "ApplicationDesignerMigrationRunEntity.RollbackPointer contains page/document/revision/sourceHash/targetHash entries",
+      "restartRecovery": "expired Running runs are marked Failed with migration.interrupted before retry; retry is idempotent from the immutable backup",
+      "directPageReadBoundary": "the migration boundary rewrites LayoutDraftJson and SchemaDraftJson to the latest canonical document and sets DesignerMode to structured so GET /pages/{id} cannot return editor-state fields"
+    },
+    "dualWrite": false,
+    "longLivedCompatibility": false
+  }
+}

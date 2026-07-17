@@ -1,0 +1,11 @@
+{
+  "fixtureId": "page-001",
+  "title": "匿名空白页面",
+  "document": {
+    "documentId": "fixture-page-001",
+    "revision": 1,
+    "pages": [{"id":"page-001","name":"匿名空白页面","rootElementId":"root-001"}],
+    "elements": {"root-001":{"id":"root-001","type":"layout.page","name":"匿名空白页面","parentId":null,"children":[],"props":{"title":{"kind":"literal","value":"匿名空白页面","valueType":"string"}},"layout":{"minHeight":"720px","width":"100%"},"style":{},"events":[],"bindings":{}}},
+    "actions": [], "variables": [], "permissions": {}, "runtimeContext": {"pageCode":"fixture-page-001"}, "metadata": {"templateCode":"designer-document"}
+  }
+}

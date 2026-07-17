@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>AsterERP.Workflow.Approval.Core</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\AsterERP.Workflow.Approval.Api\AsterERP.Workflow.Approval.Api.csproj" />
+    <ProjectReference Include="..\AsterERP.Workflow.Core\AsterERP.Workflow.Core.csproj" />
+    <ProjectReference Include="..\AsterERP.Workflow.Api\AsterERP.Workflow.Api.csproj" />
+    <ProjectReference Include="..\AsterERP.Workflow.Persistence\AsterERP.Workflow.Persistence.csproj" />
+    <ProjectReference Include="..\AsterERP.Workflow.DependencyInjection\AsterERP.Workflow.DependencyInjection.csproj" />
+    <ProjectReference Include="..\AsterERP.Shared\AsterERP.Shared.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="DynamicExpresso.Core" Version="2.19.3" />
+    <PackageReference Include="MaxMind.GeoIP2" Version="5.2.0" />
+    <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="10.0.8" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.8" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.8" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.8" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.8" />
+    <PackageReference Include="SQLitePCLRaw.lib.e_sqlite3" Version="3.53.3" />
+    <PackageReference Include="SqlSugarCore" Version="5.1.4.216" />
+    <PackageReference Include="Volo.Abp.Core" Version="10.4.1" />
+    <PackageReference Include="Volo.Abp.Guids" Version="10.4.1" />
+    <PackageReference Include="Volo.Abp.Timing" Version="10.4.1" />
+    <PackageReference Include="Volo.Abp.Uow" Version="10.4.1" />
+  </ItemGroup>
+</Project>

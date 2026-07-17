@@ -1,0 +1,43 @@
+html {
+  font-size: var(--app-root-font-size);
+}
+
+body {
+  font-family: var(--app-ui-font-family);
+  background-color: var(--app-gray-100);
+  font-size: var(--app-text-sm);
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+code,
+pre,
+kbd,
+samp,
+.font-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.text-\[10px\] {
+  font-size: var(--app-text-2xs);
+}
+
+.text-\[11px\] {
+  font-size: var(--app-text-3xs);
+}
+
+.text-\[13px\] {
+  font-size: var(--app-text-sm);
+}
+
+.text-\[0\.84rem\] {
+  font-size: calc(0.84rem * var(--app-ui-scale));
+}

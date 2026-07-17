@@ -1,0 +1,14 @@
+<Project>
+  <!--
+    Directory.Build.targets is imported by the SDK after each csproj body, so properties here
+    override explicit TreatWarningsAsErrors / EnforceCodeStyleInBuild in vendored csproj files.
+    Applies only to AsterERP.Workflow.* projects so legacy nullable/style
+    warnings do not block builds; business projects remain under the repository root zero-warning policy.
+  -->
+  <PropertyGroup Condition="$(MSBuildProjectName.StartsWith('AsterERP.Workflow'))">
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <WarningsAsErrors></WarningsAsErrors>
+    <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
+    <RunAnalyzersDuringBuild>false</RunAnalyzersDuringBuild>
+  </PropertyGroup>
+</Project>

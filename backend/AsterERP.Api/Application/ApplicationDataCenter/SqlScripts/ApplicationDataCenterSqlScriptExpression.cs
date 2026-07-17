@@ -1,0 +1,3 @@
+namespace AsterERP.Api.Application.ApplicationDataCenter.SqlScripts;
+
+public abstract record ApplicationDataCenterSqlScriptExpression;

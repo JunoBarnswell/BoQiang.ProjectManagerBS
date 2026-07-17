@@ -1,0 +1,256 @@
+/* 边框和阴影带来的专业感 */
+.erp-panel {
+  background-color: var(--app-white);
+  border: 1px solid var(--app-gray-200);
+  border-radius: 4px;
+  box-shadow: var(--app-shadow-xs);
+}
+
+/* 表格精细化样式 */
+.erp-table th {
+  background-color: var(--app-gray-50);
+  border-bottom: 2px solid var(--app-gray-200);
+  border-right: 1px solid var(--app-gray-100);
+  font-weight: 600;
+  color: var(--app-gray-600);
+  white-space: nowrap;
+}
+.erp-table th:last-child {
+  border-right: none;
+}
+.erp-table td {
+  border-bottom: 1px solid var(--app-gray-100);
+  color: var(--app-gray-700);
+}
+.erp-table tr:hover td {
+  background-color: var(--app-primary-50);
+}
+
+/* 页签样式 */
+.erp-tab {
+  border: 1px solid transparent;
+  border-bottom: none;
+  background-color: var(--app-gray-100);
+  color: var(--app-gray-500);
+  border-radius: 4px 4px 0 0;
+  margin-right: 2px;
+  transition: all 0.2s ease;
+}
+.erp-tab:hover {
+  background-color: var(--app-gray-200);
+}
+.erp-tab.active {
+  background-color: var(--app-white);
+  border-color: var(--app-gray-200);
+  color: var(--app-primary-500);
+  font-weight: 500;
+  position: relative;
+  z-index: 10;
+}
+.erp-tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background-color: var(--app-white);
+}
+
+/* 树形结构缩进线 (简易模拟) */
+.tree-node-indent {
+  position: relative;
+}
+.tree-node-indent::before {
+  content: '';
+  position: absolute;
+  left: 10px;
+  top: -10px;
+  bottom: 10px;
+  width: 1px;
+  background-color: var(--app-gray-200);
+  z-index: 0;
+}
+
+.runtime-page-shell {
+  color: var(--app-gray-900);
+  container-type: inline-size;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+  width: 100%;
+}
+
+.runtime-page-shell > .designer-runtime-shell {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+}
+
+.runtime-page-shell > .page-stack {
+  flex: 1;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.runtime-page-shell > .page-stack > .page-stack {
+  flex: 0 0 auto;
+  overflow: visible;
+}
+
+.page-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--erp-section-gap);
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+}
+
+.page-studio__artboard {
+  container-type: inline-size;
+}
+
+[data-runtime-component^='layout.'] {
+  min-width: 0;
+}
+
+.runtime-data-table {
+  min-width: 760px;
+}
+
+@container (max-width: 760px) {
+  [data-runtime-component='layout.row'][data-runtime-layout='row'] {
+    align-items: stretch !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+  }
+
+  [data-runtime-component='layout.row'][data-runtime-layout='row'] > [data-runtime-element-id] {
+    flex: 0 0 auto !important;
+    max-width: 100%;
+    width: 100% !important;
+  }
+
+  [data-runtime-element-id='page-status'] {
+    align-self: flex-start;
+  }
+
+  [data-runtime-element-id='form-actions'] {
+    align-items: center !important;
+    flex-direction: row !important;
+    flex-wrap: wrap;
+    justify-content: flex-start !important;
+  }
+
+  [data-runtime-element-id='form-actions'] > [data-runtime-element-id] {
+    flex: 0 0 auto !important;
+    width: auto !important;
+  }
+}
+
+.card {
+  background: var(--app-white);
+  border: 1px solid var(--app-border-subtle);
+  border-radius: var(--app-radius-lg);
+  box-shadow: var(--app-shadow-sm);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.card-header {
+  align-items: flex-start;
+  border-bottom: 1px solid var(--app-gray-100);
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  min-height: 42px;
+  padding: 10px 12px;
+}
+
+.card-header > div:first-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.card h2 {
+  color: var(--app-gray-900);
+  font-size: var(--app-text-base);
+  font-weight: 700;
+  line-height: 1.35;
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.card-kicker {
+  color: var(--app-primary-600);
+  font-size: var(--app-text-xs);
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.25;
+  margin: 0;
+}
+
+.muted {
+  color: var(--app-gray-500);
+  font-size: var(--app-text-xs);
+  line-height: 1.45;
+  margin: 0;
+}
+
+.card > .muted {
+  padding: 0 12px 10px;
+}
+
+.page-renderer-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.card > .data-table-shell {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.list-page-card {
+  background: var(--app-white);
+  border: 1px solid var(--app-border-subtle);
+  border-radius: 8px;
+  box-shadow: var(--app-shadow-sm);
+  overflow: hidden;
+}
+
+.list-page-card .responsive-page-search {
+  background: transparent;
+  border-bottom: 1px solid var(--app-gray-100);
+  box-shadow: none;
+  padding: 10px;
+}
+
+.list-page-card .responsive-page-toolbar {
+  background: transparent;
+  border-bottom: 1px solid var(--app-gray-100);
+  box-shadow: none;
+  padding: 0 10px 8px;
+}
+
+.list-page-card .data-table-shell,
+.erp-panel .data-table-shell {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}

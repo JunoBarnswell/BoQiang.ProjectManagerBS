@@ -1,0 +1,29 @@
+{
+  "generatedAt": "2026-07-12",
+  "source": "Linear HAOYIDA live issue read",
+  "scope": "HAO-13..HAO-114",
+  "policy": {
+    "developmentComplete": "In Review",
+    "unifiedAcceptance": "Done",
+    "externalEvidenceRequired": true
+  },
+  "summary": {
+    "total": 102,
+    "backlog": 0,
+    "inProgress": 0,
+    "inReview": 99,
+    "done": 3,
+    "doneIssues": ["HAO-90", "HAO-98", "HAO-104"]
+  },
+  "parents": {
+    "HAO-5": "Backlog",
+    "HAO-6": "In Progress",
+    "HAO-7": "In Progress",
+    "HAO-8": "In Progress",
+    "HAO-9": "In Progress",
+    "HAO-10": "In Progress",
+    "HAO-11": "In Progress",
+    "HAO-12": "In Progress"
+  },
+  "decision": "Keep In Review tasks open until Coordinator unified integration and all external gates pass."
+}

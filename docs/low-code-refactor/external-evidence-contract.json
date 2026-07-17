@@ -1,0 +1,27 @@
+{
+  "contract": "low-code-external-evidence.latest",
+  "requiredFiles": [
+    "api-ui-auth.json",
+    "provider-sqlserver.json",
+    "provider-mysql.json",
+    "provider-postgresql.json",
+    "provider-sqlite.json",
+    "rollback.json",
+    "performance.json",
+    "visual-accessibility.json",
+    "observability.json"
+  ],
+  "requiredFields": [
+    "evidenceId",
+    "status",
+    "scope",
+    "source",
+    "validatedAt",
+    "traceId"
+  ],
+  "passRules": {
+    "statusMustEqual": "Pass",
+    "blockedReasonMustBeEmpty": true,
+    "missingEvidenceIsBlocked": true
+  }
+}

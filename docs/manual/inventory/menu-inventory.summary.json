@@ -1,0 +1,17 @@
+{
+  "generatedAt": "2026-07-08T11:38:08.289170+00:00",
+  "platform": {
+    "total": 325,
+    "visibleMenuLike": 88,
+    "visibleClickableMenus": 71,
+    "visibleButtons": 94
+  },
+  "mes": {
+    "total": 99,
+    "visibleMenuLike": 61,
+    "visibleClickableMenus": 51,
+    "visibleButtons": 38
+  },
+  "platformDb": "D:\\Code\\AsterERP\\data\\astererp.db",
+  "mesDb": "D:\\Code\\AsterERP\\backend\\AsterERP.Api\\data\\application-databases\\tenant-a\\MES\\mes11.db"
+}

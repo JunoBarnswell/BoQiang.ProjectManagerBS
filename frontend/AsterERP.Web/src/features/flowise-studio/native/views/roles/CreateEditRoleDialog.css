@@ -1,0 +1,5 @@
+.flowise-role-permissions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}

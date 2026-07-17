@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>AsterERP.Workflow.Forms.Api</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\AsterERP.Workflow.Tools\AsterERP.Workflow.Tools.csproj" />
+    <ProjectReference Include="..\AsterERP.Workflow.Approval.Api\AsterERP.Workflow.Approval.Api.csproj" />
+  </ItemGroup>
+</Project>

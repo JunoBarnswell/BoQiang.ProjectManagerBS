@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://astererp.local/contracts/component-manifest.schema.json",
+  "title": "AsterERP Component Manifest",
+  "type": "object",
+  "required": [
+    "type",
+    "capability",
+    "editor",
+    "runtime",
+    "validation",
+    "binding",
+    "responsive",
+    "security",
+    "events",
+    "i18n",
+    "defaults",
+    "migrations"
+  ],
+  "properties": {
+    "type": { "type": "string", "minLength": 1 },
+    "capability": { "type": "object", "required": ["acceptsChildren", "capabilities"] },
+    "editor": {
+      "type": "object",
+      "required": ["inspector", "inspectorSections", "previewRenderer", "selectionMode"],
+      "properties": {
+        "inspectorSections": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "previewRenderer": { "type": "string", "minLength": 1 },
+        "selectionMode": { "enum": ["single", "multi", "none"] },
+        "inspector": { "$ref": "#/$defs/inspectorDefinition" }
+      },
+      "additionalProperties": false
+    },
+    "editing": {
+      "type": "object",
+      "required": ["enabled", "commitTriggers", "supportedDataTypes", "primaryKeyNonEditable", "supportsConflictResolution"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "commitTriggers": { "type": "array", "items": { "enum": ["blur", "enter", "escape"] } },
+        "supportedDataTypes": { "type": "array", "items": { "type": "string" } },
+        "primaryKeyNonEditable": { "type": "boolean" },
+        "supportsConflictResolution": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "runtime": { "type": "object", "required": ["renderer", "supportedScopes"] },
+    "validation": { "type": "object", "required": ["schema", "supportsDiagnostics"] },
+    "binding": { "type": "object", "required": ["acceptedSources", "acceptedTypes", "supportsConversion"] },
+    "responsive": { "type": "object", "required": ["supportedLayouts", "supportsOverrides"] },
+    "security": { "type": "object", "required": ["actionPermissions", "requiresPermission"] },
+    "events": { "type": "array" },
+    "i18n": {
+      "type": "object",
+      "required": ["labelKey", "helpKey", "diagnosticKey"],
+      "properties": {
+        "labelKey": { "type": "string", "minLength": 1 },
+        "helpKey": { "type": "string", "minLength": 1 },
+        "diagnosticKey": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "defaults": { "type": "object", "required": ["layout", "props", "style"] },
+    "migrations": { "type": "array" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "inspectorDefinition": {
+      "type": "object",
+      "required": ["componentType", "ownerType", "onlyInherited", "sections", "properties"],
+      "properties": {
+        "componentType": { "type": "string", "minLength": 1 },
+        "ownerType": { "type": "string", "minLength": 1 },
+        "onlyInherited": { "type": "boolean" },
+        "sections": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "labelKey", "order"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "labelKey": { "type": "string", "minLength": 1 },
+              "order": { "type": "integer", "minimum": 0 }
+            },
+            "additionalProperties": false
+          }
+        },
+        "properties": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "path", "section", "order", "editor", "valueType", "defaultValue", "labelKey", "helpKey", "bindable", "acceptedSources", "responsive", "batchPolicy", "validation", "resetPolicy", "runtimeConsumer", "ownerType"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "path": { "type": "string", "minLength": 1 },
+              "section": { "type": "string", "minLength": 1 },
+              "order": { "type": "integer", "minimum": 0 },
+              "editor": { "enum": ["text", "textarea", "number", "boolean", "color", "select", "json"] },
+              "valueType": { "enum": ["array", "boolean", "date", "json", "number", "object", "string"] },
+              "defaultValue": {},
+              "labelKey": { "type": "string", "minLength": 1 },
+              "helpKey": { "type": "string", "minLength": 1 },
+              "fallbackLabel": { "type": "string", "minLength": 1 },
+              "bindable": { "type": "boolean" },
+              "acceptedSources": { "type": "array", "items": { "type": "string" } },
+              "responsive": { "type": "object", "required": ["enabled", "mode"], "properties": { "enabled": { "type": "boolean" }, "mode": { "enum": ["inherit", "override"] } }, "additionalProperties": false },
+              "batchPolicy": { "enum": ["editable", "readOnly", "hidden"] },
+              "validation": { "type": "object", "required": ["valueType"], "properties": { "valueType": { "type": "string" }, "required": { "type": "boolean" }, "min": { "type": "number" }, "max": { "type": "number" }, "pattern": { "type": "string" } }, "additionalProperties": false },
+              "resetPolicy": { "enum": ["default", "inherit", "none"] },
+              "runtimeConsumer": { "type": "string", "minLength": 1 },
+              "ownerType": { "type": "string", "minLength": 1 }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

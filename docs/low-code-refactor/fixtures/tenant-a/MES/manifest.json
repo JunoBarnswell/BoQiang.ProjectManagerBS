@@ -1,0 +1,24 @@
+﻿{
+  "schemaVersion": "1.0",
+  "fixtureCount": 3,
+  "fixtures": [
+    {
+      "pageCode": "codex_____232405_20260705152405481_6580",
+      "file": "codex_____232405_20260705152405481_6580.json",
+      "documentHash": "sha256:14bb12a9147e421a3d4045e6c73f895f9495d3a21267be87e0b46da6bb27e466",
+      "artifactHash": "sha256:f0b1d3513182c68c5775f17d4b30c89d1a0696d63e6b6f316ea0a32e16426bf9"
+    },
+    {
+      "pageCode": "codex_microflow_order_demo",
+      "file": "codex_microflow_order_demo.json",
+      "documentHash": "sha256:c0bdd6daa10bf86c998dab0fdd9ba44b86d0ea9ce13ea6bb318015829b66ccef",
+      "artifactHash": "sha256:65dc83f48f8249d70679d4f011888f92cc2332f28bd27241abfc7a62bac243b9"
+    },
+    {
+      "pageCode": "page_mr7xi5jk",
+      "file": "page_mr7xi5jk.json",
+      "documentHash": "sha256:aa4fb8fb73634c72c85942a3ec038d3cb7cc352040ff5ede2a74ede6489881b5",
+      "artifactHash": "sha256:2949831e2ae80c9d35b0b1b2e17c21d785573de0062b7e8c5e4ee1e1429b37cf"
+    }
+  ]
+}

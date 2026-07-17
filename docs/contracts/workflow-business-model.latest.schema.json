@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://astererp.local/contracts/workflow-business-model.latest.schema.json",
+  "title": "WorkflowBusinessModelLatest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "kind", "businessDesign"],
+  "properties": {
+    "version": { "const": "latest" },
+    "kind": { "const": "WorkflowBusinessModelLatest" },
+    "businessDesign": {
+      "type": "object",
+      "required": ["version", "selectedNodeId", "nodes", "edges"],
+      "properties": {
+        "version": { "const": "latest" },
+        "selectedNodeId": { "type": "string" },
+        "nodes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["id", "type", "label", "position"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "type": { "enum": ["start", "approval", "condition", "cc", "timeout", "subprocess", "end"] },
+              "label": { "type": "string" },
+              "position": { "type": "object" }
+            }
+          }
+        },
+        "edges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "source", "target"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "source": { "type": "string", "minLength": 1 },
+              "target": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      }
+    }
+  }
+}

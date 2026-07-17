@@ -1,0 +1,13 @@
+{
+  "format": "astererp.low-code.reliability-cases",
+  "cases": [
+    { "id": "R01", "area": "save", "name": "same canonical hash is idempotent", "evidence": "ApplicationDevelopmentReliabilityTests.Save_with_same_canonical_hash_does_not_create_a_revision", "pass": "no new revision and no partial document" },
+    { "id": "R02", "area": "save", "name": "stale expected hash conflicts", "pass": "old document and revision remain unchanged" },
+    { "id": "R03", "area": "publish", "name": "duplicate artifact publish is idempotent", "evidence": "ApplicationDesignerArtifactPublisher.PublishAsync existing-artifact path; existing migration publish preparation test", "pass": "one artifact and one publish record are retained" },
+    { "id": "R03b", "area": "publish", "name": "publish transaction failure does not advance pointer", "evidence": "ApplicationDevelopmentReliabilityTests.Publish_failure_inside_the_service_transaction_does_not_update_the_document_pointer", "pass": "previous artifact pointer remains and inserted artifact/record roll back" },
+    { "id": "R04", "area": "migration", "name": "group failure restores database state", "evidence": "ApplicationDevelopmentMigrationTests.Document_migration_rolls_back_the_entire_application_group_when_one_page_fails", "pass": "no partial document/revision/migration and run is Failed with backup SHA, completion time, and failure diagnostics" },
+    { "id": "R05", "area": "ddl", "name": "cancelled or timed-out execution is audited", "evidence": "Cancellation is executable in ApplicationDevelopmentReliabilityTests.Cancelled_save_does_not_persist_a_partial_document; deterministic timeout injection is Blocked", "status": "Blocked", "blockedReason": "No production delay/fault-injection seam or external provider is available in the permitted test scope for deterministic timeout outcome evidence", "retryCondition": "Provide an approved real-provider timeout harness or production-owned timeout seam without changing this test-only scope" },
+    { "id": "R06", "area": "runtime", "name": "monitoring export is canonical and redacted", "pass": "all events contain required fields and no secret payload" },
+    { "id": "R07", "area": "release", "name": "production recovery rehearsal", "status": "Blocked", "blockedReason": "maintenance window, authorized operator, real providers and rollback evidence are unavailable" }
+  ]
+}

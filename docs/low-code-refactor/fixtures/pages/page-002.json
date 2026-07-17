@@ -1,0 +1,25 @@
+{
+  "fixtureId": "page-002",
+  "title": "Anonymous order transaction page",
+  "sourceEvidence": {"sourceNodeCount":24,"fixtureNodeCount":8,"sourceActionCount":0,"fixtureActionCount":1,"sourceBindingCount":24,"fixtureBindingCount":3,"projection":"deterministic structural projection; business values removed"},
+  "document": {
+    "documentId": "fixture-page-002",
+    "revision": 1,
+    "pages": [{"id":"page-002","name":"Anonymous order transaction page","rootElementId":"root-002"}],
+    "elements": {
+      "root-002":{"id":"root-002","type":"layout.page","name":"Anonymous order transaction page","parentId":null,"children":["toolbar-002","query-002","table-002"],"props":{},"layout":{},"style":{},"events":[],"bindings":{}},
+      "toolbar-002":{"id":"toolbar-002","type":"layout.row","name":"toolbar","parentId":"root-002","children":["save-002","query-button-002"],"props":{},"layout":{"gap":"8px"},"style":{},"events":[],"bindings":{}},
+      "query-002":{"id":"query-002","type":"layout.form","name":"query form","parentId":"root-002","children":["order-no-002","customer-002"],"props":{},"layout":{},"style":{},"events":[],"bindings":{}},
+      "save-002":{"id":"save-002","type":"action.button","name":"save","parentId":"toolbar-002","children":[],"props":{"title":{"kind":"literal","value":"save","valueType":"string"}},"layout":{},"style":{},"events":[{"id":"save-click-002","trigger":"click","steps":[{"id":"step-save-002","type":"runPageMicroflow","config":{"flowCode":"fixture-save"}}]}],"bindings":{}},
+      "query-button-002":{"id":"query-button-002","type":"action.button","name":"query","parentId":"toolbar-002","children":[],"props":{"title":{"kind":"literal","value":"query","valueType":"string"}},"layout":{},"style":{},"events":[],"bindings":{}},
+      "order-no-002":{"id":"order-no-002","type":"input.text","name":"order number","parentId":"query-002","children":[],"props":{},"layout":{},"style":{},"events":[],"bindings":{"field":{"resourceId":"fixture.form.orderNo","displayName":"order number","valueType":"string","conversionPipeline":[]}}},
+      "customer-002":{"id":"customer-002","type":"input.text","name":"customer","parentId":"query-002","children":[],"props":{},"layout":{},"style":{},"events":[],"bindings":{"field":{"resourceId":"fixture.form.customer","displayName":"customer","valueType":"string","conversionPipeline":[]}}},
+      "table-002":{"id":"table-002","type":"report.dataTable","name":"order table","parentId":"root-002","children":[],"props":{"columns":[{"key":"orderNo","valueType":"string"},{"key":"amount","valueType":"number"}]},"layout":{},"style":{},"events":[],"bindings":{"rows":{"resourceId":"fixture.dataset.orders","displayName":"order dataset","valueType":"array","conversionPipeline":[]}}}
+    },
+    "actions": [],
+    "variables": [{"id":"fixture.orderId","name":"current order","valueType":"string"}],
+    "permissions": {},
+    "runtimeContext": {"pageCode":"fixture-page-002"},
+    "metadata": {"templateCode":"microflow-order-demo"}
+  }
+}

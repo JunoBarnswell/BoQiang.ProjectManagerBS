@@ -1,0 +1,363 @@
+.flowise-toolbar,
+.flowise-searchbar,
+.flowise-row-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.flowise-searchbar input,
+.flowise-searchbar select,
+.flowise-settings-panel input,
+.flowise-settings-panel textarea,
+.flowise-inspector-body textarea {
+  background: #fff;
+  border: 1px solid var(--app-border);
+  border-radius: 6px;
+  color: var(--app-text);
+  min-height: 34px;
+  padding: 7px 10px;
+}
+
+.flowise-searchbar input {
+  min-width: 260px;
+}
+
+.btn-primary,
+.btn-secondary,
+.btn-ghost,
+.op-link {
+  align-items: center;
+  border-radius: var(--app-radius-md);
+  cursor: pointer;
+  display: inline-flex;
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 600;
+  gap: 6px;
+  justify-content: center;
+  line-height: 1;
+  min-height: 32px;
+  padding: 0 12px;
+  text-decoration: none;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    color 0.15s ease;
+  white-space: nowrap;
+}
+
+.btn-primary > svg,
+.btn-secondary > svg,
+.btn-ghost > svg,
+.op-link > svg {
+  flex-shrink: 0;
+  height: 16px;
+  width: 16px;
+}
+
+.btn-primary {
+  background: var(--app-primary-600);
+  border: 1px solid var(--app-primary-600);
+  color: #fff;
+}
+
+.btn-primary:hover {
+  background: var(--app-primary-700);
+  border-color: var(--app-primary-700);
+}
+
+.btn-secondary {
+  background: var(--app-white);
+  border: 1px solid var(--app-control-border);
+  color: var(--app-gray-700);
+}
+
+.btn-secondary:hover {
+  background: var(--app-primary-50);
+  border-color: var(--app-primary-200);
+  color: var(--app-primary-700);
+}
+
+.btn-ghost {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--app-muted);
+}
+
+.btn-ghost:hover {
+  background: var(--app-primary-50);
+  color: var(--app-primary-700);
+}
+
+.op-link {
+  background: transparent;
+  border: 0;
+  color: var(--app-primary);
+  min-height: 28px;
+  padding: 0 4px;
+}
+
+.op-link.danger {
+  color: #dc2626;
+}
+
+.btn-primary:focus-visible,
+.btn-secondary:focus-visible,
+.btn-ghost:focus-visible,
+.op-link:focus-visible {
+  box-shadow: 0 0 0 3px var(--app-focus-ring);
+  outline: none;
+}
+
+.btn-primary:disabled,
+.btn-secondary:disabled,
+.btn-ghost:disabled,
+.op-link:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.flowise-overview-strip {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(7, minmax(110px, 1fr));
+  width: 100%;
+}
+
+.flowise-overview-strip__item,
+.flowise-overview-strip__latest {
+  background: #fff;
+  border: 1px solid var(--app-border);
+  border-radius: 6px;
+  min-height: 58px;
+  padding: 10px 12px;
+}
+
+.flowise-overview-strip span {
+  color: var(--app-muted);
+  display: block;
+  font-size: 12px;
+}
+
+.flowise-overview-strip strong {
+  color: var(--app-text);
+  display: block;
+  font-size: 18px;
+  line-height: 1.5;
+}
+
+.flowise-table-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.flowise-table-title strong,
+.flowise-table-title span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flowise-table-title span {
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.flowise-status {
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  color: #475569;
+  display: inline-flex;
+  font-size: 12px;
+  line-height: 22px;
+  padding: 0 9px;
+}
+
+.flowise-status--enabled,
+.flowise-status--completed {
+  background: #ecfdf5;
+  border-color: #bbf7d0;
+  color: #047857;
+}
+
+.flowise-status--running,
+.flowise-status--draft {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+}
+
+.flowise-status--failed,
+.flowise-status--disabled {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+
+.flowise-secret-banner {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid var(--app-border);
+  border-radius: 6px;
+  display: flex;
+  gap: 12px;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+}
+
+.flowise-secret-banner code {
+  background: #fff;
+  border: 1px solid var(--app-border);
+  border-radius: 4px;
+  flex: 1;
+  padding: 5px 8px;
+}
+
+.flowise-settings-panel {
+  background: #fff;
+  border: 1px solid var(--app-border);
+  border-radius: 6px;
+  display: grid;
+  gap: 14px;
+  max-width: 760px;
+  padding: 18px;
+}
+
+.flowise-settings-panel label,
+.flowise-inspector-body label {
+  display: grid;
+  gap: 6px;
+}
+
+.flowise-canvas-shell {
+  border: 1px solid var(--app-border);
+  display: grid;
+  grid-template-columns: 230px minmax(0, 1fr) 300px;
+  height: 100%;
+  min-height: 620px;
+}
+
+.flowise-canvas-palette,
+.flowise-canvas-inspector {
+  background: #fff;
+  min-width: 0;
+  overflow: auto;
+}
+
+.flowise-canvas-palette {
+  border-right: 1px solid var(--app-border);
+}
+
+.flowise-canvas-inspector {
+  border-left: 1px solid var(--app-border);
+}
+
+.flowise-panel-title {
+  align-items: center;
+  border-bottom: 1px solid var(--app-border);
+  display: flex;
+  font-weight: 700;
+  gap: 8px;
+  height: 44px;
+  padding: 0 12px;
+}
+
+.flowise-node-catalog {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+}
+
+.flowise-node-catalog button {
+  background: #fff;
+  border: 1px solid var(--app-border);
+  border-radius: 6px;
+  display: grid;
+  gap: 2px;
+  padding: 10px;
+  text-align: left;
+}
+
+.flowise-node-catalog span,
+.flowise-inspector-body p {
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.flowise-canvas-stage {
+  background: #f8fafc;
+  min-width: 0;
+}
+
+.flowise-inspector-tabs {
+  border-bottom: 1px solid var(--app-border);
+  display: flex;
+  height: 44px;
+}
+
+.flowise-inspector-tabs button {
+  align-items: center;
+  border-bottom: 2px solid transparent;
+  display: inline-flex;
+  flex: 1;
+  font-size: 13px;
+  gap: 6px;
+  justify-content: center;
+}
+
+.flowise-inspector-tabs button.active {
+  border-bottom-color: var(--app-primary);
+  color: var(--app-primary);
+  font-weight: 700;
+}
+
+.flowise-inspector-tabs button span {
+  align-items: center;
+  background: #eef2ff;
+  border-radius: 999px;
+  color: #3730a3;
+  display: inline-flex;
+  font-size: 11px;
+  height: 18px;
+  justify-content: center;
+  min-width: 18px;
+  padding: 0 5px;
+}
+
+.flowise-inspector-body {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.flowise-inspector-body pre,
+.flowise-row-actions pre {
+  background: #0f172a;
+  border-radius: 6px;
+  color: #e2e8f0;
+  font-size: 12px;
+  max-height: 220px;
+  overflow: auto;
+  padding: 10px;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 1100px) {
+  .flowise-overview-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .flowise-canvas-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .flowise-canvas-palette,
+  .flowise-canvas-inspector {
+    max-height: 260px;
+  }
+}

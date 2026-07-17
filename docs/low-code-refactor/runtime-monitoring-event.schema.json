@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "astererp.low-code.runtime-monitoring-event",
+  "title": "AsterERP unified low-code monitoring event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["eventId", "eventName", "occurredAt", "outcome", "durationMs", "cancellationRequested", "context"],
+  "properties": {
+    "eventId": { "type": "string", "minLength": 1 },
+    "eventName": { "type": "string" },
+    "occurredAt": { "type": "string", "format": "date-time" },
+    "outcome": { "enum": ["succeeded", "failed", "cancelled", "timedOut"] },
+    "durationMs": { "type": "number", "minimum": 0 },
+    "timeoutMs": { "type": "number", "exclusiveMinimum": 0 },
+    "cancellationRequested": { "type": "boolean" },
+    "errorCode": { "type": "string", "minLength": 1 },
+    "context": { "$ref": "#/$defs/context" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "outcome": { "const": "cancelled" } } },
+      "then": { "required": ["errorCode"], "properties": { "cancellationRequested": { "const": true } } }
+    },
+    {
+      "if": { "properties": { "outcome": { "const": "timedOut" } } },
+      "then": { "required": ["errorCode", "timeoutMs"], "properties": { "cancellationRequested": { "const": false } } }
+    },
+    {
+      "if": { "properties": { "outcome": { "const": "failed" } } },
+      "then": { "required": ["errorCode"] }
+    },
+    {
+      "if": { "properties": { "outcome": { "const": "succeeded" } } },
+      "then": { "not": { "required": ["errorCode"] } }
+    }
+  ],
+  "oneOf": [
+    { "$ref": "#/$defs/designerCommand" },
+    { "$ref": "#/$defs/designerCommandFailed" },
+    { "$ref": "#/$defs/designerSave" },
+    { "$ref": "#/$defs/designerPublish" },
+    { "$ref": "#/$defs/designerMigration" },
+    { "$ref": "#/$defs/runtimeRender" },
+    { "$ref": "#/$defs/runtimeAction" },
+    { "$ref": "#/$defs/runtimeBindingError" },
+    { "$ref": "#/$defs/connectionTest" },
+    { "$ref": "#/$defs/catalogRefresh" },
+    { "$ref": "#/$defs/queryExecute" },
+    { "$ref": "#/$defs/schemaDeploy" },
+    { "$ref": "#/$defs/dataWrite" }
+  ],
+  "$defs": {
+    "context": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "affectedRows": { "type": "integer", "minimum": 0 },
+        "appCode": { "type": "string", "minLength": 1 },
+        "artifactHash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "auditId": { "type": "string", "minLength": 1 },
+        "backupSha": { "type": "string", "minLength": 1 },
+        "bindingPath": { "type": "string", "minLength": 1 },
+        "catalogId": { "type": "string", "minLength": 1 },
+        "commandId": { "type": "string", "minLength": 1 },
+        "commandType": { "type": "string", "minLength": 1 },
+        "connectionId": { "type": "string", "minLength": 1 },
+        "documentId": { "type": "string", "minLength": 1 },
+        "migrationId": { "type": "string", "minLength": 1 },
+        "queryId": { "type": "string", "minLength": 1 },
+        "requestHash": { "type": "string", "minLength": 1 },
+        "resourceKind": { "type": "string", "minLength": 1 },
+        "revision": { "type": "integer", "minimum": 1 },
+        "schemaName": { "type": "string", "minLength": 1 },
+        "tenantId": { "type": "string", "minLength": 1 },
+        "traceId": { "type": "string", "minLength": 1 },
+        "actionId": { "type": "string", "minLength": 1 },
+        "actionType": { "type": "string", "minLength": 1 }
+      }
+    },
+    "designerCommand": { "$ref": "#/$defs/event", "properties": { "eventName": { "const": "designer.command" }, "context": { "$ref": "#/$defs/designerCommandContext" } } },
+    "designerCommandFailed": { "$ref": "#/$defs/event", "properties": { "eventName": { "const": "designer.command.failed" }, "context": { "$ref": "#/$defs/designerCommandContext" } }, "required": ["errorCode"] },
+    "designerSave": { "$ref": "#/$defs/event", "properties": { "eventName": { "const": "designer.save" }, "context": { "$ref": "#/$defs/designerSaveContext" } } },
+    "designerPublish": { "$ref": "#/$defs/event", "properties": { "eventName": { "const": "designer.publish" }, "context": { "$ref": "#/$defs/designerPublishContext" } } },
+    "designerMigration": { "$ref": "#/$defs/event", "properties": { "eventName": { "const": "designer.migration" }, "context": { "$ref": "#/$defs/designerMigrationContext" } } },
+    "runtimeRender": { "$ref": "#/$defs/event", "properties": { "eventName": { "const": "runtime.render" }, "context": { "$ref": "#/$defs/runtimeRenderContext" } } },
+    "runtimeAction": { "$ref": "#/$defs/event", "properties": { "eventName": { "const": "runtime.action" }, "context": { "$ref": "#/$defs/runtimeActionContext" } } },
+    "runtimeBindingError": { "$ref": "#/$defs/event", "properties": { "eventName": { "const": "runtime.binding.error" }, "context": { "$ref": "#/$defs/bindingContext" } }, "required": ["errorCode"] },
+    "connectionTest": { "$ref": "#/$defs/event", "properties": { "eventName": { "const": "dataStudio.connection.test" }, "context": { "$ref": "#/$defs/connectionContext" } } },
+    "catalogRefresh": { "$ref": "#/$defs/event", "properties": { "eventName": { "const": "dataStudio.catalog.refresh" }, "context": { "$ref": "#/$defs/catalogContext" } } },
+    "queryExecute": { "$ref": "#/$defs/event", "properties": { "eventName": { "const": "dataStudio.query.execute" }, "context": { "$ref": "#/$defs/queryContext" } } },
+    "schemaDeploy": { "$ref": "#/$defs/event", "properties": { "eventName": { "const": "dataStudio.schema.deploy" }, "context": { "$ref": "#/$defs/schemaContext" } } },
+    "dataWrite": { "$ref": "#/$defs/event", "properties": { "eventName": { "const": "dataStudio.data.write" }, "context": { "$ref": "#/$defs/writeContext" } } },
+    "event": { "type": "object", "required": ["eventName", "context"] },
+    "designerCommandContext": { "$ref": "#/$defs/context", "required": ["commandId", "commandType"] },
+    "designerSaveContext": { "$ref": "#/$defs/context", "required": ["documentId", "revision"] },
+    "designerPublishContext": { "$ref": "#/$defs/designerSaveContext", "required": ["artifactHash"] },
+    "designerMigrationContext": { "$ref": "#/$defs/context", "required": ["documentId", "migrationId"] },
+    "runtimeRenderContext": { "$ref": "#/$defs/designerPublishContext" },
+    "runtimeActionContext": { "$ref": "#/$defs/context", "required": ["actionId", "actionType"] },
+    "bindingContext": { "$ref": "#/$defs/context", "required": ["bindingPath"] },
+    "connectionContext": { "$ref": "#/$defs/context", "required": ["connectionId"] },
+    "catalogContext": { "$ref": "#/$defs/connectionContext", "required": ["catalogId"] },
+    "queryContext": { "$ref": "#/$defs/connectionContext", "required": ["queryId"] },
+    "schemaContext": { "$ref": "#/$defs/connectionContext", "required": ["schemaName"] },
+    "writeContext": { "$ref": "#/$defs/connectionContext", "required": ["affectedRows", "resourceKind"] }
+  }
+}

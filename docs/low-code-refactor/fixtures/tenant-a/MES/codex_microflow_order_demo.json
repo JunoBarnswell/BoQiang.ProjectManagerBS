@@ -1,0 +1,3222 @@
+﻿{
+  "AppCode": "MES",
+  "Artifact": {
+    "artifactHash": "sha256:981f311c3ebcb9718aefbcaa2d5e4eefafe415c36ae595d877089e971da5a70f",
+    "compilerVersion": "runtime-1",
+    "description": "\u7531\u5B8C\u6574\u4F4E\u4EE3\u7801\u5143\u7D20\u8BBE\u8BA1\u5668\u751F\u6210\u7684\u9875\u9762\u3002",
+    "detail": {},
+    "document": {
+      "actions": [],
+      "apiBindings": [],
+      "dataSources": [],
+      "documentId": "codex_microflow_order_demo_page_id",
+      "elements": {
+        "btnQuery": {
+          "bindings": {},
+          "children": [],
+          "events": [
+            {
+              "id": "query-click",
+              "name": "\u6267\u884C\u8BA2\u5355\u5217\u8868\u5FAE\u6D41",
+              "steps": [
+                {
+                  "config": {
+                    "action": "query",
+                    "flowCode": "codex_demo_order_query_list",
+                    "inputMappings": [
+                      {
+                        "sourceExpression": {
+                          "displayName": "form.query_keyword",
+                          "fallback": {
+                            "kind": "string",
+                            "value": ""
+                          },
+                          "resourceId": "form::query_keyword",
+                          "valueType": "string"
+                        },
+                        "targetVariable": "keyword"
+                      },
+                      {
+                        "sourceExpression": {
+                          "displayName": "form.query_order_no",
+                          "fallback": {
+                            "kind": "string",
+                            "value": ""
+                          },
+                          "resourceId": "form::query_order_no",
+                          "valueType": "string"
+                        },
+                        "targetVariable": "orderNo"
+                      },
+                      {
+                        "sourceExpression": {
+                          "displayName": "form.query_customer_name",
+                          "fallback": {
+                            "kind": "string",
+                            "value": ""
+                          },
+                          "resourceId": "form::query_customer_name",
+                          "valueType": "string"
+                        },
+                        "targetVariable": "customerName"
+                      },
+                      {
+                        "sourceExpression": {
+                          "expectedType": "number",
+                          "fallback": 1,
+                          "helpers": [],
+                          "invalidReason": null,
+                          "modelCode": null,
+                          "rawPathPreview": null,
+                          "source": "constant",
+                          "value": 1
+                        },
+                        "targetVariable": "pageIndex"
+                      },
+                      {
+                        "sourceExpression": {
+                          "expectedType": "number",
+                          "fallback": 50,
+                          "helpers": [],
+                          "invalidReason": null,
+                          "modelCode": null,
+                          "rawPathPreview": null,
+                          "source": "constant",
+                          "value": 50
+                        },
+                        "targetVariable": "pageSize"
+                      }
+                    ],
+                    "refreshLoadActionsAfter": false,
+                    "resultPath": "orderListRows",
+                    "resultVariable": "orderListRows"
+                  },
+                  "id": "4cc5491bd76d4e54adf7df23c475c318",
+                  "type": "runPageMicroflow"
+                }
+              ],
+              "trigger": "click"
+            }
+          ],
+          "id": "btnQuery",
+          "layout": {},
+          "name": "\u5237\u65B0\u5217\u8868",
+          "parentId": "toolbar",
+          "props": {
+            "title": "\u5237\u65B0\u5217\u8868"
+          },
+          "style": {},
+          "type": "action.button"
+        },
+        "btnQueryInline": {
+          "bindings": {},
+          "children": [],
+          "events": [
+            {
+              "id": "query-inline-click",
+              "name": "\u6267\u884C\u8BA2\u5355\u5217\u8868\u5FAE\u6D41",
+              "steps": [
+                {
+                  "config": {
+                    "action": "query",
+                    "flowCode": "codex_demo_order_query_list",
+                    "inputMappings": [
+                      {
+                        "sourceExpression": {
+                          "displayName": "form.query_keyword",
+                          "fallback": {
+                            "kind": "string",
+                            "value": ""
+                          },
+                          "resourceId": "form::query_keyword",
+                          "valueType": "string"
+                        },
+                        "targetVariable": "keyword"
+                      },
+                      {
+                        "sourceExpression": {
+                          "displayName": "form.query_order_no",
+                          "fallback": {
+                            "kind": "string",
+                            "value": ""
+                          },
+                          "resourceId": "form::query_order_no",
+                          "valueType": "string"
+                        },
+                        "targetVariable": "orderNo"
+                      },
+                      {
+                        "sourceExpression": {
+                          "displayName": "form.query_customer_name",
+                          "fallback": {
+                            "kind": "string",
+                            "value": ""
+                          },
+                          "resourceId": "form::query_customer_name",
+                          "valueType": "string"
+                        },
+                        "targetVariable": "customerName"
+                      },
+                      {
+                        "sourceExpression": {
+                          "expectedType": "number",
+                          "fallback": 1,
+                          "helpers": [],
+                          "invalidReason": null,
+                          "modelCode": null,
+                          "rawPathPreview": null,
+                          "source": "constant",
+                          "value": 1
+                        },
+                        "targetVariable": "pageIndex"
+                      },
+                      {
+                        "sourceExpression": {
+                          "expectedType": "number",
+                          "fallback": 50,
+                          "helpers": [],
+                          "invalidReason": null,
+                          "modelCode": null,
+                          "rawPathPreview": null,
+                          "source": "constant",
+                          "value": 50
+                        },
+                        "targetVariable": "pageSize"
+                      }
+                    ],
+                    "refreshLoadActionsAfter": false,
+                    "resultPath": "orderListRows",
+                    "resultVariable": "orderListRows"
+                  },
+                  "id": "f2001d410ffe45b5bfce88f3ba43c843",
+                  "type": "runPageMicroflow"
+                }
+              ],
+              "trigger": "click"
+            }
+          ],
+          "id": "btnQueryInline",
+          "layout": {},
+          "name": "\u67E5\u8BE2",
+          "parentId": "queryPanel",
+          "props": {
+            "title": "\u67E5\u8BE2",
+            "variant": "primary"
+          },
+          "style": {},
+          "type": "action.button"
+        },
+        "btnSave": {
+          "bindings": {},
+          "children": [],
+          "events": [
+            {
+              "id": "save-click",
+              "name": "\u6267\u884C\u4FDD\u5B58\u5FAE\u6D41",
+              "steps": [
+                {
+                  "config": {
+                    "action": "edit",
+                    "flowCode": "codex_demo_order_save",
+                    "inputMappings": [
+                      {
+                        "sourceExpression": {
+                          "displayName": "variables.orderId",
+                          "fallback": {
+                            "kind": "string",
+                            "value": ""
+                          },
+                          "resourceId": "variables::orderId",
+                          "valueType": "string"
+                        },
+                        "targetVariable": "orderId"
+                      },
+                      {
+                        "sourceExpression": {
+                          "expectedType": "object",
+                          "fallback": {},
+                          "helpers": [],
+                          "invalidReason": null,
+                          "modelCode": null,
+                          "rawPathPreview": null,
+                          "source": "form",
+                          "value": null
+                        },
+                        "targetVariable": "form"
+                      },
+                      {
+                        "sourceExpression": {
+                          "displayName": "variables.detailLines",
+                          "fallback": {
+                            "kind": "array",
+                            "value": []
+                          },
+                          "resourceId": "variables::detailLines",
+                          "valueType": "array"
+                        },
+                        "targetVariable": "detailLines"
+                      },
+                      {
+                        "sourceExpression": {
+                          "displayName": "variables.unitRows",
+                          "fallback": {
+                            "kind": "array",
+                            "value": []
+                          },
+                          "resourceId": "variables::unitRows",
+                          "valueType": "array"
+                        },
+                        "targetVariable": "unitRows"
+                      },
+                      {
+                        "sourceExpression": {
+                          "displayName": "variables.deletedDetailLineIds",
+                          "fallback": {
+                            "kind": "array",
+                            "value": []
+                          },
+                          "resourceId": "variables::deletedDetailLineIds",
+                          "valueType": "array"
+                        },
+                        "targetVariable": "deletedDetailLineIds"
+                      },
+                      {
+                        "sourceExpression": {
+                          "displayName": "variables.deletedUnitRowIds",
+                          "fallback": {
+                            "kind": "array",
+                            "value": []
+                          },
+                          "resourceId": "variables::deletedUnitRowIds",
+                          "valueType": "array"
+                        },
+                        "targetVariable": "deletedUnitRowIds"
+                      }
+                    ],
+                    "refreshLoadActionsAfter": true,
+                    "resultPath": "saveResult",
+                    "resultVariable": "saveResult"
+                  },
+                  "id": "029021c6477647ebba06a5454e7b3724",
+                  "type": "runPageMicroflow"
+                }
+              ],
+              "trigger": "click"
+            }
+          ],
+          "id": "btnSave",
+          "layout": {},
+          "name": "\u4FDD\u5B58\u8BA2\u5355\u4E8B\u52A1",
+          "parentId": "toolbar",
+          "props": {
+            "title": "\u4FDD\u5B58\u8BA2\u5355\u4E8B\u52A1",
+            "variant": "primary"
+          },
+          "style": {},
+          "type": "action.button"
+        },
+        "customerItem": {
+          "bindings": {},
+          "children": [
+            "customerItemInput"
+          ],
+          "events": [],
+          "id": "customerItem",
+          "layout": {
+            "display": "grid",
+            "gridTemplateColumns": "120px minmax(0, 1fr)"
+          },
+          "name": "\u5BA2\u6237\u540D\u79F0",
+          "parentId": "form",
+          "props": {
+            "title": "\u5BA2\u6237\u540D\u79F0"
+          },
+          "style": {},
+          "type": "layout.formItem"
+        },
+        "customerItemInput": {
+          "bindings": {},
+          "children": [],
+          "events": [],
+          "id": "customerItemInput",
+          "layout": {},
+          "name": "\u5BA2\u6237\u540D\u79F0",
+          "parentId": "customerItem",
+          "props": {
+            "placeholder": "Codex \u5BA2\u6237",
+            "title": "\u5BA2\u6237\u540D\u79F0"
+          },
+          "style": {},
+          "type": "input.text"
+        },
+        "dateItem": {
+          "bindings": {},
+          "children": [
+            "dateItemInput"
+          ],
+          "events": [],
+          "id": "dateItem",
+          "layout": {
+            "display": "grid",
+            "gridTemplateColumns": "120px minmax(0, 1fr)"
+          },
+          "name": "\u8BA2\u5355\u65E5\u671F",
+          "parentId": "form",
+          "props": {
+            "title": "\u8BA2\u5355\u65E5\u671F"
+          },
+          "style": {},
+          "type": "layout.formItem"
+        },
+        "dateItemInput": {
+          "bindings": {},
+          "children": [],
+          "events": [],
+          "id": "dateItemInput",
+          "layout": {},
+          "name": "\u8BA2\u5355\u65E5\u671F",
+          "parentId": "dateItem",
+          "props": {
+            "placeholder": "2026-07-02",
+            "title": "\u8BA2\u5355\u65E5\u671F"
+          },
+          "style": {},
+          "type": "input.date"
+        },
+        "detailTable": {
+          "bindings": {
+            "data": {
+              "displayName": "variables.orderListRows",
+              "fallback": {
+                "kind": "array",
+                "value": []
+              },
+              "resourceId": "variables::orderListRows",
+              "valueType": "array"
+            }
+          },
+          "children": [],
+          "events": [
+            {
+              "id": "list-load",
+              "name": "\u52A0\u8F7D\u8BA2\u5355\u5217\u8868",
+              "steps": [
+                {
+                  "config": {
+                    "action": "query",
+                    "flowCode": "codex_demo_order_query_list",
+                    "inputMappings": [
+                      {
+                        "sourceExpression": {
+                          "expectedType": "number",
+                          "fallback": 1,
+                          "helpers": [],
+                          "invalidReason": null,
+                          "modelCode": null,
+                          "rawPathPreview": null,
+                          "source": "constant",
+                          "value": 1
+                        },
+                        "targetVariable": "pageIndex"
+                      },
+                      {
+                        "sourceExpression": {
+                          "expectedType": "number",
+                          "fallback": 50,
+                          "helpers": [],
+                          "invalidReason": null,
+                          "modelCode": null,
+                          "rawPathPreview": null,
+                          "source": "constant",
+                          "value": 50
+                        },
+                        "targetVariable": "pageSize"
+                      }
+                    ],
+                    "refreshLoadActionsAfter": false,
+                    "resultPath": "orderListRows",
+                    "resultVariable": "orderListRows"
+                  },
+                  "id": "step_load_order_list",
+                  "type": "runPageMicroflow"
+                }
+              ],
+              "trigger": "load"
+            }
+          ],
+          "id": "detailTable",
+          "layout": {},
+          "name": "\u8BA2\u5355\u5217\u8868",
+          "parentId": "root",
+          "props": {
+            "columns": [
+              {
+                "key": "order_no",
+                "title": "\u8BA2\u5355\u53F7"
+              },
+              {
+                "key": "customer_name",
+                "title": "\u5BA2\u6237"
+              },
+              {
+                "key": "order_date",
+                "title": "\u65E5\u671F"
+              },
+              {
+                "key": "total_amount",
+                "title": "\u5408\u8BA1"
+              },
+              {
+                "key": "approval_level",
+                "title": "\u5BA1\u6279\u7B49\u7EA7"
+              },
+              {
+                "key": "line_count",
+                "title": "\u660E\u7EC6\u6570"
+              },
+              {
+                "key": "total_quantity",
+                "title": "\u603B\u6570\u91CF"
+              },
+              {
+                "key": "status",
+                "title": "\u72B6\u6001"
+              }
+            ],
+            "selectionMappings": [
+              {
+                "sourceExpression": {
+                  "expectedType": "object",
+                  "fallback": {},
+                  "helpers": [],
+                  "invalidReason": null,
+                  "modelCode": null,
+                  "rawPathPreview": null,
+                  "source": "tableRow",
+                  "value": null
+                },
+                "target": "variables.selectedOrder"
+              },
+              {
+                "sourceExpression": {
+                  "displayName": "tableRow.id",
+                  "fallback": {
+                    "kind": "string",
+                    "value": ""
+                  },
+                  "resourceId": "tableRow::id",
+                  "valueType": "string"
+                },
+                "target": "variables.orderId"
+              },
+              {
+                "sourceExpression": {
+                  "displayName": "tableRow.order_no",
+                  "fallback": {
+                    "kind": "string",
+                    "value": ""
+                  },
+                  "resourceId": "tableRow::order_no",
+                  "valueType": "string"
+                },
+                "target": "form.order_no"
+              },
+              {
+                "sourceExpression": {
+                  "displayName": "tableRow.customer_name",
+                  "fallback": {
+                    "kind": "string",
+                    "value": ""
+                  },
+                  "resourceId": "tableRow::customer_name",
+                  "valueType": "string"
+                },
+                "target": "form.customer_name"
+              },
+              {
+                "sourceExpression": {
+                  "displayName": "tableRow.order_date",
+                  "fallback": {
+                    "kind": "string",
+                    "value": ""
+                  },
+                  "resourceId": "tableRow::order_date",
+                  "valueType": "string"
+                },
+                "target": "form.order_date"
+              },
+              {
+                "sourceExpression": {
+                  "displayName": "tableRow.remark",
+                  "fallback": {
+                    "kind": "string",
+                    "value": ""
+                  },
+                  "resourceId": "tableRow::remark",
+                  "valueType": "string"
+                },
+                "target": "form.remark"
+              },
+              {
+                "sourceExpression": {
+                  "displayName": "tableRow.detailLines",
+                  "fallback": {
+                    "kind": "array",
+                    "value": []
+                  },
+                  "resourceId": "tableRow::detailLines",
+                  "valueType": "array"
+                },
+                "target": "variables.detailLines"
+              },
+              {
+                "sourceExpression": {
+                  "displayName": "tableRow.unitRows",
+                  "fallback": {
+                    "kind": "array",
+                    "value": []
+                  },
+                  "resourceId": "tableRow::unitRows",
+                  "valueType": "array"
+                },
+                "target": "variables.unitRows"
+              },
+              {
+                "sourceExpression": {
+                  "expectedType": "array",
+                  "fallback": [],
+                  "helpers": [],
+                  "invalidReason": null,
+                  "modelCode": null,
+                  "rawPathPreview": null,
+                  "source": "constant",
+                  "value": []
+                },
+                "target": "variables.deletedDetailLineIds"
+              },
+              {
+                "sourceExpression": {
+                  "expectedType": "array",
+                  "fallback": [],
+                  "helpers": [],
+                  "invalidReason": null,
+                  "modelCode": null,
+                  "rawPathPreview": null,
+                  "source": "constant",
+                  "value": []
+                },
+                "target": "variables.deletedUnitRowIds"
+              }
+            ],
+            "title": "\u8BA2\u5355\u5217\u8868"
+          },
+          "style": {},
+          "type": "report.dataTable"
+        },
+        "editorPanel": {
+          "bindings": {},
+          "children": [
+            "form",
+            "editorTables"
+          ],
+          "events": [],
+          "id": "editorPanel",
+          "layout": {
+            "gap": "12px"
+          },
+          "name": "\u8BA2\u5355\u7F16\u8F91\u533A",
+          "parentId": "root",
+          "props": {},
+          "style": {},
+          "type": "layout.column"
+        },
+        "editorTables": {
+          "bindings": {},
+          "children": [
+            "lineTable",
+            "unitTable"
+          ],
+          "events": [],
+          "id": "editorTables",
+          "layout": {
+            "gap": "12px"
+          },
+          "name": "\u660E\u7EC6\u7F16\u8F91\u533A",
+          "parentId": "editorPanel",
+          "props": {
+            "gridTemplateColumns": "repeat(auto-fit, minmax(420px, 1fr))"
+          },
+          "style": {},
+          "type": "layout.responsive"
+        },
+        "form": {
+          "bindings": {},
+          "children": [
+            "orderNoItem",
+            "customerItem",
+            "dateItem",
+            "remarkItem"
+          ],
+          "events": [],
+          "id": "form",
+          "layout": {
+            "backgroundColor": "#ffffff",
+            "border": "1px solid #dbe3ef",
+            "borderRadius": "8px",
+            "display": "grid",
+            "gap": "12px",
+            "gridTemplateColumns": "repeat(2, minmax(0, 1fr))",
+            "padding": "14px"
+          },
+          "name": "\u8BA2\u5355\u4E3B\u8868\u5355",
+          "parentId": "editorPanel",
+          "props": {
+            "title": "\u8BA2\u5355\u4E3B\u8868\u5355"
+          },
+          "style": {},
+          "type": "layout.form"
+        },
+        "lineTable": {
+          "bindings": {
+            "data": {
+              "displayName": "variables.detailLines",
+              "fallback": {
+                "kind": "array",
+                "value": []
+              },
+              "resourceId": "variables::detailLines",
+              "valueType": "array"
+            }
+          },
+          "children": [],
+          "events": [],
+          "id": "lineTable",
+          "layout": {},
+          "name": "\u5F85\u4FDD\u5B58\u660E\u7EC6\u884C",
+          "parentId": "editorTables",
+          "props": {
+            "columns": [
+              {
+                "defaultValue": 1,
+                "editorType": "number",
+                "key": "line_no",
+                "required": true,
+                "title": "\u884C\u53F7"
+              },
+              {
+                "defaultValue": "",
+                "editorType": "text",
+                "key": "product_name",
+                "required": true,
+                "title": "\u4EA7\u54C1"
+              },
+              {
+                "defaultValue": 1,
+                "editorType": "number",
+                "key": "quantity",
+                "required": true,
+                "title": "\u6570\u91CF"
+              },
+              {
+                "defaultValue": 0,
+                "editorType": "number",
+                "key": "unit_price",
+                "required": false,
+                "title": "\u5355\u4EF7"
+              },
+              {
+                "defaultValue": 0,
+                "editorType": "number",
+                "key": "amount",
+                "required": false,
+                "title": "\u91D1\u989D"
+              },
+              {
+                "defaultValue": "",
+                "editorType": "text",
+                "key": "unit_code",
+                "required": true,
+                "title": "\u5355\u4F4D"
+              },
+              {
+                "defaultValue": 0,
+                "editorType": "number",
+                "key": "discount_rate",
+                "required": false,
+                "title": "\u6298\u6263\u7387"
+              }
+            ],
+            "rowEditing": {
+              "allowAdd": true,
+              "allowDelete": true,
+              "allowEdit": true,
+              "deleteIdsVariable": "deletedDetailLineIds",
+              "enabled": true,
+              "fields": [
+                {
+                  "defaultValue": 1,
+                  "editorType": "number",
+                  "key": "line_no",
+                  "options": null,
+                  "readOnly": false,
+                  "required": true,
+                  "title": "\u884C\u53F7"
+                },
+                {
+                  "defaultValue": "",
+                  "editorType": "text",
+                  "key": "product_name",
+                  "options": null,
+                  "readOnly": false,
+                  "required": true,
+                  "title": "\u4EA7\u54C1"
+                },
+                {
+                  "defaultValue": 1,
+                  "editorType": "number",
+                  "key": "quantity",
+                  "options": null,
+                  "readOnly": false,
+                  "required": true,
+                  "title": "\u6570\u91CF"
+                },
+                {
+                  "defaultValue": 0,
+                  "editorType": "number",
+                  "key": "unit_price",
+                  "options": null,
+                  "readOnly": false,
+                  "required": false,
+                  "title": "\u5355\u4EF7"
+                },
+                {
+                  "defaultValue": 0,
+                  "editorType": "number",
+                  "key": "amount",
+                  "options": null,
+                  "readOnly": false,
+                  "required": false,
+                  "title": "\u91D1\u989D"
+                },
+                {
+                  "defaultValue": "",
+                  "editorType": "text",
+                  "key": "unit_code",
+                  "options": null,
+                  "readOnly": false,
+                  "required": true,
+                  "title": "\u5355\u4F4D"
+                },
+                {
+                  "defaultValue": 0,
+                  "editorType": "number",
+                  "key": "discount_rate",
+                  "options": null,
+                  "readOnly": false,
+                  "required": false,
+                  "title": "\u6298\u6263\u7387"
+                }
+              ],
+              "keyField": "id",
+              "mode": "inline"
+            },
+            "title": "\u5F85\u4FDD\u5B58\u660E\u7EC6\u884C"
+          },
+          "style": {},
+          "type": "report.dataTable"
+        },
+        "orderNoItem": {
+          "bindings": {},
+          "children": [
+            "orderNoItemInput"
+          ],
+          "events": [],
+          "id": "orderNoItem",
+          "layout": {
+            "display": "grid",
+            "gridTemplateColumns": "120px minmax(0, 1fr)"
+          },
+          "name": "\u8BA2\u5355\u53F7",
+          "parentId": "form",
+          "props": {
+            "title": "\u8BA2\u5355\u53F7"
+          },
+          "style": {},
+          "type": "layout.formItem"
+        },
+        "orderNoItemInput": {
+          "bindings": {},
+          "children": [],
+          "events": [],
+          "id": "orderNoItemInput",
+          "layout": {},
+          "name": "\u8BA2\u5355\u53F7",
+          "parentId": "orderNoItem",
+          "props": {
+            "placeholder": "SO-DEMO-001",
+            "title": "\u8BA2\u5355\u53F7"
+          },
+          "style": {},
+          "type": "input.text"
+        },
+        "queryCustomerItem": {
+          "bindings": {},
+          "children": [
+            "queryCustomerItemInput"
+          ],
+          "events": [],
+          "id": "queryCustomerItem",
+          "layout": {
+            "display": "grid",
+            "gap": "6px"
+          },
+          "name": "\u5BA2\u6237\u540D\u79F0",
+          "parentId": "queryPanel",
+          "props": {
+            "title": "\u5BA2\u6237\u540D\u79F0"
+          },
+          "style": {},
+          "type": "layout.formItem"
+        },
+        "queryCustomerItemInput": {
+          "bindings": {},
+          "children": [],
+          "events": [],
+          "id": "queryCustomerItemInput",
+          "layout": {},
+          "name": "\u5BA2\u6237\u540D\u79F0",
+          "parentId": "queryCustomerItem",
+          "props": {
+            "placeholder": "\u8F93\u5165\u5BA2\u6237\u540D\u79F0",
+            "title": "\u5BA2\u6237\u540D\u79F0"
+          },
+          "style": {},
+          "type": "input.text"
+        },
+        "queryOrderNoItem": {
+          "bindings": {},
+          "children": [
+            "queryOrderNoItemInput"
+          ],
+          "events": [],
+          "id": "queryOrderNoItem",
+          "layout": {
+            "display": "grid",
+            "gap": "6px"
+          },
+          "name": "\u8BA2\u5355\u53F7",
+          "parentId": "queryPanel",
+          "props": {
+            "title": "\u8BA2\u5355\u53F7"
+          },
+          "style": {},
+          "type": "layout.formItem"
+        },
+        "queryOrderNoItemInput": {
+          "bindings": {},
+          "children": [],
+          "events": [],
+          "id": "queryOrderNoItemInput",
+          "layout": {},
+          "name": "\u8BA2\u5355\u53F7",
+          "parentId": "queryOrderNoItem",
+          "props": {
+            "placeholder": "\u8F93\u5165\u8BA2\u5355\u53F7",
+            "title": "\u8BA2\u5355\u53F7"
+          },
+          "style": {},
+          "type": "input.text"
+        },
+        "queryPanel": {
+          "bindings": {},
+          "children": [
+            "queryOrderNoItem",
+            "queryCustomerItem",
+            "btnQueryInline"
+          ],
+          "events": [],
+          "id": "queryPanel",
+          "layout": {
+            "alignItems": "end",
+            "backgroundColor": "#ffffff",
+            "border": "1px solid #dbe3ef",
+            "borderRadius": "8px",
+            "display": "grid",
+            "gap": "12px",
+            "gridTemplateColumns": "minmax(220px, 1fr) minmax(220px, 1fr) auto",
+            "padding": "14px"
+          },
+          "name": "\u67E5\u8BE2\u9762\u677F",
+          "parentId": "root",
+          "props": {
+            "title": "\u67E5\u8BE2\u9762\u677F"
+          },
+          "style": {},
+          "type": "layout.form"
+        },
+        "remarkItem": {
+          "bindings": {},
+          "children": [
+            "remarkItemInput"
+          ],
+          "events": [],
+          "id": "remarkItem",
+          "layout": {
+            "display": "grid",
+            "gridTemplateColumns": "120px minmax(0, 1fr)"
+          },
+          "name": "\u5907\u6CE8",
+          "parentId": "form",
+          "props": {
+            "title": "\u5907\u6CE8"
+          },
+          "style": {},
+          "type": "layout.formItem"
+        },
+        "remarkItemInput": {
+          "bindings": {},
+          "children": [],
+          "events": [],
+          "id": "remarkItemInput",
+          "layout": {},
+          "name": "\u5907\u6CE8",
+          "parentId": "remarkItem",
+          "props": {
+            "placeholder": "\u5FAE\u6D41\u4E8B\u52A1\u5199\u5165\u4E3B\u660E\u7EC6\u5355\u4F4D\u4E09\u8868",
+            "title": "\u5907\u6CE8"
+          },
+          "style": {},
+          "type": "input.text"
+        },
+        "root": {
+          "bindings": {},
+          "children": [
+            "toolbar",
+            "queryPanel",
+            "detailTable",
+            "editorPanel"
+          ],
+          "events": [],
+          "id": "root",
+          "layout": {},
+          "name": "\u8BA2\u5355\u5FAE\u6D41\u4E8B\u52A1\u9875\u9762",
+          "parentId": null,
+          "props": {},
+          "style": {
+            "backgroundColor": "#f3f6fb",
+            "gap": "12px",
+            "minWidth": "0",
+            "padding": "12px"
+          },
+          "type": "layout.page"
+        },
+        "toolbar": {
+          "bindings": {},
+          "children": [
+            "btnSave",
+            "btnQuery"
+          ],
+          "events": [],
+          "id": "toolbar",
+          "layout": {
+            "alignItems": "center",
+            "gap": "8px",
+            "justifyContent": "flex-end"
+          },
+          "name": "\u64CD\u4F5C\u533A",
+          "parentId": "root",
+          "props": {},
+          "style": {},
+          "type": "layout.row"
+        },
+        "unitTable": {
+          "bindings": {
+            "data": {
+              "displayName": "variables.unitRows",
+              "fallback": {
+                "kind": "array",
+                "value": []
+              },
+              "resourceId": "variables::unitRows",
+              "valueType": "array"
+            }
+          },
+          "children": [],
+          "events": [],
+          "id": "unitTable",
+          "layout": {},
+          "name": "\u5F85\u4FDD\u5B58\u5355\u4F4D\u6362\u7B97",
+          "parentId": "editorTables",
+          "props": {
+            "columns": [
+              {
+                "defaultValue": 1,
+                "editorType": "number",
+                "key": "line_no",
+                "required": true,
+                "title": "\u884C\u53F7"
+              },
+              {
+                "defaultValue": "",
+                "editorType": "text",
+                "key": "unit_code",
+                "required": true,
+                "title": "\u5355\u4F4D\u7F16\u7801"
+              },
+              {
+                "defaultValue": "",
+                "editorType": "text",
+                "key": "unit_name",
+                "required": true,
+                "title": "\u5355\u4F4D\u540D\u79F0"
+              },
+              {
+                "defaultValue": 1,
+                "editorType": "number",
+                "key": "qty",
+                "required": true,
+                "title": "\u6362\u7B97\u6570\u91CF"
+              },
+              {
+                "defaultValue": 1,
+                "editorType": "number",
+                "key": "conversion_rate",
+                "required": true,
+                "title": "\u6362\u7B97\u7387"
+              }
+            ],
+            "rowEditing": {
+              "allowAdd": true,
+              "allowDelete": true,
+              "allowEdit": true,
+              "deleteIdsVariable": "deletedUnitRowIds",
+              "enabled": true,
+              "fields": [
+                {
+                  "defaultValue": 1,
+                  "editorType": "number",
+                  "key": "line_no",
+                  "options": null,
+                  "readOnly": false,
+                  "required": true,
+                  "title": "\u884C\u53F7"
+                },
+                {
+                  "defaultValue": "",
+                  "editorType": "text",
+                  "key": "unit_code",
+                  "options": null,
+                  "readOnly": false,
+                  "required": true,
+                  "title": "\u5355\u4F4D\u7F16\u7801"
+                },
+                {
+                  "defaultValue": "",
+                  "editorType": "text",
+                  "key": "unit_name",
+                  "options": null,
+                  "readOnly": false,
+                  "required": true,
+                  "title": "\u5355\u4F4D\u540D\u79F0"
+                },
+                {
+                  "defaultValue": 1,
+                  "editorType": "number",
+                  "key": "qty",
+                  "options": null,
+                  "readOnly": false,
+                  "required": true,
+                  "title": "\u6362\u7B97\u6570\u91CF"
+                },
+                {
+                  "defaultValue": 1,
+                  "editorType": "number",
+                  "key": "conversion_rate",
+                  "options": null,
+                  "readOnly": false,
+                  "required": true,
+                  "title": "\u6362\u7B97\u7387"
+                }
+              ],
+              "keyField": "id",
+              "mode": "inline"
+            },
+            "title": "\u5F85\u4FDD\u5B58\u5355\u4F4D\u6362\u7B97"
+          },
+          "style": {},
+          "type": "report.dataTable"
+        }
+      },
+      "metadata": {
+        "pageCode": "codex_microflow_order_demo",
+        "pageName": "\u5FAE\u6D41\u8BA2\u5355\u4E8B\u52A1\u793A\u4F8B"
+      },
+      "modals": [],
+      "modelOperations": [
+        {
+          "fieldMappings": [],
+          "filters": [],
+          "modelCode": "codex_demo_order_list_view",
+          "operationCode": "queryDefault",
+          "operationName": "\u9ED8\u8BA4\u67E5\u8BE2",
+          "operationType": "query",
+          "pageIndex": 1,
+          "pageSize": 20
+        },
+        {
+          "fieldMappings": [],
+          "filters": [],
+          "modelCode": "codex_demo_order_list_view",
+          "operationCode": "createDefault",
+          "operationName": "\u9ED8\u8BA4\u65B0\u589E",
+          "operationType": "create"
+        },
+        {
+          "fieldMappings": [],
+          "filters": [],
+          "idExpression": {
+            "displayName": "currentRow.__runtimeKey",
+            "fallback": {
+              "kind": "string",
+              "value": ""
+            },
+            "resourceId": "currentRow::__runtimeKey",
+            "valueType": "string"
+          },
+          "modelCode": "codex_demo_order_list_view",
+          "operationCode": "updateDefault",
+          "operationName": "\u9ED8\u8BA4\u7F16\u8F91",
+          "operationType": "update"
+        }
+      ],
+      "models": [
+        {
+          "modelCode": "codex_demo_order_header",
+          "modelName": "\u8BA2\u5355\u4E3B\u8868\u6A21\u578B"
+        },
+        {
+          "modelCode": "codex_demo_order_line",
+          "modelName": "\u8BA2\u5355\u660E\u7EC6\u6A21\u578B"
+        },
+        {
+          "modelCode": "codex_demo_order_unit",
+          "modelName": "\u8BA2\u5355\u5355\u4F4D\u6A21\u578B"
+        },
+        {
+          "modelCode": "codex_demo_order_list_view",
+          "modelName": "\u8BA2\u5355\u5217\u8868\u89C6\u56FE\u6A21\u578B"
+        },
+        {
+          "modelCode": "codex_demo_order_detail_view",
+          "modelName": "\u8BA2\u5355\u8BE6\u60C5\u89C6\u56FE\u6A21\u578B"
+        }
+      ],
+      "pageParameters": [],
+      "pageType": "standard",
+      "pages": [
+        {
+          "id": "page",
+          "name": "\u5FAE\u6D41\u8BA2\u5355\u4E8B\u52A1\u793A\u4F8B",
+          "rootElementId": "root"
+        }
+      ],
+      "permissions": {},
+      "printBindings": [],
+      "revision": 10,
+      "runtimeContext": {
+        "menuCode": "codex_microflow_order_demo-menu",
+        "modelCode": "codex_demo_order_list_view",
+        "pageCode": "codex_microflow_order_demo",
+        "pageName": "\u5FAE\u6D41\u8BA2\u5355\u4E8B\u52A1\u793A\u4F8B",
+        "pageParameters": [],
+        "pageType": "standard",
+        "permissionPrefix": "app:runtime-page:codex-microflow-order-demo",
+        "templateCode": "microflow-order-demo"
+      },
+      "sqlBindings": [],
+      "styleTokens": {},
+      "variables": [
+        {
+          "defaultValue": {},
+          "id": "acceptanceResult",
+          "name": "acceptanceResult",
+          "valueType": "object"
+        },
+        {
+          "defaultValue": [],
+          "id": "orderDetailResult",
+          "name": "orderDetailResult",
+          "valueType": "array"
+        },
+        {
+          "defaultValue": [],
+          "id": "orderListRows",
+          "name": "\u8BA2\u5355\u5217\u8868",
+          "valueType": "array"
+        },
+        {
+          "defaultValue": [],
+          "id": "orderDetailRows",
+          "name": "orderDetailRows",
+          "valueType": "array"
+        },
+        {
+          "defaultValue": [],
+          "id": "detailLines",
+          "name": "\u660E\u7EC6\u884C",
+          "valueType": "array"
+        },
+        {
+          "defaultValue": [],
+          "id": "unitRows",
+          "name": "\u5355\u4F4D\u6362\u7B97",
+          "valueType": "array"
+        },
+        {
+          "defaultValue": {},
+          "id": "selectedOrder",
+          "name": "\u9009\u4E2D\u8BA2\u5355",
+          "valueType": "object"
+        },
+        {
+          "defaultValue": "",
+          "id": "orderId",
+          "name": "\u9009\u4E2D\u8BA2\u5355ID",
+          "valueType": "string"
+        },
+        {
+          "defaultValue": [],
+          "id": "deletedDetailLineIds",
+          "name": "\u5DF2\u5220\u9664\u660E\u7EC6\u884CID",
+          "valueType": "array"
+        },
+        {
+          "defaultValue": [],
+          "id": "deletedUnitRowIds",
+          "name": "\u5DF2\u5220\u9664\u5355\u4F4D\u884CID",
+          "valueType": "array"
+        }
+      ],
+      "workflowBindings": []
+    },
+    "form": {
+      "fields": [
+        {
+          "binding": "order_no",
+          "dataType": "text",
+          "fieldCode": "order_no",
+          "fieldName": "\u8BA2\u5355\u53F7",
+          "order": 1,
+          "visible": true,
+          "writable": true
+        },
+        {
+          "binding": "customer_name",
+          "dataType": "text",
+          "fieldCode": "customer_name",
+          "fieldName": "\u5BA2\u6237",
+          "order": 2,
+          "visible": true,
+          "writable": true
+        },
+        {
+          "binding": "order_date",
+          "dataType": "text",
+          "fieldCode": "order_date",
+          "fieldName": "\u65E5\u671F",
+          "order": 3,
+          "visible": true,
+          "writable": true
+        },
+        {
+          "binding": "total_amount",
+          "dataType": "text",
+          "fieldCode": "total_amount",
+          "fieldName": "\u5408\u8BA1",
+          "order": 4,
+          "visible": true,
+          "writable": true
+        },
+        {
+          "binding": "approval_level",
+          "dataType": "text",
+          "fieldCode": "approval_level",
+          "fieldName": "\u5BA1\u6279\u7B49\u7EA7",
+          "order": 5,
+          "visible": true,
+          "writable": true
+        },
+        {
+          "binding": "line_count",
+          "dataType": "text",
+          "fieldCode": "line_count",
+          "fieldName": "\u660E\u7EC6\u6570",
+          "order": 6,
+          "visible": true,
+          "writable": true
+        },
+        {
+          "binding": "total_quantity",
+          "dataType": "text",
+          "fieldCode": "total_quantity",
+          "fieldName": "\u603B\u6570\u91CF",
+          "order": 7,
+          "visible": true,
+          "writable": true
+        },
+        {
+          "binding": "status",
+          "dataType": "text",
+          "fieldCode": "status",
+          "fieldName": "\u72B6\u6001",
+          "order": 8,
+          "visible": true,
+          "writable": true
+        }
+      ]
+    },
+    "grid": {
+      "columns": [
+        {
+          "binding": "order_no",
+          "fixed": null,
+          "isVisible": true,
+          "key": "order_no",
+          "order": 1,
+          "queryField": "order_no",
+          "renderer": null,
+          "sortField": "order_no",
+          "title": "\u8BA2\u5355\u53F7",
+          "width": "180px"
+        },
+        {
+          "binding": "customer_name",
+          "fixed": null,
+          "isVisible": true,
+          "key": "customer_name",
+          "order": 2,
+          "queryField": "customer_name",
+          "renderer": null,
+          "sortField": "customer_name",
+          "title": "\u5BA2\u6237",
+          "width": "180px"
+        },
+        {
+          "binding": "order_date",
+          "fixed": null,
+          "isVisible": true,
+          "key": "order_date",
+          "order": 3,
+          "queryField": "order_date",
+          "renderer": null,
+          "sortField": "order_date",
+          "title": "\u65E5\u671F",
+          "width": "180px"
+        },
+        {
+          "binding": "total_amount",
+          "fixed": null,
+          "isVisible": true,
+          "key": "total_amount",
+          "order": 4,
+          "queryField": "total_amount",
+          "renderer": null,
+          "sortField": "total_amount",
+          "title": "\u5408\u8BA1",
+          "width": "180px"
+        },
+        {
+          "binding": "approval_level",
+          "fixed": null,
+          "isVisible": true,
+          "key": "approval_level",
+          "order": 5,
+          "queryField": "approval_level",
+          "renderer": null,
+          "sortField": "approval_level",
+          "title": "\u5BA1\u6279\u7B49\u7EA7",
+          "width": "180px"
+        },
+        {
+          "binding": "line_count",
+          "fixed": null,
+          "isVisible": true,
+          "key": "line_count",
+          "order": 6,
+          "queryField": "line_count",
+          "renderer": null,
+          "sortField": "line_count",
+          "title": "\u660E\u7EC6\u6570",
+          "width": "180px"
+        },
+        {
+          "binding": "total_quantity",
+          "fixed": null,
+          "isVisible": true,
+          "key": "total_quantity",
+          "order": 7,
+          "queryField": "total_quantity",
+          "renderer": null,
+          "sortField": "total_quantity",
+          "title": "\u603B\u6570\u91CF",
+          "width": "180px"
+        },
+        {
+          "binding": "status",
+          "fixed": null,
+          "isVisible": true,
+          "key": "status",
+          "order": 8,
+          "queryField": "status",
+          "renderer": null,
+          "sortField": "status",
+          "title": "\u72B6\u6001",
+          "width": "180px"
+        }
+      ],
+      "keyField": "order_no",
+      "masterDetail": {
+        "detailSections": [],
+        "enabled": false,
+        "relations": []
+      }
+    },
+    "id": "codex_microflow_order_demo",
+    "manifest": [
+      {
+        "binding": {
+          "acceptedSources": [],
+          "acceptedTypes": [],
+          "supportsConversion": false
+        },
+        "defaults": {
+          "layout": {},
+          "props": {},
+          "style": {}
+        },
+        "events": [],
+        "inspector": {
+          "sections": [
+            "component"
+          ]
+        },
+        "migration": {
+          "revision": "latest",
+          "strategy": "none"
+        },
+        "renderer": {
+          "preview": "ComponentRuntimeHost",
+          "runtime": "ComponentRuntimeHost"
+        },
+        "responsive": {
+          "supportedLayouts": [
+            "inherited"
+          ],
+          "supportsOverrides": true
+        },
+        "security": {
+          "actionPermissions": [],
+          "requiresPermission": false
+        },
+        "type": "action.button"
+      },
+      {
+        "binding": {
+          "acceptedSources": [],
+          "acceptedTypes": [],
+          "supportsConversion": false
+        },
+        "defaults": {
+          "layout": {},
+          "props": {},
+          "style": {}
+        },
+        "events": [],
+        "inspector": {
+          "sections": [
+            "component"
+          ]
+        },
+        "migration": {
+          "revision": "latest",
+          "strategy": "none"
+        },
+        "renderer": {
+          "preview": "ComponentRuntimeHost",
+          "runtime": "ComponentRuntimeHost"
+        },
+        "responsive": {
+          "supportedLayouts": [
+            "inherited"
+          ],
+          "supportsOverrides": true
+        },
+        "security": {
+          "actionPermissions": [],
+          "requiresPermission": false
+        },
+        "type": "layout.formItem"
+      },
+      {
+        "binding": {
+          "acceptedSources": [],
+          "acceptedTypes": [],
+          "supportsConversion": false
+        },
+        "defaults": {
+          "layout": {},
+          "props": {},
+          "style": {}
+        },
+        "events": [],
+        "inspector": {
+          "sections": [
+            "component"
+          ]
+        },
+        "migration": {
+          "revision": "latest",
+          "strategy": "none"
+        },
+        "renderer": {
+          "preview": "ComponentRuntimeHost",
+          "runtime": "ComponentRuntimeHost"
+        },
+        "responsive": {
+          "supportedLayouts": [
+            "inherited"
+          ],
+          "supportsOverrides": true
+        },
+        "security": {
+          "actionPermissions": [],
+          "requiresPermission": false
+        },
+        "type": "input.text"
+      },
+      {
+        "binding": {
+          "acceptedSources": [],
+          "acceptedTypes": [],
+          "supportsConversion": false
+        },
+        "defaults": {
+          "layout": {},
+          "props": {},
+          "style": {}
+        },
+        "events": [],
+        "inspector": {
+          "sections": [
+            "component"
+          ]
+        },
+        "migration": {
+          "revision": "latest",
+          "strategy": "none"
+        },
+        "renderer": {
+          "preview": "ComponentRuntimeHost",
+          "runtime": "ComponentRuntimeHost"
+        },
+        "responsive": {
+          "supportedLayouts": [
+            "inherited"
+          ],
+          "supportsOverrides": true
+        },
+        "security": {
+          "actionPermissions": [],
+          "requiresPermission": false
+        },
+        "type": "input.date"
+      },
+      {
+        "binding": {
+          "acceptedSources": [],
+          "acceptedTypes": [],
+          "supportsConversion": false
+        },
+        "defaults": {
+          "layout": {},
+          "props": {},
+          "style": {}
+        },
+        "events": [],
+        "inspector": {
+          "sections": [
+            "component"
+          ]
+        },
+        "migration": {
+          "revision": "latest",
+          "strategy": "none"
+        },
+        "renderer": {
+          "preview": "ComponentRuntimeHost",
+          "runtime": "ComponentRuntimeHost"
+        },
+        "responsive": {
+          "supportedLayouts": [
+            "inherited"
+          ],
+          "supportsOverrides": true
+        },
+        "security": {
+          "actionPermissions": [],
+          "requiresPermission": false
+        },
+        "type": "report.dataTable"
+      },
+      {
+        "binding": {
+          "acceptedSources": [],
+          "acceptedTypes": [],
+          "supportsConversion": false
+        },
+        "defaults": {
+          "layout": {},
+          "props": {},
+          "style": {}
+        },
+        "events": [],
+        "inspector": {
+          "sections": [
+            "component"
+          ]
+        },
+        "migration": {
+          "revision": "latest",
+          "strategy": "none"
+        },
+        "renderer": {
+          "preview": "ComponentRuntimeHost",
+          "runtime": "ComponentRuntimeHost"
+        },
+        "responsive": {
+          "supportedLayouts": [
+            "inherited"
+          ],
+          "supportsOverrides": true
+        },
+        "security": {
+          "actionPermissions": [],
+          "requiresPermission": false
+        },
+        "type": "layout.column"
+      },
+      {
+        "binding": {
+          "acceptedSources": [],
+          "acceptedTypes": [],
+          "supportsConversion": false
+        },
+        "defaults": {
+          "layout": {},
+          "props": {},
+          "style": {}
+        },
+        "events": [],
+        "inspector": {
+          "sections": [
+            "component"
+          ]
+        },
+        "migration": {
+          "revision": "latest",
+          "strategy": "none"
+        },
+        "renderer": {
+          "preview": "ComponentRuntimeHost",
+          "runtime": "ComponentRuntimeHost"
+        },
+        "responsive": {
+          "supportedLayouts": [
+            "inherited"
+          ],
+          "supportsOverrides": true
+        },
+        "security": {
+          "actionPermissions": [],
+          "requiresPermission": false
+        },
+        "type": "layout.responsive"
+      },
+      {
+        "binding": {
+          "acceptedSources": [],
+          "acceptedTypes": [],
+          "supportsConversion": false
+        },
+        "defaults": {
+          "layout": {},
+          "props": {},
+          "style": {}
+        },
+        "events": [],
+        "inspector": {
+          "sections": [
+            "component"
+          ]
+        },
+        "migration": {
+          "revision": "latest",
+          "strategy": "none"
+        },
+        "renderer": {
+          "preview": "ComponentRuntimeHost",
+          "runtime": "ComponentRuntimeHost"
+        },
+        "responsive": {
+          "supportedLayouts": [
+            "inherited"
+          ],
+          "supportsOverrides": true
+        },
+        "security": {
+          "actionPermissions": [],
+          "requiresPermission": false
+        },
+        "type": "layout.form"
+      },
+      {
+        "binding": {
+          "acceptedSources": [],
+          "acceptedTypes": [],
+          "supportsConversion": false
+        },
+        "defaults": {
+          "layout": {},
+          "props": {},
+          "style": {}
+        },
+        "events": [],
+        "inspector": {
+          "sections": [
+            "component"
+          ]
+        },
+        "migration": {
+          "revision": "latest",
+          "strategy": "none"
+        },
+        "renderer": {
+          "preview": "ComponentRuntimeHost",
+          "runtime": "ComponentRuntimeHost"
+        },
+        "responsive": {
+          "supportedLayouts": [
+            "inherited"
+          ],
+          "supportsOverrides": true
+        },
+        "security": {
+          "actionPermissions": [],
+          "requiresPermission": false
+        },
+        "type": "layout.page"
+      },
+      {
+        "binding": {
+          "acceptedSources": [],
+          "acceptedTypes": [],
+          "supportsConversion": false
+        },
+        "defaults": {
+          "layout": {},
+          "props": {},
+          "style": {}
+        },
+        "events": [],
+        "inspector": {
+          "sections": [
+            "component"
+          ]
+        },
+        "migration": {
+          "revision": "latest",
+          "strategy": "none"
+        },
+        "renderer": {
+          "preview": "ComponentRuntimeHost",
+          "runtime": "ComponentRuntimeHost"
+        },
+        "responsive": {
+          "supportedLayouts": [
+            "inherited"
+          ],
+          "supportsOverrides": true
+        },
+        "security": {
+          "actionPermissions": [],
+          "requiresPermission": false
+        },
+        "type": "layout.row"
+      }
+    ],
+    "manifestTypes": [
+      "action.button",
+      "layout.formItem",
+      "input.text",
+      "input.date",
+      "report.dataTable",
+      "layout.column",
+      "layout.responsive",
+      "layout.form",
+      "layout.page",
+      "layout.row"
+    ],
+    "migrationRevision": "latest",
+    "modelCode": "codex_demo_order_list_view",
+    "pageType": "standard",
+    "relations": [],
+    "renderer": "designerDocument",
+    "revision": 10,
+    "runtimeContext": {
+      "menuCode": "codex_microflow_order_demo-menu",
+      "modelCode": "codex_demo_order_list_view",
+      "pageCode": "codex_microflow_order_demo",
+      "pageName": "\u5FAE\u6D41\u8BA2\u5355\u4E8B\u52A1\u793A\u4F8B",
+      "pageParameters": [],
+      "pageType": "standard",
+      "permissionPrefix": "app:runtime-page:codex-microflow-order-demo",
+      "templateCode": "microflow-order-demo"
+    },
+    "sections": [
+      {
+        "componentKey": "runtimeCrudPage",
+        "id": "codex_microflow_order_demo-runtime-crud",
+        "props": {
+          "addPermissionCode": "app:runtime-page:codex-microflow-order-demo:add",
+          "createImportExport": false,
+          "createRuntimeCrudActions": false,
+          "deletePermissionCode": "app:runtime-page:codex-microflow-order-demo:delete",
+          "editPermissionCode": "app:runtime-page:codex-microflow-order-demo:edit",
+          "exportPermissionCode": "app:runtime-page:codex-microflow-order-demo:export",
+          "importPermissionCode": "app:runtime-page:codex-microflow-order-demo:import",
+          "keyField": "order_no",
+          "modelCode": "codex_demo_order_list_view",
+          "pageCode": "codex_microflow_order_demo",
+          "pageName": "\u5FAE\u6D41\u8BA2\u5355\u4E8B\u52A1\u793A\u4F8B",
+          "permissionCode": "app:runtime-page:codex-microflow-order-demo:view",
+          "readOnly": false
+        },
+        "variant": "plain"
+      }
+    ],
+    "signature": "8fbf8ee6f4c0a68069ee0d2509efc607c13c1e9a718b10e315af0f009ff67422",
+    "title": "\u5FAE\u6D41\u8BA2\u5355\u4E8B\u52A1\u793A\u4F8B"
+  },
+  "ArtifactHash": "sha256:65dc83f48f8249d70679d4f011888f92cc2332f28bd27241abfc7a62bac243b9",
+  "Document": {
+    "actions": [],
+    "apiBindings": [],
+    "dataSources": [],
+    "documentId": "codex_microflow_order_demo_page_id",
+    "elements": {
+      "btnQuery": {
+        "bindings": {},
+        "children": [],
+        "events": [
+          {
+            "id": "query-click",
+            "name": "\u6267\u884C\u8BA2\u5355\u5217\u8868\u5FAE\u6D41",
+            "steps": [
+              {
+                "config": {
+                  "action": "query",
+                  "flowCode": "codex_demo_order_query_list",
+                  "inputMappings": [
+                    {
+                      "sourceExpression": {
+                        "displayName": "form.query_keyword",
+                        "fallback": {
+                          "kind": "string",
+                          "value": ""
+                        },
+                        "resourceId": "form::query_keyword",
+                        "valueType": "string"
+                      },
+                      "targetVariable": "keyword"
+                    },
+                    {
+                      "sourceExpression": {
+                        "displayName": "form.query_order_no",
+                        "fallback": {
+                          "kind": "string",
+                          "value": ""
+                        },
+                        "resourceId": "form::query_order_no",
+                        "valueType": "string"
+                      },
+                      "targetVariable": "orderNo"
+                    },
+                    {
+                      "sourceExpression": {
+                        "displayName": "form.query_customer_name",
+                        "fallback": {
+                          "kind": "string",
+                          "value": ""
+                        },
+                        "resourceId": "form::query_customer_name",
+                        "valueType": "string"
+                      },
+                      "targetVariable": "customerName"
+                    },
+                    {
+                      "sourceExpression": {
+                        "expectedType": "number",
+                        "fallback": 1,
+                        "helpers": [],
+                        "invalidReason": null,
+                        "modelCode": null,
+                        "rawPathPreview": null,
+                        "source": "constant",
+                        "value": 1
+                      },
+                      "targetVariable": "pageIndex"
+                    },
+                    {
+                      "sourceExpression": {
+                        "expectedType": "number",
+                        "fallback": 50,
+                        "helpers": [],
+                        "invalidReason": null,
+                        "modelCode": null,
+                        "rawPathPreview": null,
+                        "source": "constant",
+                        "value": 50
+                      },
+                      "targetVariable": "pageSize"
+                    }
+                  ],
+                  "refreshLoadActionsAfter": false,
+                  "resultPath": "orderListRows",
+                  "resultVariable": "orderListRows"
+                },
+                "id": "4cc5491bd76d4e54adf7df23c475c318",
+                "type": "runPageMicroflow"
+              }
+            ],
+            "trigger": "click"
+          }
+        ],
+        "id": "btnQuery",
+        "layout": {},
+        "name": "\u5237\u65B0\u5217\u8868",
+        "parentId": "toolbar",
+        "props": {
+          "title": "\u5237\u65B0\u5217\u8868"
+        },
+        "style": {},
+        "type": "action.button"
+      },
+      "btnQueryInline": {
+        "bindings": {},
+        "children": [],
+        "events": [
+          {
+            "id": "query-inline-click",
+            "name": "\u6267\u884C\u8BA2\u5355\u5217\u8868\u5FAE\u6D41",
+            "steps": [
+              {
+                "config": {
+                  "action": "query",
+                  "flowCode": "codex_demo_order_query_list",
+                  "inputMappings": [
+                    {
+                      "sourceExpression": {
+                        "displayName": "form.query_keyword",
+                        "fallback": {
+                          "kind": "string",
+                          "value": ""
+                        },
+                        "resourceId": "form::query_keyword",
+                        "valueType": "string"
+                      },
+                      "targetVariable": "keyword"
+                    },
+                    {
+                      "sourceExpression": {
+                        "displayName": "form.query_order_no",
+                        "fallback": {
+                          "kind": "string",
+                          "value": ""
+                        },
+                        "resourceId": "form::query_order_no",
+                        "valueType": "string"
+                      },
+                      "targetVariable": "orderNo"
+                    },
+                    {
+                      "sourceExpression": {
+                        "displayName": "form.query_customer_name",
+                        "fallback": {
+                          "kind": "string",
+                          "value": ""
+                        },
+                        "resourceId": "form::query_customer_name",
+                        "valueType": "string"
+                      },
+                      "targetVariable": "customerName"
+                    },
+                    {
+                      "sourceExpression": {
+                        "expectedType": "number",
+                        "fallback": 1,
+                        "helpers": [],
+                        "invalidReason": null,
+                        "modelCode": null,
+                        "rawPathPreview": null,
+                        "source": "constant",
+                        "value": 1
+                      },
+                      "targetVariable": "pageIndex"
+                    },
+                    {
+                      "sourceExpression": {
+                        "expectedType": "number",
+                        "fallback": 50,
+                        "helpers": [],
+                        "invalidReason": null,
+                        "modelCode": null,
+                        "rawPathPreview": null,
+                        "source": "constant",
+                        "value": 50
+                      },
+                      "targetVariable": "pageSize"
+                    }
+                  ],
+                  "refreshLoadActionsAfter": false,
+                  "resultPath": "orderListRows",
+                  "resultVariable": "orderListRows"
+                },
+                "id": "f2001d410ffe45b5bfce88f3ba43c843",
+                "type": "runPageMicroflow"
+              }
+            ],
+            "trigger": "click"
+          }
+        ],
+        "id": "btnQueryInline",
+        "layout": {},
+        "name": "\u67E5\u8BE2",
+        "parentId": "queryPanel",
+        "props": {
+          "title": "\u67E5\u8BE2",
+          "variant": "primary"
+        },
+        "style": {},
+        "type": "action.button"
+      },
+      "btnSave": {
+        "bindings": {},
+        "children": [],
+        "events": [
+          {
+            "id": "save-click",
+            "name": "\u6267\u884C\u4FDD\u5B58\u5FAE\u6D41",
+            "steps": [
+              {
+                "config": {
+                  "action": "edit",
+                  "flowCode": "codex_demo_order_save",
+                  "inputMappings": [
+                    {
+                      "sourceExpression": {
+                        "displayName": "variables.orderId",
+                        "fallback": {
+                          "kind": "string",
+                          "value": ""
+                        },
+                        "resourceId": "variables::orderId",
+                        "valueType": "string"
+                      },
+                      "targetVariable": "orderId"
+                    },
+                    {
+                      "sourceExpression": {
+                        "expectedType": "object",
+                        "fallback": {},
+                        "helpers": [],
+                        "invalidReason": null,
+                        "modelCode": null,
+                        "rawPathPreview": null,
+                        "source": "form",
+                        "value": null
+                      },
+                      "targetVariable": "form"
+                    },
+                    {
+                      "sourceExpression": {
+                        "displayName": "variables.detailLines",
+                        "fallback": {
+                          "kind": "array",
+                          "value": []
+                        },
+                        "resourceId": "variables::detailLines",
+                        "valueType": "array"
+                      },
+                      "targetVariable": "detailLines"
+                    },
+                    {
+                      "sourceExpression": {
+                        "displayName": "variables.unitRows",
+                        "fallback": {
+                          "kind": "array",
+                          "value": []
+                        },
+                        "resourceId": "variables::unitRows",
+                        "valueType": "array"
+                      },
+                      "targetVariable": "unitRows"
+                    },
+                    {
+                      "sourceExpression": {
+                        "displayName": "variables.deletedDetailLineIds",
+                        "fallback": {
+                          "kind": "array",
+                          "value": []
+                        },
+                        "resourceId": "variables::deletedDetailLineIds",
+                        "valueType": "array"
+                      },
+                      "targetVariable": "deletedDetailLineIds"
+                    },
+                    {
+                      "sourceExpression": {
+                        "displayName": "variables.deletedUnitRowIds",
+                        "fallback": {
+                          "kind": "array",
+                          "value": []
+                        },
+                        "resourceId": "variables::deletedUnitRowIds",
+                        "valueType": "array"
+                      },
+                      "targetVariable": "deletedUnitRowIds"
+                    }
+                  ],
+                  "refreshLoadActionsAfter": true,
+                  "resultPath": "saveResult",
+                  "resultVariable": "saveResult"
+                },
+                "id": "029021c6477647ebba06a5454e7b3724",
+                "type": "runPageMicroflow"
+              }
+            ],
+            "trigger": "click"
+          }
+        ],
+        "id": "btnSave",
+        "layout": {},
+        "name": "\u4FDD\u5B58\u8BA2\u5355\u4E8B\u52A1",
+        "parentId": "toolbar",
+        "props": {
+          "title": "\u4FDD\u5B58\u8BA2\u5355\u4E8B\u52A1",
+          "variant": "primary"
+        },
+        "style": {},
+        "type": "action.button"
+      },
+      "customerItem": {
+        "bindings": {},
+        "children": [
+          "customerItemInput"
+        ],
+        "events": [],
+        "id": "customerItem",
+        "layout": {
+          "display": "grid",
+          "gridTemplateColumns": "120px minmax(0, 1fr)"
+        },
+        "name": "\u5BA2\u6237\u540D\u79F0",
+        "parentId": "form",
+        "props": {
+          "title": "\u5BA2\u6237\u540D\u79F0"
+        },
+        "style": {},
+        "type": "layout.formItem"
+      },
+      "customerItemInput": {
+        "bindings": {},
+        "children": [],
+        "events": [],
+        "id": "customerItemInput",
+        "layout": {},
+        "name": "\u5BA2\u6237\u540D\u79F0",
+        "parentId": "customerItem",
+        "props": {
+          "placeholder": "Codex \u5BA2\u6237",
+          "title": "\u5BA2\u6237\u540D\u79F0"
+        },
+        "style": {},
+        "type": "input.text"
+      },
+      "dateItem": {
+        "bindings": {},
+        "children": [
+          "dateItemInput"
+        ],
+        "events": [],
+        "id": "dateItem",
+        "layout": {
+          "display": "grid",
+          "gridTemplateColumns": "120px minmax(0, 1fr)"
+        },
+        "name": "\u8BA2\u5355\u65E5\u671F",
+        "parentId": "form",
+        "props": {
+          "title": "\u8BA2\u5355\u65E5\u671F"
+        },
+        "style": {},
+        "type": "layout.formItem"
+      },
+      "dateItemInput": {
+        "bindings": {},
+        "children": [],
+        "events": [],
+        "id": "dateItemInput",
+        "layout": {},
+        "name": "\u8BA2\u5355\u65E5\u671F",
+        "parentId": "dateItem",
+        "props": {
+          "placeholder": "2026-07-02",
+          "title": "\u8BA2\u5355\u65E5\u671F"
+        },
+        "style": {},
+        "type": "input.date"
+      },
+      "detailTable": {
+        "bindings": {
+          "data": {
+            "displayName": "variables.orderListRows",
+            "fallback": {
+              "kind": "array",
+              "value": []
+            },
+            "resourceId": "variables::orderListRows",
+            "valueType": "array"
+          }
+        },
+        "children": [],
+        "events": [
+          {
+            "id": "list-load",
+            "name": "\u52A0\u8F7D\u8BA2\u5355\u5217\u8868",
+            "steps": [
+              {
+                "config": {
+                  "action": "query",
+                  "flowCode": "codex_demo_order_query_list",
+                  "inputMappings": [
+                    {
+                      "sourceExpression": {
+                        "expectedType": "number",
+                        "fallback": 1,
+                        "helpers": [],
+                        "invalidReason": null,
+                        "modelCode": null,
+                        "rawPathPreview": null,
+                        "source": "constant",
+                        "value": 1
+                      },
+                      "targetVariable": "pageIndex"
+                    },
+                    {
+                      "sourceExpression": {
+                        "expectedType": "number",
+                        "fallback": 50,
+                        "helpers": [],
+                        "invalidReason": null,
+                        "modelCode": null,
+                        "rawPathPreview": null,
+                        "source": "constant",
+                        "value": 50
+                      },
+                      "targetVariable": "pageSize"
+                    }
+                  ],
+                  "refreshLoadActionsAfter": false,
+                  "resultPath": "orderListRows",
+                  "resultVariable": "orderListRows"
+                },
+                "id": "step_load_order_list",
+                "type": "runPageMicroflow"
+              }
+            ],
+            "trigger": "load"
+          }
+        ],
+        "id": "detailTable",
+        "layout": {},
+        "name": "\u8BA2\u5355\u5217\u8868",
+        "parentId": "root",
+        "props": {
+          "columns": [
+            {
+              "key": "order_no",
+              "title": "\u8BA2\u5355\u53F7"
+            },
+            {
+              "key": "customer_name",
+              "title": "\u5BA2\u6237"
+            },
+            {
+              "key": "order_date",
+              "title": "\u65E5\u671F"
+            },
+            {
+              "key": "total_amount",
+              "title": "\u5408\u8BA1"
+            },
+            {
+              "key": "approval_level",
+              "title": "\u5BA1\u6279\u7B49\u7EA7"
+            },
+            {
+              "key": "line_count",
+              "title": "\u660E\u7EC6\u6570"
+            },
+            {
+              "key": "total_quantity",
+              "title": "\u603B\u6570\u91CF"
+            },
+            {
+              "key": "status",
+              "title": "\u72B6\u6001"
+            }
+          ],
+          "selectionMappings": [
+            {
+              "sourceExpression": {
+                "expectedType": "object",
+                "fallback": {},
+                "helpers": [],
+                "invalidReason": null,
+                "modelCode": null,
+                "rawPathPreview": null,
+                "source": "tableRow",
+                "value": null
+              },
+              "target": "variables.selectedOrder"
+            },
+            {
+              "sourceExpression": {
+                "displayName": "tableRow.id",
+                "fallback": {
+                  "kind": "string",
+                  "value": ""
+                },
+                "resourceId": "tableRow::id",
+                "valueType": "string"
+              },
+              "target": "variables.orderId"
+            },
+            {
+              "sourceExpression": {
+                "displayName": "tableRow.order_no",
+                "fallback": {
+                  "kind": "string",
+                  "value": ""
+                },
+                "resourceId": "tableRow::order_no",
+                "valueType": "string"
+              },
+              "target": "form.order_no"
+            },
+            {
+              "sourceExpression": {
+                "displayName": "tableRow.customer_name",
+                "fallback": {
+                  "kind": "string",
+                  "value": ""
+                },
+                "resourceId": "tableRow::customer_name",
+                "valueType": "string"
+              },
+              "target": "form.customer_name"
+            },
+            {
+              "sourceExpression": {
+                "displayName": "tableRow.order_date",
+                "fallback": {
+                  "kind": "string",
+                  "value": ""
+                },
+                "resourceId": "tableRow::order_date",
+                "valueType": "string"
+              },
+              "target": "form.order_date"
+            },
+            {
+              "sourceExpression": {
+                "displayName": "tableRow.remark",
+                "fallback": {
+                  "kind": "string",
+                  "value": ""
+                },
+                "resourceId": "tableRow::remark",
+                "valueType": "string"
+              },
+              "target": "form.remark"
+            },
+            {
+              "sourceExpression": {
+                "displayName": "tableRow.detailLines",
+                "fallback": {
+                  "kind": "array",
+                  "value": []
+                },
+                "resourceId": "tableRow::detailLines",
+                "valueType": "array"
+              },
+              "target": "variables.detailLines"
+            },
+            {
+              "sourceExpression": {
+                "displayName": "tableRow.unitRows",
+                "fallback": {
+                  "kind": "array",
+                  "value": []
+                },
+                "resourceId": "tableRow::unitRows",
+                "valueType": "array"
+              },
+              "target": "variables.unitRows"
+            },
+            {
+              "sourceExpression": {
+                "expectedType": "array",
+                "fallback": [],
+                "helpers": [],
+                "invalidReason": null,
+                "modelCode": null,
+                "rawPathPreview": null,
+                "source": "constant",
+                "value": []
+              },
+              "target": "variables.deletedDetailLineIds"
+            },
+            {
+              "sourceExpression": {
+                "expectedType": "array",
+                "fallback": [],
+                "helpers": [],
+                "invalidReason": null,
+                "modelCode": null,
+                "rawPathPreview": null,
+                "source": "constant",
+                "value": []
+              },
+              "target": "variables.deletedUnitRowIds"
+            }
+          ],
+          "title": "\u8BA2\u5355\u5217\u8868"
+        },
+        "style": {},
+        "type": "report.dataTable"
+      },
+      "editorPanel": {
+        "bindings": {},
+        "children": [
+          "form",
+          "editorTables"
+        ],
+        "events": [],
+        "id": "editorPanel",
+        "layout": {
+          "gap": "12px"
+        },
+        "name": "\u8BA2\u5355\u7F16\u8F91\u533A",
+        "parentId": "root",
+        "props": {},
+        "style": {},
+        "type": "layout.column"
+      },
+      "editorTables": {
+        "bindings": {},
+        "children": [
+          "lineTable",
+          "unitTable"
+        ],
+        "events": [],
+        "id": "editorTables",
+        "layout": {
+          "gap": "12px"
+        },
+        "name": "\u660E\u7EC6\u7F16\u8F91\u533A",
+        "parentId": "editorPanel",
+        "props": {
+          "gridTemplateColumns": "repeat(auto-fit, minmax(420px, 1fr))"
+        },
+        "style": {},
+        "type": "layout.responsive"
+      },
+      "form": {
+        "bindings": {},
+        "children": [
+          "orderNoItem",
+          "customerItem",
+          "dateItem",
+          "remarkItem"
+        ],
+        "events": [],
+        "id": "form",
+        "layout": {
+          "backgroundColor": "#ffffff",
+          "border": "1px solid #dbe3ef",
+          "borderRadius": "8px",
+          "display": "grid",
+          "gap": "12px",
+          "gridTemplateColumns": "repeat(2, minmax(0, 1fr))",
+          "padding": "14px"
+        },
+        "name": "\u8BA2\u5355\u4E3B\u8868\u5355",
+        "parentId": "editorPanel",
+        "props": {
+          "title": "\u8BA2\u5355\u4E3B\u8868\u5355"
+        },
+        "style": {},
+        "type": "layout.form"
+      },
+      "lineTable": {
+        "bindings": {
+          "data": {
+            "displayName": "variables.detailLines",
+            "fallback": {
+              "kind": "array",
+              "value": []
+            },
+            "resourceId": "variables::detailLines",
+            "valueType": "array"
+          }
+        },
+        "children": [],
+        "events": [],
+        "id": "lineTable",
+        "layout": {},
+        "name": "\u5F85\u4FDD\u5B58\u660E\u7EC6\u884C",
+        "parentId": "editorTables",
+        "props": {
+          "columns": [
+            {
+              "defaultValue": 1,
+              "editorType": "number",
+              "key": "line_no",
+              "required": true,
+              "title": "\u884C\u53F7"
+            },
+            {
+              "defaultValue": "",
+              "editorType": "text",
+              "key": "product_name",
+              "required": true,
+              "title": "\u4EA7\u54C1"
+            },
+            {
+              "defaultValue": 1,
+              "editorType": "number",
+              "key": "quantity",
+              "required": true,
+              "title": "\u6570\u91CF"
+            },
+            {
+              "defaultValue": 0,
+              "editorType": "number",
+              "key": "unit_price",
+              "required": false,
+              "title": "\u5355\u4EF7"
+            },
+            {
+              "defaultValue": 0,
+              "editorType": "number",
+              "key": "amount",
+              "required": false,
+              "title": "\u91D1\u989D"
+            },
+            {
+              "defaultValue": "",
+              "editorType": "text",
+              "key": "unit_code",
+              "required": true,
+              "title": "\u5355\u4F4D"
+            },
+            {
+              "defaultValue": 0,
+              "editorType": "number",
+              "key": "discount_rate",
+              "required": false,
+              "title": "\u6298\u6263\u7387"
+            }
+          ],
+          "rowEditing": {
+            "allowAdd": true,
+            "allowDelete": true,
+            "allowEdit": true,
+            "deleteIdsVariable": "deletedDetailLineIds",
+            "enabled": true,
+            "fields": [
+              {
+                "defaultValue": 1,
+                "editorType": "number",
+                "key": "line_no",
+                "options": null,
+                "readOnly": false,
+                "required": true,
+                "title": "\u884C\u53F7"
+              },
+              {
+                "defaultValue": "",
+                "editorType": "text",
+                "key": "product_name",
+                "options": null,
+                "readOnly": false,
+                "required": true,
+                "title": "\u4EA7\u54C1"
+              },
+              {
+                "defaultValue": 1,
+                "editorType": "number",
+                "key": "quantity",
+                "options": null,
+                "readOnly": false,
+                "required": true,
+                "title": "\u6570\u91CF"
+              },
+              {
+                "defaultValue": 0,
+                "editorType": "number",
+                "key": "unit_price",
+                "options": null,
+                "readOnly": false,
+                "required": false,
+                "title": "\u5355\u4EF7"
+              },
+              {
+                "defaultValue": 0,
+                "editorType": "number",
+                "key": "amount",
+                "options": null,
+                "readOnly": false,
+                "required": false,
+                "title": "\u91D1\u989D"
+              },
+              {
+                "defaultValue": "",
+                "editorType": "text",
+                "key": "unit_code",
+                "options": null,
+                "readOnly": false,
+                "required": true,
+                "title": "\u5355\u4F4D"
+              },
+              {
+                "defaultValue": 0,
+                "editorType": "number",
+                "key": "discount_rate",
+                "options": null,
+                "readOnly": false,
+                "required": false,
+                "title": "\u6298\u6263\u7387"
+              }
+            ],
+            "keyField": "id",
+            "mode": "inline"
+          },
+          "title": "\u5F85\u4FDD\u5B58\u660E\u7EC6\u884C"
+        },
+        "style": {},
+        "type": "report.dataTable"
+      },
+      "orderNoItem": {
+        "bindings": {},
+        "children": [
+          "orderNoItemInput"
+        ],
+        "events": [],
+        "id": "orderNoItem",
+        "layout": {
+          "display": "grid",
+          "gridTemplateColumns": "120px minmax(0, 1fr)"
+        },
+        "name": "\u8BA2\u5355\u53F7",
+        "parentId": "form",
+        "props": {
+          "title": "\u8BA2\u5355\u53F7"
+        },
+        "style": {},
+        "type": "layout.formItem"
+      },
+      "orderNoItemInput": {
+        "bindings": {},
+        "children": [],
+        "events": [],
+        "id": "orderNoItemInput",
+        "layout": {},
+        "name": "\u8BA2\u5355\u53F7",
+        "parentId": "orderNoItem",
+        "props": {
+          "placeholder": "SO-DEMO-001",
+          "title": "\u8BA2\u5355\u53F7"
+        },
+        "style": {},
+        "type": "input.text"
+      },
+      "queryCustomerItem": {
+        "bindings": {},
+        "children": [
+          "queryCustomerItemInput"
+        ],
+        "events": [],
+        "id": "queryCustomerItem",
+        "layout": {
+          "display": "grid",
+          "gap": "6px"
+        },
+        "name": "\u5BA2\u6237\u540D\u79F0",
+        "parentId": "queryPanel",
+        "props": {
+          "title": "\u5BA2\u6237\u540D\u79F0"
+        },
+        "style": {},
+        "type": "layout.formItem"
+      },
+      "queryCustomerItemInput": {
+        "bindings": {},
+        "children": [],
+        "events": [],
+        "id": "queryCustomerItemInput",
+        "layout": {},
+        "name": "\u5BA2\u6237\u540D\u79F0",
+        "parentId": "queryCustomerItem",
+        "props": {
+          "placeholder": "\u8F93\u5165\u5BA2\u6237\u540D\u79F0",
+          "title": "\u5BA2\u6237\u540D\u79F0"
+        },
+        "style": {},
+        "type": "input.text"
+      },
+      "queryOrderNoItem": {
+        "bindings": {},
+        "children": [
+          "queryOrderNoItemInput"
+        ],
+        "events": [],
+        "id": "queryOrderNoItem",
+        "layout": {
+          "display": "grid",
+          "gap": "6px"
+        },
+        "name": "\u8BA2\u5355\u53F7",
+        "parentId": "queryPanel",
+        "props": {
+          "title": "\u8BA2\u5355\u53F7"
+        },
+        "style": {},
+        "type": "layout.formItem"
+      },
+      "queryOrderNoItemInput": {
+        "bindings": {},
+        "children": [],
+        "events": [],
+        "id": "queryOrderNoItemInput",
+        "layout": {},
+        "name": "\u8BA2\u5355\u53F7",
+        "parentId": "queryOrderNoItem",
+        "props": {
+          "placeholder": "\u8F93\u5165\u8BA2\u5355\u53F7",
+          "title": "\u8BA2\u5355\u53F7"
+        },
+        "style": {},
+        "type": "input.text"
+      },
+      "queryPanel": {
+        "bindings": {},
+        "children": [
+          "queryOrderNoItem",
+          "queryCustomerItem",
+          "btnQueryInline"
+        ],
+        "events": [],
+        "id": "queryPanel",
+        "layout": {
+          "alignItems": "end",
+          "backgroundColor": "#ffffff",
+          "border": "1px solid #dbe3ef",
+          "borderRadius": "8px",
+          "display": "grid",
+          "gap": "12px",
+          "gridTemplateColumns": "minmax(220px, 1fr) minmax(220px, 1fr) auto",
+          "padding": "14px"
+        },
+        "name": "\u67E5\u8BE2\u9762\u677F",
+        "parentId": "root",
+        "props": {
+          "title": "\u67E5\u8BE2\u9762\u677F"
+        },
+        "style": {},
+        "type": "layout.form"
+      },
+      "remarkItem": {
+        "bindings": {},
+        "children": [
+          "remarkItemInput"
+        ],
+        "events": [],
+        "id": "remarkItem",
+        "layout": {
+          "display": "grid",
+          "gridTemplateColumns": "120px minmax(0, 1fr)"
+        },
+        "name": "\u5907\u6CE8",
+        "parentId": "form",
+        "props": {
+          "title": "\u5907\u6CE8"
+        },
+        "style": {},
+        "type": "layout.formItem"
+      },
+      "remarkItemInput": {
+        "bindings": {},
+        "children": [],
+        "events": [],
+        "id": "remarkItemInput",
+        "layout": {},
+        "name": "\u5907\u6CE8",
+        "parentId": "remarkItem",
+        "props": {
+          "placeholder": "\u5FAE\u6D41\u4E8B\u52A1\u5199\u5165\u4E3B\u660E\u7EC6\u5355\u4F4D\u4E09\u8868",
+          "title": "\u5907\u6CE8"
+        },
+        "style": {},
+        "type": "input.text"
+      },
+      "root": {
+        "bindings": {},
+        "children": [
+          "toolbar",
+          "queryPanel",
+          "detailTable",
+          "editorPanel"
+        ],
+        "events": [],
+        "id": "root",
+        "layout": {},
+        "name": "\u8BA2\u5355\u5FAE\u6D41\u4E8B\u52A1\u9875\u9762",
+        "parentId": null,
+        "props": {},
+        "style": {
+          "backgroundColor": "#f3f6fb",
+          "gap": "12px",
+          "minWidth": "0",
+          "padding": "12px"
+        },
+        "type": "layout.page"
+      },
+      "toolbar": {
+        "bindings": {},
+        "children": [
+          "btnSave",
+          "btnQuery"
+        ],
+        "events": [],
+        "id": "toolbar",
+        "layout": {
+          "alignItems": "center",
+          "gap": "8px",
+          "justifyContent": "flex-end"
+        },
+        "name": "\u64CD\u4F5C\u533A",
+        "parentId": "root",
+        "props": {},
+        "style": {},
+        "type": "layout.row"
+      },
+      "unitTable": {
+        "bindings": {
+          "data": {
+            "displayName": "variables.unitRows",
+            "fallback": {
+              "kind": "array",
+              "value": []
+            },
+            "resourceId": "variables::unitRows",
+            "valueType": "array"
+          }
+        },
+        "children": [],
+        "events": [],
+        "id": "unitTable",
+        "layout": {},
+        "name": "\u5F85\u4FDD\u5B58\u5355\u4F4D\u6362\u7B97",
+        "parentId": "editorTables",
+        "props": {
+          "columns": [
+            {
+              "defaultValue": 1,
+              "editorType": "number",
+              "key": "line_no",
+              "required": true,
+              "title": "\u884C\u53F7"
+            },
+            {
+              "defaultValue": "",
+              "editorType": "text",
+              "key": "unit_code",
+              "required": true,
+              "title": "\u5355\u4F4D\u7F16\u7801"
+            },
+            {
+              "defaultValue": "",
+              "editorType": "text",
+              "key": "unit_name",
+              "required": true,
+              "title": "\u5355\u4F4D\u540D\u79F0"
+            },
+            {
+              "defaultValue": 1,
+              "editorType": "number",
+              "key": "qty",
+              "required": true,
+              "title": "\u6362\u7B97\u6570\u91CF"
+            },
+            {
+              "defaultValue": 1,
+              "editorType": "number",
+              "key": "conversion_rate",
+              "required": true,
+              "title": "\u6362\u7B97\u7387"
+            }
+          ],
+          "rowEditing": {
+            "allowAdd": true,
+            "allowDelete": true,
+            "allowEdit": true,
+            "deleteIdsVariable": "deletedUnitRowIds",
+            "enabled": true,
+            "fields": [
+              {
+                "defaultValue": 1,
+                "editorType": "number",
+                "key": "line_no",
+                "options": null,
+                "readOnly": false,
+                "required": true,
+                "title": "\u884C\u53F7"
+              },
+              {
+                "defaultValue": "",
+                "editorType": "text",
+                "key": "unit_code",
+                "options": null,
+                "readOnly": false,
+                "required": true,
+                "title": "\u5355\u4F4D\u7F16\u7801"
+              },
+              {
+                "defaultValue": "",
+                "editorType": "text",
+                "key": "unit_name",
+                "options": null,
+                "readOnly": false,
+                "required": true,
+                "title": "\u5355\u4F4D\u540D\u79F0"
+              },
+              {
+                "defaultValue": 1,
+                "editorType": "number",
+                "key": "qty",
+                "options": null,
+                "readOnly": false,
+                "required": true,
+                "title": "\u6362\u7B97\u6570\u91CF"
+              },
+              {
+                "defaultValue": 1,
+                "editorType": "number",
+                "key": "conversion_rate",
+                "options": null,
+                "readOnly": false,
+                "required": true,
+                "title": "\u6362\u7B97\u7387"
+              }
+            ],
+            "keyField": "id",
+            "mode": "inline"
+          },
+          "title": "\u5F85\u4FDD\u5B58\u5355\u4F4D\u6362\u7B97"
+        },
+        "style": {},
+        "type": "report.dataTable"
+      }
+    },
+    "metadata": {
+      "pageCode": "codex_microflow_order_demo",
+      "pageName": "\u5FAE\u6D41\u8BA2\u5355\u4E8B\u52A1\u793A\u4F8B"
+    },
+    "modals": [],
+    "modelOperations": [
+      {
+        "fieldMappings": [],
+        "filters": [],
+        "modelCode": "codex_demo_order_list_view",
+        "operationCode": "queryDefault",
+        "operationName": "\u9ED8\u8BA4\u67E5\u8BE2",
+        "operationType": "query",
+        "pageIndex": 1,
+        "pageSize": 20
+      },
+      {
+        "fieldMappings": [],
+        "filters": [],
+        "modelCode": "codex_demo_order_list_view",
+        "operationCode": "createDefault",
+        "operationName": "\u9ED8\u8BA4\u65B0\u589E",
+        "operationType": "create"
+      },
+      {
+        "fieldMappings": [],
+        "filters": [],
+        "idExpression": {
+          "displayName": "currentRow.__runtimeKey",
+          "fallback": {
+            "kind": "string",
+            "value": ""
+          },
+          "resourceId": "currentRow::__runtimeKey",
+          "valueType": "string"
+        },
+        "modelCode": "codex_demo_order_list_view",
+        "operationCode": "updateDefault",
+        "operationName": "\u9ED8\u8BA4\u7F16\u8F91",
+        "operationType": "update"
+      }
+    ],
+    "models": [
+      {
+        "modelCode": "codex_demo_order_header",
+        "modelName": "\u8BA2\u5355\u4E3B\u8868\u6A21\u578B"
+      },
+      {
+        "modelCode": "codex_demo_order_line",
+        "modelName": "\u8BA2\u5355\u660E\u7EC6\u6A21\u578B"
+      },
+      {
+        "modelCode": "codex_demo_order_unit",
+        "modelName": "\u8BA2\u5355\u5355\u4F4D\u6A21\u578B"
+      },
+      {
+        "modelCode": "codex_demo_order_list_view",
+        "modelName": "\u8BA2\u5355\u5217\u8868\u89C6\u56FE\u6A21\u578B"
+      },
+      {
+        "modelCode": "codex_demo_order_detail_view",
+        "modelName": "\u8BA2\u5355\u8BE6\u60C5\u89C6\u56FE\u6A21\u578B"
+      }
+    ],
+    "pageParameters": [],
+    "pageType": "standard",
+    "pages": [
+      {
+        "id": "page",
+        "name": "\u5FAE\u6D41\u8BA2\u5355\u4E8B\u52A1\u793A\u4F8B",
+        "rootElementId": "root"
+      }
+    ],
+    "permissions": {},
+    "printBindings": [],
+    "revision": 10,
+    "runtimeContext": {
+      "menuCode": "codex_microflow_order_demo-menu",
+      "modelCode": "codex_demo_order_list_view",
+      "pageCode": "codex_microflow_order_demo",
+      "pageName": "\u5FAE\u6D41\u8BA2\u5355\u4E8B\u52A1\u793A\u4F8B",
+      "pageParameters": [],
+      "pageType": "standard",
+      "permissionPrefix": "app:runtime-page:codex-microflow-order-demo",
+      "templateCode": "microflow-order-demo"
+    },
+    "sqlBindings": [],
+    "styleTokens": {},
+    "variables": [
+      {
+        "defaultValue": {},
+        "id": "acceptanceResult",
+        "name": "acceptanceResult",
+        "valueType": "object"
+      },
+      {
+        "defaultValue": [],
+        "id": "orderDetailResult",
+        "name": "orderDetailResult",
+        "valueType": "array"
+      },
+      {
+        "defaultValue": [],
+        "id": "orderListRows",
+        "name": "\u8BA2\u5355\u5217\u8868",
+        "valueType": "array"
+      },
+      {
+        "defaultValue": [],
+        "id": "orderDetailRows",
+        "name": "orderDetailRows",
+        "valueType": "array"
+      },
+      {
+        "defaultValue": [],
+        "id": "detailLines",
+        "name": "\u660E\u7EC6\u884C",
+        "valueType": "array"
+      },
+      {
+        "defaultValue": [],
+        "id": "unitRows",
+        "name": "\u5355\u4F4D\u6362\u7B97",
+        "valueType": "array"
+      },
+      {
+        "defaultValue": {},
+        "id": "selectedOrder",
+        "name": "\u9009\u4E2D\u8BA2\u5355",
+        "valueType": "object"
+      },
+      {
+        "defaultValue": "",
+        "id": "orderId",
+        "name": "\u9009\u4E2D\u8BA2\u5355ID",
+        "valueType": "string"
+      },
+      {
+        "defaultValue": [],
+        "id": "deletedDetailLineIds",
+        "name": "\u5DF2\u5220\u9664\u660E\u7EC6\u884CID",
+        "valueType": "array"
+      },
+      {
+        "defaultValue": [],
+        "id": "deletedUnitRowIds",
+        "name": "\u5DF2\u5220\u9664\u5355\u4F4D\u884CID",
+        "valueType": "array"
+      }
+    ],
+    "workflowBindings": []
+  },
+  "DocumentHash": "sha256:c0bdd6daa10bf86c998dab0fdd9ba44b86d0ea9ce13ea6bb318015829b66ccef",
+  "PageCode": "codex_microflow_order_demo",
+  "PageName": "\u5FAE\u6D41\u8BA2\u5355\u4E8B\u52A1\u793A\u4F8B",
+  "PermissionConfig": {
+    "allowAdd": true,
+    "allowDelete": true,
+    "allowEdit": true,
+    "allowExport": true,
+    "allowImport": true,
+    "menuCode": "codex_microflow_order_demo-menu",
+    "menuName": "\u5FAE\u6D41\u8BA2\u5355\u4E8B\u52A1\u793A\u4F8B",
+    "parentMenuCode": "dev-center",
+    "roleCodes": []
+  },
+  "SourceArtifactHash": "sha256:981f311c3ebcb9718aefbcaa2d5e4eefafe415c36ae595d877089e971da5a70f",
+  "SourceDocumentHash": "sha256:c0bdd6daa10bf86c998dab0fdd9ba44b86d0ea9ce13ea6bb318015829b66ccef",
+  "TenantId": "tenant-a"
+}

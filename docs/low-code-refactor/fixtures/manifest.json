@@ -1,0 +1,36 @@
+{
+  "fixtureSet": "application-pages-anonymized",
+  "generatedAt": "2026-07-11",
+  "source": {
+    "database": "backend/AsterERP.Api/data/application-databases/{tenant}/{app}/{database}",
+    "fixedDebugDatabase": "backend/AsterERP.Api/data/application-databases/tenant-a/MES/mes11.db",
+    "table": "app_dev_pages",
+    "predicate": "IsDeleted = 0",
+    "readMode": "read-only",
+    "pageCount": 3
+  },
+  "anonymization": {
+    "pageCode": "replaced by fixtureId",
+    "pageName": "replaced by fixture title",
+    "tenantId": "removed",
+    "appCode": "removed",
+    "userIds": "removed",
+    "entityIds": "removed",
+    "businessValues": "removed or replaced with deterministic literals"
+  },
+  "fixtures": [
+    {"fixtureId":"page-001","file":"pages/page-001.json","sourcePageFingerprint":"9be67e6d17825334096bb57dbb082ba66dc5adfb4f4e1ac2b6cd5272b0d93a85","status":"Published","nodeCount":1,"actionCount":0,"bindingCount":0,"sourceLayoutDraftSha256":"16b5f0c53fc878ca3e834b0566a7bd82b3feb492cdd21b810cc9710decaaf97f"},
+    {"fixtureId":"page-002","file":"pages/page-002.json","sourcePageFingerprint":"104cd36c16537eec6582b835c4c8207a23e473f6aa8b1020f97063df88233de3","status":"Published","sourceNodeCount":24,"fixtureNodeCount":8,"sourceActionCount":0,"fixtureActionCount":1,"sourceBindingCount":24,"fixtureBindingCount":3,"sourceLayoutDraftSha256":"efdd33893af0f7428b3682f295e8d200248c7c124a1ea392eaf389c0a67c0033"},
+    {"fixtureId":"page-003","file":"pages/page-003.json","sourcePageFingerprint":"597e3fe696a3c5b72df79e9b844b6eab8f23912d525ccc3ad13916ca9dbd7e6a","status":"Published","nodeCount":1,"actionCount":0,"bindingCount":0,"sourceLayoutDraftSha256":"45c5a67d1af7049df3ca1ddc2882d052ffc7ac4149224d69433e3b9d71407161"}
+  ],
+  "missingPagePolicy": "Fail",
+  "sourceUnavailablePolicy": "Blocked",
+  "fixtureSchema": {
+    "requiredDocumentFields": ["documentId", "revision", "pages", "elements", "actions", "variables", "permissions", "runtimeContext", "metadata"],
+    "requiredElementFields": ["id", "type", "children", "props", "layout", "style", "events", "bindings"],
+    "requiredBindingFields": ["resourceId", "displayName", "valueType", "conversionPipeline"],
+    "hashAlgorithm": "sha256",
+    "hashInput": "canonical document object, excluding fixture metadata and sourceEvidence"
+  },
+  "generatedFixtureDefinitions": "../phase1-baseline.json"
+}

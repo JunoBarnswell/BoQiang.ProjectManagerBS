@@ -1,0 +1,5 @@
+{
+  "*.{ts,tsx,js,jsx}": ["npm run lint -- --max-warnings 0"],
+  "*.{css,scss}": ["npm run stylelint"],
+  "*.{json,md,yml,yaml}": ["npm run format:check"]
+}

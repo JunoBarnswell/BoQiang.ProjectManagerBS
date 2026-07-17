@@ -1,0 +1,36 @@
+bin/
+obj/
+node_modules/
+dist/
+.vite/
+.npm-cache/
+.sandbox-appdata/
+artifacts/
+/logs/
+/backend/AsterERP.Api/logs/
+/backend/AsterERP.Api/data/uploads/
+/backend/AsterERP.Api/wwwroot/
+*.log
+*.dev.err.log
+*.dev.out.log
+*.db
+*.db-shm
+*.db-wal
+*.user
+*.suo
+id_ed25519_git
+id_ed25519_git.pub
+output/
+outputs/
+.claude/
+.codegraph/
+.codex/
+/.vs/AsterERP
+# Codex runtime artifacts
+.codex-tmp/
+.playwright-mcp/
+# Invalid generated asset staging path
+/frontend/AsterERP.Web/dummy-non-existing-folder/
+/frontend/AsterERP.Web/test-results/
+/frontend/AsterERP.Web/playwright-report/
+/frontend/AsterERP.Web/coverage/

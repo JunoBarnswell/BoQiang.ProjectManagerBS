@@ -1,0 +1,21 @@
+{
+  "baselineId": "low-code-phase0",
+  "phase": 0,
+  "status": "evidence-required",
+  "source": {"database":"backend/AsterERP.Api/data/application-databases/tenant-a/MES/mes11.db","table":"app_dev_pages","predicate":"IsDeleted = 0","readMode":"read-only"},
+  "fixtureManifest": "fixtures/manifest.json",
+  "cases": [
+    {"id":"C01","kind":"database-fixture-parity","evidence":"fixture manifest page count and fixture files"},
+    {"id":"C02","kind":"canonical-json-hash","evidence":"canonical document hash is reproducible"},
+    {"id":"C03","kind":"schema-validation","evidence":"valid fixtures pass and invalid documents are rejected"},
+    {"id":"C04","kind":"tree-integrity","evidence":"parent/children references are bidirectional and acyclic"},
+    {"id":"C05","kind":"migration-idempotency","evidence":"one migration creates one revision and rerun creates none"},
+    {"id":"C09","kind":"unsafe-input-rejection","evidence":"editor state and prototype pollution are rejected"},
+    {"id":"C10","kind":"artifact-integrity","evidence":"tampered artifact is rejected before runtime"},
+    {"id":"C12","kind":"migration-failure-boundary","evidence":"malformed source creates no document, revision or migration record"},
+    {"id":"C16","kind":"migration-intermediate-artifact-boundary","evidence":"CurrentDocumentMigration returns a draft without artifactHash/signature and rejects invalid graph or unknown manifest input"},
+    {"id":"C17","kind":"cross-stack-designer-document-hash","evidence":"frontend and backend consume fixtures/designer-document-hash-fixture.json with the same sha256-prefixed canonical hash"}
+  ],
+  "unmeasuredCases": ["C06", "C07", "C08", "C11", "C13", "C14", "C15"],
+  "unmeasuredPolicy": "Coordinator must attach browser, provider, restarted-api and deletion-scan evidence before marking Pass."
+}

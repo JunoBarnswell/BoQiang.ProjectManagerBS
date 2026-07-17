@@ -1,0 +1,10 @@
+{
+  "format": "astererp.low-code.migration-evidence.v1",
+  "required": ["migrationId","maintenanceLockId","backupPath","backupSha256","sourceCommit","targetCommit","previousArtifactId","publishedArtifactId","healthCheckId","operator","traceId"],
+  "rollbackRequired": ["rollbackReason","rollbackRevisionId","rollbackArtifactId","rollbackCompletedAt"],
+  "nonEmptyStrings": ["migrationId","maintenanceLockId","backupPath","backupSha256","sourceCommit","targetCommit","operator","traceId"],
+  "sha256Fields": ["backupSha256"],
+  "statusValues": ["Pass","Fail","Blocked"],
+  "blockedRequires": ["blockedReason","retryCondition"],
+  "rules": {"backupMustBeReadOnly":true,"rollbackRestoresPreviousArtifactPointer":true,"failedHealthCheckRequiresRollback":true,"anonymous401IsNotEvidence":true}
+}

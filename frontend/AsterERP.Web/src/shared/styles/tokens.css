@@ -1,0 +1,174 @@
+:root {
+  color-scheme: light;
+  --app-ui-scale: 1;
+  --app-ui-scale-percent: 100;
+  --app-ui-font-family:
+    -apple-system, "BlinkMacSystemFont", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "Noto Sans", sans-serif,
+    "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --app-root-font-size: 13px;
+  --app-text-2xs: 10px;
+  --app-text-3xs: 11px;
+  --app-text-xs: 12px;
+  --app-text-sm: 13px;
+  --app-text-base: 14px;
+  --app-text-lg: 16px;
+  --app-shell-header-height: calc(40px * var(--app-ui-scale));
+  --app-shell-tab-height: calc(32px * var(--app-ui-scale));
+  --app-shell-status-height: calc(20px * var(--app-ui-scale));
+  --app-shell-sidebar-width: calc(208px * var(--app-ui-scale));
+  --app-shell-sidebar-collapsed-width: calc(56px * var(--app-ui-scale));
+  --app-shell-control-height: calc(28px * var(--app-ui-scale));
+  --app-shell-icon-size: calc(16px * var(--app-ui-scale));
+  --app-accent: #1452d4;
+  --app-accent-soft: rgba(20, 82, 212, 0.12);
+  --app-bg:
+    radial-gradient(circle at top left, rgba(84, 120, 255, 0.16), transparent 30%),
+    radial-gradient(circle at top right, rgba(0, 179, 126, 0.1), transparent 26%),
+    linear-gradient(180deg, #f8fbff 0%, #eef3f9 100%);
+  --app-border: rgba(16, 32, 51, 0.1);
+  --app-card: rgba(255, 255, 255, 0.76);
+  --app-shadow: 0 18px 55px rgba(31, 41, 55, 0.08);
+  --app-text: #102033;
+  --app-muted: rgba(16, 32, 51, 0.64);
+  --app-muted-strong: rgba(16, 32, 51, 0.78);
+  --app-surface-contrast: rgba(16, 32, 51, 0.96);
+  --app-surface-contrast-text: #eef4ff;
+  --app-white: #ffffff;
+  --app-primary-50: #eff6ff;
+  --app-primary-100: #dbeafe;
+  --app-primary-200: #bfdbfe;
+  --app-primary-300: #93c5fd;
+  --app-primary-400: #60a5fa;
+  --app-primary-500: #3b82f6;
+  --app-primary-600: #2563eb;
+  --app-primary-700: #1d4ed8;
+  --app-primary-800: #1e40af;
+  --app-primary-900: #1e3a8a;
+  --app-primary: var(--app-primary-600);
+  --app-success: #059669;
+  --app-warning: #d97706;
+  --app-danger: #dc2626;
+  --app-gray-50: #f8fafc;
+  --app-gray-100: #f1f5f9;
+  --app-gray-200: #e2e8f0;
+  --app-gray-300: #cbd5e1;
+  --app-gray-400: #94a3b8;
+  --app-gray-500: #64748b;
+  --app-gray-600: #475569;
+  --app-gray-700: #334155;
+  --app-gray-800: #1e293b;
+  --app-gray-900: #0f172a;
+  --app-bg-subtle: var(--app-gray-50);
+  --app-border-subtle: #eef2f7;
+  --app-control-border: #dbe3ef;
+  --app-focus-ring: rgba(59, 130, 246, 0.2);
+  --app-focus-ring-soft: rgba(59, 130, 246, 0.14);
+  --app-overlay: rgba(15, 23, 42, 0.28);
+  --app-shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --app-shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
+  --app-shadow-md: 0 12px 28px rgba(15, 23, 42, 0.14);
+  --app-shadow-panel: -10px 0 28px rgba(15, 23, 42, 0.12);
+  --app-table-header-bg: var(--app-gray-50);
+  --app-table-cell-bg: var(--app-white);
+  --app-table-hover-bg: rgba(239, 246, 255, 0.5);
+  --app-table-active-bg: var(--app-primary-50);
+
+  /* Compact layout tokens for enterprise density */
+  --app-radius-sm: 4px;
+  --app-radius-md: 6px;
+  --app-radius-lg: 8px;
+  --app-radius-round: 999px;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --app-accent: #7db3ff;
+  --app-accent-soft: rgba(125, 179, 255, 0.14);
+  --app-bg:
+    radial-gradient(circle at top left, rgba(84, 120, 255, 0.2), transparent 30%),
+    radial-gradient(circle at top right, rgba(0, 179, 126, 0.12), transparent 26%),
+    linear-gradient(180deg, #09101d 0%, #0f1727 100%);
+  --app-border: rgba(148, 163, 184, 0.18);
+  --app-card: rgba(15, 23, 42, 0.76);
+  --app-shadow: 0 18px 55px rgba(2, 6, 23, 0.34);
+  --app-text: #e5eefc;
+  --app-muted: rgba(226, 232, 240, 0.72);
+  --app-muted-strong: rgba(226, 232, 240, 0.88);
+  --app-surface-contrast: rgba(3, 7, 18, 0.96);
+  --app-surface-contrast-text: #eef4ff;
+  --app-white: #111827;
+  --app-gray-50: #111827;
+  --app-gray-100: #1f2937;
+  --app-gray-200: #334155;
+  --app-gray-300: #475569;
+  --app-gray-400: #94a3b8;
+  --app-gray-500: #cbd5e1;
+  --app-gray-600: #e2e8f0;
+  --app-gray-700: #e5eefc;
+  --app-gray-800: #f1f5f9;
+  --app-gray-900: #f8fafc;
+  --app-primary: var(--app-primary-400);
+  --app-success: #34d399;
+  --app-warning: #fbbf24;
+  --app-danger: #f87171;
+  --app-bg-subtle: var(--app-gray-50);
+  --app-border-subtle: rgba(148, 163, 184, 0.18);
+  --app-control-border: rgba(148, 163, 184, 0.28);
+  --app-focus-ring: rgba(125, 179, 255, 0.24);
+  --app-focus-ring-soft: rgba(125, 179, 255, 0.16);
+  --app-overlay: rgba(2, 6, 23, 0.52);
+  --app-shadow-xs: 0 1px 2px rgba(2, 6, 23, 0.2);
+  --app-shadow-sm: 0 1px 3px rgba(2, 6, 23, 0.3), 0 1px 2px rgba(2, 6, 23, 0.24);
+  --app-shadow-md: 0 12px 28px rgba(2, 6, 23, 0.38);
+  --app-shadow-panel: -10px 0 28px rgba(2, 6, 23, 0.42);
+  --app-table-header-bg: rgba(15, 23, 42, 0.96);
+  --app-table-cell-bg: rgba(15, 23, 42, 0.88);
+  --app-table-hover-bg: rgba(30, 64, 175, 0.22);
+  --app-table-active-bg: rgba(30, 64, 175, 0.32);
+}
+
+:root[data-theme='brand'] {
+  color-scheme: light;
+  --app-accent: #0f766e;
+  --app-accent-soft: rgba(15, 118, 110, 0.14);
+  --app-bg:
+    radial-gradient(circle at top left, rgba(15, 118, 110, 0.14), transparent 32%),
+    radial-gradient(circle at top right, rgba(217, 119, 6, 0.1), transparent 24%),
+    linear-gradient(180deg, #f8faf8 0%, #edf4ef 100%);
+}
+
+:root[data-theme='kingdee'] {
+  color-scheme: light;
+  --app-accent: #1c44b9;
+  --app-accent-soft: rgba(28, 68, 185, 0.12);
+  --app-bg:
+    radial-gradient(circle at top left, rgba(28, 68, 185, 0.14), transparent 30%),
+    radial-gradient(circle at top right, rgba(0, 139, 139, 0.1), transparent 26%),
+    linear-gradient(180deg, #f5f8fc 0%, #e8eef6 100%);
+  --app-border: rgba(28, 68, 185, 0.16);
+  --app-card: rgba(255, 255, 255, 0.88);
+  --app-shadow: 0 12px 36px rgba(28, 68, 185, 0.08);
+  --app-text: #0d1e3c;
+  --app-muted: rgba(13, 30, 60, 0.62);
+  --app-muted-strong: rgba(13, 30, 60, 0.78);
+  --app-surface-contrast: #1c44b9;
+  --app-surface-contrast-text: #ffffff;
+}
+
+:root[data-theme='yonyou'] {
+  color-scheme: light;
+  --app-accent: #de2910;
+  --app-accent-soft: rgba(222, 41, 16, 0.1);
+  --app-bg:
+    radial-gradient(circle at top left, rgba(222, 41, 16, 0.08), transparent 30%),
+    radial-gradient(circle at top right, rgba(251, 191, 36, 0.08), transparent 26%),
+    linear-gradient(180deg, #fafafa 0%, #f0f0f0 100%);
+  --app-border: rgba(16, 32, 51, 0.14);
+  --app-card: rgba(255, 255, 255, 0.92);
+  --app-shadow: 0 12px 36px rgba(16, 32, 51, 0.06);
+  --app-text: #1b1c1e;
+  --app-muted: rgba(27, 28, 30, 0.62);
+  --app-muted-strong: rgba(27, 28, 30, 0.8);
+  --app-surface-contrast: #262626;
+  --app-surface-contrast-text: #ffffff;
+}

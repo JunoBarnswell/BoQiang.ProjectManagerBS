@@ -1,0 +1,1016 @@
+{
+  "generatedAt": "2026-07-12",
+  "source": "Linear HAOYIDA live issue read",
+  "scope": "HAO-5..HAO-114",
+  "policy": {
+    "developmentComplete": "In Review",
+    "unifiedAcceptance": "Done",
+    "externalEvidenceRequired": [
+      "authorized API/UI/E2E",
+      "four provider integration",
+      "maintenance window",
+      "backup and rollback rehearsal",
+      "performance/accessibility/visual evidence"
+    ]
+  },
+  "summary": {
+    "total": 110,
+    "backlog": 1,
+    "inProgress": 8,
+    "inReview": 101,
+    "done": 0,
+    "canceled": 0
+  },
+  "issues": [
+    {
+      "id": "HAO-5",
+      "title": "【总纲】AsterERP Low-Code Studio 全量重构计划",
+      "parentId": null,
+      "status": "Backlog",
+      "statusType": "backlog",
+      "updatedAt": "2026-07-11T21:25:26.008Z",
+      "url": "https://linear.app/haoyida/issue/HAO-5/总纲astererp-low-code-studio-全量重构计划"
+    },
+    {
+      "id": "HAO-6",
+      "title": "[Phase 0] 源码整改准备与基线冻结",
+      "parentId": null,
+      "status": "In Progress",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T11:33:11.053Z",
+      "url": "https://linear.app/haoyida/issue/HAO-6/phase-0-源码整改准备与基线冻结"
+    },
+    {
+      "id": "HAO-7",
+      "title": "[Phase 1] 设计器核心与 Component Manifest 最新实现",
+      "parentId": null,
+      "status": "In Progress",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T19:49:43.376Z",
+      "url": "https://linear.app/haoyida/issue/HAO-7/phase-1-设计器核心与-component-manifest-最新实现"
+    },
+    {
+      "id": "HAO-8",
+      "title": "[Phase 2] 属性系统与变量绑定重构",
+      "parentId": null,
+      "status": "In Progress",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T19:49:50.696Z",
+      "url": "https://linear.app/haoyida/issue/HAO-8/phase-2-属性系统与变量绑定重构"
+    },
+    {
+      "id": "HAO-9",
+      "title": "[Phase 3] 商业级画布、布局与响应式",
+      "parentId": null,
+      "status": "In Progress",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T19:49:47.664Z",
+      "url": "https://linear.app/haoyida/issue/HAO-9/phase-3-商业级画布布局与响应式"
+    },
+    {
+      "id": "HAO-10",
+      "title": "[Phase 4] 数据中心升级为 Data Studio",
+      "parentId": null,
+      "status": "In Progress",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T19:49:53.739Z",
+      "url": "https://linear.app/haoyida/issue/HAO-10/phase-4-数据中心升级为-data-studio"
+    },
+    {
+      "id": "HAO-11",
+      "title": "[Phase 5] 运行态一致性、直接替换与旧链路删除",
+      "parentId": null,
+      "status": "In Progress",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T19:50:00.882Z",
+      "url": "https://linear.app/haoyida/issue/HAO-11/phase-5-运行态一致性直接替换与旧链路删除"
+    },
+    {
+      "id": "HAO-12",
+      "title": "[质量总门禁] 非功能、全量测试矩阵与最终验收",
+      "parentId": null,
+      "status": "In Progress",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T19:50:04.341Z",
+      "url": "https://linear.app/haoyida/issue/HAO-12/质量总门禁-非功能全量测试矩阵与最终验收"
+    },
+    {
+      "id": "HAO-13",
+      "title": "P0-01｜盘点现有文档、组件、动作与绑定契约",
+      "parentId": "HAO-6",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:42:12.203Z",
+      "url": "https://linear.app/haoyida/issue/HAO-13/p0-01盘点现有文档组件动作与绑定契约"
+    },
+    {
+      "id": "HAO-14",
+      "title": "P0-02｜生成全部现有页面匿名化 Fixture",
+      "parentId": "HAO-6",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T15:54:41.822Z",
+      "url": "https://linear.app/haoyida/issue/HAO-14/p0-02生成全部现有页面匿名化-fixture"
+    },
+    {
+      "id": "HAO-15",
+      "title": "P0-03｜建立 DesignerGoldenCase 基线资产",
+      "parentId": "HAO-6",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T15:54:46.278Z",
+      "url": "https://linear.app/haoyida/issue/HAO-15/p0-03建立-designergoldencase-基线资产"
+    },
+    {
+      "id": "HAO-16",
+      "title": "P0-04｜建立组件六维代码覆盖矩阵",
+      "parentId": "HAO-6",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T15:54:50.872Z",
+      "url": "https://linear.app/haoyida/issue/HAO-16/p0-04建立组件六维代码覆盖矩阵"
+    },
+    {
+      "id": "HAO-17",
+      "title": "P0-05｜生成前后端共享 Designer 契约",
+      "parentId": "HAO-6",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:32:41.232Z",
+      "url": "https://linear.app/haoyida/issue/HAO-17/p0-05生成前后端共享-designer-契约"
+    },
+    {
+      "id": "HAO-18",
+      "title": "P0-06｜建立数据库 Provider Capability Matrix",
+      "parentId": "HAO-6",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:35:46.772Z",
+      "url": "https://linear.app/haoyida/issue/HAO-18/p0-06建立数据库-provider-capability-matrix"
+    },
+    {
+      "id": "HAO-19",
+      "title": "P0-07｜记录设计器节点规模性能基线",
+      "parentId": "HAO-6",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T16:47:49.020Z",
+      "url": "https://linear.app/haoyida/issue/HAO-19/p0-07记录设计器节点规模性能基线"
+    },
+    {
+      "id": "HAO-20",
+      "title": "P0-08｜记录宽表与大数据量浏览基线",
+      "parentId": "HAO-6",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T16:47:51.316Z",
+      "url": "https://linear.app/haoyida/issue/HAO-20/p0-08记录宽表与大数据量浏览基线"
+    },
+    {
+      "id": "HAO-21",
+      "title": "P0-09｜建立一次性迁移与替换部署控制",
+      "parentId": "HAO-6",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T16:47:59.242Z",
+      "url": "https://linear.app/haoyida/issue/HAO-21/p0-09建立一次性迁移与替换部署控制"
+    },
+    {
+      "id": "HAO-22",
+      "title": "P0-10｜固化源码提交与数据库快照基线",
+      "parentId": "HAO-6",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:32:44.168Z",
+      "url": "https://linear.app/haoyida/issue/HAO-22/p0-10固化源码提交与数据库快照基线"
+    },
+    {
+      "id": "HAO-23",
+      "title": "P0-QA｜Phase 0 全量测试与验收门禁",
+      "parentId": "HAO-6",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T18:40:26.615Z",
+      "url": "https://linear.app/haoyida/issue/HAO-23/p0-qaphase-0-全量测试与验收门禁"
+    },
+    {
+      "id": "HAO-24",
+      "title": "P1-01｜定义最新 Designer Document 三类核心模型",
+      "parentId": "HAO-7",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:33:54.883Z",
+      "url": "https://linear.app/haoyida/issue/HAO-24/p1-01定义最新-designer-document-三类核心模型"
+    },
+    {
+      "id": "HAO-25",
+      "title": "P1-02｜实现不可变 Designer Document Store",
+      "parentId": "HAO-7",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T20:16:21.058Z",
+      "url": "https://linear.app/haoyida/issue/HAO-25/p1-02实现不可变-designer-document-store"
+    },
+    {
+      "id": "HAO-26",
+      "title": "P1-03｜实现 Designer Command Bus 核心命令集",
+      "parentId": "HAO-7",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T20:16:29.714Z",
+      "url": "https://linear.app/haoyida/issue/HAO-26/p1-03实现-designer-command-bus-核心命令集"
+    },
+    {
+      "id": "HAO-27",
+      "title": "P1-04｜为全部命令实现逆命令或可逆补丁",
+      "parentId": "HAO-7",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T20:58:34.938Z",
+      "url": "https://linear.app/haoyida/issue/HAO-27/p1-04为全部命令实现逆命令或可逆补丁"
+    },
+    {
+      "id": "HAO-28",
+      "title": "P1-05｜以事务历史替代完整文档快照历史",
+      "parentId": "HAO-7",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T22:26:43.735Z",
+      "url": "https://linear.app/haoyida/issue/HAO-28/p1-05以事务历史替代完整文档快照历史"
+    },
+    {
+      "id": "HAO-29",
+      "title": "P1-06｜实现连续编辑命令合并",
+      "parentId": "HAO-7",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T11:54:51.504Z",
+      "url": "https://linear.app/haoyida/issue/HAO-29/p1-06实现连续编辑命令合并"
+    },
+    {
+      "id": "HAO-30",
+      "title": "P1-07｜重构多选 Selection Model",
+      "parentId": "HAO-7",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T11:58:24.769Z",
+      "url": "https://linear.app/haoyida/issue/HAO-30/p1-07重构多选-selection-model"
+    },
+    {
+      "id": "HAO-31",
+      "title": "P1-08｜实现 Component Manifest 最新完整协议",
+      "parentId": "HAO-7",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T12:00:06.757Z",
+      "url": "https://linear.app/haoyida/issue/HAO-31/p1-08实现-component-manifest-最新完整协议"
+    },
+    {
+      "id": "HAO-32",
+      "title": "P1-09｜实现组件注册表启动完整性校验",
+      "parentId": "HAO-7",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T12:01:40.760Z",
+      "url": "https://linear.app/haoyida/issue/HAO-32/p1-09实现组件注册表启动完整性校验"
+    },
+    {
+      "id": "HAO-33",
+      "title": "P1-10｜一次性迁移旧组件元数据并删除旧注册链路",
+      "parentId": "HAO-7",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T17:21:07.476Z",
+      "url": "https://linear.app/haoyida/issue/HAO-33/p1-10一次性迁移旧组件yuan数据并删除旧注册链路"
+    },
+    {
+      "id": "HAO-34",
+      "title": "P1-11｜后端使用共享契约验证最新 Designer Document",
+      "parentId": "HAO-7",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T17:21:12.947Z",
+      "url": "https://linear.app/haoyida/issue/HAO-34/p1-11后端使用共享契约验证最新-designer-document"
+    },
+    {
+      "id": "HAO-35",
+      "title": "P1-12｜发布记录保存文档与组件版本元数据",
+      "parentId": "HAO-7",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T17:21:17.454Z",
+      "url": "https://linear.app/haoyida/issue/HAO-35/p1-12发布记录保存文档与组件版本yuan数据"
+    },
+    {
+      "id": "HAO-36",
+      "title": "P1-QA｜Phase 1 全量测试与验收门禁",
+      "parentId": "HAO-7",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:42:14.537Z",
+      "url": "https://linear.app/haoyida/issue/HAO-36/p1-qaphase-1-全量测试与验收门禁"
+    },
+    {
+      "id": "HAO-37",
+      "title": "P2-01｜按六类信息架构重组属性面板",
+      "parentId": "HAO-8",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:14:09.421Z",
+      "url": "https://linear.app/haoyida/issue/HAO-37/p2-01按六类信息架构重组属性面板"
+    },
+    {
+      "id": "HAO-38",
+      "title": "P2-02｜实现高频属性紧凑行编辑",
+      "parentId": "HAO-8",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:10:03.934Z",
+      "url": "https://linear.app/haoyida/issue/HAO-38/p2-02实现高频属性紧凑行编辑"
+    },
+    {
+      "id": "HAO-39",
+      "title": "P2-03｜移除固定值/变量双标签前置交互",
+      "parentId": "HAO-8",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:10:06.700Z",
+      "url": "https://linear.app/haoyida/issue/HAO-39/p2-03移除固定值变量双标签前置交互"
+    },
+    {
+      "id": "HAO-40",
+      "title": "P2-04｜实现属性 BindingPopover",
+      "parentId": "HAO-8",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:10:08.289Z",
+      "url": "https://linear.app/haoyida/issue/HAO-40/p2-04实现属性-bindingpopover"
+    },
+    {
+      "id": "HAO-41",
+      "title": "P2-05｜实现变量拖拽绑定全入口",
+      "parentId": "HAO-8",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:10:09.908Z",
+      "url": "https://linear.app/haoyida/issue/HAO-41/p2-05实现变量拖拽绑定全入口"
+    },
+    {
+      "id": "HAO-42",
+      "title": "P2-06｜建设统一 Resource Explorer 资源树",
+      "parentId": "HAO-8",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:10:11.681Z",
+      "url": "https://linear.app/haoyida/issue/HAO-42/p2-06建设统一-resource-explorer-资源树"
+    },
+    {
+      "id": "HAO-43",
+      "title": "P2-07｜实现绑定类型兼容评分与推荐",
+      "parentId": "HAO-8",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:10:13.272Z",
+      "url": "https://linear.app/haoyida/issue/HAO-43/p2-07实现绑定类型兼容评分与推荐"
+    },
+    {
+      "id": "HAO-44",
+      "title": "P2-08｜实现可视化类型转换管线",
+      "parentId": "HAO-8",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:10:15.122Z",
+      "url": "https://linear.app/haoyida/issue/HAO-44/p2-08实现可视化类型转换管线"
+    },
+    {
+      "id": "HAO-45",
+      "title": "P2-09｜实现最近变量、收藏、搜索与使用位置",
+      "parentId": "HAO-8",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:10:16.841Z",
+      "url": "https://linear.app/haoyida/issue/HAO-45/p2-09实现最近变量收藏搜索与使用位置"
+    },
+    {
+      "id": "HAO-46",
+      "title": "P2-10｜实现多选属性交集与 Mixed Value 批量编辑",
+      "parentId": "HAO-8",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:10:18.444Z",
+      "url": "https://linear.app/haoyida/issue/HAO-46/p2-10实现多选属性交集与-mixed-value-批量编辑"
+    },
+    {
+      "id": "HAO-47",
+      "title": "P2-11｜实现可视化 Expression AST/节点图编辑器",
+      "parentId": "HAO-8",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:10:20.554Z",
+      "url": "https://linear.app/haoyida/issue/HAO-47/p2-11实现可视化-expression-ast节点图编辑器"
+    },
+    {
+      "id": "HAO-48",
+      "title": "P2-12｜绑定使用稳定 Resource ID",
+      "parentId": "HAO-8",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:10:22.418Z",
+      "url": "https://linear.app/haoyida/issue/HAO-48/p2-12绑定使用稳定-resource-id"
+    },
+    {
+      "id": "HAO-49",
+      "title": "P2-13｜属性变更统一生成事务化命令",
+      "parentId": "HAO-8",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:10:24.118Z",
+      "url": "https://linear.app/haoyida/issue/HAO-49/p2-13属性变更统一生成事务化命令"
+    },
+    {
+      "id": "HAO-50",
+      "title": "P2-14｜阻断错误绑定与带病保存",
+      "parentId": "HAO-8",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:10:25.948Z",
+      "url": "https://linear.app/haoyida/issue/HAO-50/p2-14阻断错误绑定与带病保存"
+    },
+    {
+      "id": "HAO-51",
+      "title": "P2-QA｜Phase 2 全量测试与验收门禁",
+      "parentId": "HAO-8",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:14:12.019Z",
+      "url": "https://linear.app/haoyida/issue/HAO-51/p2-qaphase-2-全量测试与验收门禁"
+    },
+    {
+      "id": "HAO-52",
+      "title": "P3-01｜统一 Pointer Events 交互输入",
+      "parentId": "HAO-9",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:17:40.504Z",
+      "url": "https://linear.app/haoyida/issue/HAO-52/p3-01统一-pointer-events-交互输入"
+    },
+    {
+      "id": "HAO-53",
+      "title": "P3-02｜建立四层画布坐标系统",
+      "parentId": "HAO-9",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:17:45.674Z",
+      "url": "https://linear.app/haoyida/issue/HAO-53/p3-02建立四层画布坐标系统"
+    },
+    {
+      "id": "HAO-54",
+      "title": "P3-03｜实现无限画布缩放与平移",
+      "parentId": "HAO-9",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T22:26:45.365Z",
+      "url": "https://linear.app/haoyida/issue/HAO-54/p3-03实现无限画布缩放与平移"
+    },
+    {
+      "id": "HAO-55",
+      "title": "P3-04｜实现多选、框选与层级穿透选择",
+      "parentId": "HAO-9",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:17:48.883Z",
+      "url": "https://linear.app/haoyida/issue/HAO-55/p3-04实现多选框选与层级穿透选择"
+    },
+    {
+      "id": "HAO-56",
+      "title": "P3-05｜修复拖动与 Resize 总位移算法",
+      "parentId": "HAO-9",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:17:52.345Z",
+      "url": "https://linear.app/haoyida/issue/HAO-56/p3-05修复拖动与-resize-总位移算法"
+    },
+    {
+      "id": "HAO-57",
+      "title": "P3-06｜建立画布空间索引与邻近测量",
+      "parentId": "HAO-9",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:17:54.843Z",
+      "url": "https://linear.app/haoyida/issue/HAO-57/p3-06建立画布空间索引与邻近测量"
+    },
+    {
+      "id": "HAO-58",
+      "title": "P3-07｜实现对齐、分布与统一尺寸命令",
+      "parentId": "HAO-9",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:17:57.860Z",
+      "url": "https://linear.app/haoyida/issue/HAO-58/p3-07实现对齐分布与统一尺寸命令"
+    },
+    {
+      "id": "HAO-59",
+      "title": "P3-08｜实现标尺、网格、辅助线与吸附控制",
+      "parentId": "HAO-9",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T17:02:08.490Z",
+      "url": "https://linear.app/haoyida/issue/HAO-59/p3-08实现标尺网格辅助线与吸附控制"
+    },
+    {
+      "id": "HAO-60",
+      "title": "P3-09｜为 Flex、Grid、Free 建立独立编辑器与命令",
+      "parentId": "HAO-9",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T11:44:23.610Z",
+      "url": "https://linear.app/haoyida/issue/HAO-60/p3-09为-flexgridfree-建立独立编辑器与命令"
+    },
+    {
+      "id": "HAO-61",
+      "title": "P3-10｜以约束模型实现自由布局",
+      "parentId": "HAO-9",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T17:02:12.588Z",
+      "url": "https://linear.app/haoyida/issue/HAO-61/p3-10以约束模型实现自由布局"
+    },
+    {
+      "id": "HAO-62",
+      "title": "P3-11｜实现完整可配置快捷键系统",
+      "parentId": "HAO-9",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T17:02:16.503Z",
+      "url": "https://linear.app/haoyida/issue/HAO-62/p3-11实现完整可配置快捷键系统"
+    },
+    {
+      "id": "HAO-63",
+      "title": "P3-12｜实现含子树与资源引用的设计器剪贴板",
+      "parentId": "HAO-9",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T11:44:25.511Z",
+      "url": "https://linear.app/haoyida/issue/HAO-63/p3-12实现含子树与资源引用的设计器剪贴板"
+    },
+    {
+      "id": "HAO-64",
+      "title": "P3-13｜实现断点继承与 Override Diff 可视化",
+      "parentId": "HAO-9",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T11:44:27.495Z",
+      "url": "https://linear.app/haoyida/issue/HAO-64/p3-13实现断点继承与-override-diff-可视化"
+    },
+    {
+      "id": "HAO-65",
+      "title": "P3-14｜支持横竖屏、自定义设备与安全区模拟",
+      "parentId": "HAO-9",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T17:02:20.471Z",
+      "url": "https://linear.app/haoyida/issue/HAO-65/p3-14支持横竖屏自定义设备与安全区模拟"
+    },
+    {
+      "id": "HAO-66",
+      "title": "P3-15｜保证选择叠层不影响真实布局",
+      "parentId": "HAO-9",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T17:02:27.443Z",
+      "url": "https://linear.app/haoyida/issue/HAO-66/p3-15保证选择叠层不影响真实布局"
+    },
+    {
+      "id": "HAO-67",
+      "title": "P3-16｜交互结束时一次性提交画布事务",
+      "parentId": "HAO-9",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T11:44:29.817Z",
+      "url": "https://linear.app/haoyida/issue/HAO-67/p3-16交互结束时一次性提交画布事务"
+    },
+    {
+      "id": "HAO-68",
+      "title": "P3-QA｜Phase 3 全量测试与验收门禁",
+      "parentId": "HAO-9",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:17:42.464Z",
+      "url": "https://linear.app/haoyida/issue/HAO-68/p3-qaphase-3-全量测试与验收门禁"
+    },
+    {
+      "id": "HAO-69",
+      "title": "P4-01｜建立四数据库 Provider Adapter 架构",
+      "parentId": "HAO-10",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:59:40.965Z",
+      "url": "https://linear.app/haoyida/issue/HAO-69/p4-01建立四数据库-provider-adapter-架构"
+    },
+    {
+      "id": "HAO-70",
+      "title": "P4-02｜按 Provider 重构数据库连接向导",
+      "parentId": "HAO-10",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:35:50.025Z",
+      "url": "https://linear.app/haoyida/issue/HAO-70/p4-02按-provider-重构数据库连接向导"
+    },
+    {
+      "id": "HAO-71",
+      "title": "P4-03｜实现分阶段连接测试与修复诊断",
+      "parentId": "HAO-10",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:35:52.138Z",
+      "url": "https://linear.app/haoyida/issue/HAO-71/p4-03实现分阶段连接测试与修复诊断"
+    },
+    {
+      "id": "HAO-72",
+      "title": "P4-04｜建立完整数据库 Catalog Snapshot",
+      "parentId": "HAO-10",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:35:55.331Z",
+      "url": "https://linear.app/haoyida/issue/HAO-72/p4-04建立完整数据库-catalog-snapshot"
+    },
+    {
+      "id": "HAO-73",
+      "title": "P4-05｜实现 Data Studio 对象资源管理器",
+      "parentId": "HAO-10",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:35:57.004Z",
+      "url": "https://linear.app/haoyida/issue/HAO-73/p4-05实现-data-studio-对象资源管理器"
+    },
+    {
+      "id": "HAO-74",
+      "title": "P4-06｜表设计器统一生成 SchemaChangePlan",
+      "parentId": "HAO-10",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:35:59.498Z",
+      "url": "https://linear.app/haoyida/issue/HAO-74/p4-06表设计器统一生成-schemachangeplan"
+    },
+    {
+      "id": "HAO-75",
+      "title": "P4-07｜展示 DDL SQL、风险与依赖影响",
+      "parentId": "HAO-10",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:36:01.704Z",
+      "url": "https://linear.app/haoyida/issue/HAO-75/p4-07展示-ddl-sql风险与依赖影响"
+    },
+    {
+      "id": "HAO-76",
+      "title": "P4-08｜实现可审计可回滚的 DDL 部署服务",
+      "parentId": "HAO-10",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:36:03.640Z",
+      "url": "https://linear.app/haoyida/issue/HAO-76/p4-08实现可审计可回滚的-ddl-部署服务"
+    },
+    {
+      "id": "HAO-77",
+      "title": "P4-09｜实现强类型 Data Browser",
+      "parentId": "HAO-10",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:36:05.704Z",
+      "url": "https://linear.app/haoyida/issue/HAO-77/p4-09实现强类型-data-browser"
+    },
+    {
+      "id": "HAO-78",
+      "title": "P4-10｜实现数据编辑乐观并发策略",
+      "parentId": "HAO-10",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:36:07.426Z",
+      "url": "https://linear.app/haoyida/issue/HAO-78/p4-10实现数据编辑乐观并发策略"
+    },
+    {
+      "id": "HAO-79",
+      "title": "P4-11｜删除与批量更新增加影响行数确认",
+      "parentId": "HAO-10",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:36:09.610Z",
+      "url": "https://linear.app/haoyida/issue/HAO-79/p4-11删除与批量更新增加影响行数确认"
+    },
+    {
+      "id": "HAO-80",
+      "title": "P4-12｜接入专业 SQL 编辑器与元数据补全",
+      "parentId": "HAO-10",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:36:11.212Z",
+      "url": "https://linear.app/haoyida/issue/HAO-80/p4-12接入专业-sql-编辑器与yuan数据补全"
+    },
+    {
+      "id": "HAO-81",
+      "title": "P4-13｜实现只读与受控写查询执行策略",
+      "parentId": "HAO-10",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:36:12.895Z",
+      "url": "https://linear.app/haoyida/issue/HAO-81/p4-13实现只读与受控写查询执行策略"
+    },
+    {
+      "id": "HAO-82",
+      "title": "P4-14｜实现可视化 Query Model 设计器",
+      "parentId": "HAO-10",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:36:14.828Z",
+      "url": "https://linear.app/haoyida/issue/HAO-82/p4-14实现可视化-query-model-设计器"
+    },
+    {
+      "id": "HAO-83",
+      "title": "P4-15｜实现 Query Model 到 Provider SQL 编译",
+      "parentId": "HAO-10",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:36:16.451Z",
+      "url": "https://linear.app/haoyida/issue/HAO-83/p4-15实现-query-model-到-provider-sql-编译"
+    },
+    {
+      "id": "HAO-84",
+      "title": "P4-16｜实现候选对象校验与原子视图替换",
+      "parentId": "HAO-10",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:36:18.518Z",
+      "url": "https://linear.app/haoyida/issue/HAO-84/p4-16实现候选对象校验与原子视图替换"
+    },
+    {
+      "id": "HAO-85",
+      "title": "P4-17｜将视图元数据迁移为强类型实体",
+      "parentId": "HAO-10",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:36:20.165Z",
+      "url": "https://linear.app/haoyida/issue/HAO-85/p4-17将视图yuan数据迁移为强类型实体"
+    },
+    {
+      "id": "HAO-86",
+      "title": "P4-18｜Data Studio 全部写操作统一审计",
+      "parentId": "HAO-10",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:59:44.758Z",
+      "url": "https://linear.app/haoyida/issue/HAO-86/p4-18data-studio-全部写操作统一审计"
+    },
+    {
+      "id": "HAO-87",
+      "title": "P4-19｜Secret 仅通过 SecretRef 管理",
+      "parentId": "HAO-10",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:36:24.159Z",
+      "url": "https://linear.app/haoyida/issue/HAO-87/p4-19secret-仅通过-secretref-管理"
+    },
+    {
+      "id": "HAO-88",
+      "title": "P4-20｜实施 SQLite 路径 Sandbox 与例外审批",
+      "parentId": "HAO-10",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:36:25.958Z",
+      "url": "https://linear.app/haoyida/issue/HAO-88/p4-20实施-sqlite-路径-sandbox-与例外审批"
+    },
+    {
+      "id": "HAO-89",
+      "title": "P4-QA｜Phase 4 全量测试与验收门禁",
+      "parentId": "HAO-10",
+      "status": "In Progress",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:59:46.818Z",
+      "url": "https://linear.app/haoyida/issue/HAO-89/p4-qaphase-4-全量测试与验收门禁"
+    },
+    {
+      "id": "HAO-90",
+      "title": "P5-01｜Runtime Kernel 仅接受最新 RuntimeArtifact",
+      "parentId": "HAO-11",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T22:29:17.691Z",
+      "url": "https://linear.app/haoyida/issue/HAO-90/p5-01runtime-kernel-仅接受最新-runtimeartifact"
+    },
+    {
+      "id": "HAO-91",
+      "title": "P5-02｜设计预览与正式运行共用四类 Resolver",
+      "parentId": "HAO-11",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T15:55:07.146Z",
+      "url": "https://linear.app/haoyida/issue/HAO-91/p5-02设计预览与正式运行共用四类-resolver"
+    },
+    {
+      "id": "HAO-92",
+      "title": "P5-03｜设计态仅叠加编辑 Overlay",
+      "parentId": "HAO-11",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T22:29:20.217Z",
+      "url": "https://linear.app/haoyida/issue/HAO-92/p5-03设计态仅叠加编辑-overlay"
+    },
+    {
+      "id": "HAO-93",
+      "title": "P5-04｜Action Executor 改为 Handler Registry",
+      "parentId": "HAO-11",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T22:26:49.230Z",
+      "url": "https://linear.app/haoyida/issue/HAO-93/p5-04action-executor-改为-handler-registry"
+    },
+    {
+      "id": "HAO-94",
+      "title": "P5-05｜为每种动作声明输入输出与副作用契约",
+      "parentId": "HAO-11",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T13:04:56.254Z",
+      "url": "https://linear.app/haoyida/issue/HAO-94/p5-05为每种动作声明输入输出与副作用契约"
+    },
+    {
+      "id": "HAO-95",
+      "title": "P5-06｜实现运行变量分层 Scope 隔离",
+      "parentId": "HAO-11",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T17:20:57.718Z",
+      "url": "https://linear.app/haoyida/issue/HAO-95/p5-06实现运行变量分层-scope-隔离"
+    },
+    {
+      "id": "HAO-96",
+      "title": "P5-07｜以依赖图驱动运行态重算与刷新",
+      "parentId": "HAO-11",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T17:21:02.075Z",
+      "url": "https://linear.app/haoyida/issue/HAO-96/p5-07以依赖图驱动运行态重算与刷新"
+    },
+    {
+      "id": "HAO-97",
+      "title": "P5-08｜实现完整发布编译流水线",
+      "parentId": "HAO-11",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:32:51.980Z",
+      "url": "https://linear.app/haoyida/issue/HAO-97/p5-08实现完整发布编译流水线"
+    },
+    {
+      "id": "HAO-98",
+      "title": "P5-09｜建立替换上线前离线一致性回归",
+      "parentId": "HAO-11",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:32:47.561Z",
+      "url": "https://linear.app/haoyida/issue/HAO-98/p5-09建立替换上线前离线一致性回归"
+    },
+    {
+      "id": "HAO-99",
+      "title": "P5-10｜实施一次性替换部署与维护窗口",
+      "parentId": "HAO-11",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:05:49.722Z",
+      "url": "https://linear.app/haoyida/issue/HAO-99/p5-10实施一次性替换部署与维护窗口"
+    },
+    {
+      "id": "HAO-100",
+      "title": "P5-11｜建立最新运行实现质量与回滚监控",
+      "parentId": "HAO-11",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:05:55.404Z",
+      "url": "https://linear.app/haoyida/issue/HAO-100/p5-11建立最新运行实现质量与回滚监控"
+    },
+    {
+      "id": "HAO-101",
+      "title": "P5-12｜迁移完成后直接删除旧设计器与旧运行链路",
+      "parentId": "HAO-11",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T22:30:52.319Z",
+      "url": "https://linear.app/haoyida/issue/HAO-101/p5-12迁移完成后直接删除旧设计器与旧运行链路"
+    },
+    {
+      "id": "HAO-102",
+      "title": "P5-QA｜Phase 5 全量测试与验收门禁",
+      "parentId": "HAO-11",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T22:30:53.979Z",
+      "url": "https://linear.app/haoyida/issue/HAO-102/p5-qaphase-5-全量测试与验收门禁"
+    },
+    {
+      "id": "HAO-103",
+      "title": "P1-13｜实现现有文档到最新文档的一次性迁移与数据表",
+      "parentId": "HAO-7",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:06:03.005Z",
+      "url": "https://linear.app/haoyida/issue/HAO-103/p1-13实现现有文档到最新文档的一次性迁移与数据表"
+    },
+    {
+      "id": "HAO-104",
+      "title": "P1-14｜执行旧实现直接替换与删除守卫",
+      "parentId": "HAO-7",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T22:26:54.805Z",
+      "url": "https://linear.app/haoyida/issue/HAO-104/p1-14执行旧实现直接替换与删除守卫"
+    },
+    {
+      "id": "HAO-105",
+      "title": "Q-01｜建立并持续验证全链路性能 SLO",
+      "parentId": "HAO-12",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T21:17:50.777Z",
+      "url": "https://linear.app/haoyida/issue/HAO-105/q-01建立并持续验证全链路性能-slo"
+    },
+    {
+      "id": "HAO-106",
+      "title": "Q-02｜落实可靠性、恢复与幂等门禁",
+      "parentId": "HAO-12",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T20:19:17.663Z",
+      "url": "https://linear.app/haoyida/issue/HAO-106/q-02落实可靠性恢复与幂等门禁"
+    },
+    {
+      "id": "HAO-107",
+      "title": "Q-03｜落实 Designer、Runtime 与 Data Studio 安全门禁",
+      "parentId": "HAO-12",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T22:15:09.431Z",
+      "url": "https://linear.app/haoyida/issue/HAO-107/q-03落实-designerruntime-与-data-studio-安全门禁"
+    },
+    {
+      "id": "HAO-108",
+      "title": "Q-04｜落实 WCAG、全键盘与 i18n 门禁",
+      "parentId": "HAO-12",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T19:31:26.495Z",
+      "url": "https://linear.app/haoyida/issue/HAO-108/q-04落实-wcag全键盘与-i18n-门禁"
+    },
+    {
+      "id": "HAO-109",
+      "title": "Q-05｜建立统一可观测性事件与字段规范",
+      "parentId": "HAO-12",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T18:52:03.378Z",
+      "url": "https://linear.app/haoyida/issue/HAO-109/q-05建立统一可观测性事件与字段规范"
+    },
+    {
+      "id": "HAO-110",
+      "title": "Q-06｜将全量测试矩阵纳入 CI 门禁",
+      "parentId": "HAO-12",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T19:42:05.331Z",
+      "url": "https://linear.app/haoyida/issue/HAO-110/q-06将全量测试矩阵纳入-ci-门禁"
+    },
+    {
+      "id": "HAO-111",
+      "title": "Q-07｜Page Studio 最终产品验收",
+      "parentId": "HAO-12",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T19:09:39.423Z",
+      "url": "https://linear.app/haoyida/issue/HAO-111/q-07page-studio-最终产品验收"
+    },
+    {
+      "id": "HAO-112",
+      "title": "Q-08｜Runtime 最新实现最终产品验收",
+      "parentId": "HAO-12",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T20:49:42.319Z",
+      "url": "https://linear.app/haoyida/issue/HAO-112/q-08runtime-最新实现最终产品验收"
+    },
+    {
+      "id": "HAO-113",
+      "title": "Q-09｜Data Studio 最终产品验收",
+      "parentId": "HAO-12",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T22:15:11.087Z",
+      "url": "https://linear.app/haoyida/issue/HAO-113/q-09data-studio-最终产品验收"
+    },
+    {
+      "id": "HAO-114",
+      "title": "Q-10｜执行最终 Definition of Done 与发布签字",
+      "parentId": "HAO-12",
+      "status": "In Review",
+      "statusType": "started",
+      "updatedAt": "2026-07-11T22:30:55.698Z",
+      "url": "https://linear.app/haoyida/issue/HAO-114/q-10执行最终-definition-of-done-与发布签字"
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+.workspace-select-page {
+  height: var(--erp-raw-viewport-height);
+}
+
+.workspace-shell-grid {
+  min-height: calc(var(--erp-raw-viewport-height) - calc(96px * var(--app-ui-scale)));
+}
+
+.microflow-console-layout {
+  min-height: calc(var(--erp-raw-viewport-height) - calc(204px * var(--app-ui-scale)));
+}
+
+.data-source-tables-panel__tree {
+  max-height: calc(var(--erp-raw-viewport-height) - calc(330px * var(--app-ui-scale)));
+}
+
+.data-source-microflows-panel__list {
+  max-height: calc(var(--erp-raw-viewport-height) - calc(360px * var(--app-ui-scale)));
+}

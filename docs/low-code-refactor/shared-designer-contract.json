@@ -1,0 +1,53 @@
+{
+  "contractName": "AsterERP.LowCodeStudio.Latest",
+  "semanticPolicy": "latest-only",
+  "document": {
+    "required": ["documentId", "revision", "elements", "pages", "metadata", "actions", "variables", "permissions", "runtimeContext"],
+    "forbiddenEditorState": ["selectedNodeIds", "primaryNodeId", "anchorNodeId", "viewport", "history", "historyIndex", "dirty", "saving", "transactionId"],
+    "invariants": ["element ids are unique", "parentId and children are bidirectional", "every page root is reachable", "no element cycle", "resource references use stable resourceId", "node.permission.code is the only node permission source", "bindings.props.<property> is the canonical property binding path", "bindings.data is reserved for data-source bindings"]
+  },
+  "editorSession": {
+    "required": ["selectedNodeIds", "primaryNodeId", "anchorNodeId", "viewport", "panelState", "activeTransactionId"],
+    "persistedWithDocument": false,
+    "runtimeInput": false
+  },
+  "runtimeArtifact": {
+    "required": ["documentId", "revision", "artifactHash", "compilerVersion", "manifestTypes", "pages", "elements", "actions", "bindings", "permissions"],
+    "immutableAfterPublish": true,
+    "inputToRuntimeKernel": true,
+    "acceptsEditorSession": false,
+    "hash": "sha256(canonical-json-payload)"
+  },
+  "binding": {
+    "reference": ["resourceId", "displayName", "valueType", "conversionPipeline"],
+    "manualPath": false,
+    "canonicalPaths": ["bindings.props.<property>", "bindings.data.<property>"],
+    "legacyCompatibility": ["bindings[\"props.<property>\"] is read once and normalized to bindings.props.<property>"],
+    "conversionKinds": ["exact", "safe", "lossy", "incompatible"]
+  },
+  "action": {
+    "requiredManifest": ["type", "inputSchema", "outputSchema", "permissionCode", "sideEffectLevel", "cancellable", "timeoutMs", "errorPolicy"],
+    "unknownAction": "reject-before-publish"
+  },
+  "responsivePresentation": {
+    "inheritance": "responsiveModel.resolveResponsiveNode",
+    "sections": ["layout", "props", "style"],
+    "runtimeConsumesPublishedArtifact": true,
+    "styleIsNotMergedIntoLayout": true
+  },
+  "runtimePresentation": {
+    "permissionPath": "node.permission.code",
+    "state": ["visible", "disabled", "readOnly", "loading"],
+    "loadingAria": "aria-busy=true",
+    "invisibleNodeCreatesNoDom": true
+  },
+  "dataFlow": [
+    "editor reads DesignerDocument",
+    "command bus emits immutable revision and inverse operation",
+    "save validates, canonicalizes, hashes and idempotently persists",
+    "publish compiles an immutable RuntimeArtifact",
+    "RuntimeKernel reads only RuntimeArtifact",
+    "Data Studio emits SchemaChangePlan or controlled QueryPlan before execution"
+  ],
+  "compatibility": {"dualWrite": false, "longLivedFeatureFlag": false, "bridgeOrShim": false}
+}

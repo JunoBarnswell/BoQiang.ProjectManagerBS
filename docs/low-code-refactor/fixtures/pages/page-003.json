@@ -1,0 +1,11 @@
+{
+  "fixtureId": "page-003",
+  "title": "匿名发布页面",
+  "document": {
+    "documentId": "fixture-page-003",
+    "revision": 1,
+    "pages": [{"id":"page-003","name":"匿名发布页面","rootElementId":"root-003"}],
+    "elements": {"root-003":{"id":"root-003","type":"layout.page","name":"匿名发布页面","parentId":null,"children":[],"props":{"title":{"kind":"literal","value":"匿名发布页面","valueType":"string"}},"layout":{"minHeight":"720px","width":"100%"},"style":{},"events":[],"bindings":{}}},
+    "actions": [], "variables": [], "permissions": {}, "runtimeContext": {"pageCode":"fixture-page-003"}, "metadata": {"templateCode":"designer-document"}
+  }
+}

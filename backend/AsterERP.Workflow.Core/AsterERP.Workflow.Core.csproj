@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\AsterERP.Workflow.BpmnModel\AsterERP.Workflow.BpmnModel.csproj" />
+    <ProjectReference Include="..\AsterERP.Workflow.BpmnParser\AsterERP.Workflow.BpmnParser.csproj" />
+    <ProjectReference Include="..\AsterERP.Workflow.Common\AsterERP.Workflow.Common.csproj" />
+    <ProjectReference Include="..\AsterERP.Workflow.Persistence\AsterERP.Workflow.Persistence.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="DynamicExpresso.Core" Version="2.19.3" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.8" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.8" />
+    <PackageReference Include="Volo.Abp.Core" Version="10.4.1" />
+    <PackageReference Include="Volo.Abp.Guids" Version="10.4.1" />
+    <PackageReference Include="Volo.Abp.Timing" Version="10.4.1" />
+    <PackageReference Include="Volo.Abp.Uow" Version="10.4.1" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+  </PropertyGroup>
+
+</Project>

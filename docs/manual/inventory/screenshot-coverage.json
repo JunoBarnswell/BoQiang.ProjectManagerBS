@@ -1,0 +1,136 @@
+{
+  "screenshots": [
+    {
+      "raw": "docs/manual/assets/screenshots/designer/page-designer-entry-raw.png",
+      "annotated": "docs/manual/assets/screenshots/designer/page-designer-entry-annotated.png",
+      "annotations": [],
+      "status": "annotated"
+    },
+    {
+      "raw": "docs/manual/assets/screenshots/mes/application-console-raw.png",
+      "annotated": "docs/manual/assets/screenshots/mes/application-console-annotated.png",
+      "annotations": [],
+      "status": "annotated"
+    },
+    {
+      "raw": "docs/manual/assets/screenshots/mes/data-center-microflows-raw.png",
+      "annotated": "docs/manual/assets/screenshots/mes/data-center-microflows-annotated.png",
+      "annotations": [],
+      "status": "annotated"
+    },
+    {
+      "raw": "docs/manual/assets/screenshots/mes/data-center-raw.png",
+      "annotated": "docs/manual/assets/screenshots/mes/data-center-annotated.png",
+      "annotations": [],
+      "status": "annotated"
+    },
+    {
+      "raw": "docs/manual/assets/screenshots/mes/development-center-raw.png",
+      "annotated": "docs/manual/assets/screenshots/mes/development-center-annotated.png",
+      "annotations": [],
+      "status": "annotated"
+    },
+    {
+      "raw": "docs/manual/assets/screenshots/mes/home-raw.png",
+      "annotated": "docs/manual/assets/screenshots/mes/home-annotated.png",
+      "annotations": [],
+      "status": "annotated"
+    },
+    {
+      "raw": "docs/manual/assets/screenshots/mes/login-raw.png",
+      "annotated": "docs/manual/assets/screenshots/mes/login-annotated.png",
+      "annotations": [],
+      "status": "annotated"
+    },
+    {
+      "raw": "docs/manual/assets/screenshots/mes/runtime-order-demo-raw.png",
+      "annotated": "docs/manual/assets/screenshots/mes/runtime-order-demo-annotated.png",
+      "annotations": [],
+      "status": "annotated"
+    },
+    {
+      "raw": "docs/manual/assets/screenshots/mes/system-users-raw.png",
+      "annotated": "docs/manual/assets/screenshots/mes/system-users-annotated.png",
+      "annotations": [],
+      "status": "annotated"
+    },
+    {
+      "raw": "docs/manual/assets/screenshots/mes/workflow-history-raw.png",
+      "annotated": "docs/manual/assets/screenshots/mes/workflow-history-annotated.png",
+      "annotations": [],
+      "status": "annotated"
+    },
+    {
+      "raw": "docs/manual/assets/screenshots/mes/workflow-models-raw.png",
+      "annotated": "docs/manual/assets/screenshots/mes/workflow-models-annotated.png",
+      "annotations": [],
+      "status": "annotated"
+    },
+    {
+      "raw": "docs/manual/assets/screenshots/mes/workflow-tasks-raw.png",
+      "annotated": "docs/manual/assets/screenshots/mes/workflow-tasks-annotated.png",
+      "annotations": [],
+      "status": "annotated"
+    },
+    {
+      "raw": "docs/manual/assets/screenshots/platform/ai-workbench-raw.png",
+      "annotated": "docs/manual/assets/screenshots/platform/ai-workbench-annotated.png",
+      "annotations": [],
+      "status": "annotated"
+    },
+    {
+      "raw": "docs/manual/assets/screenshots/platform/application-center-raw.png",
+      "annotated": "docs/manual/assets/screenshots/platform/application-center-annotated.png",
+      "annotations": [],
+      "status": "annotated"
+    },
+    {
+      "raw": "docs/manual/assets/screenshots/platform/flowise-chatflows-raw.png",
+      "annotated": "docs/manual/assets/screenshots/platform/flowise-chatflows-annotated.png",
+      "annotations": [],
+      "status": "annotated"
+    },
+    {
+      "raw": "docs/manual/assets/screenshots/platform/login-raw.png",
+      "annotated": "docs/manual/assets/screenshots/platform/login-annotated.png",
+      "annotations": [],
+      "status": "annotated"
+    },
+    {
+      "raw": "docs/manual/assets/screenshots/platform/platform-applications-raw.png",
+      "annotated": "docs/manual/assets/screenshots/platform/platform-applications-annotated.png",
+      "annotations": [],
+      "status": "annotated"
+    },
+    {
+      "raw": "docs/manual/assets/screenshots/platform/platform-tenants-raw.png",
+      "annotated": "docs/manual/assets/screenshots/platform/platform-tenants-annotated.png",
+      "annotations": [],
+      "status": "annotated"
+    },
+    {
+      "raw": "docs/manual/assets/screenshots/platform/post-login-raw.png",
+      "annotated": "docs/manual/assets/screenshots/platform/post-login-annotated.png",
+      "annotations": [],
+      "status": "annotated"
+    },
+    {
+      "raw": "docs/manual/assets/screenshots/platform/system-roles-raw.png",
+      "annotated": "docs/manual/assets/screenshots/platform/system-roles-annotated.png",
+      "annotations": [],
+      "status": "annotated"
+    },
+    {
+      "raw": "docs/manual/assets/screenshots/platform/system-users-raw.png",
+      "annotated": "docs/manual/assets/screenshots/platform/system-users-annotated.png",
+      "annotations": [],
+      "status": "annotated"
+    },
+    {
+      "raw": "docs/manual/assets/screenshots/platform/workspace-select-raw.png",
+      "annotated": "docs/manual/assets/screenshots/platform/workspace-select-annotated.png",
+      "annotations": [],
+      "status": "annotated"
+    }
+  ]
+}

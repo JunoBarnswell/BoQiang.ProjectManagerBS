@@ -1,0 +1,14 @@
+{
+  "versionPolicy": "latest-only",
+  "fixtureManifest": "fixtures/manifest.json",
+  "phase1Baseline": "phase1-baseline.json",
+  "cases": [
+    {"id":"GC-001","fixture":"page-001","action":"load-and-publish","expected":{"validation":"pass","artifact":"immutable","unknownManifest":"reject"}},
+    {"id":"GC-002","fixture":"page-002","action":"query-then-save-microflow","expected":{"bindingSources":["form","dataset"],"action":"runMicroflow","scopeIsolation":true,"affectedRows":"audited"}},
+    {"id":"GC-003","fixture":"page-003","action":"reload-after-publish","expected":{"revision":"same-or-new-explicit-revision","artifactHash":"stable-for-same-payload","editorSession":"not-in-artifact"}},
+    {"id":"GC-004","fixture":"generated-1000-node","fixtureKind":"generated","generation":{"nodes":1000,"maxDepth":8},"action":"zoom-drag-resize","expected":{"transactions":1,"drift":"zero-within-pixel-tolerance","documentWrites":"pointer-up-only"}},
+    {"id":"GC-005","fixture":"generated-wide-table","fixtureKind":"generated","generation":{"columns":100,"rows":10000},"action":"typed-edit-with-optimistic-concurrency","expected":{"staleWrite":"reject","secret":"never-returned","affectedRows":"confirmed"}},
+    {"id":"GC-006","fixture":"tampered-artifact","fixtureKind":"generated","generation":{"mutation":"artifactHash-or-manifestTypes"},"action":"runtime-load","expected":{"result":"reject","diagnostic":"hash-or-manifest-mismatch","fallback":"none"}}
+  ],
+  "screenshotPolicy": {"requiredFor":"canvas, inspector, binding popover, data studio, runtime, publish rollback","naming":"<case>-<viewport>-<state>.png","missingScreenshot":"Blocked for UI acceptance"}
+}

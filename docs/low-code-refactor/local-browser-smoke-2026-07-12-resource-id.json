@@ -1,0 +1,43 @@
+{
+  "evidenceId": "local-browser-smoke-2026-07-12-resource-id",
+  "status": "EvidencePresent",
+  "scope": "local-only",
+  "environment": {
+    "api": "http://127.0.0.1:5000",
+    "frontend": "http://127.0.0.1:5173",
+    "tenant": "tenant-a",
+    "application": "MES",
+    "backendRestarted": true,
+    "apiHealth": "GET /api/health -> 200, service=Running"
+  },
+  "cases": [
+    {
+      "name": "Latest DesignerDocument designer",
+      "route": "/tenants/tenant-a/apps/MES/admin/development-center/pages/1d77fd8dee5941aeba46fd19a650c360/designer",
+      "observed": ["Low-code page designer", "Responsive breakpoint", "Save draft", "Preview", "Preparing latest runtime preview"]
+    },
+    {
+      "name": "Runtime preview",
+      "route": "/tenants/tenant-a/apps/MES/admin/pages/page_mr7xi5jk?previewPageId=1d77fd8dee5941aeba46fd19a650c360",
+      "observed": ["11（预览）", "single preview route"]
+    },
+    {
+      "name": "Data Studio",
+      "route": "/tenants/tenant-a/apps/MES/admin/data-center/data-sources",
+      "observed": ["数据中心", "数据源管理", "Codex 微流订单演示库", "已发布", "1 data source", "no loading state", "no business error"]
+    }
+  ],
+  "automatedChecks": {
+    "backendBuild": "Release build passed with 0 warnings and 0 errors",
+    "backendTests": "725/725 passed",
+    "frontendTargetedTests": "3 files / 7 tests passed",
+    "frontendFullRun": "81 files / 393 tests passed",
+    "frontendTypecheck": "passed",
+    "frontendBuild": "passed",
+    "frontendLint": "passed"
+  },
+  "limitations": [
+    "The local browser run uses Database__SkipSeed=true; no mock business table or rows were substituted.",
+    "Four-provider external database evidence, maintenance-window rollback rehearsal, and production authorization remain blocked by environment access."
+  ]
+}

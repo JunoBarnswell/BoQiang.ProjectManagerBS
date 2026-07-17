@@ -1,0 +1,45 @@
+.app-header-bar {
+  min-height: var(--app-shell-header-height);
+}
+
+.app-content-region {
+  gap: var(--erp-section-gap);
+  padding: calc(6px * var(--app-ui-scale));
+}
+
+@media (min-width: 640px) {
+  .app-content-region {
+    padding: calc(8px * var(--app-ui-scale));
+  }
+}
+
+.app-status-bar {
+  font-size: var(--app-text-2xs);
+  height: var(--app-shell-status-height);
+  min-height: var(--app-shell-status-height);
+}
+
+.app-sidebar--expanded {
+  width: var(--app-shell-sidebar-width);
+}
+
+.app-sidebar--collapsed {
+  width: var(--app-shell-sidebar-collapsed-width);
+}
+
+.app-sidebar__workspace {
+  min-height: calc(40px * var(--app-ui-scale));
+}
+
+.app-sidebar__workspace--collapsed {
+  min-height: calc(48px * var(--app-ui-scale));
+}
+
+.app-sidebar__toggle {
+  height: calc(32px * var(--app-ui-scale));
+}
+
+.app-tabs-view {
+  height: var(--app-shell-tab-height);
+  min-height: var(--app-shell-tab-height);
+}

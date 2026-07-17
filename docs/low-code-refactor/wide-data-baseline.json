@@ -1,0 +1,45 @@
+{
+  "format": "astererp.low-code.wide-data-baseline.v1",
+  "scope": {
+    "columnCounts": [20, 200, 1000],
+    "rowCounts": [10000, 1000000],
+    "projectionColumns": 6,
+    "pageSize": 200,
+    "dataGeneration": "deterministic-local-fixture",
+    "externalDatabaseEvidence": "required"
+  },
+  "operations": [
+    "metadataLoad",
+    "firstInteractiveColumnModel",
+    "filter",
+    "sort",
+    "page",
+    "editSerialization",
+    "boundedExport"
+  ],
+  "budgets": {
+    "metadataLoadP95Ms": 250,
+    "firstInteractiveColumnModelP95Ms": 250,
+    "filterP95Ms": 5000,
+    "sortP95Ms": 10000,
+    "pageP95Ms": 50,
+    "editSerializationP95Ms": 50,
+    "boundedExportP95Ms": 250,
+    "maxRenderedRows": 200
+  },
+  "acceptance": {
+    "boundedPageOnly": "Pass",
+    "fullMillionRowDomRender": "Fail",
+    "missingExternalDatabase": "Blocked",
+    "missingBrowserEvidence": "Blocked",
+    "mockDataAsProductionEvidence": "Fail",
+    "anonymous401IsNotEvidence": true
+  },
+  "externalEvidenceRequirements": [
+    "Provider-backed 10000-row and 1000000-row source",
+    "Restarted authorized API",
+    "Route-to-Page-to-API-to-Application-Service-to-ORM-to-DB trace",
+    "Real browser filter/sort/page/edit/refresh/reload evidence",
+    "Failure and export cancellation evidence"
+  ]
+}

@@ -1,0 +1,23 @@
+export const asterScenePermissions = {
+  adminView: 'asterscene:admin:view',
+  appealManage: 'asterscene:appeal:manage',
+  assetDelete: 'asterscene:asset:delete',
+  assetUpload: 'asterscene:asset:upload',
+  assetView: 'asterscene:asset:view',
+  communityInteract: 'asterscene:community:interact',
+  documentSave: 'asterscene:document:save',
+  jobView: 'asterscene:job:view',
+  moderationManage: 'asterscene:moderation:manage',
+  supportAdminManage: 'asterscene:support:admin:manage',
+  supportAdminView: 'asterscene:support:admin:view',
+  projectCreate: 'asterscene:project:create',
+  projectDelete: 'asterscene:project:delete',
+  projectList: 'asterscene:project:list',
+  publishExecute: 'asterscene:publish:execute',
+  publishView: 'asterscene:publish:view',
+  publishRollback: 'asterscene:publish:rollback',
+  remixCreate: 'asterscene:remix:create',
+  studioOpen: 'asterscene:studio:open',
+  subscriptionManage: 'asterscene:subscription:manage',
+  usageView: 'asterscene:usage:view'
+} as const;

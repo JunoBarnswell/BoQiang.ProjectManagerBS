@@ -1,0 +1,23 @@
+{
+  "baselineId": "low-code-phase1",
+  "phase": 1,
+  "status": "contract-frozen",
+  "contract": "shared-designer-contract.json",
+  "fixtureManifest": "fixtures/manifest.json",
+  "goldenCases": "golden-cases.json",
+  "generatedFixtures": [
+    {"fixtureId":"generated-1000-node","kind":"designer-document","generator":"deterministic-tree","nodeCount":1000,"seed":"phase1-tree-001","expected":"valid-latest-document"},
+    {"fixtureId":"generated-wide-table","kind":"designer-document","generator":"deterministic-table","columnCount":100,"rowCount":10000,"seed":"phase1-table-001","expected":"valid-latest-document-and-bounded-columns"},
+    {"fixtureId":"tampered-artifact","kind":"runtime-artifact","generator":"page-001-artifact-copy-with-document-mutation","expected":"hash-mismatch-rejected"}
+  ],
+  "cases": [
+    {"id":"P1-C01","kind":"fixture-contract","pass":"all manifest and golden references resolve to machine-readable inputs"},
+    {"id":"P1-C02","kind":"generated-tree","pass":"1000 unique nodes, one root, no cycle, one canonical hash"},
+    {"id":"P1-C03","kind":"generated-table","pass":"100 deterministic columns and 10000 bounded rows remain valid"},
+    {"id":"P1-C04","kind":"tampered-artifact","pass":"publisher rejects altered document without fallback"},
+    {"id":"P1-C05","kind":"migration-rollback-boundary","pass":"malformed source leaves no partially persisted migration"},
+    {"id":"P1-C06","kind":"migration-runtime-boundary","pass":"migration emits only a named intermediate draft and the latest compiler remains the sole producer of signed RuntimeArtifact"},
+    {"id":"P1-C07","kind":"cross-stack-hash","pass":"frontend and backend calculate the same canonical DesignerDocument hash from the shared fixture"}
+  ],
+  "execution": {"testClass":"LowCodeRefactorAssetContractTests","migrationTestClass":"ApplicationDevelopmentMigrationTests","passRequires":"dotnet test backend/AsterERP.Api.Tests/AsterERP.Api.Tests.csproj"}
+}

@@ -1,0 +1,157 @@
+{
+  "schema": "astererp.low-code.acceptance-matrix.latest",
+  "generatedAt": "2026-07-12",
+  "policy": {
+    "localPassIsNotReleasePass": true,
+    "releasePassRequires": ["local command output", "authorized API/UI evidence", "external provider evidence", "rollback evidence"],
+    "blockedNeverUpgradesToPass": true
+  },
+  "statusVocabulary": {
+    "Pass": "The named command completed and its raw evidence is retained.",
+    "EvidencePresent": "The source/test or prior local evidence is present, but it is not sufficient for release sign-off.",
+    "PartialPass": "The local slice is covered while one or more required acceptance dimensions remain blocked.",
+    "Blocked": "A required external environment, authorization, maintenance window, or evidence artifact is unavailable.",
+    "Fail": "The named command or acceptance assertion failed."
+  },
+  "issues": [
+    {
+      "id": "HAO-105",
+      "title": "Performance SLO",
+      "localChecks": [
+        "backend/AsterERP.Api.Tests/LowCodePerformanceBenchmarkTests.cs",
+        "frontend/AsterERP.Web/src/pages/application-console/development-center/low-code-studio/testing/performance/lowCodePerformanceBenchmark.test.ts",
+        "docs/low-code-refactor/performance-baseline.json"
+      ],
+      "localCommand": "dotnet test backend/AsterERP.Api.Tests/AsterERP.Api.Tests.csproj --configuration Release --no-restore --filter FullyQualifiedName~LowCodePerformanceBenchmarkTests; npm test --prefix frontend/AsterERP.Web -- --run src/pages/application-console/development-center/low-code-studio/testing/performance/lowCodePerformanceBenchmark.test.ts --reporter=json --outputFile=../../artifacts/low-code-performance/frontend-test.json",
+      "localStatus": "EvidencePresent",
+      "passCondition": "Backend TRX and frontend JSON exist; every node-count scenario reports p95 within the documented budget.",
+      "externalEvidence": ["repeated controlled browser frame timing", "wide-table and million-row data", "four-provider query latency"],
+      "externalStatus": "Blocked",
+      "blockedCondition": "No retained repeated Release run and no authorized browser/provider performance evidence.",
+      "releaseStatus": "Blocked"
+    },
+    {
+      "id": "HAO-106",
+      "title": "Idempotency, recovery and cancellation",
+      "localChecks": [
+        "backend/AsterERP.Api.Tests/ApplicationDevelopmentReliabilityTests.cs",
+        "backend/AsterERP.Api.Tests/ApplicationDesignerArtifactRollbackTests.cs",
+        "backend/AsterERP.Api.Tests/ApplicationDataSourceTableRowServiceTests.cs",
+        "backend/AsterERP.Api.Tests/ApplicationDataMutationLedgerServiceTests.cs"
+      ],
+      "localCommand": "dotnet test backend/AsterERP.Api.Tests/AsterERP.Api.Tests.csproj --configuration Release --no-restore --filter \"FullyQualifiedName~ApplicationDevelopmentReliabilityTests|FullyQualifiedName~ApplicationDesignerArtifactRollbackTests|FullyQualifiedName~ApplicationDataSourceTableRowServiceTests|FullyQualifiedName~ApplicationDataMutationLedgerServiceTests\"",
+      "localStatus": "EvidencePresent",
+      "passCondition": "Idempotent save/publish, stale-write conflict, cancellation and ledger recovery assertions pass.",
+      "externalEvidence": ["authorized API retry", "provider timeout/cancellation", "backup restore and rollback rehearsal"],
+      "externalStatus": "Blocked",
+      "blockedCondition": "No authorized maintenance window, backup snapshot, real-provider timeout run, or restore rehearsal.",
+      "releaseStatus": "Blocked"
+    },
+    {
+      "id": "HAO-107",
+      "title": "Security gates",
+      "localChecks": [
+        "backend/AsterERP.Api.Tests/HAO107SecurityGateTests.cs",
+        "frontend/AsterERP.Web/src/shared/runtime/designer-document/runtimeSecurityPolicy.test.ts",
+        "backend/AsterERP.Api.Tests/ApplicationDataSourceSecurityBoundaryTests.cs"
+      ],
+      "localCommand": "dotnet test backend/AsterERP.Api.Tests/AsterERP.Api.Tests.csproj --configuration Release --no-restore --filter \"FullyQualifiedName~HAO107SecurityGateTests|FullyQualifiedName~ApplicationDataSourceSecurityBoundaryTests\"; npm test --prefix frontend/AsterERP.Web -- --run src/shared/runtime/designer-document/runtimeSecurityPolicy.test.ts",
+      "localStatus": "EvidencePresent",
+      "passCondition": "Unsafe document/artifact inputs, secret echo, path traversal and dynamic execution guards pass.",
+      "externalEvidence": ["authorized tenant/RBAC API trace", "secret and SQLite sandbox production trace", "permission-deny trace"],
+      "externalStatus": "Blocked",
+      "blockedCondition": "Local tests do not prove deployed authorization, tenant isolation, or production secret/path handling.",
+      "releaseStatus": "Blocked"
+    },
+    {
+      "id": "HAO-108",
+      "title": "Accessibility and i18n",
+      "localChecks": ["backend/AsterERP.Api.Tests/LowCodeAccessibilityGuardTests.cs"],
+      "localCommand": "dotnet test backend/AsterERP.Api.Tests/AsterERP.Api.Tests.csproj --configuration Release --no-restore --filter FullyQualifiedName~LowCodeAccessibilityGuardTests",
+      "localStatus": "EvidencePresent",
+      "passCondition": "Loading, error, 403/404, keyboard semantics and alert semantics assertions pass.",
+      "externalEvidence": ["browser keyboard audit", "screen-reader audit", "Page Studio/Data Studio visual and i18n review"],
+      "externalStatus": "Blocked",
+      "blockedCondition": "No retained authorized browser accessibility, visual, responsive, or i18n evidence.",
+      "releaseStatus": "Blocked"
+    },
+    {
+      "id": "HAO-109",
+      "title": "Observability events",
+      "localChecks": [
+        "frontend/AsterERP.Web/src/runtime-kernel/RuntimeMonitoringContract.test.ts",
+        "backend/AsterERP.Api.Tests/LowCodeObservabilityGuardTests.cs",
+        "docs/low-code-refactor/runtime-monitoring-event.schema.json"
+      ],
+      "localCommand": "dotnet test backend/AsterERP.Api.Tests/AsterERP.Api.Tests.csproj --configuration Release --no-restore --filter FullyQualifiedName~LowCodeObservabilityGuardTests; npm test --prefix frontend/AsterERP.Web -- --run src/runtime-kernel/RuntimeMonitoringContract.test.ts",
+      "localStatus": "EvidencePresent",
+      "passCondition": "Known event names, required context, redaction and cancellation fields validate.",
+      "externalEvidence": ["Designer/Data Studio production event emission", "metrics/log retrieval", "alert routing and trace correlation"],
+      "externalStatus": "Blocked",
+      "blockedCondition": "No production telemetry export or alert retrieval evidence is present.",
+      "releaseStatus": "Blocked"
+    },
+    {
+      "id": "HAO-110",
+      "title": "CI test matrix",
+      "localChecks": [
+        ".github/workflows/low-code-quality-gates.yml",
+        "docs/low-code-refactor/validate-acceptance-matrix.ps1",
+        "docs/low-code-refactor/hao-105-110-acceptance-matrix.json"
+      ],
+      "localCommand": "powershell -File docs/low-code-refactor/validate-acceptance-matrix.ps1",
+      "localStatus": "EvidencePresent",
+      "passCondition": "The validator finds exactly HAO-105..110, all referenced check files exist, and CI executes every named local gate.",
+      "externalEvidence": ["green CI run with retained TRX/JSON artifacts", "controlled external evidence artifacts under artifacts/low-code-external"],
+      "externalStatus": "Blocked",
+      "blockedCondition": "A static workflow or matrix validation is not a CI execution result; no retained CI run with external evidence is available.",
+      "releaseStatus": "Blocked"
+    }
+  ],
+  "extendedIssues": [
+    {
+      "id": "HAO-111",
+      "title": "Page Studio acceptance",
+      "localChecks": ["frontend/AsterERP.Web/src/pages/application-console/development-center/low-code-studio/testing/acceptance/pageStudioHao111Acceptance.test.ts", "docs/low-code-refactor/page-studio-hao-111-acceptance.md"],
+      "localCommand": "npm test --prefix frontend/AsterERP.Web -- --run src/pages/application-console/development-center/low-code-studio/testing/acceptance/pageStudioHao111Acceptance.test.ts --reporter=json --outputFile=../../artifacts/hao-111/acceptance.json",
+      "localStatus": "EvidencePresent",
+      "passCondition": "Page Studio logic cases and authorized browser insert/move/delete/duplicate/edit/bind/undo/redo/save/reload cases pass.",
+      "externalStatus": "Blocked",
+      "blockedCondition": "No retained Page Studio E2E route, screenshot, permission-deny, responsive, or backend save trace.",
+      "releaseStatus": "Blocked"
+    },
+    {
+      "id": "HAO-112",
+      "title": "Runtime product acceptance",
+      "localChecks": ["frontend/AsterERP.Web/src/pages/application-console/development-center/low-code-studio/testing/acceptance/pageStudioHao112Acceptance.test.ts", "docs/low-code-refactor/runtime-acceptance.md"],
+      "localCommand": "npm test --prefix frontend/AsterERP.Web -- --run src/pages/application-console/development-center/low-code-studio/testing/acceptance/pageStudioHao112Acceptance.test.ts --reporter=json --outputFile=../../artifacts/hao-112/runtime.json",
+      "localStatus": "EvidencePresent",
+      "passCondition": "Runtime monitoring, canonical integrity and unknown-event rejection pass; local browser smoke is retained.",
+      "externalStatus": "Blocked",
+      "blockedCondition": "No authorized runtime API/UI trace, rollback rehearsal, accessibility/layout evidence, or final deletion scan.",
+      "releaseStatus": "Blocked"
+    },
+    {
+      "id": "HAO-113",
+      "title": "Data Studio product acceptance",
+      "localChecks": ["frontend/AsterERP.Web/src/pages/application-console/development-center/low-code-studio/testing/acceptance/pageStudioHao113Acceptance.test.ts", "docs/low-code-refactor/data-studio-acceptance.md", "docs/low-code-refactor/data-studio-BLOCKERS.md"],
+      "localCommand": "npm test --prefix frontend/AsterERP.Web -- --run src/pages/application-console/development-center/low-code-studio/testing/acceptance/pageStudioHao113Acceptance.test.ts --reporter=json --outputFile=../../artifacts/hao-113/data-studio.json",
+      "localStatus": "EvidencePresent",
+      "passCondition": "Structured query model, current SQL editor and typed parameters pass; local SQLite chain is retained separately.",
+      "externalStatus": "Blocked",
+      "blockedCondition": "No four-provider credentials or authorized Data Studio API/UI evidence.",
+      "releaseStatus": "Blocked"
+    },
+    {
+      "id": "HAO-114",
+      "title": "Definition of Done and release sign-off",
+      "localChecks": ["docs/low-code-refactor/definition-of-done.md", "docs/low-code-refactor/quality-gates.md", "docs/low-code-refactor/runtime-release-blocked.md", "docs/low-code-refactor/data-studio-acceptance.md"],
+      "localCommand": "powershell -File docs/low-code-refactor/validate-acceptance-matrix.ps1; dotnet build AsterERP.sln --configuration Release --no-restore; npm run typecheck --prefix frontend/AsterERP.Web; npm run lint --prefix frontend/AsterERP.Web; npm run build --prefix frontend/AsterERP.Web",
+      "localStatus": "EvidencePresent",
+      "passCondition": "All local gates pass and every external/operational evidence item is retained with traceable status.",
+      "externalStatus": "Blocked",
+      "blockedCondition": "Maintenance window, operator authorization, backup/restore, external providers, authorized API/UI, accessibility/visual/performance, or deletion evidence is missing.",
+      "releaseStatus": "Blocked"
+    }
+  ]
+}

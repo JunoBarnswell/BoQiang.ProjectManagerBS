@@ -1,0 +1,101 @@
+{
+  "semanticPolicy": "latest-only",
+  "auditedCommit": "cc8bdd90",
+  "scope": [
+    "frontend/AsterERP.Web/src",
+    "backend/AsterERP.Api",
+    "backend/AsterERP.Contracts",
+    "docs/contracts"
+  ],
+  "automatedScan": {
+      "command": "dotnet test backend/AsterERP.Api.Tests/AsterERP.Api.Tests.csproj --configuration Release --no-restore --filter FullyQualifiedName~LatestOnly",
+      "result": "Pass",
+      "cases": 7,
+      "notes": "The scan excludes only migration/rejection inputs where the latest boundary explicitly requires them, test fixtures, and generated web assets. Production imports from full-designer must be empty; new imports fail. Verified at cc8bdd90."
+  },
+  "currentWorkingTreeScan": {
+    "status": "Pass",
+    "command": "pwsh -File docs/low-code-refactor/scan-latest-only.ps1",
+    "observedAt": "2026-07-12",
+    "commitContext": "70fe13316 plus current worktree",
+    "cases": 7,
+    "findings": [],
+    "requiredAction": "Rerun the source guard against the final release commit after all business changes are frozen.",
+    "releaseDecision": "Pass for this local source boundary; external release gates remain separate."
+  },
+  "deletedEntries": [
+    {
+      "paths": [
+        "frontend/AsterERP.Web/src/shared/runtime/PageRenderer.tsx",
+        "frontend/AsterERP.Web/src/core/ui-engine/ActionRegistry.ts",
+        "frontend/AsterERP.Web/src/core/ui-engine/ComponentRegistry.ts",
+        "frontend/AsterERP.Web/src/core/ui-engine/SchemaValidator.ts"
+      ],
+      "commit": "bec698a97d45f0d04be7646f4ad8ba5ebe57d280",
+      "reason": "Remove generic runtime entry and registries; RuntimeKernel and component manifests are the only runtime dispatch contract."
+    },
+    {
+      "paths": [
+        "frontend/AsterERP.Web/src/shared/runtime/designer-document/DesignerRuntimeRenderer.tsx",
+        "frontend/AsterERP.Web/src/shared/runtime/designer-document/DesignerRuntimeRenderer.test.ts",
+        "frontend/AsterERP.Web/src/shared/runtime/designer-document/runtimeDocumentCodec.ts",
+        "frontend/AsterERP.Web/src/shared/runtime/designer-document/runtimeDocumentCodec.test.ts"
+      ],
+      "commit": "c00f1c08efbee432475d1e8288a0cc1ee01f8270",
+      "reason": "Remove the old renderer/codec path; RuntimeArtifact is compiled once and consumed by RuntimeKernel."
+    },
+    {
+      "paths": ["docs/contracts/designer-document-v3.schema.json"],
+      "commit": "f3226f825c4eb8b48babcb03b11b128d49c1ba0b",
+      "reason": "Replace the numeric versioned formal contract with designer-document.latest.schema.json."
+    }
+  ],
+  "currentLatestEvidence": [
+    {
+      "path": "frontend/AsterERP.Web/src/runtime-kernel/RuntimeKernel.ts",
+      "role": "single runtime artifact kernel"
+    },
+    {
+      "path": "frontend/AsterERP.Web/src/runtime-kernel/ComponentRuntimeHost.tsx",
+      "role": "manifest-driven component host"
+    },
+    {
+      "path": "docs/contracts/designer-document.latest.schema.json",
+      "role": "single formal designer contract"
+    }
+  ],
+  "productionDependencies": [],
+  "blockers": [],
+  "nonFindings": [
+    {
+      "pattern": "ApplicationDevelopmentVersionEntity",
+      "decision": "Not classified as v3/v4 or runtime dual-track",
+      "reason": "It is the existing tenant/application design workspace version entity; the latest artifact still records revision and compiler metadata as required by the contract."
+    },
+    {
+      "pattern": "DesignerMode=structured",
+      "decision": "Not classified as v3/v4 or runtime dual-track",
+      "reason": "This is the current editor mode contract sent by the latest Page Studio route; it is not a numbered schema or a second runtime."
+    },
+    {
+      "pattern": "ApplicationDevelopmentSchemaCompiler",
+      "decision": "Retained",
+      "reason": "It is the current publish compiler used to create the signed RuntimeArtifact; deleting it would remove the latest production chain rather than delete an obsolete branch."
+    }
+  ],
+  "finalRegression": {
+    "backendCases": 702,
+    "rollbackAndLatestOnlyCases": 35,
+    "frontendFiles": 81,
+    "frontendTests": 364,
+    "typecheck": "Pass",
+    "lint": "Pass",
+    "build": "Pass"
+  },
+  "externalEvidence": [
+    "Authorized maintenance window and rollback rehearsal",
+    "Production API/UI traces after restart with authorized tenant and permissions",
+    "Four-provider database integration traces",
+    "Release-commit deletion scan after final code and external evidence review"
+  ]
+}

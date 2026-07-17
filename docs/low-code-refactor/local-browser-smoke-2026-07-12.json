@@ -1,0 +1,82 @@
+{
+  "evidenceId": "local-browser-smoke-2026-07-12",
+  "status": "EvidencePresent",
+  "scope": "local-only",
+  "environment": {
+    "api": "http://127.0.0.1:5000",
+    "frontend": "http://127.0.0.1:5173",
+    "tenant": "tenant-a",
+    "application": "MES",
+    "apiEnvironment": "Development",
+    "backendRestarted": true,
+    "backendStartMode": "Release exe + ASPNETCORE_ENVIRONMENT=Development + ASPNETCORE_URLS=http://127.0.0.1:5000 + Database__SkipSeed=true",
+    "defaultHangfireStorage": "local Development recovery startup; seed chain skipped so no seed data is used as acceptance evidence"
+  },
+  "health": {
+    "request": "GET /api/health",
+    "statusCode": 200,
+    "serviceStatus": "Running",
+    "traceEvidence": "artifacts/api-startup-release-skipseed.out.log",
+    "responseEvidence": "GET /api/health -> 200, service=Running"
+  },
+  "browserCases": [
+    {
+      "case": "Latest DesignerDocument designer route",
+      "route": "/tenants/tenant-a/apps/MES/admin/development-center/pages/1d77fd8dee5941aeba46fd19a650c360/designer",
+      "observed": ["Low-code page designer", "Responsive breakpoint", "Tablet selected", "Save draft", "Page design saved", "server-compiled preview artifact"],
+      "actions": ["open designer", "select Tablet", "Save draft", "open Preview"]
+    },
+    {
+      "case": "Runtime preview",
+      "route": "/tenants/tenant-a/apps/MES/admin/pages/page_mr7xi5jk?previewPageId=1d77fd8dee5941aeba46fd19a650c360",
+      "observed": ["Runtime page ready", "tampered marker absent", "single Runtime route", "API restarted before navigation"]
+    },
+    {
+      "case": "Data Studio tenant-bound SQLite",
+      "route": "/tenants/tenant-a/apps/MES/admin/data-center/data-sources",
+      "observed": ["Codex microflow order demo database", "Published", "1 data source", "database workbench entry"],
+      "workbenchRoute": "/tenants/tenant-a/apps/MES/admin/data-center/data-sources/codex_demo_mes11_source/workbench",
+      "workbenchObserved": ["Database workbench", "tenant-bound workbench route", "table catalog empty because Database__SkipSeed=true"],
+      "businessErrorObserved": false,
+      "businessDataAcceptance": "Blocked: seed data was intentionally skipped; no mock table substituted"
+    }
+  ],
+  "automatedEvidence": {
+    "frontendTests": "Full Vitest 81 files / 391 tests passed on 2026-07-12",
+    "frontendTypecheck": "passed on 2026-07-12",
+    "frontendLint": "RuntimeKernel targeted lint passed",
+    "frontendBuild": "passed on 2026-07-12",
+    "backendBuild": "Release 0 warnings / 0 errors after commit 6e61e3fc",
+    "backendTests": "Full Release regression 725/725 passed after commit 6e61e3fc; QueryPlan 17/17 and DesignerDocument 25/25 remain covered",
+    "latestOnlyDeletionGuard": "7 / 7 passed",
+    "acceptanceMatrix": "HAO-105..HAO-110 passed",
+    "migrationRegression": "legacy dataBinding mapped to bindings.data and latest validator remains strict",
+    "browserResult": {
+      "designerSave": true,
+      "runtimePreview": true,
+      "dataStudioLoaded": true,
+      "dataStudioBusinessData": "blocked by intentional seed skip",
+      "dataStudioBusinessError": false,
+      "backendHealth": 200,
+      "runtimeUrl": "http://127.0.0.1:5173/tenants/tenant-a/apps/MES/admin/pages/page_mr7xi5jk?previewPageId=1d77fd8dee5941aeba46fd19a650c360"
+    },
+    "performance": {
+      "frontendFullRun": {
+        "nodeSizes": [100, 500, 1000, 2000],
+        "node2000SaveP95Ms": 101.087,
+        "node2000UndoP95Ms": 43.963,
+        "node2000RuntimeFirstScreenP95Ms": 63.989,
+        "status": "Pass"
+      }
+    },
+    "validatedAt": "2026-07-12T20:53:29+08:00",
+    "commits": ["6e61e3fc", "85b3b5bea", "6715f576", "23617350", "de21617e6", "cab7e5b9b"]
+  },
+  "limitations": [
+    "This record is local smoke evidence, not production authorization evidence.",
+    "The local MES SQLite workbench currently has zero tables in its data snapshot; this is recorded as data-state evidence, not replaced with a mock table.",
+    "Four-provider external database traces, maintenance-window evidence, backup/rollback rehearsal, permission-deny/tenant-isolation traces, accessibility/visual E2E, and production observability remain unavailable.",
+    "The in-app browser logged Vite HMR/SignalR negotiation warnings; no DesignerDocument, save, runtime, or workbench route business-path failure was observed.",
+    "The final Release API restart was verified separately through /api/health after browser capture; the browser run used the same local Development API chain before the final process replacement."
+  ]
+}

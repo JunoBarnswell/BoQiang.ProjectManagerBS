@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://astererp.local/contracts/designer-document.latest.schema.json",
+  "title": "AsterERP Designer Document Latest",
+  "description": "The single formal persisted designer contract. Editor session state is not part of this document and runtime consumes only the published artifact.",
+  "oneOf": [
+    { "$ref": "#/$defs/designerDocument" },
+    { "$ref": "#/$defs/runtimeArtifact" }
+  ],
+  "$defs": {
+    "elementMap": {
+      "type": "object",
+      "maxProperties": 2000,
+      "propertyNames": { "pattern": "^[A-Za-z0-9._:-]+$" },
+      "additionalProperties": { "$ref": "#/$defs/element" }
+    },
+    "element": {
+      "type": "object",
+      "required": ["id", "type", "parentId", "children", "props", "layout", "events"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "type": { "type": "string", "minLength": 1 },
+        "name": { "type": "string" },
+        "parentId": { "type": ["string", "null"] },
+        "children": { "type": "array", "items": { "type": "string" } },
+        "props": { "type": "object" },
+        "layout": { "type": "object" },
+        "style": { "type": "object" },
+        "events": { "type": "array" },
+        "bindings": {
+          "type": "object",
+          "properties": {
+            "props": { "type": "object", "additionalProperties": true },
+            "data": { "type": "object", "additionalProperties": true }
+          },
+          "additionalProperties": true
+        },
+        "responsiveOverrides": {
+          "type": "object",
+          "properties": {
+            "mobile": { "$ref": "#/$defs/responsiveSection" },
+            "tablet": { "$ref": "#/$defs/responsiveSection" },
+            "desktop": { "$ref": "#/$defs/responsiveSection" }
+          },
+          "additionalProperties": { "$ref": "#/$defs/responsiveSection" }
+        },
+        "validation": { "type": "array" },
+        "permission": {
+          "type": "object",
+          "properties": {
+            "code": { "type": ["string", "null"] },
+            "visibleWhen": { "type": ["boolean", "string", "object", "null"] }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "page": {
+      "type": "object",
+      "required": ["id", "name", "rootElementId"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string" },
+        "rootElementId": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "responsiveSection": {
+      "type": "object",
+      "properties": {
+        "layout": { "type": "object" },
+        "props": { "type": "object" },
+        "style": { "type": "object" }
+      },
+      "additionalProperties": false
+    },
+    "baseDocument": {
+      "type": "object",
+      "required": ["documentId", "revision", "pages", "elements", "actions", "variables", "permissions", "runtimeContext", "metadata"],
+      "properties": {
+        "documentId": { "type": "string", "minLength": 1 },
+        "revision": { "type": "integer", "minimum": 1 },
+        "pages": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/page" } },
+        "modals": { "type": "array" },
+        "elements": { "$ref": "#/$defs/elementMap" },
+        "actions": { "type": "array", "maxItems": 200 },
+        "variables": { "type": "array" },
+        "permissions": { "type": "object" },
+        "runtimeContext": { "type": "object" },
+        "metadata": { "type": "object" },
+        "apiBindings": { "type": "array" },
+        "dataSources": { "type": "array" },
+        "pageMicroflows": { "type": "array" },
+        "workflowBindings": { "type": "array" },
+        "pageParameters": { "type": "array" },
+        "styleTokens": { "type": "object" }
+      },
+      "additionalProperties": false
+    },
+    "designerDocument": {
+      "allOf": [
+        { "$ref": "#/$defs/baseDocument" },
+        { "properties": { "artifactHash": { "not": {} }, "compilerVersion": { "not": {} }, "manifestTypes": { "not": {} } } }
+      ]
+    },
+    "runtimeArtifact": {
+      "allOf": [
+        { "$ref": "#/$defs/baseDocument" },
+        {
+          "required": ["artifactHash", "compilerVersion", "manifestTypes"],
+          "properties": {
+            "artifactHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+            "compilerVersion": { "type": "string", "minLength": 1 },
+            "manifestTypes": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
+          }
+        }
+      ]
+    }
+  }
+}

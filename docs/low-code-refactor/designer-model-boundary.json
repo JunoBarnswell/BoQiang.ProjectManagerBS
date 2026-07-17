@@ -1,0 +1,44 @@
+{
+  "format": "astererp.low-code.designer-model-boundary.v1",
+  "models": {
+    "DesignerDocument": {
+      "purpose": "persisted editable business document",
+      "requiredFields": ["schemaVersion", "pages", "elements", "actions", "variables", "permissions", "runtimeContext"],
+      "mayContain": ["editor-only tree", "selection", "viewport"],
+      "mustNotContain": ["artifactHash", "signature", "compilerVersion", "publishedAt"],
+      "persistence": "app_dev_documents.document_json"
+    },
+    "DesignerEditorSession": {
+      "purpose": "ephemeral editor interaction state",
+      "requiredFields": ["sessionId", "documentId", "transactionId", "selectedNodeIds", "primaryNodeId", "anchorNodeId", "viewport"],
+      "mayContain": ["panelState", "dirty", "saving"],
+      "mustNotContain": ["business document content", "runtime artifact", "published permission state"],
+      "persistence": "frontend session store; never embedded in runtime artifact"
+    },
+    "RuntimeArtifact": {
+      "purpose": "immutable executable output",
+      "requiredFields": ["artifactId", "documentId", "revision", "artifactHash", "manifestHash", "compilerVersion", "signature", "integrityPayload", "document"],
+      "mayContain": ["runtime document collections", "manifest metadata", "integrity metadata"],
+      "mustNotContain": ["schemaVersion", "tree", "selectedNodeId", "viewport", "history", "dirty", "saving"],
+      "persistence": "app_dev_runtime_artifacts.artifact_json"
+    }
+  },
+  "revisionRules": {
+    "firstRevision": 1,
+    "incrementOnly": true,
+    "expectedRevisionRequired": true,
+    "expectedHashRequiredForExistingDocument": true,
+    "hashAlgorithm": "SHA-256",
+    "hashInput": "canonical persisted DesignerDocument JSON",
+    "writeAtomicity": "document + revision in one transaction",
+    "runtimeReadSource": "published RuntimeArtifact only"
+  },
+  "acceptance": {
+    "editorSessionLeakIntoRuntime": "Fail",
+    "staleRevision": "Fail",
+    "staleHash": "Fail",
+    "duplicateRevision": "Fail",
+    "partialDocumentRevisionWrite": "Fail",
+    "missingRealPersistenceTest": "Fail"
+  }
+}

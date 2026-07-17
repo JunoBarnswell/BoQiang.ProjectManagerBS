@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>AsterERP.Contracts</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\AsterERP.Shared\AsterERP.Shared.csproj" />
+    <EmbeddedResource Include="ApplicationDesigner\runtime-capability.latest.json"
+                      LogicalName="AsterERP.Contracts.ApplicationDesigner.runtime-capability.latest.json" />
+  </ItemGroup>
+</Project>

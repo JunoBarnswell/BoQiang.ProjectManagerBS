@@ -1,0 +1,1454 @@
+.flowise-card-grid {
+  align-content: start;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  min-height: 0;
+  overflow: auto;
+}
+
+.flowise-flow-card {
+  background: var(--app-card, #fff);
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  min-height: 210px;
+  padding: 14px;
+}
+
+.flowise-flow-card__header {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+}
+
+.flowise-flow-card__header > span:first-child {
+  align-items: center;
+  background: color-mix(in srgb, var(--app-primary) 10%, #fff);
+  border: 1px solid color-mix(in srgb, var(--app-primary) 18%, var(--app-border));
+  border-radius: 8px;
+  color: var(--app-primary);
+  display: inline-flex;
+  height: 36px;
+  justify-content: center;
+  width: 36px;
+}
+
+.flowise-flow-card h3,
+.flowise-flow-card p {
+  margin: 0;
+}
+
+.flowise-flow-card h3 {
+  font-size: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flowise-flow-card__header p,
+.flowise-flow-card > p {
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.flowise-flow-card__nodes {
+  align-content: start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 32px;
+}
+
+.flowise-flow-card__nodes span {
+  background: #f8fafc;
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  color: var(--app-muted);
+  font-size: 12px;
+  line-height: 24px;
+  max-width: 140px;
+  overflow: hidden;
+  padding: 0 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flowise-flow-card footer {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.flowise-empty-card {
+  border: 1px dashed var(--app-border);
+  border-radius: 8px;
+  color: var(--app-muted);
+  padding: 28px;
+  text-align: center;
+}
+
+.flowise-toolbar .active {
+  border-color: var(--app-primary);
+  color: var(--app-primary);
+}
+
+.flowise-detail-layout {
+  display: grid;
+  gap: 12px;
+  min-height: 0;
+}
+
+.flowise-detail-panel {
+  background: var(--app-card, #fff);
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  min-height: 0;
+  padding: 12px;
+}
+
+.flowise-detail-panel h3 {
+  font-size: 14px;
+  margin: 0;
+}
+
+.flowise-detail-panel pre {
+  background: #0f172a;
+  border-radius: 6px;
+  color: #e2e8f0;
+  margin: 0;
+  max-height: 260px;
+  overflow: auto;
+  padding: 10px;
+  white-space: pre-wrap;
+}
+
+.flowise-detail-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.flowise-detail-list div {
+  align-items: baseline;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 150px minmax(0, 1fr);
+}
+
+.flowise-detail-list dt {
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.flowise-detail-list dd {
+  font-size: 13px;
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.flowise-detail-text {
+  color: var(--app-text, #111827);
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.flowise-cell-ellipsis {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flowise-metrics-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  margin-bottom: 12px;
+}
+
+.flowise-metrics-grid div {
+  background: #fff;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+}
+
+.flowise-metrics-grid span {
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.flowise-metrics-grid strong {
+  font-size: 20px;
+}
+.flowise-native-page {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: calc(var(--erp-raw-viewport-height) - calc(132px * var(--app-ui-scale)));
+  padding: 18px;
+}
+
+.flowise-native-page__header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.flowise-native-page__header h1 {
+  font-size: 22px;
+  margin: 0;
+}
+
+.flowise-native-page__header span {
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.flowise-native-page__actions,
+.flowise-native-page__toolbar,
+.flowise-native-flow-card footer {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.flowise-native-page__toolbar input {
+  border: 1px solid var(--app-border);
+  border-radius: 6px;
+  min-height: 34px;
+  padding: 0 10px;
+  width: min(360px, 100%);
+}
+
+.flowise-native-flow-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+
+.flowise-native-flow-card {
+  background: var(--app-card, #fff);
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 190px;
+  padding: 16px;
+}
+
+.flowise-native-flow-card__title {
+  align-items: flex-start;
+  display: flex;
+  gap: 10px;
+}
+
+.flowise-native-flow-card__title h2 {
+  font-size: 16px;
+  margin: 0;
+}
+
+.flowise-native-flow-card__title span {
+  color: var(--app-muted);
+  display: block;
+  font-size: 11px;
+  margin-top: 4px;
+  word-break: break-all;
+}
+
+.flowise-native-flow-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.flowise-native-flow-card__meta span {
+  background: #eef2ff;
+  border-radius: 999px;
+  color: #3730a3;
+  font-size: 11px;
+  padding: 3px 8px;
+}
+
+.flowise-native-node-preview {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 28px;
+}
+
+.flowise-native-node-preview span {
+  background: #f8fafc;
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  color: #475569;
+  font-size: 11px;
+  max-width: 160px;
+  overflow: hidden;
+  padding: 4px 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flowise-native-node-preview__icon {
+  align-items: center;
+  display: inline-flex;
+  height: 30px;
+  justify-content: center;
+  padding: 0;
+  width: 30px;
+}
+
+.flowise-native-node-preview__icon img {
+  border-radius: 6px;
+  display: block;
+  height: 24px;
+  object-fit: contain;
+  width: 24px;
+}
+
+.flowise-native-node-preview__more {
+  align-items: center;
+  display: inline-flex;
+  min-height: 28px;
+}
+
+.flowise-native-node-preview.compact {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.flowise-native-node-preview.compact .flowise-native-node-preview__icon {
+  height: 26px;
+  width: 26px;
+}
+
+.flowise-native-node-preview.compact .flowise-native-node-preview__icon img {
+  height: 21px;
+  width: 21px;
+}
+
+.flowise-native-node-preview.compact .flowise-native-node-preview__more {
+  max-width: 96px;
+}
+
+.flowise-native-options {
+  position: relative;
+}
+
+.flowise-native-options > button,
+.flowise-native-options > .btn-secondary,
+.flowise-native-options > .btn-ghost {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.flowise-native-options__menu {
+  background: var(--app-card, #fff);
+  border-radius: 6px;
+  box-shadow:
+    rgb(255 255 255 / 0%) 0 0 0 0,
+    rgb(0 0 0 / 5%) 0 0 0 1px,
+    rgb(0 0 0 / 10%) 0 10px 15px -3px,
+    rgb(0 0 0 / 5%) 0 4px 6px -2px;
+  display: grid;
+  min-width: 180px;
+  padding: 4px;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 20;
+}
+
+.flowise-native-options__item {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: var(--app-text);
+  cursor: pointer;
+  display: flex;
+  font-size: 13px;
+  gap: 12px;
+  min-height: 32px;
+  padding: 6px 12px;
+  text-align: left;
+  width: 100%;
+}
+
+.flowise-native-options__item svg {
+  color: var(--app-muted);
+  flex: 0 0 auto;
+  height: 18px;
+  width: 18px;
+}
+
+.flowise-native-options__item:hover,
+.flowise-native-options__item:focus-visible {
+  background: color-mix(in srgb, var(--app-primary, #2563eb) 8%, transparent);
+  outline: none;
+}
+
+.flowise-native-options__item.danger {
+  color: #dc2626;
+}
+
+.flowise-native-options__item.danger svg {
+  color: #dc2626;
+}
+
+.flowise-native-options__menu hr {
+  border: 0;
+  border-top: 1px solid var(--app-border);
+  margin: 4px 0;
+}
+
+[data-theme='dark'] .flowise-native-options__menu {
+  box-shadow:
+    rgb(0 0 0 / 35%) 0 16px 35px -8px,
+    rgb(255 255 255 / 8%) 0 0 0 1px;
+}
+
+.flowise-native-flow-list {
+  background: var(--app-card, #fff);
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.flowise-native-flow-row {
+  align-items: center;
+  border-bottom: 1px solid var(--app-border);
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(180px, 1fr) minmax(160px, 1fr) 120px 120px auto;
+  min-height: 46px;
+  padding: 0 14px;
+}
+
+.flowise-native-empty {
+  align-items: center;
+  color: var(--app-muted);
+  display: flex;
+  justify-content: center;
+  min-height: 220px;
+}
+
+.flowise-native-dialog-backdrop {
+  align-items: center;
+  background: rgb(15 23 42 / 45%);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  position: fixed;
+  z-index: 1000;
+}
+
+.flowise-native-dialog {
+  background: var(--app-card, #fff);
+  border-radius: 8px;
+  box-shadow: 0 20px 80px rgb(15 23 42 / 25%);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 720px;
+  padding: 16px;
+  width: min(calc(720px * var(--app-ui-scale)), calc(var(--erp-raw-viewport-width) - calc(32px * var(--app-ui-scale))));
+}
+
+.flowise-native-dialog header,
+.flowise-native-dialog footer,
+.flowise-native-dialog__checks {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.flowise-native-dialog h2 {
+  font-size: 16px;
+  margin: 0;
+}
+
+.flowise-native-dialog label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.flowise-native-dialog__field {
+  display: grid;
+  gap: 6px;
+}
+
+.flowise-native-dialog .MuiTextField-root {
+  background: var(--app-card, #fff);
+}
+
+.flowise-native-dialog .MuiButton-root {
+  border-radius: 6px;
+  min-height: 34px;
+  text-transform: none;
+}
+
+.flowise-native-dialog header .MuiIconButton-root {
+  color: var(--app-muted);
+}
+
+.flowise-native-dialog input,
+.flowise-native-dialog textarea {
+  border: 1px solid var(--app-border);
+  border-radius: 6px;
+  min-height: 34px;
+  padding: 8px;
+}
+
+.flowise-native-dialog textarea {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  min-height: 220px;
+}
+
+.flowise-native-dialog textarea.flowise-native-template-description {
+  font-family: inherit;
+  min-height: 96px;
+}
+
+.flowise-native-main-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: calc(var(--erp-raw-viewport-height) - calc(132px * var(--app-ui-scale)));
+  padding: 18px;
+}
+
+.flowise-native-main-card__header {
+  align-items: flex-start;
+  display: flex;
+  gap: 18px;
+  justify-content: space-between;
+}
+
+.flowise-native-main-card__header h1 {
+  font-size: 22px;
+  margin: 0;
+}
+
+.flowise-native-main-card__header p {
+  color: var(--app-muted);
+  font-size: 13px;
+  margin: 6px 0 0;
+}
+
+.flowise-native-main-card__actions,
+.flowise-native-toolbar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.flowise-native-toolbar input,
+.flowise-native-toolbar select,
+.flowise-native-pagination select,
+.flowise-native-form input,
+.flowise-native-form select,
+.flowise-native-form textarea {
+  border: 1px solid var(--app-border);
+  border-radius: 6px;
+  min-height: 34px;
+  padding: 7px 9px;
+}
+
+.flowise-native-toolbar input {
+  width: min(360px, 100%);
+}
+
+.flowise-native-card-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+
+.flowise-native-item-card {
+  background: var(--app-card, #fff);
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 188px;
+  padding: 14px;
+}
+
+.flowise-native-item-card:hover {
+  box-shadow: 0 12px 28px rgb(15 23 42 / 10%);
+}
+
+.flowise-native-item-card__top {
+  align-items: flex-start;
+  display: flex;
+  gap: 10px;
+}
+
+.flowise-native-item-card__icon {
+  align-items: center;
+  background: #eef2ff;
+  border-radius: 8px;
+  color: #4338ca;
+  display: inline-flex;
+  height: 36px;
+  justify-content: center;
+  min-width: 36px;
+}
+
+.flowise-native-item-card__title {
+  flex: 1;
+  min-width: 0;
+}
+
+.flowise-native-item-card__title h2 {
+  font-size: 15px;
+  margin: 0;
+}
+
+.flowise-native-card-title-link,
+.flowise-native-table-link {
+  color: var(--app-text);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.flowise-native-card-title-link:hover,
+.flowise-native-table-link:hover {
+  color: var(--app-primary);
+}
+
+.flowise-native-item-card__title span {
+  color: var(--app-muted);
+  display: block;
+  font-size: 11px;
+  margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flowise-native-item-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.flowise-native-item-card__meta span,
+.flowise-native-item-card__badge span {
+  background: #f8fafc;
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  color: #475569;
+  font-size: 11px;
+  padding: 3px 8px;
+}
+
+.flowise-native-item-card__body p {
+  color: var(--app-muted);
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.flowise-native-item-card__actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.flowise-native-table {
+  background: var(--app-card, #fff);
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  overflow: visible;
+}
+
+.flowise-native-table__head,
+.flowise-native-table__row {
+  align-items: center;
+  display: grid;
+  gap: 12px;
+  min-width: 780px;
+  padding: 0 14px;
+}
+
+.flowise-native-table__head {
+  background: #f8fafc;
+  border-bottom: 1px solid var(--app-border);
+  color: var(--app-muted);
+  font-size: 12px;
+  font-weight: 600;
+  min-height: 42px;
+}
+
+.flowise-native-table__row {
+  border-bottom: 1px solid var(--app-border);
+  min-height: 50px;
+}
+
+.flowise-native-table__row:last-child {
+  border-bottom: 0;
+}
+
+.flowise-native-table__row > span,
+.flowise-native-table__head > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flowise-native-table__actions {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  overflow: visible;
+  white-space: normal;
+}
+
+.flowise-native-table__sort {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-weight: 600;
+  gap: 4px;
+  padding: 0;
+}
+
+.flowise-native-table__sort i {
+  color: var(--app-primary);
+  font-style: normal;
+}
+
+.flowise-native-category-chips {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.flowise-native-category-chips span {
+  background: #f8fafc;
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  color: #475569;
+  font-size: 11px;
+  padding: 3px 8px;
+}
+
+.flowise-native-loading,
+.flowise-native-pagination {
+  align-items: center;
+  color: var(--app-muted);
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  min-height: 56px;
+}
+
+.flowise-native-form {
+  display: grid;
+  gap: 12px;
+}
+
+.flowise-native-form label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.flowise-native-form textarea {
+  min-height: 88px;
+}
+
+.flowise-native-form .flowise-native-code-input {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  min-height: 140px;
+}
+
+.flowise-native-form-help {
+  color: var(--app-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.flowise-native-dialog__content {
+  display: grid;
+  gap: 12px;
+}
+
+.flowise-native-dialog__hint {
+  color: var(--app-muted);
+  font-size: 12px;
+  margin: 0;
+}
+
+.flowise-native-template-summary {
+  border: 1px solid var(--app-border);
+  border-radius: 6px;
+  display: grid;
+  gap: 8px 12px;
+  grid-template-columns: minmax(88px, auto) 1fr;
+  padding: 12px;
+}
+
+.flowise-native-template-summary span {
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.flowise-native-template-summary strong {
+  font-size: 13px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.flowise-native-icon-button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--app-muted);
+  cursor: pointer;
+  display: inline-flex;
+  height: 30px;
+  justify-content: center;
+  width: 30px;
+}
+
+.flowise-tools-page {
+  display: grid;
+  gap: 16px;
+}
+
+.flowise-tools-shell {
+  display: grid;
+  gap: 16px;
+}
+
+.flowise-tools-shell__header {
+  display: flex;
+  justify-content: space-between;
+}
+
+.flowise-tools-shell__header h1 {
+  font-size: 20px;
+  margin: 0;
+}
+
+.flowise-tools-shell__header p {
+  color: var(--app-muted);
+  margin: 4px 0 0;
+}
+
+.flowise-native-tabs {
+  align-items: center;
+  border-bottom: 1px solid var(--app-border);
+  display: flex;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.flowise-native-tabs button {
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--app-muted);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 10px 12px;
+}
+
+.flowise-native-tabs button.active {
+  border-bottom-color: var(--app-primary);
+  color: var(--app-text);
+}
+
+.flowise-native-form-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.flowise-native-form-error {
+  color: var(--app-danger);
+  font-size: 12px;
+}
+
+.flowise-native-pagination {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.flowise-native-pagination span {
+  color: var(--app-muted);
+  font-size: 13px;
+}
+
+.flowise-custom-mcp-toolbar {
+  justify-content: flex-end;
+  margin-bottom: 16px;
+}
+
+.flowise-custom-mcp-toolbar input {
+  margin-right: auto;
+  max-width: 320px;
+}
+
+.flowise-custom-mcp-dialog {
+  display: grid;
+  gap: 16px;
+}
+
+.flowise-custom-mcp-dialog__titlebar {
+  display: flex;
+  justify-content: flex-start;
+  min-height: 24px;
+}
+
+.flowise-custom-mcp-readonly {
+  display: grid;
+  gap: 14px;
+}
+
+.flowise-custom-mcp-readonly__field {
+  display: grid;
+  gap: 4px;
+}
+
+.flowise-custom-mcp-readonly__field span,
+.flowise-custom-mcp-readonly__headers > span,
+.flowise-custom-mcp-discovered header span {
+  color: var(--app-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.flowise-custom-mcp-readonly__field strong {
+  font-size: 14px;
+  word-break: break-all;
+}
+
+.flowise-custom-mcp-readonly__headers {
+  display: grid;
+  gap: 6px;
+}
+
+.flowise-custom-mcp-readonly__headers code {
+  background: var(--app-bg-subtle);
+  border: 1px solid var(--app-border);
+  border-radius: 6px;
+  padding: 8px;
+}
+
+.flowise-custom-mcp-headers {
+  display: grid;
+  gap: 8px;
+}
+
+.flowise-custom-mcp-headers__head,
+.flowise-custom-mcp-headers__row {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+}
+
+.flowise-custom-mcp-headers__head {
+  color: var(--app-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.flowise-custom-mcp-discovered {
+  border-top: 1px solid var(--app-border);
+  display: grid;
+  gap: 12px;
+  padding-top: 12px;
+}
+
+.flowise-custom-mcp-discovered header {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.flowise-custom-mcp-discovered__summary {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--app-text);
+  cursor: pointer;
+  display: flex;
+  gap: 8px;
+  padding: 0;
+  text-align: left;
+}
+
+.flowise-custom-mcp-discovered__actions {
+  align-items: center;
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.flowise-custom-mcp-discovered__search {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+}
+
+.flowise-custom-mcp-discovered__search input {
+  min-width: 220px;
+  max-width: 320px;
+}
+
+.flowise-custom-mcp-tools {
+  display: grid;
+  gap: 10px;
+}
+
+.flowise-custom-mcp-tool {
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.flowise-custom-mcp-tool.expanded {
+  border-color: var(--app-primary);
+}
+
+.flowise-custom-mcp-tool > button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--app-text);
+  cursor: pointer;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: auto auto minmax(120px, 0.8fr) minmax(160px, 1fr) minmax(120px, auto) auto;
+  padding: 10px 12px;
+  text-align: left;
+  width: 100%;
+}
+
+.flowise-custom-mcp-tool > button em,
+.flowise-custom-mcp-tool > button small {
+  color: var(--app-muted);
+  font-style: normal;
+  font-size: 12px;
+}
+
+.flowise-custom-mcp-tool__icon,
+.flowise-custom-mcp-tool__icon-placeholder {
+  border-radius: 4px;
+  display: inline-flex;
+  height: 20px;
+  object-fit: contain;
+  width: 20px;
+}
+
+.flowise-custom-mcp-tool__icon-placeholder {
+  background: var(--app-bg-subtle);
+  border: 1px solid var(--app-border);
+}
+
+.flowise-custom-mcp-tool__body {
+  border-top: 1px solid var(--app-border);
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.flowise-custom-mcp-tool__body p {
+  color: var(--app-muted);
+  margin: 0;
+}
+
+.flowise-custom-mcp-tool__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.flowise-custom-mcp-tool__chips.compact {
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.flowise-custom-mcp-tool__chip {
+  align-items: center;
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 700;
+  gap: 4px;
+  padding: 3px 8px;
+}
+
+.flowise-custom-mcp-tool__chip i {
+  align-items: center;
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 10px;
+  font-style: normal;
+  height: 14px;
+  justify-content: center;
+  line-height: 1;
+  width: 14px;
+}
+
+.flowise-custom-mcp-tool__chip.safe {
+  background: rgba(34, 197, 94, 0.12);
+  color: #15803d;
+}
+
+.flowise-custom-mcp-tool__chip.danger {
+  background: rgba(239, 68, 68, 0.12);
+  color: #b91c1c;
+}
+
+.flowise-custom-mcp-tool__chip.external {
+  background: rgba(59, 130, 246, 0.12);
+  color: #1d4ed8;
+}
+
+.flowise-custom-mcp-tool__params {
+  display: grid;
+  gap: 8px;
+}
+
+.flowise-custom-mcp-tool__params > span {
+  color: var(--app-muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.flowise-custom-mcp-tool__param {
+  background: var(--app-bg-subtle);
+  border-radius: 6px;
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+}
+
+.flowise-custom-mcp-tool__param code {
+  font-weight: 700;
+}
+
+.flowise-custom-mcp-tool__param small {
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.flowise-custom-mcp-tool__required,
+.flowise-custom-mcp-tool__type {
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 700;
+  justify-self: start;
+  line-height: 1.4;
+  padding: 2px 8px;
+}
+
+.flowise-custom-mcp-tool__required.required {
+  background: rgba(239, 68, 68, 0.12);
+  color: #b91c1c;
+}
+
+.flowise-custom-mcp-tool__required.optional {
+  background: rgba(100, 116, 139, 0.12);
+  color: #475569;
+}
+
+.flowise-custom-mcp-tool__type.type-string {
+  background: transparent;
+  border: 1px solid #2E7D32;
+  color: #2E7D32;
+}
+
+.flowise-custom-mcp-tool__type.type-integer,
+.flowise-custom-mcp-tool__type.type-number {
+  background: transparent;
+  border: 1px solid #1565C0;
+  color: #1565C0;
+}
+
+.flowise-custom-mcp-tool__type.type-boolean {
+  background: transparent;
+  border: 1px solid #6A1B9A;
+  color: #6A1B9A;
+}
+
+.flowise-custom-mcp-tool__type.type-array {
+  background: transparent;
+  border: 1px solid #00838F;
+  color: #00838F;
+}
+
+.flowise-custom-mcp-tool__type.type-object {
+  background: transparent;
+  border: 1px solid #E65100;
+  color: #E65100;
+}
+
+.flowise-custom-mcp-tool__type.type-other {
+  background: transparent;
+  border: 1px solid #64748b;
+  color: #475569;
+}
+
+[data-theme='dark'] .flowise-custom-mcp-tool__required.optional,
+[data-theme='dark'] .flowise-custom-mcp-tool__type.type-other {
+  color: #cbd5e1;
+}
+
+[data-theme='dark'] .flowise-custom-mcp-tool__type.type-string {
+  border-color: #81C784;
+  color: #81C784;
+}
+
+[data-theme='dark'] .flowise-custom-mcp-tool__type.type-integer,
+[data-theme='dark'] .flowise-custom-mcp-tool__type.type-number {
+  border-color: #64B5F6;
+  color: #64B5F6;
+}
+
+[data-theme='dark'] .flowise-custom-mcp-tool__type.type-boolean {
+  border-color: #CE93D8;
+  color: #CE93D8;
+}
+
+[data-theme='dark'] .flowise-custom-mcp-tool__type.type-object {
+  border-color: #FFB74D;
+  color: #FFB74D;
+}
+
+[data-theme='dark'] .flowise-custom-mcp-tool__type.type-array {
+  border-color: #4DD0E1;
+  color: #4DD0E1;
+}
+
+.flowise-custom-mcp-tool__enum {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.flowise-custom-mcp-tool__enum span {
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.flowise-custom-mcp-tool__enum i {
+  background: transparent;
+  border: 1px solid #94a3b8;
+  border-radius: 999px;
+  color: var(--app-text);
+  font-size: 11px;
+  font-style: normal;
+  padding: 2px 7px;
+}
+
+.flowise-custom-mcp-tool__param p {
+  font-size: 12px;
+}
+
+.flowise-source-page {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-height: calc(var(--erp-raw-viewport-height) - calc(132px * var(--app-ui-scale)));
+  padding: 18px;
+}
+
+.flowise-source-view-header {
+  align-items: center;
+  display: flex;
+  gap: 18px;
+  justify-content: space-between;
+}
+
+.flowise-source-view-header h1 {
+  font-size: 22px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.flowise-source-view-header p {
+  color: var(--app-muted);
+  font-size: 13px;
+  margin: 6px 0 0;
+}
+
+.flowise-source-toolbar {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+}
+
+.flowise-source-toolbar .MuiTextField-root {
+  max-width: 420px;
+}
+
+.flowise-source-table-container {
+  border: 1px solid rgb(15 23 42 / 12%);
+  border-radius: 8px !important;
+  box-shadow: none !important;
+}
+
+.flowise-source-table-container .MuiTableHead-root {
+  background: #f8fafc;
+}
+
+.flowise-source-table-container .MuiTableCell-head {
+  color: #334155;
+  font-weight: 600;
+}
+
+.flowise-source-empty {
+  align-items: center;
+  color: var(--app-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  justify-content: center;
+  min-height: 260px;
+}
+
+.flowise-source-empty img {
+  height: calc(var(--erp-raw-viewport-height) * 0.2);
+  max-height: calc(190px * var(--app-ui-scale));
+  object-fit: contain;
+  width: auto;
+}
+
+.flowise-source-card {
+  border: 1px solid rgb(15 23 42 / 12%);
+  border-radius: 8px !important;
+  box-shadow: 0 2px 14px 0 rgb(32 40 45 / 8%) !important;
+  height: 100%;
+}
+
+.flowise-source-card:hover {
+  box-shadow: 0 2px 14px 0 rgb(32 40 45 / 20%) !important;
+}
+
+.flowise-source-inner-table {
+  border: 1px solid rgb(15 23 42 / 12%);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.flowise-source-secret {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  word-break: break-all;
+}
+
+.flowise-source-ellipsis {
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flowise-source-avatar {
+  background: #eef2ff !important;
+}
+
+.flowise-source-avatar img {
+  height: 70%;
+  object-fit: contain;
+  width: 70%;
+}
+
+.flowise-source-picker-list {
+  max-height: 420px;
+  overflow: auto;
+}
+
+.flowise-source-code-line {
+  background: #0f172a;
+  border-radius: 6px;
+  color: #e2e8f0;
+  display: block;
+  padding: 10px 12px;
+}
+
+.flowise-source-json-preview {
+  background: #0f172a;
+  border-radius: 8px;
+  color: #e2e8f0;
+  margin: 18px 0 0;
+  max-height: 360px;
+  overflow: auto;
+  padding: 12px;
+  white-space: pre-wrap;
+}
+
+.flowise-source-dialog-icon {
+  align-items: center;
+  background: color-mix(in srgb, var(--app-primary, #2563eb) 10%, #fff);
+  border: 1px solid color-mix(in srgb, var(--app-primary, #2563eb) 18%, var(--app-border));
+  border-radius: 8px;
+  color: var(--app-primary, #2563eb);
+  display: inline-flex;
+  height: 36px;
+  justify-content: center;
+  width: 36px;
+}
+
+.flowise-source-dialog-hint {
+  color: var(--app-muted);
+  font-size: 13px;
+  margin: 12px 0 0;
+}
+
+@media (max-width: 768px) {
+  .flowise-source-view-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .flowise-source-toolbar .MuiTextField-root {
+    max-width: none;
+  }
+}

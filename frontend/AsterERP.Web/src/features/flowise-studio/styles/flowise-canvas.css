@@ -1,0 +1,585 @@
+.flowise-canvas-page {
+  height: calc(var(--erp-raw-viewport-height) - calc(116px * var(--app-ui-scale)));
+  min-height: 680px;
+}
+
+.flowise-canvas-page .responsive-page__body {
+  min-height: 0;
+}
+
+.flowise-native-canvas-shell {
+  background: #f8fafc;
+  border: 1px solid var(--app-border);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
+  min-height: 680px;
+}
+
+.flowise-canvas-header {
+  align-items: center;
+  background: var(--app-card, #fff);
+  border-bottom: 1px solid var(--app-border);
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  min-height: 56px;
+  padding: 8px 12px;
+}
+
+.flowise-canvas-header__main,
+.flowise-canvas-header__actions {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.flowise-canvas-header__actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.flowise-canvas-header__actions .MuiButton-root {
+  border-radius: 6px;
+  min-height: 32px;
+  text-transform: none;
+}
+
+.flowise-canvas-header__actions .MuiButton-startIcon {
+  margin-right: 6px;
+}
+
+.flowise-canvas-header__text-action.MuiButton-root {
+  background: #fff;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.flowise-canvas-header__text-action.MuiButton-root:hover {
+  background: #eff6ff;
+  border-color: #2563eb;
+}
+
+.flowise-canvas-header__icon-action,
+.flowise-canvas-header__icon-save {
+  align-items: center;
+  border: 1px solid var(--app-border);
+  border-radius: 6px;
+  color: var(--app-text);
+  display: inline-flex;
+  height: 34px;
+  justify-content: center;
+  min-width: 34px;
+  padding: 0;
+}
+
+.flowise-canvas-header__icon-action .MuiAvatar-root {
+  background: transparent;
+  color: inherit;
+  height: 32px;
+  width: 32px;
+}
+
+.flowise-canvas-header__icon-save.MuiButton-root {
+  border-radius: 6px;
+  min-width: 34px;
+  padding: 0;
+}
+
+.flowise-canvas-header__icon-action:hover,
+.flowise-canvas-header__icon-save:hover {
+  background: #f8fafc;
+}
+
+.flowise-canvas-header h2 {
+  font-size: 15px;
+  margin: 0;
+}
+
+.flowise-canvas-header__title {
+  min-width: 160px;
+}
+
+.flowise-canvas-header__name-row,
+.flowise-canvas-header__rename {
+  align-items: center;
+  display: flex;
+  gap: 4px;
+}
+
+.flowise-canvas-header__name-row h2 strong {
+  color: #f97316;
+}
+
+.flowise-canvas-header__rename .MuiTextField-root {
+  min-width: 240px;
+}
+
+.flowise-canvas-header span {
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.flowise-native-canvas-shell__body {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr) 340px;
+  min-height: 0;
+  position: relative;
+}
+
+.flowise-node-palette,
+.flowise-canvas-inspector {
+  background: var(--app-card, #fff);
+  min-width: 0;
+  overflow: auto;
+}
+
+.flowise-node-palette {
+  border-right: 1px solid var(--app-border);
+}
+
+@media (max-width: 900px) {
+  .flowise-native-canvas-shell__body {
+    grid-template-columns: 220px minmax(280px, 1fr);
+  }
+
+  .flowise-canvas-inspector {
+    bottom: 0;
+    box-shadow: -12px 0 24px rgba(15, 23, 42, 0.12);
+    position: absolute;
+    right: 0;
+    top: 0;
+    width: min(calc(320px * var(--app-ui-scale)), calc(var(--erp-raw-viewport-width) * 0.68));
+    z-index: 8;
+  }
+}
+
+.flowise-palette-search {
+  align-items: center;
+  border-bottom: 1px solid var(--app-border);
+  display: flex;
+  padding: 10px;
+}
+
+.flowise-palette-search .MuiInputBase-root {
+  border-radius: 6px;
+}
+
+.flowise-palette-search .MuiInputBase-input {
+  font-size: 13px;
+}
+
+.flowise-palette-search__icon {
+  color: var(--app-muted);
+  margin-right: 6px;
+}
+
+.flowise-palette-tabs {
+  border-bottom: 1px solid var(--app-border);
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 8px 10px;
+}
+
+.flowise-palette-tabs .MuiToggleButton-root {
+  background: #f8fafc;
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  color: var(--app-muted);
+  flex: 0 0 auto;
+  font-size: 12px;
+  min-height: 28px;
+  padding: 0 10px;
+  text-transform: none;
+}
+
+.flowise-palette-tabs .MuiToggleButton-root.Mui-selected {
+  background: #eff6ff;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+  font-weight: 700;
+}
+
+.flowise-palette-sticky {
+  align-items: center;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 6px;
+  color: #92400e;
+  display: flex;
+  gap: 8px;
+  margin: 10px;
+  min-height: 34px;
+  padding: 0 10px;
+  width: calc(100% - 20px);
+  text-transform: none;
+}
+
+.flowise-node-catalog {
+  display: grid;
+  gap: 12px;
+  padding: 10px;
+}
+
+.flowise-node-catalog section {
+  display: grid;
+  gap: 6px;
+}
+
+.flowise-node-catalog h4 {
+  color: var(--app-muted);
+  font-size: 12px;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.flowise-node-catalog__category.MuiButton-root {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--app-muted);
+  display: grid;
+  gap: 6px;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  min-height: 28px;
+  padding: 0;
+  text-align: left;
+  text-transform: none;
+}
+
+.flowise-node-catalog__category em {
+  background: #f1f5f9;
+  border-radius: 999px;
+  color: #475569;
+  font-size: 11px;
+  font-style: normal;
+  padding: 2px 7px;
+}
+
+.flowise-node-catalog__item.MuiButton-root {
+  align-items: start;
+  background: #fff;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  display: grid;
+  gap: 2px 8px;
+  grid-template-columns: 28px minmax(0, 1fr);
+  min-height: 58px;
+  padding: 8px;
+  text-align: left;
+  text-transform: none;
+}
+
+.flowise-node-catalog__item-icon {
+  align-items: center;
+  background: #f1f5f9;
+  border-radius: 6px;
+  display: inline-flex;
+  grid-row: span 2;
+  height: 28px;
+  justify-content: center;
+  width: 28px;
+}
+
+.flowise-node-catalog small {
+  color: var(--app-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flowise-canvas-stage {
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  width: 100%;
+}
+
+.flowise-reactflow-interaction-layer {
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  position: relative;
+  width: 100%;
+}
+
+.flowise-reactflow-interaction-layer .reactflow-wrapper,
+.flowise-reactflow-interaction-layer .react-flow {
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+}
+
+.flowise-canvas-stage .react-flow__node {
+  pointer-events: auto !important;
+  visibility: visible !important;
+  z-index: 2 !important;
+}
+
+.flowise-canvas-stage .react-flow__nodes {
+  pointer-events: auto;
+  z-index: 2;
+}
+
+.flowise-canvas-stage .react-flow__pane {
+  z-index: 0;
+}
+
+.flowise-node-card {
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+  min-width: 230px;
+  padding: 10px;
+  position: relative;
+  z-index: 3;
+}
+
+.flowise-node-card--selected {
+  border-color: var(--app-primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--app-primary) 18%, transparent);
+}
+
+.flowise-node-card--inprogress {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.16), 0 8px 20px rgba(37, 99, 235, 0.12);
+}
+
+.flowise-node-card--finished {
+  border-color: #16a34a;
+  box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.14), 0 8px 20px rgba(22, 163, 74, 0.1);
+}
+
+.flowise-node-card--error,
+.flowise-node-card--terminated {
+  border-color: #dc2626;
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.14), 0 8px 20px rgba(220, 38, 38, 0.12);
+}
+
+.flowise-node-card__header {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+}
+
+.flowise-node-card__icon {
+  align-items: center;
+  background: #eff6ff;
+  border-radius: 8px;
+  color: var(--app-primary);
+  display: inline-flex;
+  height: 34px;
+  justify-content: center;
+  width: 34px;
+}
+
+.flowise-node-card__header strong,
+.flowise-node-card__header span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flowise-node-card__header span,
+.flowise-node-card__description {
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.flowise-node-card__description {
+  margin: 8px 0 0;
+}
+
+.flowise-node-card__status {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  min-width: 0;
+}
+
+.flowise-node-card__status span {
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  padding: 5px 7px;
+}
+
+.flowise-node-card__status[data-status="INPROGRESS"] span {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.flowise-node-card__status[data-status="FINISHED"] span {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.flowise-node-card__status[data-status="ERROR"] span,
+.flowise-node-card__status[data-status="TERMINATED"] span {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.flowise-node-card__status small {
+  color: #b91c1c;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flowise-node-card__params {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.flowise-node-card__params span {
+  background: #f8fafc;
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  color: var(--app-muted);
+  font-size: 11px;
+  padding: 2px 7px;
+}
+
+.flowise-node-card__tools {
+  display: none;
+  gap: 4px;
+  position: absolute;
+  right: 8px;
+  top: -14px;
+}
+
+.flowise-node-card:hover .flowise-node-card__tools,
+.flowise-node-card--selected .flowise-node-card__tools {
+  display: flex;
+}
+
+.flowise-node-card__tools button,
+.flowise-node-card__tools .MuiIconButton-root,
+.flowise-edge-delete {
+  align-items: center;
+  background: #fff;
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  display: inline-flex;
+  height: 24px;
+  justify-content: center;
+  width: 24px;
+}
+
+.flowise-node-card__tools button:hover,
+.flowise-node-card__tools .MuiIconButton-root:hover,
+.flowise-edge-delete:hover {
+  border-color: var(--app-primary);
+  color: var(--app-primary);
+}
+
+.flowise-agent-node .flowise-node-card {
+  border-color: #93c5fd;
+}
+
+.flowise-iteration-node {
+  border: 2px dashed #93c5fd;
+  border-radius: 12px;
+  padding: 18px;
+}
+
+.flowise-iteration-node__label {
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.flowise-sticky-note {
+  background: #fef3c7;
+  border: 1px solid #fbbf24;
+  border-radius: 8px;
+  color: #78350f;
+  display: grid;
+  gap: 8px;
+  min-height: 120px;
+  padding: 12px;
+  width: 220px;
+}
+
+.flowise-sticky-note__input .MuiInputBase-root {
+  background: rgb(255 251 235 / 82%);
+  border: 0;
+  color: #78350f;
+  min-height: 84px;
+  outline: 0;
+  padding: 0;
+}
+
+.flowise-sticky-note__input textarea {
+  color: #78350f;
+  min-height: 84px;
+  resize: vertical;
+  width: 100%;
+}
+
+.flowise-sticky-note--selected {
+  box-shadow: 0 0 0 2px #f59e0b;
+}
+
+.flowise-node-info {
+  display: grid;
+  gap: 12px;
+}
+
+.flowise-node-info dl {
+  display: grid;
+  gap: 8px 12px;
+  grid-template-columns: 96px minmax(0, 1fr);
+  margin: 0;
+}
+
+.flowise-node-info dt {
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.flowise-node-info dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.flowise-agent-edge-label,
+.flowise-edge-delete {
+  pointer-events: all;
+  position: absolute;
+}
+
+.flowise-agent-edge-label {
+  background: #111827;
+  border-radius: 999px;
+  color: #fff;
+  font-size: 11px;
+  padding: 3px 8px;
+}
+
+.flowise-agent-connection-label {
+  background: transparent;
+  font-size: 0.5rem;
+  font-weight: 700;
+  padding-top: 1px;
+  pointer-events: none;
+  position: absolute;
+  z-index: 1000;
+}

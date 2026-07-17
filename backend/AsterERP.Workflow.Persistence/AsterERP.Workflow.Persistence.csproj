@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <NoWarn>NU1701</NoWarn>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <AssetTargetFallback>netstandard2.1;netstandard2.0;net461</AssetTargetFallback>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AsterERP.Workflow.Common\AsterERP.Workflow.Common.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="SQLitePCLRaw.lib.e_sqlite3" Version="3.53.3" />
+    <PackageReference Include="SqlSugarCore" Version="5.1.4.216" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.8" />
+    <PackageReference Include="Volo.Abp.Core" Version="10.4.1" />
+    <PackageReference Include="Volo.Abp.Guids" Version="10.4.1" />
+    <PackageReference Include="Volo.Abp.Timing" Version="10.4.1" />
+  </ItemGroup>
+
+</Project>

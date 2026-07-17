@@ -1,0 +1,13 @@
+@import "../shared/styles/tokens.css";
+@import "../shared/styles/buttons.css";
+@import "../shared/flow-canvas/flowCanvas.css";
+@import "tailwindcss";
+@import "./styles/theme.css";
+@import "./styles/base.css";
+@import "./styles/layout.css";
+@import "./styles/display-preferences.css";
+@import "./styles/workspace-panels.css";
+@import "./styles/scrollbar.css";
+@import "./styles/runtime-panels.css";
+@import "./styles/data-table.css";
+@import "./styles/forms.css";

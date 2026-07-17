@@ -1,0 +1,26 @@
+namespace AsterERP.Contracts.Platform;
+
+public sealed record ApplicationPublishTaskResponse(
+    string Id,
+    string AppId,
+    string AppCode,
+    string AppName,
+    string TenantId,
+    string? Version,
+    string Status,
+    string Stage,
+    int ProgressPercent,
+    DateTime? StartedAt,
+    DateTime? FinishedAt,
+    long DurationMs,
+    string? SourceProjectPath,
+    string? ReleasePath,
+    string? ArtifactPath,
+    string BackendHost,
+    int BackendPort,
+    string FrontendBasePath,
+    string FrontendApiBaseUrl,
+    string? ErrorMessage,
+    string TraceId,
+    DateTime CreatedTime,
+    string? Remark);

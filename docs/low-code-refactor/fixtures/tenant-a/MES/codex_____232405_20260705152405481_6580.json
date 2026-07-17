@@ -1,0 +1,273 @@
+﻿{
+  "AppCode": "MES",
+  "Artifact": {
+    "artifactHash": "sha256:b238ef3c444af850214beec70dcda8e7feb1015ce4dec62cb809685963b60a24",
+    "compilerVersion": "runtime-1",
+    "description": "\u7531\u5B8C\u6574\u4F4E\u4EE3\u7801\u5143\u7D20\u8BBE\u8BA1\u5668\u751F\u6210\u7684\u9875\u9762\u3002",
+    "detail": {},
+    "document": {
+      "actions": [],
+      "apiBindings": [],
+      "dataSources": [],
+      "documentId": "05ac82f0990d44fb872d6f464bb2e2d3",
+      "elements": {
+        "codex_____232405_20260705152405481_6580_root": {
+          "bindings": {},
+          "children": [],
+          "events": [],
+          "id": "codex_____232405_20260705152405481_6580_root",
+          "layout": {
+            "minHeight": "720px",
+            "width": "100%"
+          },
+          "name": "Codex\u7A7A\u767D\u9875\u9A8C\u6536232405",
+          "parentId": null,
+          "permission": {},
+          "props": {
+            "title": "Codex\u7A7A\u767D\u9875\u9A8C\u6536232405"
+          },
+          "style": {
+            "backgroundColor": "#ffffff",
+            "borderColor": "#e2e8f0",
+            "borderRadius": "2px",
+            "borderWidth": "1px",
+            "padding": "14px"
+          },
+          "type": "layout.page",
+          "validation": []
+        }
+      },
+      "metadata": {
+        "pageCode": "codex_____232405_20260705152405481_6580",
+        "pageName": "Codex\u7A7A\u767D\u9875\u9A8C\u6536232405"
+      },
+      "modals": [],
+      "modelOperations": [],
+      "models": [],
+      "pageParameters": [],
+      "pageType": "standard",
+      "pages": [
+        {
+          "id": "codex_____232405_20260705152405481_6580",
+          "name": "Codex\u7A7A\u767D\u9875\u9A8C\u6536232405",
+          "rootElementId": "codex_____232405_20260705152405481_6580_root"
+        }
+      ],
+      "permissions": {},
+      "printBindings": [],
+      "revision": 5,
+      "runtimeContext": {
+        "dataSourceId": null,
+        "menuCode": "codex_____232405_20260705152405481_6580-menu",
+        "modelCode": null,
+        "pageCode": "codex_____232405_20260705152405481_6580",
+        "pageName": "Codex\u7A7A\u767D\u9875\u9A8C\u6536232405",
+        "pageParameters": [],
+        "pageType": "standard",
+        "permissionPrefix": "app:runtime-page:codex-----232405-20260705152405481-6580",
+        "tableName": null
+      },
+      "sqlBindings": [],
+      "styleTokens": {},
+      "variables": [
+        {
+          "id": "system.currentUser",
+          "name": "\u5F53\u524D\u7528\u6237",
+          "source": "system",
+          "valueType": "json"
+        },
+        {
+          "id": "row.current",
+          "name": "\u5F53\u524D\u884C",
+          "source": "currentRow",
+          "valueType": "json"
+        },
+        {
+          "id": "form.values",
+          "name": "\u8868\u5355\u5B57\u6BB5",
+          "source": "formField",
+          "valueType": "json"
+        }
+      ],
+      "workflowBindings": []
+    },
+    "form": {
+      "fields": []
+    },
+    "grid": {
+      "columns": [],
+      "keyField": "id",
+      "masterDetail": {
+        "detailSections": [],
+        "enabled": false,
+        "relations": []
+      }
+    },
+    "id": "codex_____232405_20260705152405481_6580",
+    "manifest": [
+      {
+        "binding": {
+          "acceptedSources": [],
+          "acceptedTypes": [],
+          "supportsConversion": false
+        },
+        "defaults": {
+          "layout": {},
+          "props": {},
+          "style": {}
+        },
+        "events": [],
+        "inspector": {
+          "sections": [
+            "component"
+          ]
+        },
+        "migration": {
+          "revision": "latest",
+          "strategy": "none"
+        },
+        "renderer": {
+          "preview": "ComponentRuntimeHost",
+          "runtime": "ComponentRuntimeHost"
+        },
+        "responsive": {
+          "supportedLayouts": [
+            "inherited"
+          ],
+          "supportsOverrides": true
+        },
+        "security": {
+          "actionPermissions": [],
+          "requiresPermission": false
+        },
+        "type": "layout.page"
+      }
+    ],
+    "manifestTypes": [
+      "layout.page"
+    ],
+    "migrationRevision": "latest",
+    "pageType": "standard",
+    "relations": [],
+    "renderer": "designerDocument",
+    "revision": 5,
+    "runtimeContext": {
+      "dataSourceId": null,
+      "menuCode": "codex_____232405_20260705152405481_6580-menu",
+      "modelCode": null,
+      "pageCode": "codex_____232405_20260705152405481_6580",
+      "pageName": "Codex\u7A7A\u767D\u9875\u9A8C\u6536232405",
+      "pageParameters": [],
+      "pageType": "standard",
+      "permissionPrefix": "app:runtime-page:codex-----232405-20260705152405481-6580",
+      "tableName": null
+    },
+    "sections": [],
+    "signature": "370920b3ca8ce96684205f76e5e98fed41a87cd2b5b671f05d676a016990f5df",
+    "title": "Codex\u7A7A\u767D\u9875\u9A8C\u6536232405"
+  },
+  "ArtifactHash": "sha256:f0b1d3513182c68c5775f17d4b30c89d1a0696d63e6b6f316ea0a32e16426bf9",
+  "Document": {
+    "actions": [],
+    "apiBindings": [],
+    "dataSources": [],
+    "documentId": "05ac82f0990d44fb872d6f464bb2e2d3",
+    "elements": {
+      "codex_____232405_20260705152405481_6580_root": {
+        "bindings": {},
+        "children": [],
+        "events": [],
+        "id": "codex_____232405_20260705152405481_6580_root",
+        "layout": {
+          "minHeight": "720px",
+          "width": "100%"
+        },
+        "name": "Codex\u7A7A\u767D\u9875\u9A8C\u6536232405",
+        "parentId": null,
+        "permission": {},
+        "props": {
+          "title": "Codex\u7A7A\u767D\u9875\u9A8C\u6536232405"
+        },
+        "style": {
+          "backgroundColor": "#ffffff",
+          "borderColor": "#e2e8f0",
+          "borderRadius": "2px",
+          "borderWidth": "1px",
+          "padding": "14px"
+        },
+        "type": "layout.page",
+        "validation": []
+      }
+    },
+    "metadata": {
+      "pageCode": "codex_____232405_20260705152405481_6580",
+      "pageName": "Codex\u7A7A\u767D\u9875\u9A8C\u6536232405"
+    },
+    "modals": [],
+    "modelOperations": [],
+    "models": [],
+    "pageParameters": [],
+    "pageType": "standard",
+    "pages": [
+      {
+        "id": "codex_____232405_20260705152405481_6580",
+        "name": "Codex\u7A7A\u767D\u9875\u9A8C\u6536232405",
+        "rootElementId": "codex_____232405_20260705152405481_6580_root"
+      }
+    ],
+    "permissions": {},
+    "printBindings": [],
+    "revision": 5,
+    "runtimeContext": {
+      "dataSourceId": null,
+      "menuCode": "codex_____232405_20260705152405481_6580-menu",
+      "modelCode": null,
+      "pageCode": "codex_____232405_20260705152405481_6580",
+      "pageName": "Codex\u7A7A\u767D\u9875\u9A8C\u6536232405",
+      "pageParameters": [],
+      "pageType": "standard",
+      "permissionPrefix": "app:runtime-page:codex-----232405-20260705152405481-6580",
+      "tableName": null
+    },
+    "sqlBindings": [],
+    "styleTokens": {},
+    "variables": [
+      {
+        "id": "system.currentUser",
+        "name": "\u5F53\u524D\u7528\u6237",
+        "source": "system",
+        "valueType": "json"
+      },
+      {
+        "id": "row.current",
+        "name": "\u5F53\u524D\u884C",
+        "source": "currentRow",
+        "valueType": "json"
+      },
+      {
+        "id": "form.values",
+        "name": "\u8868\u5355\u5B57\u6BB5",
+        "source": "formField",
+        "valueType": "json"
+      }
+    ],
+    "workflowBindings": []
+  },
+  "DocumentHash": "sha256:14bb12a9147e421a3d4045e6c73f895f9495d3a21267be87e0b46da6bb27e466",
+  "PageCode": "codex_____232405_20260705152405481_6580",
+  "PageName": "Codex\u7A7A\u767D\u9875\u9A8C\u6536232405",
+  "PermissionConfig": {
+    "allowAdd": true,
+    "allowDelete": true,
+    "allowEdit": true,
+    "allowExport": true,
+    "allowImport": true,
+    "menuCode": null,
+    "menuName": null,
+    "parentMenuCode": null,
+    "roleCodes": []
+  },
+  "SourceArtifactHash": "sha256:b238ef3c444af850214beec70dcda8e7feb1015ce4dec62cb809685963b60a24",
+  "SourceDocumentHash": "sha256:14bb12a9147e421a3d4045e6c73f895f9495d3a21267be87e0b46da6bb27e466",
+  "TenantId": "tenant-a"
+}

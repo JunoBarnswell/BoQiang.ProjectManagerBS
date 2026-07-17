@@ -1,0 +1,103 @@
+.edgebutton {
+  align-items: center;
+  background: #eee;
+  border: 1px solid #fff;
+  border-radius: 50%;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 12px;
+  height: 20px;
+  justify-content: center;
+  line-height: 1;
+  width: 20px;
+}
+
+.edgebutton:hover {
+  background: #5e35b1;
+  box-shadow: 0 0 6px 2px rgba(0, 0, 0, 0.08);
+  color: #eee;
+}
+
+.edgebutton-foreignobject div {
+  align-items: center;
+  background: transparent;
+  display: flex;
+  height: 40px;
+  justify-content: center;
+  min-height: 40px;
+  width: 40px;
+}
+
+.reactflow-parent-wrapper {
+  display: flex;
+  flex-grow: 1;
+  height: 100%;
+}
+
+.reactflow-parent-wrapper .reactflow-wrapper {
+  flex-grow: 1;
+  height: 100%;
+}
+
+.chatflow-canvas .react-flow__handle-connecting {
+  background: #db4e4e !important;
+  cursor: not-allowed;
+}
+
+.chatflow-canvas .react-flow__handle-valid {
+  background: #5dba62 !important;
+  cursor: crosshair;
+}
+
+.agent-flow-edge-selector:hover {
+  cursor: pointer;
+}
+
+.agent-flow-edge-selector:hover + .agent-flow-edge {
+  opacity: 1;
+  stroke-width: 3 !important;
+}
+
+.dark-mode-controls {
+  --xy-controls-box-shadow-default: 0 0 2px 1px rgba(255, 255, 255, 0.1);
+  --xy-controls-button-background-color-default: #2d2d2d;
+  --xy-controls-button-background-color-hover-default: #404040;
+  --xy-controls-button-border-color-default: #525252;
+}
+
+.dark-mode-controls .react-flow__controls-button {
+  background-color: #2d2d2d;
+  border: 1px solid #525252;
+  border-color: #525252;
+  color: #fff;
+}
+
+.dark-mode-controls .react-flow__controls-button:hover,
+.dark-mode-controls .react-flow__controls-button.react-flow__controls-interactive:hover {
+  background-color: #404040;
+}
+
+.dark-mode-controls .react-flow__controls-button.react-flow__controls-interactive {
+  background-color: #2d2d2d;
+  border-color: #525252;
+  color: #fff;
+}
+
+.dark-mode-controls .react-flow__controls-button svg,
+.dark-mode-controls .react-flow__controls-button:hover svg {
+  color: #fff;
+  fill: #fff;
+}
+
+.flowise-agent-edge-label,
+.flowise-agent-connection-label {
+  background: var(--app-card, #fff);
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.12);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  pointer-events: none;
+  position: absolute;
+}

@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://astererp.local/contracts/expression-value.latest.schema.json",
+  "title": "AsterERP ExpressionValue latest",
+  "type": "object",
+  "required": ["version", "kind", "dataType"],
+  "properties": {
+    "version": { "const": "latest" },
+    "kind": { "enum": ["literal", "resourceRef", "functionCall", "conversion", "condition", "logic", "object", "array", "template", "defaultValue"] },
+    "dataType": { "enum": ["array", "boolean", "date", "json", "number", "object", "string"] },
+    "value": {},
+    "resourceId": { "type": "string", "minLength": 1 },
+    "functionId": { "type": "string", "minLength": 1 },
+    "args": { "type": "array", "items": { "$ref": "#" } },
+    "input": { "$ref": "#" },
+    "when": { "$ref": "#" },
+    "then": { "$ref": "#" },
+    "otherwise": { "$ref": "#" },
+    "operator": { "enum": ["and", "or", "not"] },
+    "properties": { "type": "object", "additionalProperties": { "$ref": "#" } },
+    "items": { "type": "array", "items": { "$ref": "#" } },
+    "pipeline": { "type": "array", "items": { "$ref": "#/$defs/conversion" } },
+    "fallback": {},
+    "dependencies": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+    "canonicalHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  },
+  "$defs": {
+    "conversion": {
+      "type": "object",
+      "required": ["from", "name", "to"],
+      "properties": {
+        "from": { "enum": ["array", "boolean", "date", "json", "number", "object", "string"] },
+        "name": { "type": "string", "minLength": 1 },
+        "to": { "enum": ["array", "boolean", "date", "json", "number", "object", "string"] }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

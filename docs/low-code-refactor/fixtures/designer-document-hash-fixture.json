@@ -1,0 +1,57 @@
+{
+  "fixtureId": "designer-document-hash-001",
+  "expectedHash": "sha256:686f5d1aee97e8f6d1be5ff4abccef0543c1b0e6d1017c15585d0ef536455eb4",
+  "document": {
+    "documentHash": "sha256:ignored-top-level-document-hash",
+    "documentId": "hash-fixture",
+    "revision": 7,
+    "metadata": {
+      "pageName": "Hash Fixture",
+      "source": "phase-0-1"
+    },
+    "pages": [
+      {
+        "id": "hash-fixture",
+        "name": "Hash Fixture",
+        "rootElementId": "root"
+      }
+    ],
+    "elements": {
+      "root": {
+        "id": "root",
+        "type": "layout.page",
+        "parentId": null,
+        "children": [],
+        "layout": {
+          "width": "100%"
+        },
+        "props": {
+          "title": "Hash Fixture",
+          "value": {
+            "a": 1,
+            "documentHash": "sha256:preserve-nested-value",
+            "z": 2
+          }
+        },
+        "style": {},
+        "events": [],
+        "bindings": {},
+        "permission": {},
+        "validation": []
+      }
+    },
+    "actions": [],
+    "apiBindings": [],
+    "dataSources": [],
+    "modals": [],
+    "pageMicroflows": [],
+    "pageParameters": [],
+    "permissions": {},
+    "runtimeContext": {
+      "pageCode": "hash-fixture"
+    },
+    "styleTokens": {},
+    "variables": [],
+    "workflowBindings": []
+  }
+}
