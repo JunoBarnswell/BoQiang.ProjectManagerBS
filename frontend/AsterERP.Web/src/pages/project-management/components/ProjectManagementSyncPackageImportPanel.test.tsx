@@ -81,7 +81,7 @@ describe("ProjectManagementSyncPackageImportPanel", () => {
     expect(messages.success).toHaveBeenCalledWith("同步包已导入：新增 2，更新 1，跳过 3");
   });
 
-  it("does not render a partial-result panel when apply succeeds without warnings", () => {
+  it("renders a successful result report when apply succeeds without warnings", () => {
     render(<ProjectManagementSyncPackageImportPanel />);
 
     act(() => {
@@ -98,7 +98,8 @@ describe("ProjectManagementSyncPackageImportPanel", () => {
       });
     });
 
-    expect(screen.queryByText("导入完成，但有需要关注的结果")).toBeNull();
+    expect(screen.getByText("导入完成")).toBeTruthy();
+    expect(screen.getByText(/包 package-2 · 策略 Overwrite · 新增 1 · 更新 0 · 跳过 0 · 已导入附件 1/)).toBeTruthy();
     expect(messages.success).toHaveBeenCalledWith("同步包已导入：新增 1，更新 0，跳过 0");
   });
 });

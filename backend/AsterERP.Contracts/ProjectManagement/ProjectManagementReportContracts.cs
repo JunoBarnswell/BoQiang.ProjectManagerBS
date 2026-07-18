@@ -23,3 +23,9 @@ public sealed record ProjectManagementReportFile(
     string ContentType,
     byte[] Content,
     int RowCount);
+
+public sealed record ProjectManagementReportSnapshotRequest(
+    string Format,
+    ProjectManagementReportQuery Query);
+
+public sealed record ProjectManagementReportSnapshotStartResponse(string OperationId);

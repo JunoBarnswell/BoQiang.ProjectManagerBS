@@ -86,6 +86,7 @@ export interface ProjectManagementBackup {
   createdByUserId: string;
   createdTime: string;
   completedAt?: string;
+  operationId?: string;
 }
 
 export interface ProjectManagementDataSpaceImpact {
@@ -535,6 +536,17 @@ export interface ProjectManagementReportQuery {
   pageSize?: number;
   keyword?: string;
   status?: string;
+}
+
+export type ProjectManagementReportSnapshotFormat = 'csv' | 'xlsx' | 'pdf';
+
+export interface ProjectManagementReportSnapshotRequest {
+  format: ProjectManagementReportSnapshotFormat;
+  query: ProjectManagementReportQuery;
+}
+
+export interface ProjectManagementReportSnapshotStartResponse {
+  operationId: string;
 }
 
 export interface ProjectManagementSyncWatermark {

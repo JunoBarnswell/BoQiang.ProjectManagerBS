@@ -10,7 +10,8 @@ namespace AsterERP.Api.Application.ProjectManagement;
 public sealed class ProjectManagementOperationRunner(
     IHttpContextAccessor httpContextAccessor,
     IDataPermissionFilterRegistrar dataPermissionFilterRegistrar,
-    ProjectManagementWorkspaceValidationExecutor workspaceValidationExecutor)
+    ProjectManagementWorkspaceValidationExecutor workspaceValidationExecutor,
+    ProjectManagementReportSnapshotExecutor? reportSnapshotExecutor = null)
 {
     public async Task ExecuteAsync(ProjectManagementOperationJobArgs args)
     {
@@ -20,6 +21,7 @@ public sealed class ProjectManagementOperationRunner(
         try
         {
             using var filterScope = await dataPermissionFilterRegistrar.RegisterAsync(CancellationToken.None);
+            if (reportSnapshotExecutor is not null && await reportSnapshotExecutor.TryExecuteAsync(args, CancellationToken.None)) return;
             await workspaceValidationExecutor.ExecuteAsync(args, CancellationToken.None);
         }
         finally
@@ -38,6 +40,7 @@ public sealed class ProjectManagementOperationRunner(
             new Claim(AsterErpClaimTypes.TenantId, args.TenantId),
             new Claim(AsterErpClaimTypes.AppCode, args.AppCode),
             new Claim(AsterErpClaimTypes.DataScope, "SELF"),
+            new Claim(AsterErpClaimTypes.PermissionCode, PermissionCodes.ProjectManagementReportExport),
             new Claim(AsterErpClaimTypes.PermissionCode, PermissionCodes.ProjectManagementOperationView),
             new Claim(AsterErpClaimTypes.PermissionCode, PermissionCodes.ProjectManagementOperationManage)
         };

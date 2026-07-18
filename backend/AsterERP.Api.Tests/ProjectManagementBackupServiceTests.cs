@@ -32,29 +32,31 @@ public sealed class ProjectManagementBackupServiceTests
             await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
             db.CodeFirst.InitTables<SystemUserEntity>();
             await db.Insertable(new SystemUserEntity { Id = "operator", UserName = "operator", PasswordHash = "secret", Status = "Enabled" }).ExecuteCommandAsync();
-            db.Ado.ExecuteCommand("CREATE TABLE IF NOT EXISTS backup_marker (Id INTEGER PRIMARY KEY, Value TEXT NOT NULL);");
-            db.Ado.ExecuteCommand("INSERT INTO backup_marker(Id, Value) VALUES (1, 'before');");
+            await db.Insertable(new ProjectManagementProjectEntity
+            {
+                Id = "project-1", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "before", ProjectName = "Before restore", OwnerUserId = "operator"
+            }).ExecuteCommandAsync();
 
             var accessor = new TestWorkspaceDatabaseAccessor(db);
             var user = new FixedAsterErpCurrentUser(new ClaimsPrincipal(new ClaimsIdentity(new[]
             {
                 new Claim(AsterErpClaimTypes.UserId, "operator"),
                 new Claim(AsterErpClaimTypes.TenantId, "tenant-a"),
-                new Claim(AsterErpClaimTypes.AppCode, "MES")
+                new Claim(AsterErpClaimTypes.AppCode, "SYSTEM")
             }, "test")));
             var operationWriter = new ProjectManagementOperationWriter(accessor, user);
             var service = new ProjectManagementBackupService(accessor, user, new ProjectManagementRiskConfirmationService(accessor, user, new TestPasswordHashService()), new ProjectManagementMaintenanceLock(accessor, user), new TestHostEnvironment(root), operationWriter);
 
             var backup = await service.CreateAsync(new ProjectManagementBackupRequest("secret", true, "test backup"));
             Assert.Equal("Ready", backup.Status);
-            db.Ado.ExecuteCommand("UPDATE backup_marker SET Value = 'after' WHERE Id = 1;");
+            await db.Updateable<ProjectManagementProjectEntity>().SetColumns(item => new ProjectManagementProjectEntity { ProjectCode = "after" }).Where(item => item.Id == "project-1").ExecuteCommandAsync();
             await service.RestoreAsync(backup.Id, new ProjectManagementRestoreRequest("secret", true));
-            Assert.Equal("before", db.Ado.GetString("SELECT Value FROM backup_marker WHERE Id = 1"));
+            Assert.Equal("before", (await db.Queryable<ProjectManagementProjectEntity>().Where(item => item.Id == "project-1").FirstAsync()).ProjectCode);
             Assert.Contains(await service.ListAsync(), item => item.Id == backup.Id);
             var operations = await db.Queryable<ProjectManagementOperationEntity>().Where(item => !item.IsDeleted).ToListAsync();
             Assert.Equal(2, operations.Count);
             Assert.Contains(operations, item => item.OperationType == "backup.restore" && item.Status == "Succeeded");
-            Assert.Contains(operations, item => item.OperationType == "backup.create" && item.Status == "Failed");
+            Assert.Contains(operations, item => item.OperationType == "backup.create" && item.Status == "Succeeded");
         }
         finally
         {
@@ -75,7 +77,7 @@ public sealed class ProjectManagementBackupServiceTests
             await db.Insertable(new SystemUserEntity { Id = "operator", UserName = "operator", PasswordHash = "secret", Status = "Enabled" }).ExecuteCommandAsync();
             await db.Insertable(new ProjectManagementBackupEntity
             {
-                Id = "malicious-backup", TenantId = "tenant-a", AppCode = "MES", BackupName = "malicious",
+                Id = "malicious-backup", TenantId = "tenant-a", AppCode = "SYSTEM", BackupName = "malicious",
                 RelativePath = "data/project-management-backups/tenant-a/MES/../../../../outside.db",
                 Sha256 = "", FileSize = 0, Status = "Ready", CreatedByUserId = "operator", CreatedBy = "operator", CreatedTime = DateTime.UtcNow
             }).ExecuteCommandAsync();
@@ -83,7 +85,7 @@ public sealed class ProjectManagementBackupServiceTests
             var accessor = new TestWorkspaceDatabaseAccessor(db);
             var user = new FixedAsterErpCurrentUser(new ClaimsPrincipal(new ClaimsIdentity(new[]
             {
-                new Claim(AsterErpClaimTypes.UserId, "operator"), new Claim(AsterErpClaimTypes.TenantId, "tenant-a"), new Claim(AsterErpClaimTypes.AppCode, "MES")
+                new Claim(AsterErpClaimTypes.UserId, "operator"), new Claim(AsterErpClaimTypes.TenantId, "tenant-a"), new Claim(AsterErpClaimTypes.AppCode, "SYSTEM")
             }, "test")));
             var service = new ProjectManagementBackupService(accessor, user, new ProjectManagementRiskConfirmationService(accessor, user, new TestPasswordHashService()), new ProjectManagementMaintenanceLock(accessor, user), new TestHostEnvironment(root));
 
@@ -109,7 +111,7 @@ public sealed class ProjectManagementBackupServiceTests
             var accessor = new TestWorkspaceDatabaseAccessor(db);
             var user = new FixedAsterErpCurrentUser(new ClaimsPrincipal(new ClaimsIdentity(new[]
             {
-                new Claim(AsterErpClaimTypes.UserId, "operator"), new Claim(AsterErpClaimTypes.TenantId, "tenant-a"), new Claim(AsterErpClaimTypes.AppCode, "MES")
+                new Claim(AsterErpClaimTypes.UserId, "operator"), new Claim(AsterErpClaimTypes.TenantId, "tenant-a"), new Claim(AsterErpClaimTypes.AppCode, "SYSTEM")
             }, "test")));
             var service = new ProjectManagementBackupService(accessor, user, new ProjectManagementRiskConfirmationService(accessor, user, new TestPasswordHashService()), new ProjectManagementMaintenanceLock(accessor, user), new TestHostEnvironment(rootFile), new ProjectManagementOperationWriter(accessor, user));
 
@@ -125,10 +127,12 @@ public sealed class ProjectManagementBackupServiceTests
     }
 
     [Fact]
-    public async Task Platform_workspace_rejects_physical_backup_before_writing_the_main_database()
+    public async Task Platform_workspace_rejects_in_memory_backup_without_writing_the_main_database()
     {
         using var db = new SqlSugarClient(new ConnectionConfig { ConnectionString = $"Data Source=file:project-management-platform-backup-{Guid.NewGuid():N};Mode=Memory;Cache=Shared", DbType = DbType.Sqlite, IsAutoCloseConnection = false });
         await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
+        db.CodeFirst.InitTables<SystemUserEntity>();
+        await db.Insertable(new SystemUserEntity { Id = "operator", UserName = "operator", PasswordHash = "secret", Status = "Enabled" }).ExecuteCommandAsync();
         var user = new FixedAsterErpCurrentUser(new ClaimsPrincipal(new ClaimsIdentity(new[]
         {
             new Claim(AsterErpClaimTypes.UserId, "operator"), new Claim(AsterErpClaimTypes.TenantId, "tenant-a"), new Claim(AsterErpClaimTypes.AppCode, "SYSTEM")

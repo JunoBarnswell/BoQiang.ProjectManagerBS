@@ -11,4 +11,12 @@ public interface IProjectManagementReportService
     Task<ProjectManagementReportFile> ExportExcelAsync(
         ProjectManagementReportQuery query,
         CancellationToken cancellationToken = default);
+
+    Task<ProjectManagementReportSnapshotStartResponse> StartSnapshotAsync(
+        ProjectManagementReportSnapshotRequest request,
+        CancellationToken cancellationToken = default);
+
+    Task ExecuteSnapshotAsync(string operationId, CancellationToken cancellationToken = default);
+
+    Task<ProjectManagementReportFile> DownloadSnapshotAsync(string operationId, CancellationToken cancellationToken = default);
 }

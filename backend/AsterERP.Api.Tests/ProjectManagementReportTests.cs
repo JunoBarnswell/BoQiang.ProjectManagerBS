@@ -33,15 +33,15 @@ public sealed class ProjectManagementReportTests
         await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
         await db.Insertable(new[]
         {
-            new ProjectManagementProjectEntity { Id = "visible", TenantId = "tenant-a", AppCode = "MES", ProjectCode = "=VISIBLE", ProjectName = "Visible", OwnerUserId = "operator" },
-            new ProjectManagementProjectEntity { Id = "other-tenant", TenantId = "tenant-b", AppCode = "MES", ProjectCode = "OTHER", ProjectName = "Other tenant", OwnerUserId = "operator" },
+            new ProjectManagementProjectEntity { Id = "visible", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "=VISIBLE", ProjectName = "Visible", OwnerUserId = "operator" },
+            new ProjectManagementProjectEntity { Id = "other-tenant", TenantId = "tenant-b", AppCode = "SYSTEM", ProjectCode = "OTHER", ProjectName = "Other tenant", OwnerUserId = "operator" },
             new ProjectManagementProjectEntity { Id = "other-app", TenantId = "tenant-a", AppCode = "CRM", ProjectCode = "OTHER-APP", ProjectName = "Other app", OwnerUserId = "operator" }
         }).ExecuteCommandAsync();
-        await db.Insertable(new ProjectManagementTaskEntity { TenantId = "tenant-a", AppCode = "MES", ProjectId = "visible", TaskCode = "T-001", Title = "Task" }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementTaskEntity { TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "visible", TaskCode = "T-001", Title = "Task" }).ExecuteCommandAsync();
 
-        var user = CreateUser("operator", "tenant-a", "MES");
-        Assert.True(ProjectManagementDataPermissionFilterRegistrar.TryRegister(db, typeof(ProjectManagementProjectEntity), user, "tenant-a", "MES"));
-        Assert.True(ProjectManagementDataPermissionFilterRegistrar.TryRegister(db, typeof(ProjectManagementTaskEntity), user, "tenant-a", "MES"));
+        var user = CreateUser("operator", "tenant-a", "SYSTEM");
+        Assert.True(ProjectManagementDataPermissionFilterRegistrar.TryRegister(db, typeof(ProjectManagementProjectEntity), user, "tenant-a", "SYSTEM"));
+        Assert.True(ProjectManagementDataPermissionFilterRegistrar.TryRegister(db, typeof(ProjectManagementTaskEntity), user, "tenant-a", "SYSTEM"));
         var service = new ProjectManagementReportService(new TestWorkspaceDatabaseAccessor(db), user);
         var csv = await service.ExportCsvAsync(new ProjectManagementReportQuery(PageSize: 500));
         var csvText = Encoding.UTF8.GetString(csv.Content);

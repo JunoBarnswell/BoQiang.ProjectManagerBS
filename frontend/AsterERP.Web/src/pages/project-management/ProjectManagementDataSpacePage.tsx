@@ -15,6 +15,7 @@ import { isHttpError } from '../../core/http/httpError';
 import { queryKeys } from '../../core/query/queryKeys';
 import { useApiMutation } from '../../core/query/useApiMutation';
 import { useProjectManagementWorkspaceScope } from '../../features/project-management/state/projectManagementWorkspaceScope';
+import { ProjectManagementOperationProgress } from '../../features/project-management/components/ProjectManagementOperationProgress';
 import { toProjectManagementPlatformRoute } from '../../features/project-management/state/projectManagementPlatformRoutes';
 import { PermissionButton } from '../../shared/auth/PermissionButton';
 import { PermissionGuard } from '../../shared/auth/PermissionGuard';
@@ -33,9 +34,10 @@ export function ProjectManagementDataSpacePage() {
   const queryClient = useQueryClient();
   const [password, setPassword] = useState('');
   const [confirmRisk, setConfirmRisk] = useState(false);
+  const [operationId, setOperationId] = useState<string | null>(null);
+  const [operationResult, setOperationResult] = useState<string | null>(null);
   const [restorePreview, setRestorePreview] = useState<NonNullable<Awaited<ReturnType<typeof previewProjectManagementBackupRestore>>['data']> | null>(null);
   const { hasPermission: canManageBackup } = usePermission('project-management:backup:manage');
-  const isSystemPlatform = scope.appCode === 'SYSTEM';
   const summaryQuery = useQuery({
     enabled: scope.isAvailable,
     queryKey: queryKeys.projectManagement.dataSpaceSummary(scope),
@@ -44,20 +46,26 @@ export function ProjectManagementDataSpacePage() {
   const backupsQuery = useQuery({
     queryKey: queryKeys.projectManagement.backups(scope),
     queryFn: () => getProjectManagementBackups(),
-    enabled: scope.isAvailable && canManageBackup && !isSystemPlatform,
+    enabled: scope.isAvailable && canManageBackup,
   });
   const backupMutation = useApiMutation({
     mutationFn: () => createProjectManagementBackup({ currentPassword: password, confirmRisk, reason: '项目管理数据空间手动备份' }),
     onError: (error) => message.error(getErrorMessage(error, '备份失败')),
-    onSuccess: () => {
-      message.success('备份已完成');
+    onSuccess: (result) => {
+      const backup = result.data;
+      setOperationId(backup?.operationId ?? null);
+      setOperationResult(backup ? `备份“${backup.backupName}”已完成，校验摘要 ${backup.sha256.slice(0, 12)}…` : '备份已完成。');
+      message.success('备份已完成，可在下方查看审计状态');
       void queryClient.invalidateQueries({ queryKey: queryKeys.projectManagement.backups(scope) });
     }
   });
   const restoreMutation = useApiMutation({
     mutationFn: (id: string) => restoreProjectManagementBackup(id, { currentPassword: password, confirmRisk }),
     onError: (error) => message.error(getErrorMessage(error, '恢复失败')),
-    onSuccess: async () => {
+    onSuccess: async (result) => {
+      const backup = result.data;
+      setOperationId(backup?.operationId ?? null);
+      setOperationResult(backup ? `已从备份“${backup.backupName}”恢复当前项目管理数据空间。` : '恢复已完成，数据空间已刷新。');
       setRestorePreview(null);
       await queryClient.invalidateQueries({ queryKey: queryKeys.projectManagement.all(scope) });
       message.success('恢复已完成，项目管理数据已刷新');
@@ -88,12 +96,13 @@ export function ProjectManagementDataSpacePage() {
   }
   const summary = summaryQuery.data?.data;
   if (!summary) return <PageError description="数据空间摘要为空" />;
+  const restoreWarnings = restorePreview ? buildRestoreWarnings(restorePreview.currentDataSpace, restorePreview.backupDataSpace) : [];
 
   return (
     <ResponsivePage
       title="项目数据空间"
       eyebrow="ProjectManagement / Data Space"
-      description="查看当前授权项目域数据摘要，并通过统一 bqsync 协议进行预览和导出。"
+      description="当前平台工作区内项目管理模块的完整逻辑数据集。备份与恢复不会覆盖平台中的用户、权限、应用或其他模块数据。"
       toolbar={<div className="flex flex-wrap items-center gap-3 text-sm"><span className="text-gray-500">{summary.tenantId} / {summary.appCode} · {summary.databaseStatus}</span><PermissionGuard code="project-management:sync:export" fallback={null}><Link to={toProjectManagementPlatformRoute('project-sync')}>查看同步水位</Link></PermissionGuard><Link to={toProjectManagementPlatformRoute('project-search')}>项目搜索</Link></div>}
     >
       <div className="grid gap-3 md:grid-cols-5">
@@ -115,17 +124,28 @@ export function ProjectManagementDataSpacePage() {
       </section>
       <section className="mt-4 rounded-lg border border-gray-200 p-4">
         <h2 className="font-semibold">备份与恢复</h2>
-        {isSystemPlatform ? <p className="mt-1 text-sm text-gray-500">平台项目管理暂不支持物理备份/恢复，待 pm_* 逻辑备份能力。</p> : <>
-        <p className="mt-1 text-sm text-gray-500">仅支持当前 SQLite 数据空间。恢复会覆盖整个当前数据空间，不只是项目管理记录。</p>
+        <p className="mt-1 text-sm text-gray-500">备份范围是当前租户与 SYSTEM 工作区的项目、成员、里程碑、任务、附件和关联配置。恢复仅替换这些项目管理记录，不覆盖平台其他模块。</p>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <input className="rounded border border-gray-300 px-3 py-2" type="password" aria-label="当前密码" placeholder="当前密码" value={password} onChange={(event) => setPassword(event.target.value)} />
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={confirmRisk} onChange={(event) => setConfirmRisk(event.target.checked)} />我确认这是高风险数据操作</label>
           <PermissionButton code="project-management:backup:manage" disabled={!password || !confirmRisk || backupMutation.isPending} onClick={() => backupMutation.mutate()}>创建备份</PermissionButton>
         </div>
-        {restorePreview ? <div className="mt-3 rounded border border-amber-300 bg-amber-50 p-3 text-sm"><div className="font-medium">恢复影响确认 · {restorePreview.backup.backupName}</div><p className="mt-1">{restorePreview.impactScope}</p><p className="mt-1">当前记录：项目 {restorePreview.currentDataSpace.projectCount}、任务 {restorePreview.currentDataSpace.taskCount}；备份记录：项目 {restorePreview.backupDataSpace.projectCount}、任务 {restorePreview.backupDataSpace.taskCount}。</p><p className="mt-1">{restorePreview.failureCompensationHint}</p><p className="mt-1">{restorePreview.successfulRestoreRollbackHint}</p><div className="mt-2 flex gap-2"><PermissionButton code="project-management:backup:manage" disabled={!password || !confirmRisk || restoreMutation.isPending} onClick={() => restoreMutation.mutate(restorePreview.backup.id)}>{restoreMutation.isPending ? '恢复中…' : '确认恢复'}</PermissionButton><button type="button" onClick={() => setRestorePreview(null)}>取消</button></div></div> : null}
+        {restorePreview ? <div className="mt-3 rounded border border-amber-300 bg-amber-50 p-3 text-sm"><div className="font-medium">恢复影响确认 · {restorePreview.backup.backupName}</div><p className="mt-1">{restorePreview.impactScope}</p><p className="mt-1">当前记录：项目 {restorePreview.currentDataSpace.projectCount}、任务 {restorePreview.currentDataSpace.taskCount}；备份记录：项目 {restorePreview.backupDataSpace.projectCount}、任务 {restorePreview.backupDataSpace.taskCount}。</p>{restoreWarnings.length ? <div className="mt-2 rounded border border-amber-200 bg-white/70 p-2"><div className="font-medium text-amber-900">部分恢复警告</div><ul className="mt-1 list-disc space-y-1 pl-5">{restoreWarnings.map((warning) => <li key={warning}>{warning}</li>)}</ul></div> : <p className="mt-2 text-emerald-800">计数一致：未发现需要额外确认的对象数量差异。</p>}<p className="mt-2">失败补偿：{restorePreview.failureCompensationHint}</p><p className="mt-1">成功后回滚：{restorePreview.successfulRestoreRollbackHint}</p><div className="mt-2 flex gap-2"><PermissionButton code="project-management:backup:manage" disabled={!password || !confirmRisk || restoreMutation.isPending} onClick={() => restoreMutation.mutate(restorePreview.backup.id)}>{restoreMutation.isPending ? '恢复中…' : '确认恢复'}</PermissionButton><button type="button" onClick={() => setRestorePreview(null)}>取消</button></div></div> : null}
         {backupsQuery.isLoading ? <div className="mt-3 text-sm text-gray-500">备份列表加载中…</div> : backupsQuery.isError ? <div className="mt-3 rounded bg-amber-50 p-3 text-sm text-amber-800"><div>备份列表加载失败。</div><button type="button" className="mt-2 underline" onClick={() => void backupsQuery.refetch()}>重试</button></div> : backupsQuery.data?.data?.length ? <div className="mt-3 space-y-2">{backupsQuery.data.data.map((backup) => <div className="flex flex-wrap items-center justify-between gap-2 rounded border border-gray-100 p-3 text-sm" key={backup.id}><span>{backup.backupName} · {Math.round(backup.fileSize / 1024)} KB · {backup.sha256.slice(0, 12)}…</span><PermissionButton code="project-management:backup:manage" disabled={restorePreviewMutation.isPending} onClick={() => restorePreviewMutation.mutate(backup.id)}>{restorePreviewMutation.isPending ? '预览中…' : '查看恢复影响'}</PermissionButton></div>)}</div> : <div className="mt-3 text-sm text-gray-500">暂无备份</div>}
-        </>}
+        {operationResult ? <div className="mt-3 rounded border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900" role="status">{operationResult}</div> : null}
+        {operationId ? <PermissionGuard code="project-management:operation:view" fallback={<p className="mt-3 text-sm text-gray-500">当前账号无权读取任务追踪详情，请到审计中心查看操作记录。</p>}><div className="mt-3"><ProjectManagementOperationProgress operationId={operationId} onTrackingEnded={() => setOperationId(null)} /></div></PermissionGuard> : null}
       </section>
     </ResponsivePage>
   );
+}
+
+function buildRestoreWarnings(current: { projectCount: number; taskCount: number; memberCount: number; milestoneCount: number; attachmentCount: number }, backup: { projectCount: number; taskCount: number; memberCount: number; milestoneCount: number; attachmentCount: number }): string[] {
+  const labels: Array<[keyof typeof current, string]> = [
+    ['projectCount', '项目'],
+    ['taskCount', '任务'],
+    ['memberCount', '成员'],
+    ['milestoneCount', '里程碑'],
+    ['attachmentCount', '附件']
+  ];
+  return labels.flatMap(([key, label]) => current[key] === backup[key] ? [] : [`${label}数量将从 ${current[key]} 变为 ${backup[key]}。`]);
 }

@@ -22,6 +22,7 @@ vi.mock("react-router-dom", () => ({
 
 vi.mock("../../api/project-management/projectManagement.api", () => ({
   acknowledgeProjectManagementSync: vi.fn(),
+  exportProjectManagementSync: vi.fn(),
   getProjectManagementSyncChanges: vi.fn(),
   getProjectManagementSyncWatermark: vi.fn(),
 }));
@@ -76,6 +77,10 @@ vi.mock("./components/ProjectManagementSyncPackageImportPanel", () => ({
   ProjectManagementSyncPackageImportPanel: () => <p>同步包导入控件</p>,
 }));
 
+vi.mock("./components/ProjectManagementSyncPackageExportPanel", () => ({
+  ProjectManagementSyncPackageExportPanel: () => <p>同步包导出控件</p>,
+}));
+
 describe("ProjectManagementSyncPage", () => {
   beforeEach(() => {
     queryCalls.length = 0;
@@ -99,6 +104,7 @@ describe("ProjectManagementSyncPage", () => {
 
     expect(queryCalls).toHaveLength(2);
     expect(queryCalls.every((call) => call.enabled)).toBe(true);
+    expect(screen.getByText("同步包导出控件")).toBeTruthy();
     expect(screen.queryByText("确认当前水位")).toBeNull();
   });
 
