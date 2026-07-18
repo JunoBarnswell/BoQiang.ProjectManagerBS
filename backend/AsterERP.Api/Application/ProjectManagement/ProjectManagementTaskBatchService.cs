@@ -35,11 +35,24 @@ public sealed class ProjectManagementTaskBatchService(
         var tasks = await db.Queryable<ProjectManagementTaskEntity>().Where(item => item.ProjectId == request.ProjectId && ids.Contains(item.Id) && !item.IsDeleted).ToListAsync(cancellationToken);
         if (tasks.Count != ids.Count) throw new ValidationException("存在不属于当前项目或已删除的任务");
         var byId = tasks.ToDictionary(item => item.Id, StringComparer.Ordinal);
+        var beforeSnapshots = tasks.ToDictionary(item => item.Id, TaskActivitySnapshot.From, StringComparer.Ordinal);
         var nextStatus = string.IsNullOrWhiteSpace(request.Status) ? null : ProjectManagementDomainRules.RequireTaskStatus(request.Status);
         var nextPriority = string.IsNullOrWhiteSpace(request.Priority) ? null : RequirePriority(request.Priority);
         if (request.UpdateMilestone) await EnsureMilestoneAsync(request.ProjectId, request.MilestoneId, cancellationToken);
         if (request.UpdateSchedule) ProjectManagementDomainRules.ValidateDates(request.StartDate, request.DueDate, "任务");
         var labelIds = request.UpdateLabels ? NormalizeLabelIds(request.LabelIds) : null;
+        var labelNames = await LoadLabelNamesAsync(db, request.ProjectId, request.UpdateLabels ? tasks.Select(item => item.Id).ToList() : [], labelIds, cancellationToken);
+        if (request.UpdateLabels)
+        {
+            var existingLabels = await db.Queryable<ProjectManagementTaskLabelEntity>()
+                .Where(item => item.ProjectId == request.ProjectId && ids.Contains(item.TaskId) && !item.IsDeleted)
+                .ToListAsync(cancellationToken);
+            foreach (var task in tasks)
+                beforeSnapshots[task.Id] = beforeSnapshots[task.Id] with
+                {
+                    Labels = FormatLabels(existingLabels.Where(item => item.TaskId == task.Id).Select(item => item.LabelId), labelNames)
+                };
+        }
         var canOverrideWip = request.OverrideWip && currentUser.HasAsterErpPermission(PermissionCodes.ProjectManagementTaskOverrideWip);
         if (request.OverrideWip && !canOverrideWip)
             throw new ValidationException("没有 WIP 强制绕过权限", ErrorCodes.PermissionDenied);
@@ -86,9 +99,9 @@ public sealed class ProjectManagementTaskBatchService(
             finalTasks = await db.Queryable<ProjectManagementTaskEntity>()
                 .Where(item => ids.Contains(item.Id) && !item.IsDeleted)
                 .ToListAsync(cancellationToken);
+            await WriteBatchActivityAsync(request, finalTasks, beforeSnapshots, labelIds, labelNames, now, cancellationToken);
             foreach (var task in finalTasks)
             {
-                await WriteActivityAsync(task, cancellationToken);
                 await WriteSyncAsync(task, cancellationToken);
             }
 
@@ -110,7 +123,27 @@ public sealed class ProjectManagementTaskBatchService(
             .AnyAsync(item => item.Id == milestoneId.Trim() && item.ProjectId == projectId && !item.IsDeleted, cancellationToken))
             throw new ValidationException("里程碑不存在或不属于当前项目");
     }
-    private async Task WriteActivityAsync(ProjectManagementTaskEntity task, CancellationToken cancellationToken) { if (activityWriter is not null) await activityWriter.AppendAsync(new ProjectManagementActivityEvent(Tenant(), App(), "Task", task.Id, "batch.updated", $"批量更新任务 {task.Title}", Activity.Current?.Id ?? Guid.NewGuid().ToString("N"), User(), task.ProjectId), cancellationToken); }
+    private async Task WriteBatchActivityAsync(
+        ProjectManagementTaskBatchUpdateRequest request,
+        IReadOnlyCollection<ProjectManagementTaskEntity> tasks,
+        IReadOnlyDictionary<string, TaskActivitySnapshot> beforeSnapshots,
+        IReadOnlyList<string>? labelIds,
+        IReadOnlyDictionary<string, string> labelNames,
+        DateTime occurredAt,
+        CancellationToken cancellationToken)
+    {
+        if (activityWriter is null) return;
+        var traceId = Activity.Current?.Id ?? Guid.NewGuid().ToString("N");
+        var orderedTasks = request.Items.Select(item => tasks.Single(task => task.Id == item.TaskId)).ToList();
+        var details = orderedTasks.Select(task => new ProjectManagementActivityBatchItem(
+            "Task", task.Id, $"更新任务 {task.Title}",
+            CreateChanges(beforeSnapshots[task.Id], task, labelIds is null ? null : FormatLabels(labelIds, labelNames)))).ToList();
+        await activityWriter.AppendAsync(new ProjectManagementActivityEvent(
+            Tenant(), App(), "TaskBatch", request.ProjectId, "batch.updated", $"批量更新任务（{orderedTasks.Count} 项）",
+            traceId, User(), request.ProjectId, Source: "User",
+            Batch: new ProjectManagementActivityBatch(traceId, orderedTasks.Count, orderedTasks.Count, 0, details),
+            OccurredAt: occurredAt), cancellationToken);
+    }
     private async Task WriteSyncAsync(ProjectManagementTaskEntity task, CancellationToken cancellationToken) { if (syncJournalWriter is not null) await syncJournalWriter.AppendAsync(new ProjectManagementSyncJournalEvent(Tenant(), App(), "Task", task.Id, task.ProjectId, "batch.updated", task.VersionNo, JsonSerializer.Serialize(task), User(), null, Activity.Current?.Id ?? Guid.NewGuid().ToString("N")), cancellationToken); }
     private async Task PublishAsync(ProjectManagementTaskEntity task, CancellationToken cancellationToken) { if (realtimePublisher is not null) await realtimePublisher.PublishInvalidationAsync(new ProjectManagementDataInvalidationEvent(Tenant(), App(), "Task", task.Id, "task.batch-updated", task.VersionNo, Activity.Current?.Id ?? Guid.NewGuid().ToString("N"), task.ProjectId), cancellationToken); }
     private static string RequirePriority(string value) => value.Trim() is "Low" or "Medium" or "High" or "Urgent" ? value.Trim() : throw new ValidationException("任务优先级不受支持");
@@ -120,5 +153,34 @@ public sealed class ProjectManagementTaskBatchService(
         return labelIds;
     }
     private static string? NormalizeOptional(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    private async Task<IReadOnlyDictionary<string, string>> LoadLabelNamesAsync(ISqlSugarClient db, string projectId, IReadOnlyList<string> taskIds, IReadOnlyList<string>? requestedLabelIds, CancellationToken cancellationToken)
+    {
+        if (taskIds.Count == 0 && (requestedLabelIds?.Count ?? 0) == 0) return new Dictionary<string, string>(StringComparer.Ordinal);
+        var existingLabelIds = taskIds.Count == 0
+            ? []
+            : await db.Queryable<ProjectManagementTaskLabelEntity>().Where(item => item.ProjectId == projectId && taskIds.Contains(item.TaskId) && !item.IsDeleted).Select(item => item.LabelId).ToListAsync(cancellationToken);
+        var ids = existingLabelIds.Concat(requestedLabelIds ?? []).Distinct(StringComparer.Ordinal).ToList();
+        if (ids.Count == 0) return new Dictionary<string, string>(StringComparer.Ordinal);
+        return (await db.Queryable<ProjectManagementLabelEntity>().Where(item => item.ProjectId == projectId && ids.Contains(item.Id) && !item.IsDeleted).ToListAsync(cancellationToken))
+            .ToDictionary(item => item.Id, item => item.LabelName, StringComparer.Ordinal);
+    }
+    private static string? FormatLabels(IEnumerable<string> ids, IReadOnlyDictionary<string, string> labelNames)
+    {
+        var values = ids.Select(id => labelNames.TryGetValue(id, out var name) ? name : id).OrderBy(value => value, StringComparer.Ordinal).ToList();
+        return values.Count == 0 ? null : string.Join(", ", values);
+    }
+    private static IReadOnlyList<ProjectManagementActivityFieldChange> CreateChanges(TaskActivitySnapshot before, ProjectManagementTaskEntity after, string? labels) =>
+        ProjectManagementActivityChanges.Collect(
+            ProjectManagementActivityChanges.Create("Status", "状态", before.Status, after.Status),
+            ProjectManagementActivityChanges.Create("Priority", "优先级", before.Priority, after.Priority),
+            ProjectManagementActivityChanges.Create("AssigneeUserId", "负责人", before.AssigneeUserId, after.AssigneeUserId),
+            ProjectManagementActivityChanges.Create("MilestoneId", "里程碑", before.MilestoneId, after.MilestoneId),
+            ProjectManagementActivityChanges.Create("StartDate", "开始日期", before.StartDate, after.StartDate),
+            ProjectManagementActivityChanges.Create("DueDate", "截止日期", before.DueDate, after.DueDate),
+            ProjectManagementActivityChanges.Create("Labels", "标签", before.Labels, labels));
+    private sealed record TaskActivitySnapshot(string Status, string Priority, string? AssigneeUserId, string? MilestoneId, DateTime? StartDate, DateTime? DueDate, string? Labels)
+    {
+        public static TaskActivitySnapshot From(ProjectManagementTaskEntity entity) => new(entity.Status, entity.Priority, entity.AssigneeUserId, entity.MilestoneId, entity.StartDate, entity.DueDate, null);
+    }
     private static ProjectManagementTaskResponse Map(ProjectManagementTaskEntity entity) => new(entity.Id, entity.ProjectId, entity.MilestoneId, entity.ParentTaskId, entity.TaskCode, entity.Title, entity.Description, entity.Status, entity.Priority, entity.AssigneeUserId, entity.AssigneeEmploymentId, entity.StartDate, entity.DueDate, entity.ProgressPercent, entity.Weight, entity.EstimateMinutes, entity.ActualMinutes, entity.SortOrder, entity.Depth, entity.VersionNo, entity.CreatedTime, entity.UpdatedTime);
 }

@@ -67,7 +67,14 @@ public sealed class ProjectManagementTaskReminderService(
             await ProjectManagementMutationTransaction.RunAsync(db, async () =>
             {
                 await db.Insertable(created).ExecuteCommandAsync(cancellationToken);
-                await WriteActivityAsync(task, created.Count == 1 ? "新增任务提醒" : $"新增任务提醒（{created.Count} 位接收人）", "task.reminder.created", cancellationToken);
+                await WriteActivityAsync(
+                    task,
+                    created.Count == 1 ? "新增任务提醒" : $"新增任务提醒（{created.Count} 位接收人）",
+                    "task.reminder.created",
+                    CreateChanges(created),
+                    now,
+                    CreateBatch(created),
+                    cancellationToken);
             });
             await PublishInvalidationAsync(task, "task.reminder.created", cancellationToken);
         }
@@ -81,6 +88,7 @@ public sealed class ProjectManagementTaskReminderService(
         EnsureCanChange(entity);
         EnsureVersion(entity.VersionNo, request.VersionNo);
         if (!string.Equals(entity.Status, "Pending", StringComparison.Ordinal)) throw new ValidationException("只有待触发提醒可以修改");
+        var before = ReminderActivitySnapshot.From(entity);
         var nextVersion = entity.VersionNo + 1;
         var nextAt = NormalizeReminderAt(request.ReminderAt);
         var nextTimeZone = NormalizeTimeZone(request.TimeZoneId);
@@ -99,7 +107,7 @@ public sealed class ProjectManagementTaskReminderService(
         await ProjectManagementMutationTransaction.RunAsync(databaseAccessor.GetCurrentDb(), async () =>
         {
             await databaseAccessor.GetCurrentDb().Updateable(entity).ExecuteCommandAsync(cancellationToken);
-            await WriteActivityAsync(task, "修改任务提醒时间", "task.reminder.updated", cancellationToken);
+            await WriteActivityAsync(task, "修改任务提醒时间", "task.reminder.updated", CreateChanges(before, entity), entity.UpdatedTime ?? DateTime.UtcNow, null, cancellationToken);
         });
         await reminderScheduler.DeleteAsync(previousJobId, cancellationToken);
         await PublishInvalidationAsync(task, "task.reminder.updated", cancellationToken);
@@ -113,6 +121,7 @@ public sealed class ProjectManagementTaskReminderService(
         EnsureCanChange(entity);
         EnsureVersion(entity.VersionNo, versionNo);
         if (!string.Equals(entity.Status, "Pending", StringComparison.Ordinal)) throw new ValidationException("只有待触发提醒可以取消");
+        var before = ReminderActivitySnapshot.From(entity);
         entity.Status = "Canceled";
         entity.VersionNo++;
         entity.UpdatedBy = User();
@@ -120,7 +129,7 @@ public sealed class ProjectManagementTaskReminderService(
         await ProjectManagementMutationTransaction.RunAsync(databaseAccessor.GetCurrentDb(), async () =>
         {
             await databaseAccessor.GetCurrentDb().Updateable(entity).ExecuteCommandAsync(cancellationToken);
-            await WriteActivityAsync(task, "取消任务提醒", "task.reminder.canceled", cancellationToken);
+            await WriteActivityAsync(task, "取消任务提醒", "task.reminder.canceled", CreateChanges(before, entity), entity.UpdatedTime ?? DateTime.UtcNow, null, cancellationToken);
         });
         await reminderScheduler.DeleteAsync(entity.HangfireJobId, cancellationToken);
         await PublishInvalidationAsync(task, "task.reminder.canceled", cancellationToken);
@@ -133,6 +142,7 @@ public sealed class ProjectManagementTaskReminderService(
         EnsureCanChange(entity);
         EnsureVersion(entity.VersionNo, versionNo);
         if (string.Equals(entity.Status, "Pending", StringComparison.Ordinal)) throw new ValidationException("待触发提醒请先取消");
+        var before = ReminderActivitySnapshot.From(entity);
         entity.IsDeleted = true;
         entity.DeletedBy = User();
         entity.DeletedTime = DateTime.UtcNow;
@@ -142,7 +152,7 @@ public sealed class ProjectManagementTaskReminderService(
         await ProjectManagementMutationTransaction.RunAsync(databaseAccessor.GetCurrentDb(), async () =>
         {
             await databaseAccessor.GetCurrentDb().Updateable(entity).ExecuteCommandAsync(cancellationToken);
-            await WriteActivityAsync(task, "删除任务提醒记录", "task.reminder.deleted", cancellationToken);
+            await WriteActivityAsync(task, "删除任务提醒记录", "task.reminder.deleted", CreateChanges(before, entity), entity.UpdatedTime ?? DateTime.UtcNow, null, cancellationToken);
         });
         await reminderScheduler.DeleteAsync(entity.HangfireJobId, cancellationToken);
         await PublishInvalidationAsync(task, "task.reminder.deleted", cancellationToken);
@@ -186,10 +196,20 @@ public sealed class ProjectManagementTaskReminderService(
         throw new ValidationException("只能修改自己创建或接收的提醒", ErrorCodes.PermissionDenied);
     }
 
-    private async Task WriteActivityAsync(ProjectManagementTaskEntity task, string summary, string activityType, CancellationToken cancellationToken)
+    private async Task WriteActivityAsync(
+        ProjectManagementTaskEntity task,
+        string summary,
+        string activityType,
+        IReadOnlyList<ProjectManagementActivityFieldChange> changes,
+        DateTime occurredAt,
+        ProjectManagementActivityBatch? batch,
+        CancellationToken cancellationToken)
     {
         if (activityWriter is null) return;
-        await activityWriter.AppendAsync(new ProjectManagementActivityEvent(Tenant(), App(), "Task", task.Id, activityType, summary, Activity.Current?.Id ?? Guid.NewGuid().ToString("N"), User(), task.ProjectId), cancellationToken);
+        await activityWriter.AppendAsync(new ProjectManagementActivityEvent(
+            Tenant(), App(), "Task", task.Id, activityType, summary,
+            Activity.Current?.Id ?? Guid.NewGuid().ToString("N"), User(), task.ProjectId,
+            Source: "User", FieldChanges: changes, Batch: batch, OccurredAt: occurredAt), cancellationToken);
     }
 
     private async Task PublishInvalidationAsync(ProjectManagementTaskEntity task, string eventType, CancellationToken cancellationToken)
@@ -220,5 +240,34 @@ public sealed class ProjectManagementTaskReminderService(
     private static string Required(string? value, string error, int maximumLength) => !string.IsNullOrWhiteSpace(value) && value.Trim().Length <= maximumLength ? value.Trim() : throw new ValidationException(error);
     private static string BuildIdempotencyKey(string taskId, string recipientUserId, string clientRequestId) => $"reminder:{taskId}:{recipientUserId}:{clientRequestId}";
     private static void EnsureVersion(long current, long requested) { if (requested <= 0 || current != requested) throw new ValidationException("提醒已被其他用户修改，请刷新后重试", ErrorCodes.ApplicationDevelopmentPageRevisionConflict); }
+    private static IReadOnlyList<ProjectManagementActivityFieldChange> CreateChanges(IReadOnlyList<ProjectManagementTaskReminderEntity> reminders) =>
+        ProjectManagementActivityChanges.Collect(
+            ProjectManagementActivityChanges.Create("RecipientUserIds", "接收人", null, string.Join(", ", reminders.Select(item => item.RecipientUserId))),
+            ProjectManagementActivityChanges.Create("ReminderAtUtc", "提醒时间", null, reminders.Count == 1 ? reminders[0].ReminderAtUtc : null),
+            ProjectManagementActivityChanges.Create("TimeZoneId", "时区", null, reminders.Count == 1 ? reminders[0].TimeZoneId : null),
+            ProjectManagementActivityChanges.Create("Note", "提醒备注", null, reminders.Count == 1 ? reminders[0].Note : null, isSensitive: true),
+            ProjectManagementActivityChanges.Create("Status", "状态", null, "Pending"));
+    private static IReadOnlyList<ProjectManagementActivityFieldChange> CreateChanges(ReminderActivitySnapshot before, ProjectManagementTaskReminderEntity after) =>
+        ProjectManagementActivityChanges.Collect(
+            ProjectManagementActivityChanges.Create("ReminderAtUtc", "提醒时间", before.ReminderAtUtc, after.ReminderAtUtc),
+            ProjectManagementActivityChanges.Create("TimeZoneId", "时区", before.TimeZoneId, after.TimeZoneId),
+            ProjectManagementActivityChanges.Create("Note", "提醒备注", before.Note, after.Note, isSensitive: true),
+            ProjectManagementActivityChanges.Create("Status", "状态", before.Status, after.Status),
+            ProjectManagementActivityChanges.Create("IsDeleted", "已删除", before.IsDeleted, after.IsDeleted));
+    private static ProjectManagementActivityBatch? CreateBatch(IReadOnlyList<ProjectManagementTaskReminderEntity> reminders)
+    {
+        if (reminders.Count <= 1) return null;
+        var operationId = $"reminder:{reminders[0].TaskId}:{reminders[0].CreatedTime:O}";
+        return new ProjectManagementActivityBatch(operationId, reminders.Count, reminders.Count, 0,
+            reminders.Select(item => new ProjectManagementActivityBatchItem("TaskReminder", item.Id, $"创建提醒：{item.RecipientUserId}",
+                ProjectManagementActivityChanges.Collect(
+                    ProjectManagementActivityChanges.Create("ReminderAtUtc", "提醒时间", null, item.ReminderAtUtc),
+                    ProjectManagementActivityChanges.Create("TimeZoneId", "时区", null, item.TimeZoneId),
+                    ProjectManagementActivityChanges.Create("Note", "提醒备注", null, item.Note, isSensitive: true)))).ToList());
+    }
+    private sealed record ReminderActivitySnapshot(DateTime ReminderAtUtc, string TimeZoneId, string? Note, string Status, bool IsDeleted)
+    {
+        public static ReminderActivitySnapshot From(ProjectManagementTaskReminderEntity entity) => new(entity.ReminderAtUtc, entity.TimeZoneId, entity.Note, entity.Status, entity.IsDeleted);
+    }
     private static ProjectManagementTaskReminderResponse Map(ProjectManagementTaskReminderEntity entity) => new(entity.Id, entity.ProjectId, entity.TaskId, entity.RecipientUserId, entity.ReminderAtUtc, entity.TimeZoneId, entity.Note, entity.Status, entity.AttemptCount, entity.MaxAttempts, entity.LastAttemptAt, entity.TriggeredAt, entity.LastError, entity.VersionNo, entity.CreatedTime);
 }

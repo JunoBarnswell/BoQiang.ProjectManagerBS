@@ -1,5 +1,7 @@
 namespace AsterERP.Api.Application.ProjectManagement;
 
+using AsterERP.Contracts.ProjectManagement;
+
 public sealed record ProjectManagementActivityEvent(
     string TenantId,
     string AppCode,
@@ -9,4 +11,8 @@ public sealed record ProjectManagementActivityEvent(
     string? Summary,
     string TraceId,
     string ActorUserId,
-    string? ProjectId = null);
+    string? ProjectId = null,
+    string Source = "Business",
+    IReadOnlyList<ProjectManagementActivityFieldChange>? FieldChanges = null,
+    ProjectManagementActivityBatch? Batch = null,
+    DateTime? OccurredAt = null);

@@ -53,7 +53,7 @@ public sealed class ProjectManagementMilestoneService(
         await ProjectManagementMutationTransaction.RunAsync(db, async () =>
         {
             await db.Insertable(entity).ExecuteCommandAsync(cancellationToken);
-            await WriteActivityAsync(entity, "created", $"创建里程碑 {entity.MilestoneName}", cancellationToken);
+            await WriteActivityAsync(entity, "created", $"创建里程碑 {entity.MilestoneName}", CreateChanges(null, entity), now, cancellationToken);
             await WriteSyncJournalAsync(entity, "created", cancellationToken);
         });
         return await MapAsync(entity, cancellationToken);
@@ -65,6 +65,7 @@ public sealed class ProjectManagementMilestoneService(
         await AccessPolicy.EnsureCanManageProjectAsync(projectId, cancellationToken);
         var entity = await GetRequiredAsync(projectId, id, cancellationToken);
         EnsureVersion(entity.VersionNo, request.VersionNo);
+        var before = MilestoneActivitySnapshot.From(entity);
         Validate(request);
         await EnsureOwnerAsync(project, request.OwnerUserId, cancellationToken);
         entity.MilestoneName = NormalizeRequired(request.MilestoneName, "里程碑名称不能为空");
@@ -85,7 +86,7 @@ public sealed class ProjectManagementMilestoneService(
         await ProjectManagementMutationTransaction.RunAsync(db, async () =>
         {
             await db.Updateable(entity).ExecuteCommandAsync(cancellationToken);
-            await WriteActivityAsync(entity, "updated", $"更新里程碑 {entity.MilestoneName}", cancellationToken);
+            await WriteActivityAsync(entity, "updated", $"更新里程碑 {entity.MilestoneName}", CreateChanges(before, entity), entity.UpdatedTime ?? DateTime.UtcNow, cancellationToken);
             await WriteSyncJournalAsync(entity, "updated", cancellationToken);
         });
         return await MapAsync(entity, cancellationToken);
@@ -97,6 +98,7 @@ public sealed class ProjectManagementMilestoneService(
         await AccessPolicy.EnsureCanManageProjectAsync(projectId, cancellationToken);
         var entity = await GetRequiredAsync(projectId, id, cancellationToken);
         EnsureVersion(entity.VersionNo, versionNo);
+        var before = MilestoneActivitySnapshot.From(entity);
         entity.IsDeleted = true;
         entity.DeletedBy = RequireUserId();
         entity.DeletedTime = DateTime.UtcNow;
@@ -107,7 +109,7 @@ public sealed class ProjectManagementMilestoneService(
         await ProjectManagementMutationTransaction.RunAsync(db, async () =>
         {
             await db.Updateable(entity).ExecuteCommandAsync(cancellationToken);
-            await WriteActivityAsync(entity, "deleted", $"删除里程碑 {entity.MilestoneName}", cancellationToken);
+            await WriteActivityAsync(entity, "deleted", $"删除里程碑 {entity.MilestoneName}", CreateChanges(before, entity), entity.UpdatedTime ?? DateTime.UtcNow, cancellationToken);
             await WriteSyncJournalAsync(entity, "deleted", cancellationToken);
         });
     }
@@ -153,10 +155,19 @@ public sealed class ProjectManagementMilestoneService(
     private string RequireAppCode() => currentUser.GetAsterErpAppCode()?.Trim().ToUpperInvariant() ?? throw new ValidationException("当前会话缺少应用");
     private string RequireUserId() => currentUser.GetAsterErpUserId()?.Trim() ?? throw new ValidationException("当前会话缺少用户");
 
-    private async Task WriteActivityAsync(ProjectManagementMilestoneEntity entity, string activityType, string summary, CancellationToken cancellationToken)
+    private async Task WriteActivityAsync(
+        ProjectManagementMilestoneEntity entity,
+        string activityType,
+        string summary,
+        IReadOnlyList<ProjectManagementActivityFieldChange> changes,
+        DateTime occurredAt,
+        CancellationToken cancellationToken)
     {
         if (activityWriter is null) return;
-        await activityWriter.AppendAsync(new ProjectManagementActivityEvent(RequireTenantId(), RequireAppCode(), "Milestone", entity.Id, activityType, summary, Activity.Current?.Id ?? Guid.NewGuid().ToString("N"), RequireUserId(), entity.ProjectId), cancellationToken);
+        await activityWriter.AppendAsync(new ProjectManagementActivityEvent(
+            RequireTenantId(), RequireAppCode(), "Milestone", entity.Id, activityType, summary,
+            Activity.Current?.Id ?? Guid.NewGuid().ToString("N"), RequireUserId(), entity.ProjectId,
+            Source: "User", FieldChanges: changes, OccurredAt: occurredAt), cancellationToken);
     }
 
     private async Task WriteSyncJournalAsync(ProjectManagementMilestoneEntity entity, string operation, CancellationToken cancellationToken)
@@ -167,6 +178,34 @@ public sealed class ProjectManagementMilestoneService(
     private static string NormalizeRequired(string value, string message) => string.IsNullOrWhiteSpace(value) ? throw new ValidationException(message) : value.Trim();
     private static string? NormalizeOptional(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     private static void EnsureVersion(long current, long requested) { if (requested <= 0 || current != requested) throw new ValidationException("里程碑已被其他用户修改，请刷新后重试", ErrorCodes.ApplicationDevelopmentPageRevisionConflict); }
+
+    private static IReadOnlyList<ProjectManagementActivityFieldChange> CreateChanges(MilestoneActivitySnapshot? before, ProjectManagementMilestoneEntity after) =>
+        ProjectManagementActivityChanges.Collect(
+            ProjectManagementActivityChanges.Create("MilestoneName", "里程碑名称", before?.MilestoneName, after.MilestoneName),
+            ProjectManagementActivityChanges.Create("Description", "里程碑描述", before?.Description, after.Description),
+            ProjectManagementActivityChanges.Create("OwnerUserId", "负责人", before?.OwnerUserId, after.OwnerUserId),
+            ProjectManagementActivityChanges.Create("Status", "里程碑状态", before?.Status, after.Status),
+            ProjectManagementActivityChanges.Create("StartDate", "开始日期", before?.StartDate, after.StartDate),
+            ProjectManagementActivityChanges.Create("DueDate", "截止日期", before?.DueDate, after.DueDate),
+            ProjectManagementActivityChanges.Create("ProgressPercent", "进度", before?.ProgressPercent, after.ProgressPercent),
+            ProjectManagementActivityChanges.Create("SortOrder", "排序", before?.SortOrder, after.SortOrder),
+            ProjectManagementActivityChanges.Create("IsDeleted", "已删除", before?.IsDeleted, after.IsDeleted));
+
+    private sealed record MilestoneActivitySnapshot(
+        string MilestoneName,
+        string? Description,
+        string? OwnerUserId,
+        string Status,
+        DateTime? StartDate,
+        DateTime? DueDate,
+        decimal ProgressPercent,
+        int SortOrder,
+        bool IsDeleted)
+    {
+        public static MilestoneActivitySnapshot From(ProjectManagementMilestoneEntity entity) => new(
+            entity.MilestoneName, entity.Description, entity.OwnerUserId, entity.Status, entity.StartDate, entity.DueDate,
+            entity.ProgressPercent, entity.SortOrder, entity.IsDeleted);
+    }
     private async Task<ProjectManagementMilestoneResponse> MapAsync(ProjectManagementMilestoneEntity entity, CancellationToken cancellationToken)
     {
         var tasks = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskEntity>()

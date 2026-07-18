@@ -11,5 +11,9 @@ namespace AsterERP.Api.Controllers;
 public sealed class ProjectManagementActivitiesController(IProjectManagementActivityService service) : BaseApiController
 {
     [HttpGet]
-    public async Task<IActionResult> QueryAsync(string projectId, [FromQuery] int limit = 100, CancellationToken cancellationToken = default) => ApiOk(await service.QueryAsync(projectId, limit, cancellationToken));
+    public async Task<IActionResult> QueryAsync(
+        string projectId,
+        [FromQuery] ProjectManagementActivityQuery query,
+        CancellationToken cancellationToken = default)
+        => ApiOk(await service.QueryAsync(projectId, query, cancellationToken));
 }

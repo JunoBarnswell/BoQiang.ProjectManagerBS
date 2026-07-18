@@ -68,10 +68,16 @@ public sealed class ProjectManagementTaskBatchServiceTests
         await service.UpdateAsync(new ProjectManagementTaskBatchUpdateRequest(
             "project-a", [new("task-a", 1), new("task-b", 1)], Priority: "High"));
 
-        Assert.Equal(2, await db.Queryable<ProjectManagementActivityEntity>().CountAsync());
+        Assert.Equal(1, await db.Queryable<ProjectManagementActivityEntity>().CountAsync());
         Assert.Equal(2, await db.Queryable<ProjectManagementSyncJournalEntity>().CountAsync());
+        var timeline = await new ProjectManagementActivityService(accessor, user)
+            .QueryAsync("project-a", new ProjectManagementActivityQuery());
+        var activity = Assert.Single(timeline.Items);
+        Assert.Equal("TaskBatch", activity.AggregateType);
+        Assert.Equal(2, activity.Batch!.TotalCount);
+        Assert.Equal(2, activity.Batch.Details!.Count);
         Assert.Equal(2, publisher.ObservedCommittedSideEffects.Count);
-        Assert.All(publisher.ObservedCommittedSideEffects, item => Assert.Equal((2, 2), item));
+        Assert.All(publisher.ObservedCommittedSideEffects, item => Assert.Equal((1, 2), item));
     }
 
     [Fact]
@@ -190,7 +196,7 @@ public sealed class ProjectManagementTaskBatchServiceTests
 
     private static FixedAsterErpCurrentUser CreateUser() => new(new ClaimsPrincipal(new ClaimsIdentity(new[]
     {
-        new Claim(AsterErpClaimTypes.UserId, "operator"), new Claim(AsterErpClaimTypes.TenantId, "tenant-a"), new Claim(AsterErpClaimTypes.AppCode, "MES")
+        new Claim(AsterErpClaimTypes.UserId, "operator"), new Claim(AsterErpClaimTypes.TenantId, "tenant-a"), new Claim(AsterErpClaimTypes.AppCode, "SYSTEM")
     }, "test")));
     private sealed class TestWorkspaceDatabaseAccessor(ISqlSugarClient db) : IWorkspaceDatabaseAccessor
     {

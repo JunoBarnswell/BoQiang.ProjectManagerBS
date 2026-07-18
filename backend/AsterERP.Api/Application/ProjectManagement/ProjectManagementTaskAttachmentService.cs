@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using AsterERP.Api.Infrastructure.Database;
 using AsterERP.Api.Infrastructure.Security;
 using AsterERP.Api.Modules.ProjectManagement;
@@ -14,7 +15,8 @@ public sealed class ProjectManagementTaskAttachmentService(
     ICurrentUser currentUser,
     IProjectManagementFileStore fileStore,
     ProjectManagementAccessPolicy accessPolicy,
-    IProjectManagementRealtimePublisher? realtimePublisher = null) : IProjectManagementTaskAttachmentService
+    IProjectManagementRealtimePublisher? realtimePublisher = null,
+    IProjectManagementActivityWriter? activityWriter = null) : IProjectManagementTaskAttachmentService
 {
     public async Task<IReadOnlyList<ProjectManagementTaskAttachmentResponse>> QueryAsync(string taskId, CancellationToken cancellationToken = default)
     {
@@ -39,7 +41,11 @@ public sealed class ProjectManagementTaskAttachmentService(
         };
         try
         {
-            await databaseAccessor.GetCurrentDb().Insertable(entity).ExecuteCommandAsync(cancellationToken);
+            await ProjectManagementMutationTransaction.RunAsync(databaseAccessor.GetCurrentDb(), async () =>
+            {
+                await databaseAccessor.GetCurrentDb().Insertable(entity).ExecuteCommandAsync(cancellationToken);
+                await WriteActivityAsync(task, entity, "attachment.created", $"上传附件 {entity.FileName}", CreateChanges(null, entity), entity.CreatedTime, cancellationToken);
+            });
         }
         catch
         {
@@ -73,8 +79,13 @@ public sealed class ProjectManagementTaskAttachmentService(
         await accessPolicy.EnsureCanManageTaskAsync(task.ProjectId, task.AssigneeUserId, cancellationToken);
         var entity = await FindAsync(task.Id, id, cancellationToken);
         if (entity.VersionNo != versionNo) throw new ValidationException("附件已被其他用户修改，请刷新后重试", ErrorCodes.ApplicationDevelopmentPageRevisionConflict);
+        var before = AttachmentActivitySnapshot.From(entity);
         entity.IsDeleted = true; entity.DeletedBy = User(); entity.DeletedTime = DateTime.UtcNow; entity.UpdatedBy = User(); entity.UpdatedTime = entity.DeletedTime; entity.VersionNo++;
-        await databaseAccessor.GetCurrentDb().Updateable(entity).ExecuteCommandAsync(cancellationToken);
+        await ProjectManagementMutationTransaction.RunAsync(databaseAccessor.GetCurrentDb(), async () =>
+        {
+            await databaseAccessor.GetCurrentDb().Updateable(entity).ExecuteCommandAsync(cancellationToken);
+            await WriteActivityAsync(task, entity, "attachment.deleted", $"删除附件 {entity.FileName}", CreateChanges(before, entity), entity.UpdatedTime ?? DateTime.UtcNow, cancellationToken);
+        });
         await PublishInvalidationAsync(task, entity, "attachment.deleted", cancellationToken);
         // 附件是可恢复的业务对象；物理文件交由回收站/垃圾清理作业处理，避免数据库更新成功后文件删除失败导致状态不一致。
     }
@@ -90,6 +101,31 @@ public sealed class ProjectManagementTaskAttachmentService(
     {
         if (realtimePublisher is null) return;
         await realtimePublisher.PublishInvalidationAsync(new ProjectManagementDataInvalidationEvent(Tenant(), App(), "TaskAttachment", attachment.Id, eventType, attachment.VersionNo, Guid.NewGuid().ToString("N"), task.ProjectId), cancellationToken);
+    }
+    private async Task WriteActivityAsync(
+        ProjectManagementTaskEntity task,
+        ProjectManagementTaskAttachmentEntity attachment,
+        string activityType,
+        string summary,
+        IReadOnlyList<ProjectManagementActivityFieldChange> changes,
+        DateTime occurredAt,
+        CancellationToken cancellationToken)
+    {
+        if (activityWriter is null) return;
+        await activityWriter.AppendAsync(new ProjectManagementActivityEvent(
+            Tenant(), App(), "TaskAttachment", attachment.Id, activityType, summary,
+            Activity.Current?.Id ?? Guid.NewGuid().ToString("N"), User(), task.ProjectId,
+            Source: "User", FieldChanges: changes, OccurredAt: occurredAt), cancellationToken);
+    }
+    private static IReadOnlyList<ProjectManagementActivityFieldChange> CreateChanges(AttachmentActivitySnapshot? before, ProjectManagementTaskAttachmentEntity after) =>
+        ProjectManagementActivityChanges.Collect(
+            ProjectManagementActivityChanges.Create("FileName", "附件名称", before?.FileName, after.FileName),
+            ProjectManagementActivityChanges.Create("ContentType", "文件类型", before?.ContentType, after.ContentType),
+            ProjectManagementActivityChanges.Create("FileSize", "文件大小", before?.FileSize, after.FileSize),
+            ProjectManagementActivityChanges.Create("IsDeleted", "已删除", before?.IsDeleted, after.IsDeleted));
+    private sealed record AttachmentActivitySnapshot(string FileName, string ContentType, long FileSize, bool IsDeleted)
+    {
+        public static AttachmentActivitySnapshot From(ProjectManagementTaskAttachmentEntity entity) => new(entity.FileName, entity.ContentType, entity.FileSize, entity.IsDeleted);
     }
     private ProjectManagementTaskAttachmentResponse Map(ProjectManagementTaskAttachmentEntity item) => new(item.Id, item.ProjectId, item.TaskId, item.FileId, item.FileName, item.ContentType, item.FileSize, $"/api/project-management/tasks/{item.TaskId}/attachments/{item.Id}/download", $"/api/system/files/{Uri.EscapeDataString(item.FileId)}/preview", item.UploadedByUserId, item.CreatedTime, item.VersionNo);
     private string Tenant() => currentUser.GetAsterErpTenantId()?.Trim() ?? throw new ValidationException("当前会话缺少租户", ErrorCodes.PermissionDenied);
