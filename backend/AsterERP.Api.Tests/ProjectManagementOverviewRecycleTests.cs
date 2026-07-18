@@ -247,8 +247,10 @@ public sealed class ProjectManagementOverviewRecycleTests
         var accessor = new TestWorkspaceDatabaseAccessor(db);
         var user = CreateUser("operator", PermissionCodes.ProjectManagementTaskPurge);
         var files = new RecordingFileStore();
+        var pendingDeletes = new RecordingPurgeFileDeletionService();
+        var jobs = new RecordingBackgroundJobManager();
         var operations = new RecordingOperationWriter();
-        var service = new ProjectManagementRecycleService(accessor, user, riskConfirmation: new AcceptRiskConfirmation(), maintenanceLock: new TestMaintenanceLock(), operationWriter: operations, fileStore: files);
+        var service = new ProjectManagementRecycleService(accessor, user, riskConfirmation: new AcceptRiskConfirmation(), maintenanceLock: new TestMaintenanceLock(), operationWriter: operations, fileStore: files, purgeFileDeletionService: pendingDeletes, backgroundJobManager: jobs);
 
         await service.PurgeTaskAsync("predecessor", new ProjectManagementRecycleTaskPurgeRequest(1, "secret", true));
 
@@ -257,8 +259,31 @@ public sealed class ProjectManagementOverviewRecycleTests
         Assert.Empty(await db.Queryable<ProjectManagementTaskCommentEntity>().Where(item => item.TaskId == "predecessor").ToListAsync());
         Assert.Empty(await db.Queryable<ProjectManagementTaskAttachmentEntity>().Where(item => item.TaskId == "predecessor").ToListAsync());
         Assert.Empty(await db.Queryable<ProjectManagementTaskReminderEntity>().Where(item => item.TaskId == "predecessor").ToListAsync());
-        Assert.Equal(["file-1"], files.DeletedFileIds);
+        Assert.Empty(files.DeletedFileIds);
+        Assert.Equal(["file-1"], pendingDeletes.ScheduledFileIds);
+        Assert.Single(jobs.Args);
         Assert.Single(operations.CompletedImpacts);
+    }
+
+    [Fact]
+    public async Task Purge_task_database_rollback_keeps_attachment_and_does_not_queue_or_delete_blob()
+    {
+        using var db = CreateDb();
+        await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
+        await db.Insertable(new ProjectManagementProjectEntity { Id = "project-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "A", ProjectName = "A", OwnerUserId = "operator" }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementTaskEntity { Id = "task-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", TaskCode = "T", Title = "task", IsDeleted = true }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementTaskAttachmentEntity { Id = "attachment", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", TaskId = "task-a", FileId = "file-1", FileName = "proof.txt" }).ExecuteCommandAsync();
+        db.Ado.ExecuteCommand("CREATE TRIGGER fail_purge_task BEFORE DELETE ON pm_tasks BEGIN SELECT RAISE(ABORT, 'forced rollback'); END;");
+        var accessor = new TestWorkspaceDatabaseAccessor(db);
+        var user = CreateUser("operator", PermissionCodes.ProjectManagementTaskPurge);
+        var files = new RecordingFileStore();
+        var service = new ProjectManagementRecycleService(accessor, user, riskConfirmation: new AcceptRiskConfirmation(), maintenanceLock: new TestMaintenanceLock(), fileStore: files, purgeFileDeletionService: new ProjectManagementPurgeFileDeletionService(accessor, user, files), backgroundJobManager: new RecordingBackgroundJobManager());
+
+        await Assert.ThrowsAnyAsync<Exception>(() => service.PurgeTaskAsync("task-a", new ProjectManagementRecycleTaskPurgeRequest(1, "secret", true)));
+
+        Assert.Single(await db.Queryable<ProjectManagementTaskAttachmentEntity>().Where(item => item.Id == "attachment").ToListAsync());
+        Assert.Empty(await db.Queryable<ProjectManagementPurgeFileDeletionEntity>().ToListAsync());
+        Assert.Empty(files.DeletedFileIds);
     }
 
     private static SqlSugarClient CreateDb() => new(new ConnectionConfig
@@ -313,6 +338,27 @@ public sealed class ProjectManagementOverviewRecycleTests
         public Task DeleteAsync(string fileId, CancellationToken cancellationToken = default) { DeletedFileIds.Add(fileId); return Task.CompletedTask; }
         public Task<Stream> OpenReadAsync(string fileId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<ProjectManagementStoredFile> StoreAsync(Microsoft.AspNetCore.Http.IFormFile file, ProjectManagementFileUploadContext context, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
+    private sealed class RecordingPurgeFileDeletionService : IProjectManagementPurgeFileDeletionService
+    {
+        public List<string> ScheduledFileIds { get; } = [];
+        public Task ScheduleAsync(ISqlSugarClient db, string operationId, IReadOnlyCollection<ProjectManagementTaskAttachmentEntity> attachments, CancellationToken cancellationToken = default)
+        {
+            ScheduledFileIds.AddRange(attachments.Select(item => item.FileId));
+            return Task.CompletedTask;
+        }
+        public Task<bool> TryProcessAsync(string operationId, CancellationToken cancellationToken = default) => Task.FromResult(false);
+    }
+
+    private sealed class RecordingBackgroundJobManager : Volo.Abp.BackgroundJobs.IBackgroundJobManager
+    {
+        public List<ProjectManagementOperationJobArgs> Args { get; } = [];
+        public Task<string> EnqueueAsync<TArgs>(TArgs args, Volo.Abp.BackgroundJobs.BackgroundJobPriority priority = Volo.Abp.BackgroundJobs.BackgroundJobPriority.Normal, TimeSpan? delay = null)
+        {
+            if (args is ProjectManagementOperationJobArgs operationArgs) Args.Add(operationArgs);
+            return Task.FromResult(Guid.NewGuid().ToString("N"));
+        }
     }
 
     private sealed class RecordingOperationWriter : IProjectManagementOperationWriter

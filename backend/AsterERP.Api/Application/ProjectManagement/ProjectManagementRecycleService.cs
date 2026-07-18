@@ -7,6 +7,7 @@ using AsterERP.Shared.Exceptions;
 using SqlSugar;
 using System.Diagnostics;
 using System.Text.Json;
+using Volo.Abp.BackgroundJobs;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Users;
 
@@ -27,7 +28,9 @@ public sealed class ProjectManagementRecycleService(
     IProjectManagementOperationWriter? operationWriter = null,
     IProjectManagementTaskDependencyService? dependencyService = null,
     IProjectManagementFileStore? fileStore = null,
-    IProjectManagementReversibleCommandWriter? reversibleCommandWriter = null) : IProjectManagementRecycleService, ITransientDependency
+    IProjectManagementReversibleCommandWriter? reversibleCommandWriter = null,
+    IProjectManagementPurgeFileDeletionService? purgeFileDeletionService = null,
+    IBackgroundJobManager? backgroundJobManager = null) : IProjectManagementRecycleService, ITransientDependency
 {
     public async Task<ProjectManagementRecycleResponse> QueryAsync(ProjectManagementRecycleQuery query, CancellationToken cancellationToken = default)
     {
@@ -173,7 +176,7 @@ public sealed class ProjectManagementRecycleService(
         var taskIds = targets.Select(item => item.Id).ToList();
         var db = databaseAccessor.GetCurrentDb();
         var impact = await GetPurgeImpactAsync(entity.ProjectId, taskIds, cancellationToken);
-        var blockingReason = impact.AttachmentCount > 0 && fileStore is null ? "附件文件生命周期服务未配置，不能安全永久删除" : null;
+        var blockingReason = impact.AttachmentCount > 0 && (fileStore is null || purgeFileDeletionService is null || backgroundJobManager is null) ? "附件延后删除服务未配置，不能安全永久删除" : null;
         return new ProjectManagementRecycleTaskPurgePreviewResponse(entity.Id, entity.ProjectId, entity.TaskCode, entity.Title, entity.VersionNo, taskIds.Count, impact.DependencyCount, impact,
             blockingReason is null, blockingReason,
             "任务及子树的关系、评论、附件、提醒和同步记录将一并永久清理；操作不可撤销，结果会保留在不可变操作审计中。");
@@ -201,15 +204,16 @@ public sealed class ProjectManagementRecycleService(
             var targets = await LoadPurgeTaskTargetsAsync(entity, request.PurgeDescendants, cancellationToken);
             var taskIds = targets.Select(item => item.Id).ToList();
             var attachments = await LoadAttachmentsAsync(entity.ProjectId, taskIds, cancellationToken);
-            await DeleteAttachmentFilesAsync(attachments, cancellationToken);
             var db = databaseAccessor.GetCurrentDb();
             var affected = 0;
             await ProjectManagementMutationTransaction.RunAsync(db, async () =>
             {
+                await ScheduleAttachmentDeletionAsync(db, operationId, attachments, cancellationToken);
                 affected = await DeleteTaskTreeAsync(db, entity.ProjectId, taskIds, cancellationToken);
             });
             if (affected != targets.Count) throw new ValidationException("任务永久删除过程中检测到并发变更，请刷新后重试", ErrorCodes.ApplicationDevelopmentPageRevisionConflict);
             if (operationWriter is not null) await operationWriter.CompleteWithImpactAsync(operationId, JsonSerializer.Serialize(confirmation), cancellationToken);
+            await EnqueueAttachmentDeletionAsync(operationId, attachments.Count, cancellationToken);
         }
         catch (Exception exception)
         {
@@ -227,7 +231,7 @@ public sealed class ProjectManagementRecycleService(
         await EnsureCanPurgeProjectAsync(entity.Id, PermissionCodes.ProjectManagementProjectPurge, cancellationToken);
         EnsureVersion(entity.VersionNo, versionNo);
         var impact = await GetPurgeImpactAsync(id, null, cancellationToken);
-        var blockingReason = impact.AttachmentCount > 0 && fileStore is null ? "附件文件生命周期服务未配置，不能安全永久删除" : null;
+        var blockingReason = impact.AttachmentCount > 0 && (fileStore is null || purgeFileDeletionService is null || backgroundJobManager is null) ? "附件延后删除服务未配置，不能安全永久删除" : null;
         return new ProjectManagementRecyclePurgePreviewResponse(entity.Id, entity.ProjectCode, entity.ProjectName, entity.VersionNo, impact.MemberCount, impact.MilestoneCount, impact.TaskCount, impact,
             blockingReason is null, blockingReason, "项目、任务树及全部关联数据都会永久清理且不可撤销；操作结果将作为不可变审计保留。");
     }
@@ -251,15 +255,16 @@ public sealed class ProjectManagementRecycleService(
                 started = true;
             }
             var attachments = await LoadAttachmentsAsync(id, null, cancellationToken);
-            await DeleteAttachmentFilesAsync(attachments, cancellationToken);
             var db = databaseAccessor.GetCurrentDb();
             var affected = 0;
             await ProjectManagementMutationTransaction.RunAsync(db, async () =>
             {
+                await ScheduleAttachmentDeletionAsync(db, operationId, attachments, cancellationToken);
                 affected = await DeleteProjectGraphAsync(db, id, request.VersionNo, cancellationToken);
             });
             if (affected != 1) throw new ValidationException("对象已被其他用户修改，请刷新后重试", ErrorCodes.ApplicationDevelopmentPageRevisionConflict);
             if (operationWriter is not null) await operationWriter.CompleteWithImpactAsync(operationId, JsonSerializer.Serialize(confirmation), cancellationToken);
+            await EnqueueAttachmentDeletionAsync(operationId, attachments.Count, cancellationToken);
         }
         catch (Exception exception)
         {
@@ -320,15 +325,18 @@ public sealed class ProjectManagementRecycleService(
         return await query.ToListAsync(cancellationToken);
     }
 
-    private async Task DeleteAttachmentFilesAsync(IReadOnlyCollection<ProjectManagementTaskAttachmentEntity> attachments, CancellationToken cancellationToken)
+    private async Task ScheduleAttachmentDeletionAsync(ISqlSugarClient db, string operationId, IReadOnlyCollection<ProjectManagementTaskAttachmentEntity> attachments, CancellationToken cancellationToken)
     {
         if (attachments.Count == 0) return;
-        if (fileStore is null) throw new ValidationException("附件文件生命周期服务未配置，不能安全永久删除");
-        foreach (var fileId in attachments.Select(item => item.FileId).Where(item => !string.IsNullOrWhiteSpace(item)).Distinct(StringComparer.Ordinal))
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            await fileStore.DeleteAsync(fileId, cancellationToken);
-        }
+        if (purgeFileDeletionService is null) throw new ValidationException("附件延后删除服务未配置，不能安全永久删除");
+        await purgeFileDeletionService.ScheduleAsync(db, operationId, attachments, cancellationToken);
+    }
+
+    private async Task EnqueueAttachmentDeletionAsync(string operationId, int attachmentCount, CancellationToken cancellationToken)
+    {
+        if (attachmentCount == 0) return;
+        if (backgroundJobManager is null) throw new ValidationException("附件延后删除作业未配置，不能安全永久删除");
+        await backgroundJobManager.EnqueueAsync(new ProjectManagementOperationJobArgs(operationId, RequireTenantId(), RequireAppCode(), RequireUserId(), Activity.Current?.Id ?? operationId));
     }
 
     private async Task<int> DeleteTaskTreeAsync(ISqlSugarClient db, string projectId, IReadOnlyCollection<string> taskIds, CancellationToken cancellationToken)
