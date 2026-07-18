@@ -17,6 +17,10 @@ public sealed class ProjectManagementTaskTimeLogsController(IProjectManagementTa
     [Permission(PermissionCodes.ProjectManagementTaskEdit)]
     public async Task<IActionResult> CreateAsync(string taskId, [FromBody] ProjectManagementTaskTimeLogUpsertRequest request, CancellationToken cancellationToken) => ApiOk(await service.CreateAsync(taskId, request, cancellationToken));
 
+    [HttpPut("{id}")]
+    [Permission(PermissionCodes.ProjectManagementTaskEdit)]
+    public async Task<IActionResult> UpdateAsync(string taskId, string id, [FromBody] ProjectManagementTaskTimeLogUpdateRequest request, CancellationToken cancellationToken) => ApiOk(await service.UpdateAsync(taskId, id, request, cancellationToken));
+
     [HttpDelete("{id}")]
     [Permission(PermissionCodes.ProjectManagementTaskEdit)]
     public async Task<IActionResult> DeleteAsync(string taskId, string id, [FromQuery] long versionNo, CancellationToken cancellationToken)
@@ -24,4 +28,8 @@ public sealed class ProjectManagementTaskTimeLogsController(IProjectManagementTa
         await service.DeleteAsync(taskId, id, versionNo, cancellationToken);
         return ApiOk(new { id });
     }
+
+    [HttpGet("/api/project-management/workloads")]
+    public async Task<IActionResult> QueryWorkloadAsync([FromQuery] ProjectManagementTaskWorkloadQuery query, CancellationToken cancellationToken) =>
+        ApiOk(await service.QueryWorkloadAsync(query, cancellationToken));
 }
