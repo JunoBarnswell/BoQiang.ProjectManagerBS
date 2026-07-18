@@ -21,6 +21,7 @@ import type {
   ProjectManagementAuditQuery,
   ProjectManagementOperationPage,
   ProjectManagementOperationQuery,
+  ProjectManagementOperation,
   ProjectManagementBackup,
   ProjectManagementBackupRestorePreview,
   ProjectManagementRecyclePurgePreview,
@@ -580,6 +581,21 @@ export function getProjectManagementOperations(
   return httpClient.get<ProjectManagementOperationPage>(
     `/project-management/audit/operations${buildQueryString(query)}`,
   );
+}
+
+export function getProjectManagementOperation(
+  id: string,
+  signal?: AbortSignal,
+): Promise<ApiEnvelope<ProjectManagementOperation>> {
+  return httpClient.get<ProjectManagementOperation>(`/project-management/operations/${id}`, undefined, signal);
+}
+
+export function startProjectManagementWorkspaceValidation(): Promise<ApiEnvelope<ProjectManagementOperation>> {
+  return httpClient.post<ProjectManagementOperation, undefined>("/project-management/operations/maintenance/workspace-validation", undefined);
+}
+
+export function cancelProjectManagementOperation(id: string): Promise<ApiEnvelope<ProjectManagementOperation>> {
+  return httpClient.post<ProjectManagementOperation, undefined>(`/project-management/operations/${id}/cancel`, undefined);
 }
 
 export function exportProjectManagementAudit(

@@ -48,7 +48,8 @@ public sealed class ProjectManagementAuditService(
     {
         RequireTenant();
         RequireApp();
-        var operationQuery = databaseAccessor.GetCurrentDb().Queryable<ProjectManagementOperationEntity>().Where(item => !item.IsDeleted);
+        var operationQuery = databaseAccessor.GetCurrentDb().Queryable<ProjectManagementOperationEntity>()
+            .Where(item => item.ActorUserId == RequireUser() && !item.IsDeleted);
         if (!string.IsNullOrWhiteSpace(query.OperationType)) operationQuery = operationQuery.Where(item => item.OperationType == query.OperationType.Trim());
         if (!string.IsNullOrWhiteSpace(query.Status)) operationQuery = operationQuery.Where(item => item.Status == query.Status.Trim());
         var total = new RefAsync<int>();
@@ -57,7 +58,7 @@ public sealed class ProjectManagementAuditService(
         return new GridPageResult<ProjectManagementOperationItem>
         {
             Total = total.Value,
-            Items = rows.Select(item => new ProjectManagementOperationItem(item.Id, item.OperationType, item.Status, item.ImpactJson, item.ErrorMessage, item.TraceId, item.ActorUserId, item.StartedTime, item.CompletedTime)).ToList()
+            Items = rows.Select(item => new ProjectManagementOperationItem(item.Id, item.OperationType, item.Status, item.Phase, item.ProgressPercent, item.IsCancellationRequested, item.ImpactJson, item.ErrorMessage, item.TraceId, item.ActorUserId, item.StartedTime, item.CompletedTime)).ToList()
         };
     }
 
@@ -85,6 +86,7 @@ public sealed class ProjectManagementAuditService(
 
     private string RequireTenant() => currentUser.GetAsterErpTenantId()?.Trim() ?? throw new ValidationException("当前会话缺少租户", ErrorCodes.PermissionDenied);
     private string RequireApp() => currentUser.GetAsterErpAppCode()?.Trim() ?? throw new ValidationException("当前会话缺少应用", ErrorCodes.PermissionDenied);
+    private string RequireUser() => currentUser.GetAsterErpUserId()?.Trim() ?? throw new ValidationException("当前会话缺少用户", ErrorCodes.PermissionDenied);
     private static ProjectManagementAuditItem Map(ProjectManagementActivityEntity entity) => new(entity.Id, entity.ProjectId, entity.AggregateType, entity.AggregateId, entity.ActivityType, entity.Summary, entity.TraceId, entity.ActorUserId, entity.CreatedTime);
     private static string Escape(string? value) => $"\"{(value ?? string.Empty).Replace("\"", "\"\"")}\"";
 }

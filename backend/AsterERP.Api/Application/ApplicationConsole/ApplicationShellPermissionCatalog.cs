@@ -57,6 +57,8 @@ public static class ApplicationShellPermissionCatalog
         new("ProjectManagement", SharedPermissionCodes.ProjectManagementBackupManage, "项目数据备份恢复"),
         new("ProjectManagement", SharedPermissionCodes.ProjectManagementAuditView, "项目审计查看"),
         new("ProjectManagement", SharedPermissionCodes.ProjectManagementAuditExport, "项目审计导出"),
+        new("ProjectManagement", SharedPermissionCodes.ProjectManagementOperationView, "项目长任务查看"),
+        new("ProjectManagement", SharedPermissionCodes.ProjectManagementOperationManage, "项目长任务维护"),
 
         new("IM", SharedPermissionCodes.ImConversationView, "IM 会话查看"),
         new("IM", SharedPermissionCodes.ImConversationCreate, "IM 会话创建"),

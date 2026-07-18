@@ -321,12 +321,27 @@ CREATE TABLE IF NOT EXISTS pm_backups (
 );
 CREATE TABLE IF NOT EXISTS pm_operations (
     Id TEXT NOT NULL PRIMARY KEY, TenantId TEXT NOT NULL, AppCode TEXT NOT NULL, OperationType TEXT NOT NULL,
-    Status TEXT NOT NULL, ImpactJson TEXT NOT NULL, ErrorMessage TEXT NULL, TraceId TEXT NOT NULL,
+    Status TEXT NOT NULL, Phase TEXT NOT NULL DEFAULT 'Pending', ProgressPercent INTEGER NOT NULL DEFAULT 0, VersionNo INTEGER NOT NULL DEFAULT 1,
+    IsCancellationRequested INTEGER NOT NULL DEFAULT 0, CancellationRequestedTime TEXT NULL, CancellationRequestedBy TEXT NULL,
+    ImpactJson TEXT NOT NULL, ErrorMessage TEXT NULL, TraceId TEXT NOT NULL,
     ActorUserId TEXT NOT NULL, StartedTime TEXT NOT NULL, CompletedTime TEXT NULL,
     CreatedBy TEXT NULL, CreatedTime TEXT NOT NULL, UpdatedBy TEXT NULL, UpdatedTime TEXT NULL,
     DeletedBy TEXT NULL, DeletedTime TEXT NULL, IsDeleted INTEGER NOT NULL DEFAULT 0, Remark TEXT NULL
 );
+CREATE TABLE IF NOT EXISTS pm_operation_events (
+    Id TEXT NOT NULL PRIMARY KEY, TenantId TEXT NOT NULL, AppCode TEXT NOT NULL, OperationId TEXT NOT NULL,
+    Status TEXT NOT NULL, Phase TEXT NOT NULL, ProgressPercent INTEGER NOT NULL DEFAULT 0,
+    IsCancellationRequested INTEGER NOT NULL DEFAULT 0, TraceId TEXT NOT NULL, ActorUserId TEXT NOT NULL,
+    CreatedBy TEXT NULL, CreatedTime TEXT NOT NULL, UpdatedBy TEXT NULL, UpdatedTime TEXT NULL,
+    DeletedBy TEXT NULL, DeletedTime TEXT NULL, IsDeleted INTEGER NOT NULL DEFAULT 0, Remark TEXT NULL
+);
 """);
+        schema.EnsureColumn("pm_operations", "Phase", "TEXT NOT NULL DEFAULT 'Pending'");
+        schema.EnsureColumn("pm_operations", "ProgressPercent", "INTEGER NOT NULL DEFAULT 0");
+        schema.EnsureColumn("pm_operations", "VersionNo", "INTEGER NOT NULL DEFAULT 1");
+        schema.EnsureColumn("pm_operations", "IsCancellationRequested", "INTEGER NOT NULL DEFAULT 0");
+        schema.EnsureColumn("pm_operations", "CancellationRequestedTime", "TEXT NULL");
+        schema.EnsureColumn("pm_operations", "CancellationRequestedBy", "TEXT NULL");
         schema.EnsureColumn("pm_notifications", "ProjectId", "TEXT NULL");
         schema.EnsureColumn("pm_notifications", "TaskId", "TEXT NULL");
         schema.EnsureColumn("pm_task_comments", "MentionUserIdsJson", "TEXT NULL");
@@ -375,6 +390,7 @@ CREATE TABLE IF NOT EXISTS pm_operations (
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_maintenance_locks_expiry ON pm_maintenance_locks(TenantId, AppCode, ExpiresAt, IsDeleted);");
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_backups_created ON pm_backups(TenantId, AppCode, CreatedTime, IsDeleted);");
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_operations_status_time ON pm_operations(TenantId, AppCode, Status, StartedTime, IsDeleted);");
+        schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_operation_events_operation_time ON pm_operation_events(TenantId, AppCode, OperationId, CreatedTime, IsDeleted);");
     }
 
     private static void NormalizeTaskSiblingOrdering(SqliteSchemaExecutor schema)
