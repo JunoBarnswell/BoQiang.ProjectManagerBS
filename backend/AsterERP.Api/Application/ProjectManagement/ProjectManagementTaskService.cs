@@ -33,6 +33,7 @@ public sealed class ProjectManagementTaskService(
 
     public async Task<GridPageResult<ProjectManagementTaskListItemResponse>> QueryAsync(ProjectManagementTaskQuery query, CancellationToken cancellationToken = default)
     {
+        query = ProjectManagementTaskQueryProtocol.Normalize(query);
         await EnsureProjectAsync(query.ProjectId, cancellationToken);
         await AccessPolicy.EnsureCanViewProjectAsync(query.ProjectId, cancellationToken);
         var keyword = NormalizeOptional(query.Keyword);
@@ -41,8 +42,6 @@ public sealed class ProjectManagementTaskService(
         var labelFilter = ProjectManagementTaskLabelFilterQuery.Normalize(query.LabelFilter);
         var tenantId = RequireTenantId();
         var appCode = RequireAppCode();
-        EnsureViewProtocol(query);
-        ValidateQuery(query, status);
         var taskQuery = databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskEntity>()
             .Where(item => item.ProjectId == query.ProjectId && !item.IsDeleted);
         if (!string.IsNullOrWhiteSpace(keyword))
@@ -851,13 +850,6 @@ public sealed class ProjectManagementTaskService(
     private static decimal ResolveProgressWeight(decimal? explicitWeight, int? estimateMinutes) =>
         explicitWeight ?? (estimateMinutes is > 0 ? estimateMinutes.Value : 1m);
 
-    private static void ValidateQuery(ProjectManagementTaskQuery query, string? status)
-    {
-        if (status is not null) ProjectManagementDomainRules.RequireTaskStatus(status);
-        if (query.DueFrom.HasValue && query.DueTo.HasValue && query.DueFrom > query.DueTo)
-            throw new ValidationException("任务截止日期筛选区间无效");
-    }
-
     private static string NormalizePriority(string value) => Priorities.Contains(value.Trim(), StringComparer.Ordinal) ? value.Trim() : throw new ValidationException("任务优先级不受支持");
     private static bool IsForceStarted(string? blockedReason) => blockedReason?.StartsWith("已强制开始：", StringComparison.Ordinal) == true;
     private string RequireTenantId() => currentUser.GetAsterErpTenantId()?.Trim() ?? throw new ValidationException("当前会话缺少租户");
@@ -881,13 +873,6 @@ public sealed class ProjectManagementTaskService(
     }
     private static void EnsureVersion(long current, long requested) { if (requested <= 0 || current != requested) throw new ValidationException("任务已被其他用户修改，请刷新后重试", ErrorCodes.ApplicationDevelopmentPageRevisionConflict); }
     private sealed record ProjectManagementWipOverrideDecision(int Limit, int InProgressCount, string Reason);
-    private static void EnsureViewProtocol(ProjectManagementTaskQuery query)
-    {
-        if (!new[] { "tree", "list", "card", "board", "gantt", "calendar" }.Contains(query.ViewKey, StringComparer.OrdinalIgnoreCase)) throw new ValidationException("任务视图类型不受支持");
-        if (!new[] { "tree", "dueDate", "priority", "status", "updated" }.Contains(query.SortBy, StringComparer.OrdinalIgnoreCase)) throw new ValidationException("任务排序字段不受支持");
-        if (!string.IsNullOrWhiteSpace(query.GroupBy) && !new[] { "status", "priority", "assignee", "milestone", "parent" }.Contains(query.GroupBy, StringComparer.OrdinalIgnoreCase)) throw new ValidationException("任务分组字段不受支持");
-    }
-
     private async Task<ProjectManagementTaskDetailResponse> MapDetailAsync(ProjectManagementTaskEntity entity, CancellationToken cancellationToken)
     {
         var dependencyRows = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskDependencyEntity>()
