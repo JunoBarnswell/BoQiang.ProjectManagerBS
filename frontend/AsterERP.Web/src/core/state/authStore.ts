@@ -26,6 +26,16 @@ const asterWorkspaceQueryScopes = new Set([
   'runtime',
   'page'
 ]);
+let authenticationContextEpoch = 0;
+
+function invalidateAuthenticationContext(): number {
+  authenticationContextEpoch += 1;
+  return authenticationContextEpoch;
+}
+
+function isCurrentAuthenticationContext(epoch: number, token: string): boolean {
+  return authenticationContextEpoch === epoch && getAccessToken() === token;
+}
 
 function resetWorkspaceScopedQueryCache(): void {
   queryClient.removeQueries({
@@ -92,6 +102,7 @@ function applyApplicationLoginPayload(session: ApplicationLoginResponseDto): voi
 
 export const useAuthStore = create<AuthStoreState>((set) => ({
   applicationLogin: async (tenantId, appCode, request) => {
+    invalidateAuthenticationContext();
     const response = await applicationLoginRequest(tenantId, appCode, request);
     resetWorkspaceScopedQueryCache();
     applyApplicationLoginPayload(response.data);
@@ -104,6 +115,7 @@ export const useAuthStore = create<AuthStoreState>((set) => ({
   },
   isAuthenticated: false,
   enterApplicationBackend: async (appCode, request) => {
+    invalidateAuthenticationContext();
     const response = await enterApplicationBackendRequest(appCode, request);
     resetWorkspaceScopedQueryCache();
     applyWorkspacePayload(response.data);
@@ -116,17 +128,38 @@ export const useAuthStore = create<AuthStoreState>((set) => ({
   },
   isLoading: Boolean(getAccessToken()),
   login: async (request) => {
+    const epoch = invalidateAuthenticationContext();
     const response = await loginRequest(request);
     queryClient.clear();
     applyLoginPayload(response.data);
+    const token = getAccessToken();
     set({
-      isAuthenticated: true,
-      isLoading: false,
+      isAuthenticated: false,
+      isLoading: true,
       user: response.data.user
     });
+    try {
+      const sessionResponse = await getSession();
+      if (!isCurrentAuthenticationContext(epoch, token)) {
+        throw new Error('登录上下文已变更，请重新登录');
+      }
+      useWorkspaceStore.getState().setAvailableWorkspaces(sessionResponse.data.availableWorkspaces);
+      applyWorkspacePayload(sessionResponse.data);
+      set({
+        isAuthenticated: true,
+        isLoading: false,
+        user: sessionResponse.data.user
+      });
+    } catch (error) {
+      if (isCurrentAuthenticationContext(epoch, token)) {
+        useAuthStore.getState().logout();
+      }
+      throw error;
+    }
     return response.data;
   },
   logout: () => {
+    invalidateAuthenticationContext();
     queryClient.clear();
     clearAccessToken();
     setStoredWorkspace(null);
@@ -151,9 +184,13 @@ export const useAuthStore = create<AuthStoreState>((set) => ({
       return;
     }
 
+    const epoch = authenticationContextEpoch;
     set({ isLoading: true });
     try {
       const response = await getSession();
+      if (!isCurrentAuthenticationContext(epoch, token)) {
+        return;
+      }
       useWorkspaceStore.getState().setAvailableWorkspaces(response.data.availableWorkspaces);
       applyWorkspacePayload(response.data, options);
       set({
@@ -162,10 +199,14 @@ export const useAuthStore = create<AuthStoreState>((set) => ({
         user: response.data.user
       });
     } catch {
+      if (!isCurrentAuthenticationContext(epoch, token)) {
+        return;
+      }
       useAuthStore.getState().logout();
     }
   },
   setUser: (user) => {
+    invalidateAuthenticationContext();
     set({
       isAuthenticated: Boolean(user),
       isLoading: false,
@@ -173,6 +214,7 @@ export const useAuthStore = create<AuthStoreState>((set) => ({
     });
   },
   switchWorkspace: async (request) => {
+    invalidateAuthenticationContext();
     const response = await switchWorkspaceRequest(request);
     resetWorkspaceScopedQueryCache();
     applyWorkspacePayload(response.data);
@@ -184,6 +226,7 @@ export const useAuthStore = create<AuthStoreState>((set) => ({
     return response.data;
   },
   switchPlatform: async (request = { target: 'application-center' }) => {
+    invalidateAuthenticationContext();
     if (!hasPlatformAccessToken() || !activatePlatformAccessToken()) {
       useAuthStore.getState().logout();
       throw new Error('请先登录平台账号');
