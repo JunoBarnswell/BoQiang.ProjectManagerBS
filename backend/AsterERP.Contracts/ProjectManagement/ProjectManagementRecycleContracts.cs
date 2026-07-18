@@ -51,6 +51,7 @@ public sealed record ProjectManagementRecyclePurgePreviewResponse(
     int MemberReferenceCount,
     int MilestoneReferenceCount,
     int TaskReferenceCount,
+    ProjectManagementRecyclePurgeImpact Impact,
     bool CanExecute,
     string? BlockingReason,
     string RollbackHint);
@@ -63,6 +64,27 @@ public sealed record ProjectManagementRecycleTaskPurgePreviewResponse(
     long VersionNo,
     int TaskCount,
     int DependencyCount,
+    ProjectManagementRecyclePurgeImpact Impact,
     bool CanExecute,
     string? BlockingReason,
     string RollbackHint);
+
+public sealed record ProjectManagementRecyclePurgeImpact(
+    int ProjectCount,
+    int TaskCount,
+    int DescendantTaskCount,
+    int MemberCount,
+    int MilestoneCount,
+    int DependencyCount,
+    int ParticipantCount,
+    int LabelRelationCount,
+    int TimeLogCount,
+    int CommentCount,
+    int AttachmentCount,
+    int ReminderCount,
+    int NotificationCount,
+    int RecurrenceCount,
+    int OccurrenceCount,
+    int ConversationLinkCount,
+    int SavedViewCount,
+    int SyncJournalCount);

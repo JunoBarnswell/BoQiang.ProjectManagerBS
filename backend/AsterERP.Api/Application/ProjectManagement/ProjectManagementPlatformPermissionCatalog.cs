@@ -25,6 +25,7 @@ public static class ProjectManagementPlatformPermissionCatalog
         new(PermissionCodes.ProjectManagementTaskAdd, "任务新增"),
         new(PermissionCodes.ProjectManagementTaskEdit, "任务编辑"),
         new(PermissionCodes.ProjectManagementTaskDelete, "任务删除"),
+        new(PermissionCodes.ProjectManagementTaskPurge, "任务永久删除"),
         new(PermissionCodes.ProjectManagementTaskRestore, "任务恢复"),
         new(PermissionCodes.ProjectManagementTaskMove, "任务移动"),
         new(PermissionCodes.ProjectManagementTaskAssign, "任务分配"),

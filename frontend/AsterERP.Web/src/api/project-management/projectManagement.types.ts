@@ -166,9 +166,45 @@ export interface ProjectManagementRecyclePurgePreview {
   memberReferenceCount: number;
   milestoneReferenceCount: number;
   taskReferenceCount: number;
+  impact: ProjectManagementRecyclePurgeImpact;
   canExecute: boolean;
   blockingReason?: string;
   rollbackHint: string;
+}
+
+export interface ProjectManagementRecycleTaskPurgePreview {
+  taskId: string;
+  projectId: string;
+  taskCode: string;
+  title: string;
+  versionNo: number;
+  taskCount: number;
+  dependencyCount: number;
+  impact: ProjectManagementRecyclePurgeImpact;
+  canExecute: boolean;
+  blockingReason?: string;
+  rollbackHint: string;
+}
+
+export interface ProjectManagementRecyclePurgeImpact {
+  projectCount: number;
+  taskCount: number;
+  descendantTaskCount: number;
+  memberCount: number;
+  milestoneCount: number;
+  dependencyCount: number;
+  participantCount: number;
+  labelRelationCount: number;
+  timeLogCount: number;
+  commentCount: number;
+  attachmentCount: number;
+  reminderCount: number;
+  notificationCount: number;
+  recurrenceCount: number;
+  occurrenceCount: number;
+  conversationLinkCount: number;
+  savedViewCount: number;
+  syncJournalCount: number;
 }
 
 export interface ProjectManagementRecycleTaskItem {

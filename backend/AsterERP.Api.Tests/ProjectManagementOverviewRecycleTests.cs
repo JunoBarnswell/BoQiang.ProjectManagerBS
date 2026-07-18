@@ -73,7 +73,7 @@ public sealed class ProjectManagementOverviewRecycleTests
     }
 
     [Fact]
-    public async Task Purge_project_is_blocked_when_tasks_still_reference_it()
+    public async Task Purge_project_requires_configured_high_risk_services_before_graph_cleanup()
     {
         using var db = CreateDb();
         await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
@@ -96,7 +96,7 @@ public sealed class ProjectManagementOverviewRecycleTests
             ActivityType = "deleted", TraceId = "trace", ActorUserId = "operator"
         }).ExecuteCommandAsync();
 
-        var service = new ProjectManagementRecycleService(new TestWorkspaceDatabaseAccessor(db), CreateUser("operator"));
+        var service = new ProjectManagementRecycleService(new TestWorkspaceDatabaseAccessor(db), CreateUser("operator", PermissionCodes.ProjectManagementProjectPurge));
         var preview = await service.PreviewPurgeProjectAsync("deleted-project", 1);
 
         Assert.True(preview.CanExecute);
@@ -104,6 +104,21 @@ public sealed class ProjectManagementOverviewRecycleTests
         Assert.Equal(0, preview.MilestoneReferenceCount);
         Assert.Equal(0, preview.TaskReferenceCount);
         Assert.Null(preview.BlockingReason);
+    }
+
+    [Fact]
+    public async Task Purge_preview_rejects_manager_even_when_the_permission_is_granted()
+    {
+        using var db = CreateDb();
+        await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
+        await db.Insertable(new ProjectManagementProjectEntity { Id = "deleted-project", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "A", ProjectName = "A", OwnerUserId = "owner", IsDeleted = true }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementProjectMemberEntity { TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "deleted-project", UserId = "manager", RoleCode = "Manager", IsActive = true }).ExecuteCommandAsync();
+
+        var service = new ProjectManagementRecycleService(new TestWorkspaceDatabaseAccessor(db), CreateUser("manager", PermissionCodes.ProjectManagementProjectPurge));
+
+        var exception = await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() => service.PreviewPurgeProjectAsync("deleted-project", 1));
+
+        Assert.Contains("Owner", exception.Message);
     }
 
     [Fact]
@@ -215,7 +230,7 @@ public sealed class ProjectManagementOverviewRecycleTests
     }
 
     [Fact]
-    public async Task Purge_task_removes_dependency_edges_and_keeps_explicit_project_audit()
+    public async Task Purge_task_cleans_related_graph_releases_files_and_records_governance_audit()
     {
         using var db = CreateDb();
         await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
@@ -226,18 +241,24 @@ public sealed class ProjectManagementOverviewRecycleTests
             new ProjectManagementTaskEntity { Id = "successor", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", TaskCode = "S", Title = "successor", IsDeleted = true }
         }).ExecuteCommandAsync();
         await db.Insertable(new ProjectManagementTaskDependencyEntity { Id = "dep", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", PredecessorTaskId = "predecessor", SuccessorTaskId = "successor", CreatedTime = DateTime.UtcNow }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementTaskCommentEntity { Id = "comment", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", TaskId = "predecessor", Markdown = "comment" }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementTaskAttachmentEntity { Id = "attachment", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", TaskId = "predecessor", FileId = "file-1", FileName = "proof.txt" }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementTaskReminderEntity { Id = "reminder", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", TaskId = "predecessor", RecipientUserId = "operator", ReminderAtUtc = DateTime.UtcNow, TimeZoneId = "UTC", IdempotencyKey = "reminder-1" }).ExecuteCommandAsync();
         var accessor = new TestWorkspaceDatabaseAccessor(db);
-        var user = CreateUser("operator");
-        var audit = new RecordingActivityWriter();
-        var dependency = new ProjectManagementTaskDependencyService(accessor, user, activityWriter: audit);
-        var service = new ProjectManagementRecycleService(accessor, user, riskConfirmation: new AcceptRiskConfirmation(), maintenanceLock: new TestMaintenanceLock(), dependencyService: dependency);
+        var user = CreateUser("operator", PermissionCodes.ProjectManagementTaskPurge);
+        var files = new RecordingFileStore();
+        var operations = new RecordingOperationWriter();
+        var service = new ProjectManagementRecycleService(accessor, user, riskConfirmation: new AcceptRiskConfirmation(), maintenanceLock: new TestMaintenanceLock(), operationWriter: operations, fileStore: files);
 
         await service.PurgeTaskAsync("predecessor", new ProjectManagementRecycleTaskPurgeRequest(1, "secret", true));
 
         Assert.Empty(await db.Queryable<ProjectManagementTaskEntity>().Where(item => item.Id == "predecessor").ToListAsync());
         Assert.Empty(await db.Queryable<ProjectManagementTaskDependencyEntity>().ToListAsync());
-        Assert.Contains(audit.Events, item => item.ActivityType == "task.dependency.purged");
-        Assert.Contains(audit.Events, item => item.ActivityType == "task.purged");
+        Assert.Empty(await db.Queryable<ProjectManagementTaskCommentEntity>().Where(item => item.TaskId == "predecessor").ToListAsync());
+        Assert.Empty(await db.Queryable<ProjectManagementTaskAttachmentEntity>().Where(item => item.TaskId == "predecessor").ToListAsync());
+        Assert.Empty(await db.Queryable<ProjectManagementTaskReminderEntity>().Where(item => item.TaskId == "predecessor").ToListAsync());
+        Assert.Equal(["file-1"], files.DeletedFileIds);
+        Assert.Single(operations.CompletedImpacts);
     }
 
     private static SqlSugarClient CreateDb() => new(new ConnectionConfig
@@ -247,13 +268,13 @@ public sealed class ProjectManagementOverviewRecycleTests
         IsAutoCloseConnection = false
     });
 
-    private static FixedAsterErpCurrentUser CreateUser(string userId, string? permission = null) => new(new ClaimsPrincipal(new ClaimsIdentity(new[]
+    private static FixedAsterErpCurrentUser CreateUser(string userId, params string[] permissions) => new(new ClaimsPrincipal(new ClaimsIdentity(new[]
     {
         new Claim(AsterErpClaimTypes.UserId, userId),
         new Claim(AsterErpClaimTypes.TenantId, "tenant-a"),
         new Claim(AsterErpClaimTypes.AppCode, "SYSTEM"),
-        permission is null ? new Claim("unused", "unused") : new Claim(AsterErpClaimTypes.PermissionCode, permission)
-    }, "test")));
+        new Claim("unused", "unused")
+    }.Concat(permissions.Select(permission => new Claim(AsterErpClaimTypes.PermissionCode, permission))), "test")));
 
     private sealed class TestWorkspaceDatabaseAccessor(ISqlSugarClient db) : IWorkspaceDatabaseAccessor
     {
@@ -284,6 +305,29 @@ public sealed class ProjectManagementOverviewRecycleTests
     {
         public Task<string> AcquireAsync(string lockKey, TimeSpan duration, CancellationToken cancellationToken = default) => Task.FromResult("lock");
         public Task ReleaseAsync(string operationId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    }
+
+    private sealed class RecordingFileStore : IProjectManagementFileStore
+    {
+        public List<string> DeletedFileIds { get; } = [];
+        public Task DeleteAsync(string fileId, CancellationToken cancellationToken = default) { DeletedFileIds.Add(fileId); return Task.CompletedTask; }
+        public Task<Stream> OpenReadAsync(string fileId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<ProjectManagementStoredFile> StoreAsync(Microsoft.AspNetCore.Http.IFormFile file, ProjectManagementFileUploadContext context, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
+    private sealed class RecordingOperationWriter : IProjectManagementOperationWriter
+    {
+        public List<string> CompletedImpacts { get; } = [];
+        public Task StartAsync(string operationId, string operationType, string impactJson, string traceId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task CompleteWithImpactAsync(string operationId, string impactJson, CancellationToken cancellationToken = default) { CompletedImpacts.Add(impactJson); return Task.CompletedTask; }
+        public Task CreatePendingAsync(string operationId, string operationType, string impactJson, string traceId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task<bool> ReportProgressAsync(string operationId, string phase, int progressPercent, CancellationToken cancellationToken = default) => Task.FromResult(true);
+        public Task<bool> IsCancellationRequestedAsync(string operationId, CancellationToken cancellationToken = default) => Task.FromResult(false);
+        public Task RequestCancellationAsync(string operationId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task CancelAsync(string operationId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task SucceedAsync(string operationId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task FailAsync(string operationId, string errorMessage, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task FailRunningExceptAsync(string operationId, string errorMessage, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 
     private sealed class RecordingDependencyService : IProjectManagementTaskDependencyService
