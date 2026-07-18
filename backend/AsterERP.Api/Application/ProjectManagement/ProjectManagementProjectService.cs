@@ -114,7 +114,7 @@ public sealed class ProjectManagementProjectService(
         {
             await db.Insertable(entity).ExecuteCommandAsync(cancellationToken);
             await db.Insertable(ownerMember).ExecuteCommandAsync(cancellationToken);
-            await WriteActivityAsync(entity, "created", $"创建项目 {entity.ProjectName}", cancellationToken);
+            await WriteActivityAsync(entity, "created", $"创建项目 {entity.ProjectName}", CreateChanges(null, entity), now, cancellationToken);
             await WriteSyncJournalAsync(entity, "created", cancellationToken);
             db.Ado.CommitTran();
         }
@@ -146,6 +146,7 @@ public sealed class ProjectManagementProjectService(
         }
 
         EnsureVersion(entity, request.VersionNo);
+        var before = ProjectActivitySnapshot.From(entity);
         entity.ProjectCode = projectCode;
         entity.ProjectName = NormalizeRequired(request.ProjectName, "项目名称不能为空");
         entity.Description = NormalizeOptional(request.Description);
@@ -165,7 +166,7 @@ public sealed class ProjectManagementProjectService(
         await ProjectManagementMutationTransaction.RunAsync(db, async () =>
         {
             await db.Updateable(entity).ExecuteCommandAsync(cancellationToken);
-            await WriteActivityAsync(entity, "updated", $"更新项目 {entity.ProjectName}", cancellationToken);
+            await WriteActivityAsync(entity, "updated", $"更新项目 {entity.ProjectName}", CreateChanges(before, entity), entity.UpdatedTime ?? DateTime.UtcNow, cancellationToken);
             await WriteSyncJournalAsync(entity, "updated", cancellationToken);
         });
         if (imConversationService is not null)
@@ -184,6 +185,7 @@ public sealed class ProjectManagementProjectService(
         var entity = await GetRequiredAsync(id, cancellationToken);
         await (accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser)).EnsureCanManageProjectAsync(id, cancellationToken);
         EnsureVersion(entity, request.VersionNo);
+        var before = ProjectActivitySnapshot.From(entity);
         ProjectManagementDomainRules.EnsureProjectStatusTransition(entity.Status, ProjectManagementDomainRules.ProjectArchived);
         entity.Status = ProjectManagementDomainRules.ProjectArchived;
         entity.VersionNo++;
@@ -193,7 +195,7 @@ public sealed class ProjectManagementProjectService(
         await ProjectManagementMutationTransaction.RunAsync(db, async () =>
         {
             await db.Updateable(entity).ExecuteCommandAsync(cancellationToken);
-            await WriteActivityAsync(entity, "archived", $"归档项目 {entity.ProjectName}", cancellationToken);
+            await WriteActivityAsync(entity, "archived", $"归档项目 {entity.ProjectName}", CreateChanges(before, entity), entity.UpdatedTime ?? DateTime.UtcNow, cancellationToken);
             await WriteSyncJournalAsync(entity, "archived", cancellationToken);
         });
         if (imConversationService is not null)
@@ -207,6 +209,7 @@ public sealed class ProjectManagementProjectService(
         var entity = await GetRequiredAsync(id, cancellationToken, includeDeleted: true);
         await (accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser)).EnsureCanManageDeletedProjectAsync(id, cancellationToken);
         EnsureVersion(entity, versionNo);
+        var before = ProjectActivitySnapshot.From(entity);
         entity.IsDeleted = false;
         entity.DeletedBy = null;
         entity.DeletedTime = null;
@@ -217,7 +220,7 @@ public sealed class ProjectManagementProjectService(
         await ProjectManagementMutationTransaction.RunAsync(db, async () =>
         {
             await db.Updateable(entity).ExecuteCommandAsync(cancellationToken);
-            await WriteActivityAsync(entity, "restored", $"恢复项目 {entity.ProjectName}", cancellationToken);
+            await WriteActivityAsync(entity, "restored", $"恢复项目 {entity.ProjectName}", CreateChanges(before, entity), entity.UpdatedTime ?? DateTime.UtcNow, cancellationToken);
             await WriteSyncJournalAsync(entity, "restored", cancellationToken);
         });
         if (imConversationService is not null)
@@ -233,6 +236,7 @@ public sealed class ProjectManagementProjectService(
         var entity = await GetRequiredAsync(id, cancellationToken);
         await (accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser)).EnsureCanManageProjectAsync(id, cancellationToken);
         EnsureVersion(entity, versionNo);
+        var before = ProjectActivitySnapshot.From(entity);
         entity.IsDeleted = true;
         entity.DeletedBy = RequireUserId();
         entity.DeletedTime = DateTime.UtcNow;
@@ -247,7 +251,7 @@ public sealed class ProjectManagementProjectService(
         await ProjectManagementMutationTransaction.RunAsync(db, async () =>
         {
             await db.Updateable(entity).ExecuteCommandAsync(cancellationToken);
-            await WriteActivityAsync(entity, "deleted", $"删除项目 {entity.ProjectName}", cancellationToken);
+            await WriteActivityAsync(entity, "deleted", $"删除项目 {entity.ProjectName}", CreateChanges(before, entity), entity.UpdatedTime ?? DateTime.UtcNow, cancellationToken);
             await WriteSyncJournalAsync(entity, "deleted", cancellationToken);
         });
     }
@@ -268,10 +272,19 @@ public sealed class ProjectManagementProjectService(
 
     private void RequirePlatformScope() => ProjectManagementPlatformScope.RequireSystemWorkspace(currentUser);
 
-    private async Task WriteActivityAsync(ProjectManagementProjectEntity entity, string activityType, string summary, CancellationToken cancellationToken)
+    private async Task WriteActivityAsync(
+        ProjectManagementProjectEntity entity,
+        string activityType,
+        string summary,
+        IReadOnlyList<ProjectManagementActivityFieldChange> changes,
+        DateTime occurredAt,
+        CancellationToken cancellationToken)
     {
         if (activityWriter is null) return;
-        await activityWriter.AppendAsync(new ProjectManagementActivityEvent(RequireTenantId(), ProjectManagementPlatformScope.AppCode, "Project", entity.Id, activityType, summary, Activity.Current?.Id ?? Guid.NewGuid().ToString("N"), RequireUserId(), entity.Id), cancellationToken);
+        await activityWriter.AppendAsync(new ProjectManagementActivityEvent(
+            RequireTenantId(), ProjectManagementPlatformScope.AppCode, "Project", entity.Id, activityType, summary,
+            Activity.Current?.Id ?? Guid.NewGuid().ToString("N"), RequireUserId(), entity.Id,
+            Source: "User", FieldChanges: changes, OccurredAt: occurredAt), cancellationToken);
     }
 
     private async Task WriteSyncJournalAsync(ProjectManagementProjectEntity entity, string operation, CancellationToken cancellationToken)
@@ -309,6 +322,38 @@ public sealed class ProjectManagementProjectService(
     };
 
     private static decimal NormalizeProgress(decimal value) => value is < 0 or > 100 ? throw new ValidationException("项目进度必须在 0 到 100 之间") : value;
+
+    private static IReadOnlyList<ProjectManagementActivityFieldChange> CreateChanges(ProjectActivitySnapshot? before, ProjectManagementProjectEntity after) =>
+        ProjectManagementActivityChanges.Collect(
+            ProjectManagementActivityChanges.Create("ProjectCode", "项目编码", before?.ProjectCode, after.ProjectCode),
+            ProjectManagementActivityChanges.Create("ProjectName", "项目名称", before?.ProjectName, after.ProjectName),
+            ProjectManagementActivityChanges.Create("Description", "项目描述", before?.Description, after.Description),
+            ProjectManagementActivityChanges.Create("Status", "项目状态", before?.Status, after.Status),
+            ProjectManagementActivityChanges.Create("Priority", "优先级", before?.Priority, after.Priority),
+            ProjectManagementActivityChanges.Create("OwnerUserId", "负责人", before?.OwnerUserId, after.OwnerUserId),
+            ProjectManagementActivityChanges.Create("StartDate", "开始日期", before?.StartDate, after.StartDate),
+            ProjectManagementActivityChanges.Create("DueDate", "截止日期", before?.DueDate, after.DueDate),
+            ProjectManagementActivityChanges.Create("WipLimit", "WIP 上限", before?.WipLimit, after.WipLimit),
+            ProjectManagementActivityChanges.Create("ProgressPercent", "进度", before?.ProgressPercent, after.ProgressPercent),
+            ProjectManagementActivityChanges.Create("IsDeleted", "已删除", before?.IsDeleted, after.IsDeleted));
+
+    private sealed record ProjectActivitySnapshot(
+        string ProjectCode,
+        string ProjectName,
+        string? Description,
+        string Status,
+        string Priority,
+        string OwnerUserId,
+        DateTime? StartDate,
+        DateTime? DueDate,
+        int? WipLimit,
+        decimal ProgressPercent,
+        bool IsDeleted)
+    {
+        public static ProjectActivitySnapshot From(ProjectManagementProjectEntity entity) => new(
+            entity.ProjectCode, entity.ProjectName, entity.Description, entity.Status, entity.Priority, entity.OwnerUserId,
+            entity.StartDate, entity.DueDate, entity.WipLimit, entity.ProgressPercent, entity.IsDeleted);
+    }
 
     private static ProjectManagementProjectResponse Map(ProjectManagementProjectEntity entity) => new(
         entity.Id, entity.TenantId, entity.AppCode, entity.ProjectCode, entity.ProjectName, entity.Description,

@@ -78,7 +78,8 @@ public sealed class ProjectManagementRecycleService(
             await db.Updateable(entity).ExecuteCommandAsync(cancellationToken);
             await RefreshProgressAsync(entity.Id, cancellationToken);
             await RefreshDependencyStatesAsync(entity.Id, cancellationToken);
-            await WriteActivityAsync("Project", entity.Id, entity.Id, "restored", $"恢复项目 {entity.ProjectName}", cancellationToken);
+            await WriteActivityAsync("Project", entity.Id, entity.Id, "restored", $"恢复项目 {entity.ProjectName}",
+                ProjectManagementActivityChanges.Collect(ProjectManagementActivityChanges.Create("IsDeleted", "已删除", true, false)), now, null, cancellationToken);
             await WriteSyncJournalAsync("Project", entity.Id, entity.Id, "restored", entity.VersionNo, entity, cancellationToken);
         });
         if (imConversationService is not null)
@@ -130,7 +131,13 @@ public sealed class ProjectManagementRecycleService(
                 .ExecuteCommandAsync(cancellationToken);
             await RefreshProgressAsync(entity.ProjectId, cancellationToken);
             await RefreshDependencyStatesAsync(entity.ProjectId, cancellationToken);
-            await WriteActivityAsync("Task", entity.Id, entity.ProjectId, "restored", targets.Count == 1 ? $"恢复任务 {entity.Title}" : $"恢复任务树 {entity.Title}（共 {targets.Count} 项）", cancellationToken);
+            await WriteActivityAsync("Task", entity.Id, entity.ProjectId, "restored", targets.Count == 1 ? $"恢复任务 {entity.Title}" : $"恢复任务树 {entity.Title}（共 {targets.Count} 项）",
+                ProjectManagementActivityChanges.Collect(ProjectManagementActivityChanges.Create("IsDeleted", "已删除", true, false)),
+                now,
+                targets.Count <= 1 ? null : new ProjectManagementActivityBatch($"restore:{entity.Id}:{now:O}", targets.Count, targets.Count, 0,
+                    targets.Select(task => new ProjectManagementActivityBatchItem("Task", task.Id, $"恢复任务 {task.Title}",
+                        ProjectManagementActivityChanges.Collect(ProjectManagementActivityChanges.Create("IsDeleted", "已删除", true, false)))).ToList()),
+                cancellationToken);
             foreach (var task in targets)
                 await WriteSyncJournalAsync("Task", task.Id, task.ProjectId, "restored", task.VersionNo, task, cancellationToken);
         });
@@ -425,10 +432,22 @@ public sealed class ProjectManagementRecycleService(
         return new RecycleImpact(taskCountByProjectId, descendantCountByTaskId, projectsById);
     }
 
-    private async Task WriteActivityAsync(string aggregateType, string aggregateId, string projectId, string activityType, string summary, CancellationToken cancellationToken)
+    private async Task WriteActivityAsync(
+        string aggregateType,
+        string aggregateId,
+        string projectId,
+        string activityType,
+        string summary,
+        IReadOnlyList<ProjectManagementActivityFieldChange> changes,
+        DateTime occurredAt,
+        ProjectManagementActivityBatch? batch,
+        CancellationToken cancellationToken)
     {
         if (activityWriter is null) return;
-        await activityWriter.AppendAsync(new ProjectManagementActivityEvent(RequireTenantId(), RequireAppCode(), aggregateType, aggregateId, activityType, summary, Activity.Current?.Id ?? Guid.NewGuid().ToString("N"), RequireUserId(), projectId), cancellationToken);
+        await activityWriter.AppendAsync(new ProjectManagementActivityEvent(
+            RequireTenantId(), RequireAppCode(), aggregateType, aggregateId, activityType, summary,
+            Activity.Current?.Id ?? Guid.NewGuid().ToString("N"), RequireUserId(), projectId,
+            Source: "User", FieldChanges: changes, Batch: batch, OccurredAt: occurredAt), cancellationToken);
     }
 
     private async Task WriteSyncJournalAsync(string aggregateType, string aggregateId, string projectId, string operation, long versionNo, object snapshot, CancellationToken cancellationToken)
