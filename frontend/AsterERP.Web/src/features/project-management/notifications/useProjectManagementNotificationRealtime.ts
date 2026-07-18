@@ -1,7 +1,6 @@
-import { HubConnectionBuilder, HubConnectionState, LogLevel } from '@microsoft/signalr';
 import { useEffect } from 'react';
 
-import { getAccessToken } from '../../../core/http/tokenStorage';
+import { acquireProjectManagementHubConnection } from '../hooks/projectManagementHubConnection';
 import type { ProjectManagementWorkspaceScope } from '../state/projectManagementWorkspaceScope';
 
 interface ProjectManagementNotificationCreatedEvent {
@@ -16,30 +15,19 @@ export function useProjectManagementNotificationRealtime(
 ) {
   useEffect(() => {
     if (!enabled || !scope.isAvailable) return undefined;
-    let disposed = false;
-    const connection = new HubConnectionBuilder()
-      .withUrl(signalRUrl, { accessTokenFactory: () => getAccessToken() })
-      .withAutomaticReconnect()
-      .configureLogging(LogLevel.Warning)
-      .build();
+    const connection = acquireProjectManagementHubConnection(signalRUrl, scope);
+    if (!connection) return undefined;
     const notify = (event: ProjectManagementNotificationCreatedEvent) => {
       if (!event.notificationId) return;
       onNotificationCreated();
     };
-    connection.on('ProjectManagementNotificationCreated', notify);
-    connection.onreconnected(() => onNotificationCreated());
-    void (async () => {
-      try {
-        await connection.start();
-        if (!disposed && connection.state === HubConnectionState.Connected) onNotificationCreated();
-      } catch {
-        // The station notification list remains available via its existing query.
-      }
-    })();
+    connection.subscribe('ProjectManagementNotificationCreated', notify);
+    connection.subscribeLifecycle({
+      connected: onNotificationCreated,
+      reconnected: onNotificationCreated,
+    });
     return () => {
-      disposed = true;
-      connection.off('ProjectManagementNotificationCreated', notify);
-      void connection.stop();
+      connection.dispose();
     };
   }, [enabled, onNotificationCreated, scope, signalRUrl]);
 }

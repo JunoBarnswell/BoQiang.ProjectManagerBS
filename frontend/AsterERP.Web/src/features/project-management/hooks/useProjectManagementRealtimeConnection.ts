@@ -1,11 +1,10 @@
-import { HubConnectionBuilder, HubConnectionState, LogLevel } from '@microsoft/signalr';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 
-import { getAccessToken } from '@/core/http/tokenStorage';
-
 import { queryKeys } from '../../../core/query/queryKeys';
 import type { ProjectManagementWorkspaceScope } from '../state/projectManagementWorkspaceScope';
+
+import { acquireProjectManagementHubConnection } from './projectManagementHubConnection';
 
 interface ProjectManagementInvalidation {
   aggregateType: 'Project' | 'ProjectMember' | 'Task' | 'TaskAttachment' | 'TaskComment' | 'TaskReminder';
@@ -33,11 +32,8 @@ export function useProjectManagementRealtimeConnection(
     let flushTimer: ReturnType<typeof setTimeout> | undefined;
     const pendingAggregateTypes = new Set<ProjectManagementInvalidation['aggregateType']>();
     const versionWatermarks = new Map<string, number>();
-    const connection = new HubConnectionBuilder()
-      .withUrl(signalRUrl, { accessTokenFactory: () => getAccessToken() })
-      .withAutomaticReconnect()
-      .configureLogging(LogLevel.Warning)
-      .build();
+    const connection = acquireProjectManagementHubConnection(signalRUrl, scope);
+    if (!connection) return undefined;
     const flushInvalidations = () => {
       flushTimer = undefined;
       const aggregateTypes = new Set(pendingAggregateTypes);
@@ -72,33 +68,18 @@ export function useProjectManagementRealtimeConnection(
     const revokeAccess = (event: ProjectManagementAccessRevoked) => {
       if (event.projectId !== projectId) return;
       versionWatermarks.clear();
-      void connection.invoke('LeaveProjectManagementProject', projectId).catch(() => undefined);
+      leaveProject();
       reconcile();
     };
-    const joinAndReconcile = async () => {
-      if (disposed || connection.state !== HubConnectionState.Connected) return;
-      await connection.invoke('JoinProjectManagementProject', projectId);
-      reconcile();
-    };
-    connection.on('ProjectManagementInvalidated', invalidate);
-    connection.on('ProjectManagementAccessRevoked', revokeAccess);
-    connection.onreconnected(() => joinAndReconcile().catch(() => undefined));
-    void (async () => {
-      await Promise.resolve();
-      if (disposed) return;
-      try {
-        await connection.start();
-        await joinAndReconcile();
-      } catch {
-        // Automatic reconnect remains enabled; the page continues to use the last consistent query snapshot.
-      }
-    })();
+    connection.subscribe('ProjectManagementInvalidated', invalidate);
+    connection.subscribe('ProjectManagementAccessRevoked', revokeAccess);
+    const leaveProject = connection.subscribeProject(projectId, () => {
+      if (!disposed) reconcile();
+    });
     return () => {
       disposed = true;
       if (flushTimer) clearTimeout(flushTimer);
-      connection.off('ProjectManagementInvalidated', invalidate);
-      connection.off('ProjectManagementAccessRevoked', revokeAccess);
-      void connection.invoke('LeaveProjectManagementProject', projectId).catch(() => undefined).finally(() => connection.stop());
+      connection.dispose();
     };
   }, [enabled, projectId, queryClient, scope, signalRUrl]);
 }

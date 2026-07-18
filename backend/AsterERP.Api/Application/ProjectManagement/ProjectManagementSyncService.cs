@@ -1,7 +1,6 @@
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text.Json;
-using AsterERP.Api.Application.System.Files;
 using AsterERP.Api.Infrastructure.Database;
 using AsterERP.Api.Infrastructure.Security;
 using AsterERP.Api.Modules.ProjectManagement;
@@ -20,7 +19,7 @@ public sealed class ProjectManagementSyncService(
     ICurrentUser currentUser,
     ProjectManagementAccessPolicy accessPolicy,
     IPasswordHashService passwordHashService,
-    IFileAppService? fileAppService = null,
+    IProjectManagementFileStore? fileStore = null,
     IProjectManagementMaintenanceLock? maintenanceLock = null,
     IProjectManagementOperationWriter? operationWriter = null) : IProjectManagementSyncService
 {
@@ -65,12 +64,11 @@ public sealed class ProjectManagementSyncService(
             await WriteEntryAsync(archive, "data.json", data, cancellationToken);
             if (request.IncludeAttachments)
             {
-                if (fileAppService is null) throw new ValidationException("文件服务不可用，无法导出附件");
+                if (fileStore is null) throw new ValidationException("文件服务不可用，无法导出附件");
                 foreach (var attachment in snapshot.Attachments)
                 {
-                    var downloaded = await fileAppService.DownloadAsync(attachment.FileId, cancellationToken);
+                    await using var sourceStream = await fileStore.OpenReadAsync(attachment.FileId, cancellationToken);
                     await using var entryStream = archive.CreateEntry($"attachments/{attachment.FileId}", CompressionLevel.Fastest).Open();
-                    await using var sourceStream = downloaded.Stream;
                     await sourceStream.CopyToAsync(entryStream, cancellationToken);
                 }
             }
@@ -220,7 +218,7 @@ public sealed class ProjectManagementSyncService(
             db.Ado.RollbackTran();
             foreach (var fileId in importedFiles)
             {
-                try { if (fileAppService is not null) await fileAppService.DeleteAsync(fileId, cancellationToken); } catch { }
+                try { if (fileStore is not null) await fileStore.DeleteAsync(fileId, cancellationToken); } catch { }
             }
             if (operationStarted && operationId is not null && operationWriter is not null)
             {
@@ -386,7 +384,7 @@ public sealed class ProjectManagementSyncService(
         Action onUpdate)
     {
         if (!manifest.IncludeAttachments || records.Count == 0) return 0;
-        if (fileAppService is null) throw new ValidationException("文件服务不可用，无法导入附件");
+        if (fileStore is null) throw new ValidationException("文件服务不可用，无法导入附件");
         using var archive = new ZipArchive(new MemoryStream(packageBytes), ZipArchiveMode.Read);
         var imported = 0;
         foreach (var source in records)
@@ -403,7 +401,7 @@ public sealed class ProjectManagementSyncService(
                 Headers = new HeaderDictionary(),
                 ContentType = source.ContentType
             };
-            var uploaded = await fileAppService.UploadAsync(formFile, "ProjectManagement sync import", cancellationToken);
+            var uploaded = await fileStore.StoreAsync(formFile, new ProjectManagementFileUploadContext(ProjectManagementFileWritePurpose.SyncImport), cancellationToken);
             importedFiles.Add(uploaded.Id);
             source.FileId = uploaded.Id;
             if (exists)

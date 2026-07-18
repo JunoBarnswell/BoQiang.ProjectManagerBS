@@ -1,12 +1,12 @@
-import { HubConnectionBuilder, LogLevel } from '@microsoft/signalr';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 
-import type { ApiEnvelope } from '../../../core/http/apiEnvelope';
-import { getAccessToken } from '../../../core/http/tokenStorage';
-import { projectManagementQueryKeys } from '../../../core/query/projectManagementQueryKeys';
 import type { ProjectManagementOperation } from '../../../api/project-management/projectManagement.types';
+import type { ApiEnvelope } from '../../../core/http/apiEnvelope';
+import { projectManagementQueryKeys } from '../../../core/query/projectManagementQueryKeys';
 import type { ProjectManagementWorkspaceScope } from '../state/projectManagementWorkspaceScope';
+
+import { acquireProjectManagementHubConnection } from './projectManagementHubConnection';
 
 interface ProjectManagementOperationProgressEvent {
   id: string;
@@ -27,13 +27,12 @@ export function useProjectManagementOperationRealtime(
   const [connectionState, setConnectionState] = useState<'connected' | 'connecting' | 'reconnecting' | 'disconnected'>('disconnected');
 
   useEffect(() => {
-    if (!scope.isAvailable || !operationId) return undefined;
-    setConnectionState('connecting');
-    const connection = new HubConnectionBuilder()
-      .withUrl(signalRUrl, { accessTokenFactory: () => getAccessToken() })
-      .withAutomaticReconnect()
-      .configureLogging(LogLevel.Warning)
-      .build();
+    if (!scope.isAvailable || !operationId) {
+      setConnectionState('disconnected');
+      return undefined;
+    }
+    const connection = acquireProjectManagementHubConnection(signalRUrl, scope);
+    if (!connection) return undefined;
     const onProgress = (event: ProjectManagementOperationProgressEvent) => {
       if (event.id !== operationId) return;
       queryClient.setQueryData<ApiEnvelope<ProjectManagementOperation>>(
@@ -41,17 +40,15 @@ export function useProjectManagementOperationRealtime(
         (current) => current ? { ...current, data: { ...current.data, ...event } } : current,
       );
     };
-    connection.on('ProjectManagementOperationProgressUpdated', onProgress);
-    connection.onreconnecting(() => setConnectionState('reconnecting'));
-    connection.onreconnected(() => {
-      setConnectionState('connected');
+    connection.subscribe('ProjectManagementOperationProgressUpdated', onProgress);
+    connection.subscribeLifecycle({
+      reconnected: () => {
       void queryClient.invalidateQueries({ queryKey: projectManagementQueryKeys.operation(scope, operationId) });
+      },
+      stateChanged: setConnectionState,
     });
-    connection.onclose(() => setConnectionState('disconnected'));
-    void connection.start().then(() => setConnectionState('connected')).catch(() => setConnectionState('disconnected'));
     return () => {
-      connection.off('ProjectManagementOperationProgressUpdated', onProgress);
-      void connection.stop();
+      connection.dispose();
     };
   }, [operationId, queryClient, scope, signalRUrl]);
   return { connectionState };

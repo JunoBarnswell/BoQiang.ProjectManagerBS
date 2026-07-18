@@ -32,6 +32,10 @@ function platformProjectManagementRoute(path: string, page: ReactNode): RouteObj
       ? ['project-management:sync:export', 'project-management:sync:import']
       : path === 'projects/:projectId/reports'
         ? 'project-management:report:export'
+        : path === 'projects/:projectId/milestones'
+          ? 'project-management:milestone:view'
+          : path === 'projects/:projectId/members'
+            ? 'project-management:member:view'
         : path === 'projects/:projectId/overview'
           ? 'project-management:project:view'
           : path.includes('projects/:projectId')

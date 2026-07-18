@@ -43,6 +43,8 @@ public sealed class ProjectManagementSyncServiceTests
         var accessor = new TestWorkspaceDatabaseAccessor(db);
         var user = CreateUser();
         var service = new ProjectManagementSyncService(accessor, user, new ProjectManagementAccessPolicy(accessor, user), new TestPasswordHashService());
+        var attachmentExportFailure = await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() => service.ExportAsync(new ProjectManagementSyncExportRequest("project-sync", IncludeAttachments: true, DeviceId: "device-a")));
+        Assert.Contains("文件服务不可用", attachmentExportFailure.Message, StringComparison.Ordinal);
         var exported = await service.ExportAsync(new ProjectManagementSyncExportRequest("project-sync", DeviceId: "device-a"));
         Assert.EndsWith(".bqsync", exported.FileName, StringComparison.Ordinal);
 

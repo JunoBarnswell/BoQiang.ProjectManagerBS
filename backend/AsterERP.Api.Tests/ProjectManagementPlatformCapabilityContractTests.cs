@@ -39,7 +39,9 @@ public sealed class ProjectManagementPlatformCapabilityContractTests
     public void Capability_contracts_are_replaceable_interfaces()
     {
         Assert.True(typeof(IProjectManagementFileReferenceService).IsInterface);
+        Assert.True(typeof(IProjectManagementFileStore).IsInterface);
         Assert.True(typeof(IProjectManagementNotificationPublisher).IsInterface);
+        Assert.True(typeof(IProjectManagementRealtimeTransport).IsInterface);
         Assert.True(typeof(IProjectManagementRealtimePublisher).IsInterface);
         Assert.True(typeof(IProjectManagementReminderScheduler).IsInterface);
         Assert.True(typeof(IProjectManagementActivityWriter).IsInterface);

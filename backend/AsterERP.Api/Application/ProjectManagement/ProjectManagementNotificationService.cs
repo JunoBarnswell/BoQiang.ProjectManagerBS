@@ -1,12 +1,10 @@
 using AsterERP.Api.Infrastructure.Database;
 using AsterERP.Api.Infrastructure.Security;
-using AsterERP.Api.Infrastructure.SignalR;
 using AsterERP.Api.Modules.ProjectManagement;
 using AsterERP.Contracts.ProjectManagement;
 using AsterERP.Shared;
 using AsterERP.Shared.Exceptions;
 using SqlSugar;
-using Microsoft.AspNetCore.SignalR;
 using Volo.Abp.Users;
 
 namespace AsterERP.Api.Application.ProjectManagement;
@@ -15,7 +13,7 @@ public sealed class ProjectManagementNotificationService(
     IWorkspaceDatabaseAccessor databaseAccessor,
     ICurrentUser currentUser,
     ProjectManagementAccessPolicy? accessPolicy = null,
-    IHubContext<SystemNotificationHub>? hubContext = null) : IProjectManagementNotificationService
+    IProjectManagementRealtimeTransport? realtimeTransport = null) : IProjectManagementNotificationService
 {
     public async Task PublishAsync(ProjectManagementNotification notification, CancellationToken cancellationToken = default)
     {
@@ -35,9 +33,8 @@ public sealed class ProjectManagementNotificationService(
                 IdempotencyKey = key, CreatedBy = User(), CreatedTime = DateTime.UtcNow
             };
             await db.Insertable(entity).ExecuteCommandAsync(cancellationToken);
-            if (hubContext is not null)
-                await hubContext.Clients.Group(SystemNotificationHub.BuildProjectManagementNotificationUserGroupName(Tenant(), App(), recipient))
-                    .SendAsync("ProjectManagementNotificationCreated", new ProjectManagementNotificationCreatedEvent(entity.Id), cancellationToken);
+            if (realtimeTransport is not null)
+                await realtimeTransport.PublishNotificationCreatedAsync(Tenant(), App(), recipient, entity.Id, cancellationToken);
         }
         catch (Exception exception) when (IsDuplicateNotification(exception))
         {

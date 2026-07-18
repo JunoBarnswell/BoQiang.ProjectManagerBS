@@ -124,6 +124,10 @@ export function ProjectManagementPage() {
     { key: 'ownerUserId', title: '负责人', width: '140px', render: (row) => row.ownerUserId || '未分配' }
   ], []);
 
+  if (!scope.isAvailable) {
+    return <PageError description="项目管理仅支持 SYSTEM 平台工作区。请切换至 SYSTEM 后再访问项目管理。" />;
+  }
+
   if (projectsQuery.isLoading) return <PageLoading />;
   if (projectsQuery.isError) {
     if (isHttpError(projectsQuery.error) && projectsQuery.error.status === 403) return <Page403 />;

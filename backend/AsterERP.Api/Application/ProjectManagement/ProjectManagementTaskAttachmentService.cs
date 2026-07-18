@@ -1,4 +1,3 @@
-using AsterERP.Api.Application.System.Files;
 using AsterERP.Api.Infrastructure.Database;
 using AsterERP.Api.Infrastructure.Security;
 using AsterERP.Api.Modules.ProjectManagement;
@@ -13,7 +12,7 @@ namespace AsterERP.Api.Application.ProjectManagement;
 public sealed class ProjectManagementTaskAttachmentService(
     IWorkspaceDatabaseAccessor databaseAccessor,
     ICurrentUser currentUser,
-    IFileAppService fileAppService,
+    IProjectManagementFileStore fileStore,
     ProjectManagementAccessPolicy accessPolicy,
     IProjectManagementRealtimePublisher? realtimePublisher = null) : IProjectManagementTaskAttachmentService
 {
@@ -31,7 +30,7 @@ public sealed class ProjectManagementTaskAttachmentService(
         var task = await GetTaskAsync(taskId, cancellationToken);
         await accessPolicy.EnsureCanManageTaskAsync(task.ProjectId, task.AssigneeUserId, cancellationToken);
         if (file is null || file.Length <= 0 || file.Length > 100 * 1024 * 1024) throw new ValidationException("附件大小必须在 1 字节到 100 MB 之间");
-        var uploaded = await fileAppService.UploadAsync(file, $"ProjectManagement task:{task.Id}", cancellationToken);
+        var uploaded = await fileStore.StoreAsync(file, new ProjectManagementFileUploadContext(ProjectManagementFileWritePurpose.TaskAttachment, task.Id), cancellationToken);
         var entity = new ProjectManagementTaskAttachmentEntity
         {
             TenantId = Tenant(), AppCode = App(), ProjectId = task.ProjectId, TaskId = task.Id,
@@ -46,7 +45,7 @@ public sealed class ProjectManagementTaskAttachmentService(
         {
             try
             {
-                await fileAppService.DeleteAsync(uploaded.Id, CancellationToken.None);
+                await fileStore.DeleteAsync(uploaded.Id, CancellationToken.None);
             }
             catch
             {
@@ -65,8 +64,7 @@ public sealed class ProjectManagementTaskAttachmentService(
         var task = await GetTaskAsync(taskId, cancellationToken);
         await accessPolicy.EnsureCanViewProjectAsync(task.ProjectId, cancellationToken);
         var entity = await FindAsync(task.Id, id, cancellationToken);
-        var downloaded = await fileAppService.DownloadAsync(entity.FileId, cancellationToken);
-        return (Map(entity), downloaded.Stream);
+        return (Map(entity), await fileStore.OpenReadAsync(entity.FileId, cancellationToken));
     }
 
     public async Task DeleteAsync(string taskId, string id, long versionNo, CancellationToken cancellationToken = default)

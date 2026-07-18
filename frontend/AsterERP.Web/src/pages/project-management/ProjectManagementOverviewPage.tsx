@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 
 import {
   getProjectManagementActivities,
@@ -9,6 +9,7 @@ import { usePermission } from '../../core/auth/usePermission';
 import { isHttpError } from '../../core/http/httpError';
 import { projectManagementQueryKeys } from '../../core/query/projectManagementQueryKeys';
 import '../../features/project-management/projectManagement.css';
+import { toProjectManagementPlatformRoute } from '../../features/project-management/state/projectManagementPlatformRoutes';
 import { useProjectManagementWorkspaceScope } from '../../features/project-management/state/projectManagementWorkspaceScope';
 import { ResponsivePage } from '../../shared/responsive/ResponsivePage';
 import { Page403 } from '../../shared/status/Page403';
@@ -18,6 +19,11 @@ import { PageLoading } from '../../shared/status/PageLoading';
 export function ProjectManagementOverviewPage() {
   const scope = useProjectManagementWorkspaceScope();
   const { hasPermission: canViewActivities } = usePermission('project-management:audit:view');
+  const { hasPermission: canViewProject } = usePermission('project-management:project:view');
+  const { hasPermission: canViewTasks } = usePermission('project-management:task:view');
+  const { hasPermission: canViewMilestones } = usePermission('project-management:milestone:view');
+  const { hasPermission: canViewMembers } = usePermission('project-management:member:view');
+  const { hasPermission: canExportReports } = usePermission('project-management:report:export');
   const { projectId = '' } = useParams<{ projectId: string }>();
   const overviewQuery = useQuery({
     queryKey: projectManagementQueryKeys.overview(scope, { projectId, pageIndex: 1, pageSize: 1 }),
@@ -53,7 +59,22 @@ export function ProjectManagementOverviewPage() {
       description={project.description ?? '查看任务推进、风险、里程碑健康与近期协作活动。'}
       eyebrow="ProjectManagement / Overview"
       title={project.projectName}
-      toolbar={<div className="pm-toolbar-summary"><span>{project.projectCode}</span><ProjectStatus status={project.status} /><span>负责人：{project.ownerUserId || '未分配'}</span></div>}
+      toolbar={(
+        <div className="flex flex-col gap-2">
+          <div className="pm-toolbar-summary">
+            <span>{project.projectCode}</span>
+            <ProjectStatus status={project.status} />
+            <span>负责人：{project.ownerUserId || '未分配'}</span>
+          </div>
+          <nav aria-label="当前项目导航" className="flex flex-wrap gap-2 text-sm">
+            {canViewProject ? <Link className="rounded border border-gray-300 px-3 py-1" to={toProjectManagementPlatformRoute(`projects/${encodeURIComponent(projectId)}/overview`)}>概览</Link> : null}
+            {canViewTasks ? <Link className="rounded border border-gray-300 px-3 py-1" to={toProjectManagementPlatformRoute(`projects/${encodeURIComponent(projectId)}/tasks`)}>任务树</Link> : null}
+            {canViewMilestones ? <Link className="rounded border border-gray-300 px-3 py-1" to={toProjectManagementPlatformRoute(`projects/${encodeURIComponent(projectId)}/milestones`)}>里程碑</Link> : null}
+            {canViewMembers ? <Link className="rounded border border-gray-300 px-3 py-1" to={toProjectManagementPlatformRoute(`projects/${encodeURIComponent(projectId)}/members`)}>成员</Link> : null}
+            {canExportReports ? <Link className="rounded border border-gray-300 px-3 py-1" to={toProjectManagementPlatformRoute(`projects/${encodeURIComponent(projectId)}/reports`)}>报表</Link> : null}
+          </nav>
+        </div>
+      )}
     >
       <section aria-label="项目指标" className="pm-metric-grid">
         {metrics.map((metric) => <div className="pm-metric-card" data-tone={metric.tone} key={metric.label}><span className="pm-metric-card__label">{metric.label}</span><strong className="pm-metric-card__value">{metric.value}</strong></div>)}

@@ -2,6 +2,8 @@ using Volo.Abp.Modularity;
 using Microsoft.Extensions.DependencyInjection;
 using AsterERP.Api.Application.ProjectManagement;
 using AsterERP.Api.Infrastructure.Abp.CoreShell;
+using AsterERP.Api.Infrastructure.Abp.SystemAdministration;
+using AsterERP.Api.Infrastructure.ProjectManagement;
 using AsterERP.Api.Infrastructure.Scheduling;
 using AsterERP.Api.Infrastructure.Security.DataPermissions;
 using AsterERP.Api.Modules.ProjectManagement;
@@ -12,7 +14,9 @@ namespace AsterERP.Api.Infrastructure.Abp.ProjectManagement;
 /// ProjectManagement 的 ABP 模块边界。
 /// 业务应用服务、实体、迁移、权限和 ORM 数据过滤均在该边界内接入。
 /// </summary>
-[DependsOn(typeof(AsterErpCoreShellModule))]
+[DependsOn(
+    typeof(AsterErpCoreShellModule),
+    typeof(AsterErpSystemAdministrationModule))]
 public sealed class AsterErpProjectManagementModule : AbpModule
 {
     public override void ConfigureServices(ServiceConfigurationContext context)
@@ -25,6 +29,7 @@ public sealed class AsterErpProjectManagementModule : AbpModule
         context.Services.AddScoped<IProjectManagementMaintenanceLock, ProjectManagementMaintenanceLock>();
         context.Services.AddScoped<IProjectManagementRiskConfirmationService, ProjectManagementRiskConfirmationService>();
         context.Services.AddScoped<IProjectManagementBackupService, ProjectManagementBackupService>();
+        context.Services.AddScoped<IProjectManagementRealtimeTransport, ProjectManagementRealtimeTransport>();
         context.Services.AddScoped<IProjectManagementOperationProgressPublisher, ProjectManagementOperationProgressPublisher>();
         context.Services.AddScoped<IProjectManagementOperationWriter, ProjectManagementOperationWriter>();
         context.Services.AddScoped<IProjectManagementOperationService, ProjectManagementOperationService>();
@@ -32,6 +37,7 @@ public sealed class AsterErpProjectManagementModule : AbpModule
         context.Services.AddTransient<ProjectManagementOperationRunner>();
         context.Services.AddTransient<ProjectManagementOperationJob>();
         context.Services.AddScoped<IProjectManagementSyncJournalWriter, ProjectManagementSyncJournalWriter>();
+        context.Services.AddScoped<IProjectManagementFileStore, ProjectManagementFileStore>();
         context.Services.AddScoped<IProjectManagementTaskCommentService, ProjectManagementTaskCommentService>();
         context.Services.AddScoped<IProjectManagementTaskAttachmentService, ProjectManagementTaskAttachmentService>();
         context.Services.AddScoped<IProjectManagementSyncService, ProjectManagementSyncService>();
