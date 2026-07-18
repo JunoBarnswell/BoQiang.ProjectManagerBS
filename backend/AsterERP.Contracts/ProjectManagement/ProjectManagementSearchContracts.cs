@@ -19,3 +19,22 @@ public sealed record ProjectManagementSearchResponse(
     IReadOnlyList<ProjectManagementSearchItem> Labels,
     IReadOnlyList<ProjectManagementSearchItem> Members,
     IReadOnlyList<ProjectManagementSearchItem> Comments);
+
+public sealed record ProjectManagementSearchIndexOperationRequest(int BatchSize = 200);
+
+public sealed record ProjectManagementSearchIndexOperationResponse(
+    string OperationId,
+    string OperationType);
+
+public sealed record ProjectManagementSearchIndexStatusResponse(
+    string Status,
+    string Mode,
+    long AppliedSequenceNo,
+    long TargetSequenceNo,
+    int DocumentCount,
+    int FailureCount,
+    string? LastError,
+    string? OperationId,
+    DateTime? StartedTime,
+    DateTime? CompletedTime,
+    DateTime UpdatedTime);

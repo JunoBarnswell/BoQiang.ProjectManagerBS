@@ -32,6 +32,10 @@ public sealed class ProjectManagementSearchServiceTests
         Assert.Single(result.Projects); Assert.Single(result.Tasks); Assert.Single(result.Comments);
         Assert.Contains("search", result.Tasks[0].Summary!, StringComparison.OrdinalIgnoreCase);
         await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() => service.SearchAsync(new ProjectManagementSearchQuery(" ")));
+
+        var indexStatus = await service.GetIndexStatusAsync();
+        Assert.Equal("Unavailable", indexStatus.Status);
+        Assert.Equal(0, indexStatus.DocumentCount);
     }
 
     [Fact]
