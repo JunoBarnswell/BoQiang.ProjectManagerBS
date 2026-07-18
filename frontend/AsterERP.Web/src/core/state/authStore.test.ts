@@ -2,8 +2,8 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { SessionResponseDto } from '../../api/platform/auth.types';
-import { setApplicationAccessToken } from '../http/tokenStorage';
+import type { LoginResponseDto, SessionResponseDto } from '../../api/platform/auth.types';
+import { getAccessToken, setApplicationAccessToken } from '../http/tokenStorage';
 
 import { useAuthStore } from './authStore';
 import { useMenuStore } from './menuStore';
@@ -12,11 +12,12 @@ import { useTabStore } from './tabStore';
 import { useWorkspaceStore } from './workspaceStore';
 
 const getSessionMock = vi.fn<() => Promise<{ data: SessionResponseDto }>>();
+const loginMock = vi.fn<() => Promise<{ data: LoginResponseDto }>>();
 
 vi.mock('../../api/platform/auth.api', () => ({
   applicationLogin: vi.fn(),
   getSession: () => getSessionMock(),
-  login: vi.fn(),
+  login: () => loginMock(),
   switchPlatformWorkspace: vi.fn(),
   switchWorkspace: vi.fn()
 }));
@@ -24,6 +25,7 @@ vi.mock('../../api/platform/auth.api', () => ({
 describe('authStore', () => {
   beforeEach(() => {
     getSessionMock.mockReset();
+    loginMock.mockReset();
     localStorage.clear();
     setApplicationAccessToken('test-token');
     useAuthStore.setState({
@@ -84,6 +86,96 @@ describe('authStore', () => {
         path: '/tenants/tenant-a/apps/MES/admin/development-center/pages'
       }
     ]);
+  });
+
+  it('hydrates the full session before marking a platform login as authenticated', async () => {
+    const session = createSession();
+    loginMock.mockResolvedValue({
+      data: {
+        accessToken: 'platform-login-token',
+        availableWorkspaces: [],
+        currentWorkspace: null,
+        user: {
+          ...session.user,
+          displayName: 'Login response user',
+          permissionCodes: []
+        }
+      }
+    });
+    getSessionMock.mockResolvedValue({ data: session });
+
+    await expect(useAuthStore.getState().login({ password: 'password', userName: 'admin' })).resolves.toMatchObject({
+      accessToken: 'platform-login-token'
+    });
+
+    expect(getSessionMock).toHaveBeenCalledTimes(1);
+    expect(useAuthStore.getState()).toMatchObject({
+      isAuthenticated: true,
+      isLoading: false,
+      user: session.user
+    });
+    expect(useMenuStore.getState().menus).toEqual(session.menus);
+    expect(usePermissionStore.getState().permissionCodes).toEqual(session.permissionCodes);
+    expect(useWorkspaceStore.getState().currentWorkspace).toEqual(session.currentWorkspace);
+    expect(useWorkspaceStore.getState().availableWorkspaces).toEqual(session.availableWorkspaces);
+  });
+
+  it('clears the token and authentication state when platform login hydration fails', async () => {
+    const hydrationError = new Error('session hydration failed');
+    loginMock.mockResolvedValue({
+      data: {
+        accessToken: 'platform-login-token',
+        availableWorkspaces: [],
+        currentWorkspace: null,
+        user: createSession().user
+      }
+    });
+    getSessionMock.mockRejectedValue(hydrationError);
+
+    await expect(useAuthStore.getState().login({ password: 'password', userName: 'admin' })).rejects.toThrow(hydrationError);
+
+    expect(getAccessToken()).toBe('');
+    expect(useAuthStore.getState()).toMatchObject({
+      isAuthenticated: false,
+      isLoading: false,
+      user: null
+    });
+    expect(useMenuStore.getState().menus).toEqual([]);
+    expect(usePermissionStore.getState().permissionCodes).toEqual([]);
+    expect(useWorkspaceStore.getState().currentWorkspace).toBeNull();
+    expect(useWorkspaceStore.getState().availableWorkspaces).toEqual([]);
+  });
+
+  it('does not let a stale refresh overwrite menus from a newer login', async () => {
+    const previousSession = createSession();
+    const currentSession = {
+      ...createSession(),
+      menus: [{ ...createSession().menus[0], menuCode: 'app-module:production', menuName: '生产管理' }],
+      permissionCodes: ['app:runtime:production:view'],
+      user: { ...createSession().user, displayName: 'New session user', permissionCodes: ['app:runtime:production:view'] }
+    };
+    let resolveStaleSession: ((value: { data: SessionResponseDto }) => void) | undefined;
+    const staleSession = new Promise<{ data: SessionResponseDto }>((resolve) => {
+      resolveStaleSession = resolve;
+    });
+    getSessionMock.mockImplementationOnce(() => staleSession).mockResolvedValueOnce({ data: currentSession });
+    loginMock.mockResolvedValue({
+      data: {
+        accessToken: 'platform-login-token',
+        availableWorkspaces: [],
+        currentWorkspace: null,
+        user: currentSession.user
+      }
+    });
+
+    const staleRefresh = useAuthStore.getState().refreshSession();
+    await useAuthStore.getState().login({ password: 'password', userName: 'admin' });
+    resolveStaleSession?.({ data: previousSession });
+    await staleRefresh;
+
+    expect(useMenuStore.getState().menus).toEqual(currentSession.menus);
+    expect(usePermissionStore.getState().permissionCodes).toEqual(currentSession.permissionCodes);
+    expect(useAuthStore.getState().user).toEqual(currentSession.user);
   });
 });
 

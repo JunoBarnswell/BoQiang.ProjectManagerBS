@@ -43,7 +43,7 @@ public sealed class ProjectManagementBackupServiceTests
                 new Claim(AsterErpClaimTypes.AppCode, "MES")
             }, "test")));
             var operationWriter = new ProjectManagementOperationWriter(accessor, user);
-            var service = new ProjectManagementBackupService(accessor, user, new TestPasswordHashService(), new ProjectManagementMaintenanceLock(accessor, user), new TestHostEnvironment(root), operationWriter);
+            var service = new ProjectManagementBackupService(accessor, user, new ProjectManagementRiskConfirmationService(accessor, user, new TestPasswordHashService()), new ProjectManagementMaintenanceLock(accessor, user), new TestHostEnvironment(root), operationWriter);
 
             var backup = await service.CreateAsync(new ProjectManagementBackupRequest("secret", true, "test backup"));
             Assert.Equal("Ready", backup.Status);
@@ -85,7 +85,7 @@ public sealed class ProjectManagementBackupServiceTests
             {
                 new Claim(AsterErpClaimTypes.UserId, "operator"), new Claim(AsterErpClaimTypes.TenantId, "tenant-a"), new Claim(AsterErpClaimTypes.AppCode, "MES")
             }, "test")));
-            var service = new ProjectManagementBackupService(accessor, user, new TestPasswordHashService(), new ProjectManagementMaintenanceLock(accessor, user), new TestHostEnvironment(root));
+            var service = new ProjectManagementBackupService(accessor, user, new ProjectManagementRiskConfirmationService(accessor, user, new TestPasswordHashService()), new ProjectManagementMaintenanceLock(accessor, user), new TestHostEnvironment(root));
 
             await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() => service.RestoreAsync("malicious-backup", new ProjectManagementRestoreRequest("secret", true)));
         }
@@ -111,7 +111,7 @@ public sealed class ProjectManagementBackupServiceTests
             {
                 new Claim(AsterErpClaimTypes.UserId, "operator"), new Claim(AsterErpClaimTypes.TenantId, "tenant-a"), new Claim(AsterErpClaimTypes.AppCode, "MES")
             }, "test")));
-            var service = new ProjectManagementBackupService(accessor, user, new TestPasswordHashService(), new ProjectManagementMaintenanceLock(accessor, user), new TestHostEnvironment(rootFile), new ProjectManagementOperationWriter(accessor, user));
+            var service = new ProjectManagementBackupService(accessor, user, new ProjectManagementRiskConfirmationService(accessor, user, new TestPasswordHashService()), new ProjectManagementMaintenanceLock(accessor, user), new TestHostEnvironment(rootFile), new ProjectManagementOperationWriter(accessor, user));
 
             await Assert.ThrowsAnyAsync<Exception>(() => service.CreateAsync(new ProjectManagementBackupRequest("secret", true)));
             var operation = await db.Queryable<ProjectManagementOperationEntity>().FirstAsync();

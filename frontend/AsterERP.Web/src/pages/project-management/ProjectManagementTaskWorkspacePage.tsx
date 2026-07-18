@@ -39,6 +39,7 @@ import { isHttpError } from '../../core/http/httpError';
 import { queryKeys } from '../../core/query/queryKeys';
 import { useApiMutation } from '../../core/query/useApiMutation';
 import { useOpenImConversation } from '../../features/im/hooks/useOpenImConversation';
+import '../../features/project-management/projectManagement.css';
 import { useProjectManagementRealtimeConnection } from '../../features/project-management/hooks/useProjectManagementRealtimeConnection';
 import { useTaskWorkspaceUrlState } from '../../features/project-management/hooks/useTaskWorkspaceUrlState';
 import { useProjectManagementWorkspaceScope } from '../../features/project-management/state/projectManagementWorkspaceScope';
@@ -76,6 +77,15 @@ function resolveView(pathname: string): ProjectManagementTaskView {
   return 'tree';
 }
 
+const taskViewMeta: Record<ProjectManagementTaskView, { description: string; label: string; note?: string }> = {
+  tree: { label: '任务树', description: '按父子层级查看并执行当前项目的真实任务命令。' },
+  list: { label: '任务列表', description: '以同一查询口径平铺显示任务，筛选和权限与其他视图一致。' },
+  card: { label: '任务卡片', description: '以卡片投影查看当前筛选结果，任务编辑仍走统一命令。' },
+  board: { label: '任务看板', description: '按任务状态分列显示当前筛选结果，拖动仍由后端校验。' },
+  gantt: { label: '计划投影', description: '按现有开始/截止日期显示任务计划数据。', note: '当前为计划数据投影；可缩放时间轴、依赖连线、关键路径和日期拖动由后续甘特 Case 实现。' },
+  calendar: { label: '日期投影', description: '按现有截止日期汇总任务，保持与其他视图相同的查询和权限。', note: '当前为按截止日期聚合的日历原型；月/周网格、日期拖动和快速新建由后续日历 Case 实现。' }
+};
+
 export function ProjectManagementTaskWorkspacePage() {
   const scope = useProjectManagementWorkspaceScope();
   const { projectId = '' } = useParams<{ projectId: string }>();
@@ -93,6 +103,7 @@ export function ProjectManagementTaskWorkspacePage() {
   const [form, setForm] = useState<ProjectManagementTaskUpsertRequest>(emptyForm);
   const [commentForm, setCommentForm] = useState<ProjectManagementTaskCommentUpsertRequest>({ markdown: '' });
   const query = useMemo(() => taskWorkspaceStateToQuery(projectId, state), [projectId, state]);
+  const activeView = taskViewMeta[state.viewKey];
 
   useProjectManagementRealtimeConnection('/hubs/system-notification', scope, projectId, scope.isAvailable && Boolean(projectId));
 
@@ -331,9 +342,10 @@ export function ProjectManagementTaskWorkspacePage() {
 
   return (
     <ResponsivePage
-      description="所有视图共享 URL 查询状态、对象权限、乐观并发和实时失效链。"
+      className="pm-page"
+      description={activeView.description}
       eyebrow="ProjectManagement / Tasks"
-      title={`项目任务 · ${state.viewKey}`}
+      title={`项目任务 · ${activeView.label}`}
       toolbar={
         <TaskWorkspaceToolbar
           onOpenBatch={() => setBatchOpen(true)}
@@ -371,37 +383,44 @@ export function ProjectManagementTaskWorkspacePage() {
         />
       }
     >
-      <TaskWorkspaceSelectionPanel
-        attachments={attachmentsQuery.data?.data ?? []}
-        attachmentsError={attachmentsQuery.isError}
-        attachmentUploading={attachmentMutation.isPending}
-        comments={commentsQuery.data?.data ?? []}
-        commentsError={commentsQuery.isError}
-        commentForm={commentForm}
-        commentSubmitting={commentMutation.isPending}
-        creating={creating}
-        form={form}
-        onCancel={() => {
-          setCreating(false);
-          setForm(emptyForm);
-          setState({ selectedTaskId: undefined });
-        }}
-        onCommentChange={setCommentForm}
-        onCommentSubmit={() => commentMutation.mutate()}
-        onCreateReminder={(request) => reminderCreateMutation.mutate(request)}
-        onCancelReminder={(reminder) => confirm({ title: '取消任务提醒', content: '取消后不会再向接收人投递该提醒。', confirmText: '取消提醒', onConfirm: () => reminderCancelMutation.mutate(reminder) })}
-        onDeleteReminder={(reminder) => confirm({ title: '删除提醒记录', content: '删除后不再保留该提醒的历史记录。', confirmText: '删除记录', onConfirm: () => reminderDeleteMutation.mutate(reminder) })}
-        onFormChange={setForm}
-        onSubmit={() => saveMutation.mutate()}
-        onUpload={(file) => attachmentMutation.mutate(file)}
-        reminderCreating={reminderCreateMutation.isPending || reminderCancelMutation.isPending || reminderDeleteMutation.isPending}
-        reminderMembers={membersQuery.data?.data ?? []}
-        reminders={remindersQuery.data?.data ?? []}
-        remindersError={remindersQuery.isError}
-        remindersLoading={remindersQuery.isLoading}
-        saving={saveMutation.isPending}
-        selectedTask={selectedTask}
-      />
+      <section className="pm-workspace-summary" aria-label="当前任务工作区状态">
+        <span><strong>{activeView.label}</strong> · 当前筛选共 {tasksQuery.data?.data?.total ?? 0} 个任务</span>
+        <span>{selectedTasks.length ? `已选择 ${selectedTasks.length} 个任务，可批量更新。` : '选择任务可打开详情、协作、附件与提醒。'}</span>
+      </section>
+      {activeView.note ? <p className="pm-prototype-note" role="status">{activeView.note}</p> : null}
+      <section className="pm-detail-region" aria-label={creating ? '新建任务' : selectedTask ? '任务详情' : '任务详情占位区域'}>
+        <TaskWorkspaceSelectionPanel
+          attachments={attachmentsQuery.data?.data ?? []}
+          attachmentsError={attachmentsQuery.isError}
+          attachmentUploading={attachmentMutation.isPending}
+          comments={commentsQuery.data?.data ?? []}
+          commentsError={commentsQuery.isError}
+          commentForm={commentForm}
+          commentSubmitting={commentMutation.isPending}
+          creating={creating}
+          form={form}
+          onCancel={() => {
+            setCreating(false);
+            setForm(emptyForm);
+            setState({ selectedTaskId: undefined });
+          }}
+          onCommentChange={setCommentForm}
+          onCommentSubmit={() => commentMutation.mutate()}
+          onCreateReminder={(request) => reminderCreateMutation.mutate(request)}
+          onCancelReminder={(reminder) => confirm({ title: '取消任务提醒', content: '取消后不会再向接收人投递该提醒。', confirmText: '取消提醒', onConfirm: () => reminderCancelMutation.mutate(reminder) })}
+          onDeleteReminder={(reminder) => confirm({ title: '删除提醒记录', content: '删除后不再保留该提醒的历史记录。', confirmText: '删除记录', onConfirm: () => reminderDeleteMutation.mutate(reminder) })}
+          onFormChange={setForm}
+          onSubmit={() => saveMutation.mutate()}
+          onUpload={(file) => attachmentMutation.mutate(file)}
+          reminderCreating={reminderCreateMutation.isPending || reminderCancelMutation.isPending || reminderDeleteMutation.isPending}
+          reminderMembers={membersQuery.data?.data ?? []}
+          reminders={remindersQuery.data?.data ?? []}
+          remindersError={remindersQuery.isError}
+          remindersLoading={remindersQuery.isLoading}
+          saving={saveMutation.isPending}
+          selectedTask={selectedTask}
+        />
+      </section>
       {selectedTask && !creating ? (
         <TaskWorkspaceImConversationPanel
           conversation={taskConversationQuery.data?.data}
@@ -433,29 +452,32 @@ export function ProjectManagementTaskWorkspacePage() {
         projectId={projectId}
         tasks={selectedTasks}
       />
-      <TaskWorkspaceProjection
-        onMoveTask={(task, target) => {
-          if (moveMutation.isPending) {
-            message.error('正在提交上一项任务移动，请稍候');
-            return;
-          }
-          const request = createTaskMoveRequest(task, target);
-          if (request) moveMutation.mutate({ taskId: task.id, request });
-        }}
-        onSelectTask={(taskId) => {
-          setCreating(false);
-          setState({ selectedTaskId: taskId });
-        }}
-        onToggleTaskSelection={(taskId) => setSelectedTaskIds((current) => {
-          const next = new Set(current);
-          if (next.has(taskId)) next.delete(taskId);
-          else next.add(taskId);
-          return next;
-        })}
-        rows={rows}
-        selectedTaskIds={selectedTaskIds}
-        state={state}
-      />
+      <section className="pm-projection" aria-labelledby="task-projection-title">
+        <div className="pm-projection-heading"><div><h2 id="task-projection-title">{activeView.label}</h2><p>当前渲染的是服务端返回的任务数据；选择、批量更新和可用的移动命令均继续使用原有请求链路。</p></div><span className="pm-view-note">{rows.length} 条已加载</span></div>
+        <TaskWorkspaceProjection
+          onMoveTask={(task, target) => {
+            if (moveMutation.isPending) {
+              message.error('正在提交上一项任务移动，请稍候');
+              return;
+            }
+            const request = createTaskMoveRequest(task, target);
+            if (request) moveMutation.mutate({ taskId: task.id, request });
+          }}
+          onSelectTask={(taskId) => {
+            setCreating(false);
+            setState({ selectedTaskId: taskId });
+          }}
+          onToggleTaskSelection={(taskId) => setSelectedTaskIds((current) => {
+            const next = new Set(current);
+            if (next.has(taskId)) next.delete(taskId);
+            else next.add(taskId);
+            return next;
+          })}
+          rows={rows}
+          selectedTaskIds={selectedTaskIds}
+          state={state}
+        />
+      </section>
     </ResponsivePage>
   );
 }

@@ -13,3 +13,20 @@ public sealed record ProjectManagementBackupResponse(
     DateTime? CompletedAt);
 
 public sealed record ProjectManagementRestoreRequest(string CurrentPassword, bool ConfirmRisk);
+
+public sealed record ProjectManagementDataSpaceImpact(
+    string TenantId,
+    string AppCode,
+    int ProjectCount,
+    int TaskCount,
+    int MemberCount,
+    int MilestoneCount,
+    int AttachmentCount);
+
+public sealed record ProjectManagementBackupRestorePreviewResponse(
+    ProjectManagementBackupResponse Backup,
+    ProjectManagementDataSpaceImpact CurrentDataSpace,
+    ProjectManagementDataSpaceImpact BackupDataSpace,
+    string ImpactScope,
+    string FailureCompensationHint,
+    string SuccessfulRestoreRollbackHint);
