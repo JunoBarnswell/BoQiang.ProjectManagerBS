@@ -15,17 +15,22 @@ public sealed class ProjectManagementOperationService(
     IProjectManagementOperationWriter operationWriter,
     IBackgroundJobManager backgroundJobManager) : IProjectManagementOperationService
 {
-    public async Task<ProjectManagementOperationResponse> GetAsync(string operationId, CancellationToken cancellationToken = default) =>
-        Map(await GetOwnedAsync(operationId, cancellationToken));
+    public async Task<ProjectManagementOperationResponse> GetAsync(string operationId, CancellationToken cancellationToken = default)
+    {
+        RequireSystemWorkspace();
+        return Map(await GetOwnedAsync(operationId, cancellationToken));
+    }
 
     public async Task<ProjectManagementOperationResponse> RequestCancellationAsync(string operationId, CancellationToken cancellationToken = default)
     {
+        RequireSystemWorkspace();
         await operationWriter.RequestCancellationAsync(Required(operationId), cancellationToken);
         return await GetAsync(operationId, cancellationToken);
     }
 
     public async Task<ProjectManagementOperationResponse> RunWorkspaceValidationAsync(CancellationToken cancellationToken = default)
     {
+        RequireSystemWorkspace();
         var operationId = Guid.NewGuid().ToString("N");
         var traceId = global::System.Diagnostics.Activity.Current?.Id ?? Guid.NewGuid().ToString("N");
         await operationWriter.CreatePendingAsync(operationId, "maintenance.workspace-validation", "{}", traceId, cancellationToken);
@@ -55,5 +60,6 @@ public sealed class ProjectManagementOperationService(
     private string Tenant() => currentUser.GetAsterErpTenantId()?.Trim() ?? throw new ValidationException("当前会话缺少租户", ErrorCodes.PermissionDenied);
     private string App() => currentUser.GetAsterErpAppCode()?.Trim().ToUpperInvariant() ?? throw new ValidationException("当前会话缺少应用", ErrorCodes.PermissionDenied);
     private string UserId() => currentUser.GetAsterErpUserId()?.Trim() ?? throw new ValidationException("当前会话缺少用户", ErrorCodes.PermissionDenied);
+    private void RequireSystemWorkspace() => ProjectManagementPlatformScope.RequireSystemWorkspace(currentUser);
     private static string Required(string? value) => string.IsNullOrWhiteSpace(value) ? throw new ValidationException("长任务标识不能为空") : value.Trim();
 }

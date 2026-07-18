@@ -25,11 +25,11 @@ public sealed class ProjectManagementAuditServiceTests
         await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
         await db.Insertable(new ProjectManagementProjectEntity
         {
-            Id = "project-a", TenantId = "tenant-a", AppCode = "MES", ProjectCode = "A", ProjectName = "A", OwnerUserId = "operator"
+            Id = "project-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "A", ProjectName = "A", OwnerUserId = "operator"
         }).ExecuteCommandAsync();
         await db.Insertable(new ProjectManagementActivityEntity
         {
-            Id = "activity-a", TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-a", AggregateType = "Task", AggregateId = "task-a",
+            Id = "activity-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", AggregateType = "Task", AggregateId = "task-a",
             ActivityType = "updated", Summary = "标题, \"已更新\"", TraceId = "trace-a", ActorUserId = "operator", CreatedBy = "operator", CreatedTime = DateTime.UtcNow
         }).ExecuteCommandAsync();
 
@@ -38,7 +38,7 @@ public sealed class ProjectManagementAuditServiceTests
         {
             new Claim(AsterErpClaimTypes.UserId, "operator"),
             new Claim(AsterErpClaimTypes.TenantId, "tenant-a"),
-            new Claim(AsterErpClaimTypes.AppCode, "MES")
+            new Claim(AsterErpClaimTypes.AppCode, "SYSTEM")
         }, "test")));
         var service = new ProjectManagementAuditService(accessor, user, new ProjectManagementAccessPolicy(accessor, user));
 
@@ -54,8 +54,10 @@ public sealed class ProjectManagementAuditServiceTests
     {
         public ISqlSugarClient MainDb => db;
         public ISqlSugarClient GetCurrentDb() => db;
+        public ISqlSugarClient GetProjectManagementDb() => db;
         public ISqlSugarClient RequireApplicationDb() => db;
         public Task<ISqlSugarClient> GetCurrentDbAsync(CancellationToken cancellationToken = default) => Task.FromResult(db);
+        public Task<ISqlSugarClient> GetProjectManagementDbAsync(CancellationToken cancellationToken = default) => Task.FromResult(db);
         public Task<ISqlSugarClient> RequireApplicationDbAsync(CancellationToken cancellationToken = default) => Task.FromResult(db);
     }
 }

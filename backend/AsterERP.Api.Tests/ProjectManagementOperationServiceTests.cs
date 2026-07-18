@@ -26,7 +26,7 @@ public sealed class ProjectManagementOperationServiceTests
         using var db = CreateDatabase();
         await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
         var publisher = new RecordingOperationPublisher();
-        var user = CreateUser("operator", "tenant-a", "MES");
+        var user = CreateUser("operator", "tenant-a", "SYSTEM");
         var writer = new ProjectManagementOperationWriter(new TestWorkspaceDatabaseAccessor(db), user, publisher);
         var jobs = new RecordingBackgroundJobManager();
         var service = new ProjectManagementOperationService(new TestWorkspaceDatabaseAccessor(db), user, writer, jobs);
@@ -100,7 +100,7 @@ public sealed class ProjectManagementOperationServiceTests
     {
         using var db = CreateDatabase();
         await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
-        var user = CreateUser("operator", "tenant-a", "MES");
+        var user = CreateUser("operator", "tenant-a", "SYSTEM");
         var accessor = new TestWorkspaceDatabaseAccessor(db);
         var writer = new ProjectManagementOperationWriter(accessor, user);
         var httpContextAccessor = new HttpContextAccessor();
@@ -159,11 +159,33 @@ public sealed class ProjectManagementOperationServiceTests
     }
 
     [Fact]
-    public async Task Enqueue_failure_marks_pending_operation_failed()
+    public async Task Non_system_workspace_rejects_operation_read_create_and_cancel_before_side_effects()
     {
         using var db = CreateDatabase();
         await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
         var user = CreateUser("operator", "tenant-a", "MES");
+        var accessor = new TestWorkspaceDatabaseAccessor(db);
+        var writer = new ProjectManagementOperationWriter(accessor, user);
+        await writer.StartAsync("existing-operation", "maintenance.workspace-validation", "{}", "trace-existing");
+        var jobs = new RecordingBackgroundJobManager();
+        var service = new ProjectManagementOperationService(accessor, user, writer, jobs);
+
+        await Assert.ThrowsAsync<ValidationException>(() => service.GetAsync("existing-operation"));
+        await Assert.ThrowsAsync<ValidationException>(() => service.RequestCancellationAsync("existing-operation"));
+        await Assert.ThrowsAsync<ValidationException>(() => service.RunWorkspaceValidationAsync());
+
+        var existing = await db.Queryable<ProjectManagementOperationEntity>().Where(item => item.Id == "existing-operation").FirstAsync();
+        Assert.False(existing.IsCancellationRequested);
+        Assert.Single(await db.Queryable<ProjectManagementOperationEntity>().Where(item => !item.IsDeleted).ToListAsync());
+        Assert.Empty(jobs.Args);
+    }
+
+    [Fact]
+    public async Task Enqueue_failure_marks_pending_operation_failed()
+    {
+        using var db = CreateDatabase();
+        await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
+        var user = CreateUser("operator", "tenant-a", "SYSTEM");
         var service = new ProjectManagementOperationService(new TestWorkspaceDatabaseAccessor(db), user, new ProjectManagementOperationWriter(new TestWorkspaceDatabaseAccessor(db), user), new ThrowingBackgroundJobManager());
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => service.RunWorkspaceValidationAsync());
@@ -229,7 +251,7 @@ public sealed class ProjectManagementOperationServiceTests
         using var db = CreateDatabase();
         await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
         var accessor = new TestWorkspaceDatabaseAccessor(db);
-        var owner = CreateUser("operator", "tenant-a", "MES");
+        var owner = CreateUser("operator", "tenant-a", "SYSTEM");
         var writer = new ProjectManagementOperationWriter(accessor, owner);
         await writer.StartAsync("operation-1", "maintenance.workspace-validation", "{}", "trace-1");
         await writer.FailAsync("operation-1", "validation failed");
@@ -239,10 +261,10 @@ public sealed class ProjectManagementOperationServiceTests
         Assert.Equal("Failed", operation.Status);
         Assert.Equal("validation failed", operation.ErrorMessage);
 
-        var otherUserService = new ProjectManagementOperationService(accessor, CreateUser("other", "tenant-a", "MES"), new ProjectManagementOperationWriter(accessor, CreateUser("other", "tenant-a", "MES")), new RecordingBackgroundJobManager());
+        var otherUserService = new ProjectManagementOperationService(accessor, CreateUser("other", "tenant-a", "SYSTEM"), new ProjectManagementOperationWriter(accessor, CreateUser("other", "tenant-a", "SYSTEM")), new RecordingBackgroundJobManager());
         await Assert.ThrowsAsync<NotFoundException>(() => otherUserService.GetAsync("operation-1"));
 
-        var otherTenant = CreateUser("operator", "tenant-b", "MES");
+        var otherTenant = CreateUser("operator", "tenant-b", "SYSTEM");
         var otherTenantService = new ProjectManagementOperationService(accessor, otherTenant, new ProjectManagementOperationWriter(accessor, otherTenant), new RecordingBackgroundJobManager());
         await Assert.ThrowsAsync<NotFoundException>(() => otherTenantService.GetAsync("operation-1"));
     }
