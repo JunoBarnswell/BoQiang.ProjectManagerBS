@@ -94,19 +94,34 @@ public sealed class ProjectManagementTaskServiceTests
         }).ExecuteCommandAsync();
         var service = new ProjectManagementTaskService(new TestWorkspaceDatabaseAccessor(db), CreateUser());
 
-        var created = await service.CreateAsync("project-a", new ProjectManagementTaskUpsertRequest("T-1", "任务", "完整详情", AssigneeUserId: "member-a", EstimateMinutes: 120, Weight: 2));
+        var created = await service.CreateAsync("project-a", new ProjectManagementTaskUpsertRequest("T-1", "任务", AssigneeUserId: "member-a", EstimateMinutes: 120, Weight: 2, Summary: "列表摘要", Markdown: "## 完整详情"));
         var page = await service.QueryAsync(new ProjectManagementTaskQuery("project-a", PageIndex: 1, PageSize: 20));
         var listItem = Assert.Single(page.Items);
         Assert.Equal(created.Id, listItem.Id);
+        Assert.Equal("列表摘要", listItem.Summary);
         Assert.Null(typeof(ProjectManagementTaskListItemResponse).GetProperty("Description"));
+        Assert.Null(typeof(ProjectManagementTaskListItemResponse).GetProperty("Markdown"));
 
         var detail = await service.GetAsync(created.Id);
-        Assert.Equal("完整详情", detail.Description);
+        Assert.Equal("列表摘要", detail.Summary);
+        Assert.Equal("## 完整详情", detail.Markdown);
+        Assert.Equal("## 完整详情", detail.Description);
         Assert.Equal(120, detail.EstimateMinutes);
         await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() =>
             service.CreateAsync("project-a", new ProjectManagementTaskUpsertRequest("T-2", "无效负责人", AssigneeUserId: "outside-user")));
         await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() =>
             service.QueryAsync(new ProjectManagementTaskQuery("project-a", DueFrom: DateTime.UtcNow.AddDays(1), DueTo: DateTime.UtcNow)));
+        await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() =>
+            service.CreateAsync("project-a", new ProjectManagementTaskUpsertRequest("T-3", "冲突正文", Description: "旧正文", Markdown: "新正文")));
+
+        var conflict = await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() =>
+            service.UpdateAsync(created.Id, new ProjectManagementTaskUpsertRequest("T-1", "任务", VersionNo: created.VersionNo - 1)));
+        Assert.Equal(ErrorCodes.ApplicationDevelopmentPageRevisionConflict, conflict.Code);
+
+        var deniedService = new ProjectManagementTaskService(new TestWorkspaceDatabaseAccessor(db), CreateUser("viewer"));
+        var denied = await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() =>
+            deniedService.CreateAsync("project-a", new ProjectManagementTaskUpsertRequest("T-4", "无权限创建")));
+        Assert.Equal(ErrorCodes.PermissionDenied, denied.Code);
     }
 
     [Fact]
@@ -141,6 +156,9 @@ public sealed class ProjectManagementTaskServiceTests
         Assert.Equal(ProjectManagementDomainRules.TaskDone, parent.Status);
         Assert.NotNull(parent.ActualStartAt);
         Assert.NotNull(parent.ActualEndAt);
+        var listProjection = Assert.Single((await service.QueryAsync(new ProjectManagementTaskQuery("project-a"))).Items);
+        Assert.NotNull(listProjection.ActualStartAt);
+        Assert.NotNull(listProjection.ActualEndAt);
         var reopened = await service.UpdateAsync(parent.Id, new ProjectManagementTaskUpsertRequest("P", "Parent", Status: "Done", ProgressPercent: 20, VersionNo: parent.VersionNo));
         Assert.Equal(ProjectManagementDomainRules.TaskInProgress, reopened.Status);
         var child = await service.CreateAsync("project-a", new ProjectManagementTaskUpsertRequest("C", "Child", ParentTaskId: parent.Id, DueDate: DateTime.UtcNow.AddDays(-1)));

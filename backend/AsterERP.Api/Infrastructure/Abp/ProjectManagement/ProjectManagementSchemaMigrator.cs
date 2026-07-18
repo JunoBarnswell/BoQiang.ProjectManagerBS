@@ -116,6 +116,7 @@ CREATE TABLE IF NOT EXISTS pm_tasks (
     ParentTaskId TEXT NULL,
     TaskCode TEXT NOT NULL,
     Title TEXT NOT NULL,
+    Summary TEXT NULL,
     Description TEXT NULL,
     Status TEXT NOT NULL DEFAULT 'Todo',
     Priority TEXT NOT NULL DEFAULT 'Medium',
@@ -189,6 +190,7 @@ CREATE TABLE IF NOT EXISTS pm_task_participants (
         schema.EnsureColumn("pm_milestones", "HealthStatus", "TEXT NOT NULL DEFAULT 'OnTrack'");
         schema.EnsureColumn("pm_tasks", "BlockedReason", "TEXT NULL");
         schema.EnsureColumn("pm_tasks", "OccurrenceKey", "TEXT NULL");
+        schema.EnsureColumn("pm_tasks", "Summary", "TEXT NULL");
         schema.Execute("""
 CREATE TABLE IF NOT EXISTS pm_labels (
     Id TEXT NOT NULL PRIMARY KEY,

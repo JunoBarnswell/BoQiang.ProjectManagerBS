@@ -14,6 +14,7 @@ public sealed class ProjectManagementTaskEntity : EntityBase
     public string TaskCode { get; set; } = string.Empty;
     [SugarColumn(IsNullable = true)] public string? OccurrenceKey { get; set; }
     public string Title { get; set; } = string.Empty;
+    [SugarColumn(IsNullable = true)] public string? Summary { get; set; }
     [SugarColumn(IsNullable = true)] public string? Description { get; set; }
     public string Status { get; set; } = "Todo";
     [SugarColumn(IsNullable = true)] public string? BlockedReason { get; set; }
