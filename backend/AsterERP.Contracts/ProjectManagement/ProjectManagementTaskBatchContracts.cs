@@ -9,6 +9,7 @@ public sealed record ProjectManagementTaskBatchUpdateRequest(
     string? Priority = null,
     string? AssigneeUserId = null,
     bool OverrideWip = false,
+    string? OverrideWipReason = null,
     string? MilestoneId = null,
     bool UpdateMilestone = false,
     DateTime? StartDate = null,

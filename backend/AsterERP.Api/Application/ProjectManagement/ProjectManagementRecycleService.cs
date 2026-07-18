@@ -30,7 +30,8 @@ public sealed class ProjectManagementRecycleService(
     IProjectManagementFileStore? fileStore = null,
     IProjectManagementReversibleCommandWriter? reversibleCommandWriter = null,
     IProjectManagementPurgeFileDeletionService? purgeFileDeletionService = null,
-    IBackgroundJobManager? backgroundJobManager = null) : IProjectManagementRecycleService, ITransientDependency
+    IBackgroundJobManager? backgroundJobManager = null,
+    ProjectManagementWipCoordinator? wipCoordinator = null) : IProjectManagementRecycleService, ITransientDependency
 {
     public async Task<ProjectManagementRecycleResponse> QueryAsync(ProjectManagementRecycleQuery query, CancellationToken cancellationToken = default)
     {
@@ -126,6 +127,9 @@ public sealed class ProjectManagementRecycleService(
             if (task.MilestoneId is not null && !await db.Queryable<ProjectManagementMilestoneEntity>().AnyAsync(item => item.Id == task.MilestoneId && item.ProjectId == task.ProjectId && !item.IsDeleted, cancellationToken))
                 throw new ValidationException("里程碑已删除或不存在，不能恢复");
         }
+        await using var wipLease = targets.Any(task => task.Status == ProjectManagementDomainRules.TaskInProgress)
+            ? await WipCoordinator.EnterAsync(RequireTenantId(), RequireAppCode(), entity.ProjectId, cancellationToken)
+            : null;
         await EnsureWipCapacityAsync(entity.ProjectId, targets, cancellationToken);
         var now = DateTime.UtcNow;
         var userId = RequireUserId();
@@ -465,6 +469,8 @@ public sealed class ProjectManagementRecycleService(
 
     private Task RefreshProgressAsync(string projectId, CancellationToken cancellationToken) =>
         (progressProjector ?? new ProjectManagementTaskProgressProjector(databaseAccessor)).RefreshAsync(projectId, cancellationToken);
+
+    private ProjectManagementWipCoordinator WipCoordinator => wipCoordinator ?? new ProjectManagementWipCoordinator();
 
     private Task RefreshDependencyStatesAsync(string projectId, CancellationToken cancellationToken) =>
         (dependencyService ?? new ProjectManagementTaskDependencyService(databaseAccessor, currentUser)).RefreshBlockedStatesAsync(projectId, cancellationToken);

@@ -6,6 +6,7 @@ using AsterERP.Api.Modules.ProjectManagement;
 using AsterERP.Contracts.ProjectManagement;
 using AsterERP.Shared;
 using AsterERP.Shared.Exceptions;
+using SqlSugar;
 using Volo.Abp.Users;
 
 namespace AsterERP.Api.Application.ProjectManagement;
@@ -18,7 +19,8 @@ public sealed class ProjectManagementTaskDependencyService(
     IWorkspaceDatabaseAccessor databaseAccessor,
     ICurrentUser currentUser,
     ProjectManagementAccessPolicy? accessPolicy = null,
-    IProjectManagementActivityWriter? activityWriter = null) : IProjectManagementTaskDependencyService, IProjectManagementTaskTemplateDependencyCommandService
+    IProjectManagementActivityWriter? activityWriter = null,
+    ProjectManagementWipCoordinator? wipCoordinator = null) : IProjectManagementTaskDependencyService, IProjectManagementTaskTemplateDependencyCommandService
 {
     private const string FinishToStart = "FinishToStart";
     private const string ForcedStartReasonPrefix = "已强制开始：";
@@ -109,6 +111,7 @@ public sealed class ProjectManagementTaskDependencyService(
         // 强制开始不是普通任务编辑：必须是 Owner/Manager，Lead 不能越过前置依赖。
         await Policy().EnsureCanManageProjectAsync(projectId, cancellationToken);
         var reason = NormalizeForceStartReason(request.Reason);
+        await using var wipLease = await WipCoordinator.EnterAsync(RequireTenantId(), RequireAppCode(), projectId, cancellationToken);
         await using var lease = await EnterProjectWriteAsync(projectId, cancellationToken);
         var db = databaseAccessor.GetCurrentDb();
         ProjectManagementTaskEntity? task = null;
@@ -122,6 +125,7 @@ public sealed class ProjectManagementTaskDependencyService(
             var snapshot = await LoadDependencySnapshotAsync(projectId, cancellationToken);
             blockerCount = CountBlockers(task.Id, snapshot.Dependencies, snapshot.StatusByTaskId, out _);
             if (blockerCount == 0) throw new ValidationException("任务当前没有未完成前置依赖，不需要强制开始");
+            var wipOverride = await EnsureWipAsync(db, projectId, task.Status != ProjectManagementDomainRules.TaskInProgress, request.OverrideWip, request.OverrideWipReason, cancellationToken);
             var now = DateTime.UtcNow;
             task.Status = ProjectManagementDomainRules.TaskInProgress;
             task.BlockedReason = ForcedStartReasonPrefix + reason;
@@ -131,6 +135,7 @@ public sealed class ProjectManagementTaskDependencyService(
             task.UpdatedTime = now;
             await db.Updateable(task).ExecuteCommandAsync(cancellationToken);
             await WriteTaskAuditAsync(task, "task.dependency.force-started", $"强制开始被前置任务阻塞的任务：{reason}", cancellationToken);
+            await WriteWipOverrideAuditAsync(task, wipOverride, cancellationToken);
         });
         return new ProjectManagementTaskDependencyForceStartResponse(task!.Id, task.ProjectId, task.Status, blockerCount, reason, task.VersionNo);
     }
@@ -431,6 +436,29 @@ public sealed class ProjectManagementTaskDependencyService(
     }
 
     private ProjectManagementAccessPolicy Policy() => accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser);
+    private ProjectManagementWipCoordinator WipCoordinator => wipCoordinator ?? new ProjectManagementWipCoordinator();
+    private async Task<ProjectManagementWipOverrideDecision?> EnsureWipAsync(ISqlSugarClient db, string projectId, bool entersInProgress, bool overrideWip, string? overrideReason, CancellationToken cancellationToken)
+    {
+        if (!entersInProgress) return null;
+        var project = (await db.Queryable<ProjectManagementProjectEntity>().Where(item => item.Id == projectId && !item.IsDeleted).Take(1).ToListAsync(cancellationToken)).FirstOrDefault()
+            ?? throw new NotFoundException("项目不存在", ErrorCodes.PlatformResourceNotFound);
+        if (!project.WipLimit.HasValue) return null;
+        var count = await db.Queryable<ProjectManagementTaskEntity>().Where(item => item.ProjectId == projectId && !item.IsDeleted && item.Status == ProjectManagementDomainRules.TaskInProgress).CountAsync(cancellationToken);
+        if (count < project.WipLimit.Value) return null;
+        if (!overrideWip) throw new ValidationException("项目 WIP 上限已达到，需要 WIP 强制绕过权限");
+        if (!currentUser.HasAsterErpPermission(PermissionCodes.ProjectManagementTaskOverrideWip)) throw new ValidationException("没有 WIP 强制绕过权限", ErrorCodes.PermissionDenied);
+        return new ProjectManagementWipOverrideDecision(project.WipLimit.Value, count, NormalizeWipOverrideReason(overrideReason));
+    }
+    private async Task WriteWipOverrideAuditAsync(ProjectManagementTaskEntity task, ProjectManagementWipOverrideDecision? decision, CancellationToken cancellationToken)
+    {
+        if (decision is null || activityWriter is null) return;
+        await activityWriter.AppendAsync(new ProjectManagementActivityEvent(RequireTenantId(), RequireAppCode(), "Task", task.Id, "task.wip-overridden",
+            $"依赖强制开始时超过 WIP 上限：{decision.Reason}", Activity.Current?.Id ?? Guid.NewGuid().ToString("N"), RequireUserId(), task.ProjectId,
+            Source: "Governance", FieldChanges:
+            [new ProjectManagementActivityFieldChange("WipLimit", "WIP 上限", decision.Limit.ToString(), decision.Limit.ToString()),
+             new ProjectManagementActivityFieldChange("InProgressCount", "开始前进行中任务数", decision.InProgressCount.ToString(), (decision.InProgressCount + 1).ToString()),
+             new ProjectManagementActivityFieldChange("OverrideReason", "强制原因", null, decision.Reason)]), cancellationToken);
+    }
     private static void EnsureGraphSize(int count) { if (count > MaxDependenciesPerProject) throw new ValidationException($"项目任务依赖数量不能超过 {MaxDependenciesPerProject}"); }
     private static string NormalizeDependencyType(string? value)
     {
@@ -443,6 +471,12 @@ public sealed class ProjectManagementTaskDependencyService(
     {
         var reason = value?.Trim() ?? string.Empty;
         if (reason.Length == 0 || reason.Length > MaxForceStartReasonLength) throw new ValidationException($"强制开始原因必须在 1 到 {MaxForceStartReasonLength} 个字符之间");
+        return reason;
+    }
+    private static string NormalizeWipOverrideReason(string? value)
+    {
+        var reason = value?.Trim() ?? string.Empty;
+        if (reason.Length is < 1 or > 500) throw new ValidationException("WIP 强制绕过原因必须在 1 到 500 个字符之间");
         return reason;
     }
     private static string BuildBlockedReason(int blockerCount, int missingPredecessorCount) => missingPredecessorCount == 0
@@ -458,6 +492,7 @@ public sealed class ProjectManagementTaskDependencyService(
     private static ProjectManagementTaskDependencyResponse Map(ProjectManagementTaskDependencyEntity entity) => new(entity.Id, entity.ProjectId, entity.PredecessorTaskId, entity.SuccessorTaskId, entity.DependencyType, entity.LagMinutes, entity.VersionNo);
 
     private sealed record DependencyCandidate(string PredecessorTaskId, string SuccessorTaskId, string DependencyType, int LagMinutes);
+    private sealed record ProjectManagementWipOverrideDecision(int Limit, int InProgressCount, string Reason);
     private sealed record DependencySnapshot(IReadOnlyList<ProjectManagementTaskEntity> Tasks, IReadOnlyList<ProjectManagementTaskDependencyEntity> Dependencies, IReadOnlyDictionary<string, string> StatusByTaskId);
     private sealed class ProjectWriteLease(SemaphoreSlim gate) : IAsyncDisposable { public ValueTask DisposeAsync() { gate.Release(); return ValueTask.CompletedTask; } }
 }

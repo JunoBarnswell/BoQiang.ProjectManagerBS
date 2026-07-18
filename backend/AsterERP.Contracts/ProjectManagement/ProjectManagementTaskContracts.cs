@@ -38,6 +38,7 @@ public sealed record ProjectManagementTaskUpsertRequest(
     int? EstimateMinutes = null,
     long VersionNo = 0,
     bool OverrideWip = false,
+    string? OverrideWipReason = null,
     bool ForceComplete = false,
     string? ForceCompleteReason = null,
     string? Markdown = null,

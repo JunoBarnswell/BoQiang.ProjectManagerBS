@@ -20,7 +20,9 @@ public sealed record ProjectManagementTaskDependencyBatchCreateRequest(
 /// </summary>
 public sealed record ProjectManagementTaskDependencyForceStartRequest(
     string Reason,
-    long VersionNo);
+    long VersionNo,
+    bool OverrideWip = false,
+    string? OverrideWipReason = null);
 
 public sealed record ProjectManagementTaskDependencyResponse(
     string Id,
