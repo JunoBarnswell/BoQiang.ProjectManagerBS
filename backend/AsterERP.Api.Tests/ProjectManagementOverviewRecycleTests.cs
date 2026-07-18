@@ -161,6 +161,59 @@ public sealed class ProjectManagementOverviewRecycleTests
         Assert.All(tasks, task => Assert.Equal(3, task.VersionNo));
     }
 
+    [Fact]
+    public async Task Recycle_query_reports_impact_counts_without_exposing_other_workspace_data()
+    {
+        using var db = CreateDb();
+        await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
+        await db.Insertable(new ProjectManagementProjectEntity { Id = "project-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "A", ProjectName = "A", OwnerUserId = "operator", IsDeleted = true }).ExecuteCommandAsync();
+        await db.Insertable(new[]
+        {
+            new ProjectManagementTaskEntity { Id = "root", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", TaskCode = "T-1", Title = "root", IsDeleted = true },
+            new ProjectManagementTaskEntity { Id = "child", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", ParentTaskId = "root", TaskCode = "T-2", Title = "child", IsDeleted = true },
+            new ProjectManagementTaskEntity { Id = "other", TenantId = "tenant-b", AppCode = "SYSTEM", ProjectId = "other-project", TaskCode = "T-3", Title = "other", IsDeleted = true }
+        }).ExecuteCommandAsync();
+
+        var user = CreateUser("operator");
+        Assert.True(ProjectManagementDataPermissionFilterRegistrar.TryRegister(db, typeof(ProjectManagementProjectEntity), user, "tenant-a", "SYSTEM"));
+        Assert.True(ProjectManagementDataPermissionFilterRegistrar.TryRegister(db, typeof(ProjectManagementTaskEntity), user, "tenant-a", "SYSTEM"));
+        var result = await new ProjectManagementRecycleService(new TestWorkspaceDatabaseAccessor(db), user).QueryAsync(new ProjectManagementRecycleQuery());
+
+        var project = Assert.Single(result.Projects.Items);
+        Assert.Equal(2, project.AffectedTaskCount);
+        Assert.Equal(1, Assert.Single(result.Tasks.Items, item => item.Id == "root").AffectedDescendantCount);
+        Assert.DoesNotContain(result.Tasks.Items, item => item.Id == "other");
+    }
+
+    [Fact]
+    public async Task Restore_task_rechecks_wip_and_refreshes_dependency_states_inside_the_mutation()
+    {
+        using var db = CreateDb();
+        await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
+        await db.Insertable(new ProjectManagementProjectEntity { Id = "project-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "A", ProjectName = "A", OwnerUserId = "operator", WipLimit = 1 }).ExecuteCommandAsync();
+        await db.Insertable(new[]
+        {
+            new ProjectManagementTaskEntity { Id = "active", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", TaskCode = "T-1", Title = "active", Status = "InProgress" },
+            new ProjectManagementTaskEntity { Id = "deleted", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", TaskCode = "T-2", Title = "deleted", Status = "InProgress", IsDeleted = true }
+        }).ExecuteCommandAsync();
+        var dependency = new RecordingDependencyService();
+        var service = new ProjectManagementRecycleService(new TestWorkspaceDatabaseAccessor(db), CreateUser("operator"), dependencyService: dependency);
+
+        var exception = await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() => service.RestoreTaskAsync("deleted", new ProjectManagementRecycleRestoreRequest(1)));
+
+        Assert.Contains("WIP", exception.Message);
+        Assert.True((await db.Queryable<ProjectManagementTaskEntity>().Where(item => item.Id == "deleted").SingleAsync()).IsDeleted);
+        Assert.Empty(dependency.RefreshedProjectIds);
+
+        var deleted = await db.Queryable<ProjectManagementTaskEntity>().Where(item => item.Id == "deleted").SingleAsync();
+        deleted.Status = "Todo";
+        await db.Updateable(deleted).UpdateColumns(item => new { item.Status }).ExecuteCommandAsync();
+        await service.RestoreTaskAsync("deleted", new ProjectManagementRecycleRestoreRequest(1));
+
+        Assert.False((await db.Queryable<ProjectManagementTaskEntity>().Where(item => item.Id == "deleted").SingleAsync()).IsDeleted);
+        Assert.Equal(["project-a"], dependency.RefreshedProjectIds);
+    }
+
     private static SqlSugarClient CreateDb() => new(new ConnectionConfig
     {
         ConnectionString = $"Data Source=file:overview-recycle-{Guid.NewGuid():N};Mode=Memory;Cache=Shared",
@@ -188,5 +241,18 @@ public sealed class ProjectManagementOverviewRecycleTests
     private sealed class FailingProgressProjector : IProjectManagementTaskProgressProjector
     {
         public Task RefreshAsync(string projectId, CancellationToken cancellationToken = default) => throw new InvalidOperationException("projection failure");
+    }
+
+    private sealed class RecordingDependencyService : IProjectManagementTaskDependencyService
+    {
+        public List<string> RefreshedProjectIds { get; } = [];
+        public Task<IReadOnlyList<ProjectManagementTaskDependencyResponse>> QueryAsync(string projectId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<ProjectManagementTaskDependencyResponse> CreateAsync(string projectId, ProjectManagementTaskDependencyUpsertRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task DeleteAsync(string projectId, string id, long versionNo, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task RefreshBlockedStatesAsync(string projectId, CancellationToken cancellationToken = default)
+        {
+            RefreshedProjectIds.Add(projectId);
+            return Task.CompletedTask;
+        }
     }
 }
