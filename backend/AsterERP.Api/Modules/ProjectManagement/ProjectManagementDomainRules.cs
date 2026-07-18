@@ -8,7 +8,8 @@ namespace AsterERP.Api.Modules.ProjectManagement;
 /// </summary>
 public static class ProjectManagementDomainRules
 {
-    public const int MaxTaskDepth = 10;
+    /// <summary>任务树的默认总层数；根任务为第 1 层。</summary>
+    public const int DefaultTaskHierarchyMaxDepth = 5;
     public const string ProjectPlanning = "Planning";
     public const string ProjectActive = "Active";
     public const string ProjectPaused = "Paused";
@@ -87,7 +88,7 @@ public static class ProjectManagementDomainRules
 
     public static void EnsureTaskDepth(int depth)
     {
-        if (depth < 0 || depth > MaxTaskDepth) throw new ValidationException($"任务层级不能超过 {MaxTaskDepth} 层");
+        if (depth < 0 || depth >= DefaultTaskHierarchyMaxDepth) throw new ValidationException($"任务层级不能超过 {DefaultTaskHierarchyMaxDepth} 层");
     }
 
     private static string RequireAllowed(string value, IEnumerable<string> allowed, string message)

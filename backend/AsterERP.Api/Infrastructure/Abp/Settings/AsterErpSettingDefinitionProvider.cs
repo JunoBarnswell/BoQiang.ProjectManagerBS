@@ -50,7 +50,8 @@ public sealed class AsterErpSettingDefinitionProvider : SettingDefinitionProvide
             Visible(AsterErpSettingNames.JobsTestTimeoutSeconds, "10"),
             Visible(AsterErpSettingNames.AuditOperationLogEnabled, "true"),
             Visible(AsterErpSettingNames.AuditCaptureQueryString, "true"),
-            Visible(AsterErpSettingNames.AuditQueueCapacity, "2048"));
+            Visible(AsterErpSettingNames.AuditQueueCapacity, "2048"),
+            Visible(AsterErpSettingNames.ProjectManagementTaskHierarchyMaxDepth, "5"));
     }
 
     private static SettingDefinition Visible(string name, string? defaultValue = null) =>

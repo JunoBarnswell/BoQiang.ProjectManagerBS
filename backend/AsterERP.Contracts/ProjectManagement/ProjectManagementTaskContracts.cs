@@ -47,6 +47,19 @@ public sealed record ProjectManagementTaskMoveRequest(
     string? MilestoneId = null,
     bool UpdateMilestone = false);
 
+/// <summary>删除任务时对子任务的处理策略。</summary>
+public static class ProjectManagementTaskDeleteModes
+{
+    public const string Cascade = "Cascade";
+    public const string PromoteChildren = "PromoteChildren";
+}
+
+/// <summary>
+/// <see cref="ProjectManagementTaskDeleteModes.Cascade"/> 软删除完整子树；
+/// <see cref="ProjectManagementTaskDeleteModes.PromoteChildren"/> 删除当前任务并提升直接子任务。
+/// </summary>
+public sealed record ProjectManagementTaskDeleteRequest(long VersionNo, string Mode = ProjectManagementTaskDeleteModes.Cascade);
+
 /// <summary>
 /// 任务工作台列表投影。刻意不包含描述、工时和审计字段；选中任务后应读取详情接口。
 /// </summary>

@@ -41,4 +41,6 @@ public static class AsterErpSettingNames
     public const string AuditOperationLogEnabled = "AsterERP.Audit.OperationLog.Enabled";
     public const string AuditCaptureQueryString = "AsterERP.Audit.CaptureQueryString";
     public const string AuditQueueCapacity = "AsterERP.Audit.QueueCapacity";
+
+    public const string ProjectManagementTaskHierarchyMaxDepth = "AsterERP.ProjectManagement.TaskHierarchy.MaxDepth";
 }
