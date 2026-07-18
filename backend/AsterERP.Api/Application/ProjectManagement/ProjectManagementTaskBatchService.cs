@@ -20,7 +20,9 @@ public sealed class ProjectManagementTaskBatchService(
     IProjectManagementSyncJournalWriter? syncJournalWriter = null,
     IProjectManagementRealtimePublisher? realtimePublisher = null,
     ProjectManagementTaskLabelMutation? labelMutation = null,
-    IProjectManagementTaskDependencyService? dependencyService = null) : IProjectManagementTaskBatchService
+    IProjectManagementTaskDependencyService? dependencyService = null,
+    ProjectManagementTaskHierarchy? taskHierarchy = null,
+    IProjectManagementTaskParticipantService? participantService = null) : IProjectManagementTaskBatchService
 {
     public async Task<IReadOnlyList<ProjectManagementTaskResponse>> UpdateAsync(ProjectManagementTaskBatchUpdateRequest request, CancellationToken cancellationToken = default)
     {
@@ -40,7 +42,23 @@ public sealed class ProjectManagementTaskBatchService(
         var nextPriority = string.IsNullOrWhiteSpace(request.Priority) ? null : RequirePriority(request.Priority);
         if (request.UpdateMilestone) await EnsureMilestoneAsync(request.ProjectId, request.MilestoneId, cancellationToken);
         if (request.UpdateSchedule) ProjectManagementDomainRules.ValidateDates(request.StartDate, request.DueDate, "任务");
+        if (!request.UpdateParent && !string.IsNullOrWhiteSpace(request.BeforeTaskId)) throw new ValidationException("指定同级排序位置时必须同时移动父任务");
+        var moveRoots = request.UpdateParent
+            ? GetMoveRoots(tasks, byId).ToList()
+            : [];
+        var placements = new Dictionary<string, ProjectManagementTaskPlacement>(StringComparer.Ordinal);
+        if (request.UpdateParent)
+            foreach (var task in moveRoots)
+                placements[task.Id] = await (taskHierarchy ?? new ProjectManagementTaskHierarchy())
+                    .ResolvePlacementAsync(db, request.ProjectId, request.ParentTaskId, task.Id, cancellationToken);
         var labelIds = request.UpdateLabels ? NormalizeLabelIds(request.LabelIds) : null;
+        if (!request.ReplaceParticipants && request.ParticipantUserIds is not null)
+            throw new ValidationException("设置批量参与人时必须指定 ReplaceParticipants");
+        var participantReplaceRequest = request.ReplaceParticipants
+            ? new ProjectManagementTaskParticipantBatchReplaceRequest(request.ProjectId,
+                request.Items.Select(item => new ProjectManagementTaskParticipantBatchReplaceItem(item.TaskId, request.ParticipantUserIds ?? [])).ToList(),
+                Activity.Current?.Id ?? Guid.NewGuid().ToString("N"))
+            : null;
         var labelNames = await LoadLabelNamesAsync(db, request.ProjectId, request.UpdateLabels ? tasks.Select(item => item.Id).ToList() : [], labelIds, cancellationToken);
         if (request.UpdateLabels)
         {
@@ -83,8 +101,11 @@ public sealed class ProjectManagementTaskBatchService(
             task.VersionNo++; task.UpdatedBy = actorUserId; task.UpdatedTime = now;
         }
         List<ProjectManagementTaskEntity> finalTasks = [];
+        ProjectManagementTaskParticipantBatchMutationResult? participantMutation = null;
         await ProjectManagementMutationTransaction.RunAsync(db, async () =>
         {
+            if (request.UpdateParent)
+                await ApplyMovesAsync(db, request, moveRoots, placements, now, actorUserId, cancellationToken);
             await db.Updateable(tasks).ExecuteCommandAsync(cancellationToken);
             if (labelIds is not null)
             {
@@ -93,6 +114,11 @@ public sealed class ProjectManagementTaskBatchService(
                     await (labelMutation ?? new ProjectManagementTaskLabelMutation()).ReplaceAsync(
                         db, task, labelIds, Tenant(), App(), actorUserId, now, cancellationToken);
                 }
+            }
+            if (participantReplaceRequest is not null)
+            {
+                if (participantService is null) throw new InvalidOperationException("任务参与人批量服务未配置");
+                participantMutation = await participantService.ReplaceParticipantsForTasksAsync(db, participantReplaceRequest, cancellationToken);
             }
             if (dependencyService is not null)
                 await dependencyService.RefreshBlockedStatesAsync(request.ProjectId, cancellationToken);
@@ -108,6 +134,8 @@ public sealed class ProjectManagementTaskBatchService(
             await (progressProjector ?? new ProjectManagementTaskProgressProjector(databaseAccessor))
                 .RefreshAsync(request.ProjectId, cancellationToken);
         });
+        if (participantMutation is not null)
+            await participantService!.PublishCommittedBatchMutationAsync(participantMutation, cancellationToken);
         foreach (var task in finalTasks) await PublishAsync(task, cancellationToken);
         return finalTasks.Select(Map).ToList();
     }
@@ -147,6 +175,68 @@ public sealed class ProjectManagementTaskBatchService(
     private async Task WriteSyncAsync(ProjectManagementTaskEntity task, CancellationToken cancellationToken) { if (syncJournalWriter is not null) await syncJournalWriter.AppendAsync(new ProjectManagementSyncJournalEvent(Tenant(), App(), "Task", task.Id, task.ProjectId, "batch.updated", task.VersionNo, JsonSerializer.Serialize(task), User(), null, Activity.Current?.Id ?? Guid.NewGuid().ToString("N")), cancellationToken); }
     private async Task PublishAsync(ProjectManagementTaskEntity task, CancellationToken cancellationToken) { if (realtimePublisher is not null) await realtimePublisher.PublishInvalidationAsync(new ProjectManagementDataInvalidationEvent(Tenant(), App(), "Task", task.Id, "task.batch-updated", task.VersionNo, Activity.Current?.Id ?? Guid.NewGuid().ToString("N"), task.ProjectId), cancellationToken); }
     private static string RequirePriority(string value) => value.Trim() is "Low" or "Medium" or "High" or "Urgent" ? value.Trim() : throw new ValidationException("任务优先级不受支持");
+    private static IEnumerable<ProjectManagementTaskEntity> GetMoveRoots(
+        IReadOnlyCollection<ProjectManagementTaskEntity> tasks,
+        IReadOnlyDictionary<string, ProjectManagementTaskEntity> byId)
+    {
+        foreach (var task in tasks)
+        {
+            var cursor = task.ParentTaskId;
+            var nestedSelection = false;
+            while (!string.IsNullOrWhiteSpace(cursor) && byId.TryGetValue(cursor, out var parent))
+            {
+                nestedSelection = true;
+                cursor = parent.ParentTaskId;
+            }
+            if (!nestedSelection) yield return task;
+        }
+    }
+
+    private async Task ApplyMovesAsync(
+        ISqlSugarClient db,
+        ProjectManagementTaskBatchUpdateRequest request,
+        IReadOnlyList<ProjectManagementTaskEntity> roots,
+        IReadOnlyDictionary<string, ProjectManagementTaskPlacement> placements,
+        DateTime now,
+        string actorUserId,
+        CancellationToken cancellationToken)
+    {
+        if (roots.Count == 0) return;
+        var hierarchy = taskHierarchy ?? new ProjectManagementTaskHierarchy();
+        foreach (var root in roots)
+        {
+            var placement = placements[root.Id];
+            await hierarchy.UpdateDescendantDepthsAsync(db, placement, now, actorUserId, cancellationToken);
+            root.ParentTaskId = placement.Parent?.Id;
+            root.Depth = placement.RootDepth;
+        }
+        var movedIds = roots.Select(item => item.Id).ToList();
+        var siblings = await db.Queryable<ProjectManagementTaskEntity>()
+            .Where(item => item.ProjectId == request.ProjectId && !item.IsDeleted && !movedIds.Contains(item.Id) &&
+                (request.ParentTaskId == null ? item.ParentTaskId == null : item.ParentTaskId == request.ParentTaskId))
+            .OrderBy(item => item.SortOrder, OrderByType.Asc).OrderBy(item => item.CreatedTime, OrderByType.Asc).OrderBy(item => item.Id, OrderByType.Asc)
+            .ToListAsync(cancellationToken);
+        var beforeIndex = string.IsNullOrWhiteSpace(request.BeforeTaskId) ? siblings.Count : siblings.FindIndex(item => item.Id == request.BeforeTaskId);
+        if (beforeIndex < 0) throw new ValidationException("目标排序任务不存在或不属于目标父任务");
+        var ordered = siblings.Cast<ProjectManagementTaskEntity>().ToList();
+        ordered.InsertRange(beforeIndex, roots.OrderBy(item => item.SortOrder).ThenBy(item => item.CreatedTime).ThenBy(item => item.Id, StringComparer.Ordinal));
+        if (ordered.Count > int.MaxValue / 1024) throw new ValidationException("同级任务数量超过排序容量");
+        var existing = siblings.ToList();
+        for (var index = 0; index < existing.Count; index++) existing[index].SortOrder = -index - 1;
+        if (existing.Count > 0) await db.Updateable(existing).UpdateColumns(item => new { item.SortOrder }).ExecuteCommandAsync(cancellationToken);
+        for (var index = 0; index < ordered.Count; index++)
+        {
+            var task = ordered[index];
+            task.SortOrder = (index + 1) * 1024;
+            if (movedIds.Contains(task.Id)) continue;
+            task.VersionNo++;
+            task.UpdatedBy = actorUserId;
+            task.UpdatedTime = now;
+        }
+        if (existing.Count > 0) await db.Updateable(existing)
+            .UpdateColumns(item => new { item.SortOrder, item.VersionNo, item.UpdatedBy, item.UpdatedTime })
+            .ExecuteCommandAsync(cancellationToken);
+    }
     private static IReadOnlyList<string> NormalizeLabelIds(IReadOnlyList<string>? labelIds)
     {
         if (labelIds is null) throw new ValidationException("批量更新标签时必须提供标签列表");

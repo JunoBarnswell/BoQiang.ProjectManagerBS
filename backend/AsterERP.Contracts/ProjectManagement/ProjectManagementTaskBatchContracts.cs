@@ -15,4 +15,9 @@ public sealed record ProjectManagementTaskBatchUpdateRequest(
     DateTime? DueDate = null,
     bool UpdateSchedule = false,
     IReadOnlyList<string>? LabelIds = null,
-    bool UpdateLabels = false);
+    bool UpdateLabels = false,
+    string? ParentTaskId = null,
+    bool UpdateParent = false,
+    string? BeforeTaskId = null,
+    IReadOnlyList<string>? ParticipantUserIds = null,
+    bool ReplaceParticipants = false);
