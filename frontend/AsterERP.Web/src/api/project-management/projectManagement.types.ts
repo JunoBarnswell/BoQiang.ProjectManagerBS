@@ -135,6 +135,7 @@ export interface ProjectManagementProjectQuery {
   pageSize?: number;
   keyword?: string;
   status?: string;
+  ownerUserId?: string;
 }
 
 export interface ProjectManagementRecycleQuery {

@@ -65,14 +65,16 @@ export function ProjectManagementPage() {
   const queryClient = useQueryClient();
   const [keyword, setKeyword] = useState('');
   const [submittedKeyword, setSubmittedKeyword] = useState('');
+  const [status, setStatus] = useState('');
+  const [ownerUserId, setOwnerUserId] = useState('');
   const [form, setForm] = useState<ProjectManagementProjectUpsertRequest>(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [formDirty, setFormDirty] = useState(false);
   const projectsQuery = useQuery({
     enabled: scope.isAvailable,
-    queryFn: ({ signal }) => getProjectManagementProjects({ pageIndex: 1, pageSize: 100, keyword: submittedKeyword || undefined }, signal),
-    queryKey: queryKeys.projectManagement.projects(scope, { pageIndex: 1, pageSize: 100, keyword: submittedKeyword || undefined })
+    queryFn: ({ signal }) => getProjectManagementProjects({ pageIndex: 1, pageSize: 100, keyword: submittedKeyword || undefined, status: status || undefined, ownerUserId: ownerUserId.trim() || undefined }, signal),
+    queryKey: queryKeys.projectManagement.projects(scope, { pageIndex: 1, pageSize: 100, keyword: submittedKeyword || undefined, status: status || undefined, ownerUserId: ownerUserId.trim() || undefined })
   });
 
   useEffect(() => {
@@ -86,7 +88,7 @@ export function ProjectManagementPage() {
   }, [formDirty]);
 
   const refresh = async () => {
-    await queryClient.invalidateQueries({ queryKey: queryKeys.projectManagement.projects(scope, { pageIndex: 1, pageSize: 100, keyword: submittedKeyword || undefined }) });
+    await queryClient.invalidateQueries({ queryKey: queryKeys.projectManagement.projects(scope, { pageIndex: 1, pageSize: 100, keyword: submittedKeyword || undefined, status: status || undefined, ownerUserId: ownerUserId.trim() || undefined }) });
   };
 
   const closeEditor = () => {
@@ -148,8 +150,13 @@ export function ProjectManagementPage() {
         <div className="pm-toolbar-summary">
           <form className="flex flex-wrap items-center gap-2" onSubmit={(event) => { event.preventDefault(); setSubmittedKeyword(keyword.trim()); }}>
             <input aria-label="搜索项目" value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜索编码或名称" />
+            <select aria-label="按项目状态筛选" value={status} onChange={(event) => setStatus(event.target.value)}>
+              <option value="">全部状态</option>
+              {['Planning', 'Active', 'Paused', 'Completed', 'Canceled', 'Archived'].map((value) => <option key={value} value={value}>{projectStatusLabel(value)}</option>)}
+            </select>
+            <input aria-label="按负责人筛选" value={ownerUserId} onChange={(event) => setOwnerUserId(event.target.value)} placeholder="负责人账号" />
             <button type="submit">搜索</button>
-            {submittedKeyword ? <button type="button" onClick={() => { setKeyword(''); setSubmittedKeyword(''); }}>清空</button> : null}
+            {submittedKeyword || status || ownerUserId ? <button type="button" onClick={() => { setKeyword(''); setSubmittedKeyword(''); setStatus(''); setOwnerUserId(''); }}>清空</button> : null}
           </form>
           <span>当前工作区共 <strong>{projectsQuery.data?.data?.total ?? 0}</strong> 个项目</span>
         </div>

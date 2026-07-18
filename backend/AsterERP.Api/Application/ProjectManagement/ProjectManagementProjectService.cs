@@ -23,13 +23,13 @@ public sealed class ProjectManagementProjectService(
         ProjectManagementProjectQuery query,
         CancellationToken cancellationToken = default)
     {
-        RequireTenantId();
-        RequireAppCode();
-        var db = databaseAccessor.GetCurrentDb();
+        RequirePlatformScope();
+        var db = databaseAccessor.GetProjectManagementDb();
         var keyword = NormalizeOptional(query.Keyword);
         var status = NormalizeOptional(query.Status);
+        var ownerUserId = NormalizeOptional(query.OwnerUserId);
         var projectQuery = db.Queryable<ProjectManagementProjectEntity>()
-            .Where(item => !item.IsDeleted && item.TenantId == RequireTenantId() && item.AppCode == RequireAppCode());
+            .Where(item => !item.IsDeleted);
 
         if (!string.IsNullOrWhiteSpace(keyword))
         {
@@ -42,6 +42,11 @@ public sealed class ProjectManagementProjectService(
         if (!string.IsNullOrWhiteSpace(status))
         {
             projectQuery = projectQuery.Where(item => item.Status == status);
+        }
+
+        if (!string.IsNullOrWhiteSpace(ownerUserId))
+        {
+            projectQuery = projectQuery.Where(item => item.OwnerUserId == ownerUserId);
         }
 
         var total = new RefAsync<int>();
@@ -61,9 +66,9 @@ public sealed class ProjectManagementProjectService(
         ProjectManagementProjectUpsertRequest request,
         CancellationToken cancellationToken = default)
     {
+        RequirePlatformScope();
         var tenantId = RequireTenantId();
-        var appCode = RequireAppCode();
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         ValidateRequest(request);
         var projectCode = NormalizeRequired(request.ProjectCode, "项目编码不能为空");
         if (await db.Queryable<ProjectManagementProjectEntity>().AnyAsync(item =>
@@ -76,7 +81,7 @@ public sealed class ProjectManagementProjectService(
         var entity = new ProjectManagementProjectEntity
         {
             TenantId = tenantId,
-            AppCode = appCode,
+            AppCode = ProjectManagementPlatformScope.AppCode,
             ProjectCode = projectCode,
             ProjectName = NormalizeRequired(request.ProjectName, "项目名称不能为空"),
             Description = NormalizeOptional(request.Description),
@@ -94,7 +99,7 @@ public sealed class ProjectManagementProjectService(
         var ownerMember = new ProjectManagementProjectMemberEntity
         {
             TenantId = tenantId,
-            AppCode = appCode,
+            AppCode = ProjectManagementPlatformScope.AppCode,
             ProjectId = entity.Id,
             UserId = entity.OwnerUserId,
             RoleCode = "Owner",
@@ -126,11 +131,12 @@ public sealed class ProjectManagementProjectService(
         ProjectManagementProjectUpsertRequest request,
         CancellationToken cancellationToken = default)
     {
+        RequirePlatformScope();
         var entity = await GetRequiredAsync(id, cancellationToken);
         await (accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser)).EnsureCanManageProjectAsync(id, cancellationToken);
         ValidateRequest(request);
         var projectCode = NormalizeRequired(request.ProjectCode, "项目编码不能为空");
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         if (await db.Queryable<ProjectManagementProjectEntity>().AnyAsync(item =>
                 item.ProjectCode == projectCode && item.Id != entity.Id && !item.IsDeleted, cancellationToken))
         {
@@ -169,8 +175,9 @@ public sealed class ProjectManagementProjectService(
 
     public async Task<ProjectManagementProjectResponse> RestoreAsync(string id, long versionNo, CancellationToken cancellationToken = default)
     {
+        RequirePlatformScope();
         var entity = await GetRequiredAsync(id, cancellationToken, includeDeleted: true);
-        await (accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser)).EnsureCanManageProjectAsync(id, cancellationToken);
+        await (accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser)).EnsureCanManageDeletedProjectAsync(id, cancellationToken);
         EnsureVersion(entity, versionNo);
         entity.IsDeleted = false;
         entity.DeletedBy = null;
@@ -178,7 +185,7 @@ public sealed class ProjectManagementProjectService(
         entity.VersionNo++;
         entity.UpdatedBy = RequireUserId();
         entity.UpdatedTime = DateTime.UtcNow;
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         await ProjectManagementMutationTransaction.RunAsync(db, async () =>
         {
             await db.Updateable(entity).ExecuteCommandAsync(cancellationToken);
@@ -194,6 +201,7 @@ public sealed class ProjectManagementProjectService(
 
     public async Task DeleteAsync(string id, long versionNo, CancellationToken cancellationToken = default)
     {
+        RequirePlatformScope();
         var entity = await GetRequiredAsync(id, cancellationToken);
         await (accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser)).EnsureCanManageProjectAsync(id, cancellationToken);
         EnsureVersion(entity, versionNo);
@@ -203,7 +211,7 @@ public sealed class ProjectManagementProjectService(
         entity.VersionNo++;
         entity.UpdatedBy = entity.DeletedBy;
         entity.UpdatedTime = entity.DeletedTime;
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         if (imConversationService is not null)
         {
             await imConversationService.ArchiveProjectLinksAsync(entity.Id, cancellationToken);
@@ -218,10 +226,9 @@ public sealed class ProjectManagementProjectService(
 
     private async Task<ProjectManagementProjectEntity> GetRequiredAsync(string id, CancellationToken cancellationToken, bool includeDeleted = false)
     {
-        RequireTenantId();
-        RequireAppCode();
-        var entity = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementProjectEntity>()
-            .Where(item => item.Id == id && item.TenantId == RequireTenantId() && item.AppCode == RequireAppCode() && (includeDeleted || !item.IsDeleted))
+        RequirePlatformScope();
+        var entity = await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementProjectEntity>()
+            .Where(item => item.Id == id && (includeDeleted || !item.IsDeleted))
             .Take(1)
             .ToListAsync(cancellationToken);
         return entity.FirstOrDefault() ?? throw new NotFoundException("项目不存在", ErrorCodes.PlatformResourceNotFound);
@@ -229,20 +236,20 @@ public sealed class ProjectManagementProjectService(
 
     private string RequireTenantId() => currentUser.GetAsterErpTenantId()?.Trim() ?? throw new ValidationException("当前会话缺少租户");
 
-    private string RequireAppCode() => currentUser.GetAsterErpAppCode()?.Trim().ToUpperInvariant() ?? throw new ValidationException("当前会话缺少应用");
-
     private string RequireUserId() => currentUser.GetAsterErpUserId()?.Trim() ?? throw new ValidationException("当前会话缺少用户");
+
+    private void RequirePlatformScope() => ProjectManagementPlatformScope.RequireSystemWorkspace(currentUser);
 
     private async Task WriteActivityAsync(ProjectManagementProjectEntity entity, string activityType, string summary, CancellationToken cancellationToken)
     {
         if (activityWriter is null) return;
-        await activityWriter.AppendAsync(new ProjectManagementActivityEvent(RequireTenantId(), RequireAppCode(), "Project", entity.Id, activityType, summary, Activity.Current?.Id ?? Guid.NewGuid().ToString("N"), RequireUserId(), entity.Id), cancellationToken);
+        await activityWriter.AppendAsync(new ProjectManagementActivityEvent(RequireTenantId(), ProjectManagementPlatformScope.AppCode, "Project", entity.Id, activityType, summary, Activity.Current?.Id ?? Guid.NewGuid().ToString("N"), RequireUserId(), entity.Id), cancellationToken);
     }
 
     private async Task WriteSyncJournalAsync(ProjectManagementProjectEntity entity, string operation, CancellationToken cancellationToken)
     {
         if (syncJournalWriter is null) return;
-        await syncJournalWriter.AppendAsync(new ProjectManagementSyncJournalEvent(RequireTenantId(), RequireAppCode(), "Project", entity.Id, entity.Id, operation, entity.VersionNo, JsonSerializer.Serialize(entity), RequireUserId(), null, Activity.Current?.Id ?? Guid.NewGuid().ToString("N")), cancellationToken);
+        await syncJournalWriter.AppendAsync(new ProjectManagementSyncJournalEvent(RequireTenantId(), ProjectManagementPlatformScope.AppCode, "Project", entity.Id, entity.Id, operation, entity.VersionNo, JsonSerializer.Serialize(entity), RequireUserId(), null, Activity.Current?.Id ?? Guid.NewGuid().ToString("N")), cancellationToken);
     }
 
     private static void ValidateRequest(ProjectManagementProjectUpsertRequest request)

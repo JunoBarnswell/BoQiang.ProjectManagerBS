@@ -14,13 +14,12 @@ public sealed class ProjectManagementAccessPolicy(IWorkspaceDatabaseAccessor dat
 {
     public async Task EnsureCanViewProjectAsync(string projectId, CancellationToken cancellationToken = default)
     {
+        ProjectManagementPlatformScope.RequireSystemWorkspace(currentUser);
         if (currentUser.IsAsterErpPlatformAdmin() || currentUser.HasAsterErpPermission("*")) return;
         var userId = RequireUserId();
-        var tenantId = RequireTenantId();
-        var appCode = RequireAppCode();
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         var visible = await db.Queryable<ProjectManagementProjectEntity>()
-            .Where(project => project.Id == projectId && project.TenantId == tenantId && project.AppCode == appCode && !project.IsDeleted &&
+            .Where(project => project.Id == projectId && !project.IsDeleted &&
                 (project.OwnerUserId == userId || SqlSugar.SqlFunc.Subqueryable<ProjectManagementProjectMemberEntity>()
                     .Where(member => member.ProjectId == project.Id && member.UserId == userId && member.IsActive && !member.IsDeleted).Any()))
             .AnyAsync(cancellationToken);
@@ -41,15 +40,14 @@ public sealed class ProjectManagementAccessPolicy(IWorkspaceDatabaseAccessor dat
 
     public async Task EnsureCanManageTaskAsync(string projectId, string? assigneeUserId = null, CancellationToken cancellationToken = default)
     {
+        ProjectManagementPlatformScope.RequireSystemWorkspace(currentUser);
         if (currentUser.IsAsterErpPlatformAdmin() || currentUser.HasAsterErpPermission("*")) return;
         var userId = RequireUserId();
-        var tenantId = RequireTenantId();
-        var appCode = RequireAppCode();
-        var db = databaseAccessor.GetCurrentDb();
-        var project = await db.Queryable<ProjectManagementProjectEntity>().Where(item => item.Id == projectId && item.TenantId == tenantId && item.AppCode == appCode && !item.IsDeleted).Take(1).ToListAsync(cancellationToken);
+        var db = databaseAccessor.GetProjectManagementDb();
+        var project = await db.Queryable<ProjectManagementProjectEntity>().Where(item => item.Id == projectId && !item.IsDeleted).Take(1).ToListAsync(cancellationToken);
         var owner = project.FirstOrDefault()?.OwnerUserId;
         if (string.Equals(owner, userId, StringComparison.OrdinalIgnoreCase)) return;
-        var member = await db.Queryable<ProjectManagementProjectMemberEntity>().Where(item => item.ProjectId == projectId && item.TenantId == tenantId && item.AppCode == appCode && item.UserId == userId && item.IsActive && !item.IsDeleted).Take(1).ToListAsync(cancellationToken);
+        var member = await db.Queryable<ProjectManagementProjectMemberEntity>().Where(item => item.ProjectId == projectId && item.UserId == userId && item.IsActive && !item.IsDeleted).Take(1).ToListAsync(cancellationToken);
         var role = member.FirstOrDefault()?.RoleCode;
         if (role is "Owner" or "Manager" or "Lead") return;
         if (role == "Member" && string.Equals(assigneeUserId, userId, StringComparison.OrdinalIgnoreCase)) return;
@@ -61,21 +59,18 @@ public sealed class ProjectManagementAccessPolicy(IWorkspaceDatabaseAccessor dat
 
     private async Task EnsureRoleAsync(string projectId, string[] roles, string message, CancellationToken cancellationToken, bool includeDeleted = false)
     {
+        ProjectManagementPlatformScope.RequireSystemWorkspace(currentUser);
         if (currentUser.IsAsterErpPlatformAdmin() || currentUser.HasAsterErpPermission("*")) return;
         var userId = RequireUserId();
-        var tenantId = RequireTenantId();
-        var appCode = RequireAppCode();
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         var project = await db.Queryable<ProjectManagementProjectEntity>()
-            .Where(item => item.Id == projectId && item.TenantId == tenantId && item.AppCode == appCode && (includeDeleted || !item.IsDeleted))
+            .Where(item => item.Id == projectId && (includeDeleted || !item.IsDeleted))
             .Take(1)
             .ToListAsync(cancellationToken);
         if (string.Equals(project.FirstOrDefault()?.OwnerUserId, userId, StringComparison.OrdinalIgnoreCase)) return;
-        var allowed = (await db.Queryable<ProjectManagementProjectMemberEntity>().Where(item => item.ProjectId == projectId && item.TenantId == tenantId && item.AppCode == appCode && item.UserId == userId && item.IsActive && !item.IsDeleted).ToListAsync(cancellationToken)).Any(item => roles.Contains(item.RoleCode, StringComparer.OrdinalIgnoreCase));
+        var allowed = (await db.Queryable<ProjectManagementProjectMemberEntity>().Where(item => item.ProjectId == projectId && item.UserId == userId && item.IsActive && !item.IsDeleted).ToListAsync(cancellationToken)).Any(item => roles.Contains(item.RoleCode, StringComparer.OrdinalIgnoreCase));
         if (!allowed) throw new ValidationException(message, ErrorCodes.PermissionDenied);
     }
 
     private string RequireUserId() => currentUser.GetAsterErpUserId()?.Trim() ?? throw new ValidationException("当前会话缺少用户", ErrorCodes.PermissionDenied);
-    private string RequireTenantId() => currentUser.GetAsterErpTenantId()?.Trim() ?? throw new ValidationException("当前会话缺少租户", ErrorCodes.PermissionDenied);
-    private string RequireAppCode() => currentUser.GetAsterErpAppCode()?.Trim().ToUpperInvariant() ?? throw new ValidationException("当前会话缺少应用", ErrorCodes.PermissionDenied);
 }

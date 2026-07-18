@@ -3,6 +3,7 @@ using AsterERP.Api.Application.ProjectManagement;
 using AsterERP.Api.Controllers;
 using AsterERP.Api.Infrastructure.Database;
 using AsterERP.Api.Infrastructure.Security;
+using AsterERP.Api.Infrastructure.Security.DataPermissions;
 using AsterERP.Api.Infrastructure.Abp.ProjectManagement;
 using AsterERP.Api.Modules.ProjectManagement;
 using AsterERP.Contracts.ProjectManagement;
@@ -34,13 +35,13 @@ public sealed class ProjectManagementProjectServiceTests
             IsAutoCloseConnection = false
         });
         await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
-        var user = CreateUser("operator", "tenant-a", "MES");
+        var user = CreateUser("operator", "tenant-a", "SYSTEM");
         var service = new ProjectManagementProjectService(new TestWorkspaceDatabaseAccessor(db), user);
 
         var created = await service.CreateAsync(new ProjectManagementProjectUpsertRequest(
             "PM-001", "项目一", "第一项目", "Planning", "High", null, new DateTime(2026, 7, 1), new DateTime(2026, 7, 31), 5));
         Assert.Equal("tenant-a", created.TenantId);
-        Assert.Equal("MES", created.AppCode);
+        Assert.Equal("SYSTEM", created.AppCode);
         Assert.Equal(1, created.VersionNo);
         var owner = await db.Queryable<AsterERP.Api.Modules.ProjectManagement.ProjectManagementProjectMemberEntity>()
             .Where(item => item.ProjectId == created.Id && !item.IsDeleted)
@@ -78,13 +79,63 @@ public sealed class ProjectManagementProjectServiceTests
         await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
         var service = new ProjectManagementProjectService(
             new TestWorkspaceDatabaseAccessor(db),
-            CreateUser("operator", "tenant-a", "MES"));
+            CreateUser("operator", "tenant-a", "SYSTEM"));
 
         await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() => service.CreateAsync(
             new ProjectManagementProjectUpsertRequest("PM-INVALID", "无效项目", StartDate: new DateTime(2026, 8, 2), DueDate: new DateTime(2026, 8, 1))));
         await service.CreateAsync(new ProjectManagementProjectUpsertRequest("PM-DUP", "项目"));
         await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() => service.CreateAsync(
             new ProjectManagementProjectUpsertRequest("PM-DUP", "重复项目")));
+    }
+
+    [Fact]
+    public async Task Project_service_enforces_status_machine_and_dates_on_update()
+    {
+        using var db = new SqlSugarClient(new ConnectionConfig
+        {
+            ConnectionString = $"Data Source=file:project-management-project-state-{Guid.NewGuid():N};Mode=Memory;Cache=Shared",
+            DbType = DbType.Sqlite,
+            IsAutoCloseConnection = false
+        });
+        await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
+        var service = new ProjectManagementProjectService(
+            new TestWorkspaceDatabaseAccessor(db),
+            CreateUser("operator", "tenant-a", "SYSTEM"));
+
+        var project = await service.CreateAsync(new ProjectManagementProjectUpsertRequest(
+            "PM-STATE", "状态机项目", StartDate: new DateTime(2026, 7, 1), DueDate: new DateTime(2026, 7, 31)));
+        await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() => service.UpdateAsync(
+            project.Id,
+            new ProjectManagementProjectUpsertRequest("PM-STATE", "状态机项目", Status: "Completed", VersionNo: project.VersionNo)));
+        await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() => service.UpdateAsync(
+            project.Id,
+            new ProjectManagementProjectUpsertRequest("PM-STATE", "状态机项目", StartDate: new DateTime(2026, 8, 1), DueDate: new DateTime(2026, 7, 31), VersionNo: project.VersionNo)));
+
+        var active = await service.UpdateAsync(
+            project.Id,
+            new ProjectManagementProjectUpsertRequest("PM-STATE", "状态机项目", Status: "Active", VersionNo: project.VersionNo));
+        var paused = await service.UpdateAsync(
+            project.Id,
+            new ProjectManagementProjectUpsertRequest("PM-STATE", "状态机项目", Status: "Paused", VersionNo: active.VersionNo));
+        var resumed = await service.UpdateAsync(
+            project.Id,
+            new ProjectManagementProjectUpsertRequest("PM-STATE", "状态机项目", Status: "Active", VersionNo: paused.VersionNo));
+        var completed = await service.UpdateAsync(
+            project.Id,
+            new ProjectManagementProjectUpsertRequest("PM-STATE", "状态机项目", Status: "Completed", VersionNo: resumed.VersionNo));
+        var archived = await service.UpdateAsync(
+            project.Id,
+            new ProjectManagementProjectUpsertRequest("PM-STATE", "状态机项目", Status: "Archived", VersionNo: completed.VersionNo));
+        var canceledProject = await service.CreateAsync(new ProjectManagementProjectUpsertRequest("PM-CANCELED", "取消项目"));
+        var canceled = await service.UpdateAsync(
+            canceledProject.Id,
+            new ProjectManagementProjectUpsertRequest("PM-CANCELED", "取消项目", Status: "Canceled", VersionNo: canceledProject.VersionNo));
+
+        Assert.Equal("Archived", archived.Status);
+        Assert.NotNull(completed.CompletedAt);
+        Assert.Equal("Canceled", canceled.Status);
+        await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() => service.CreateAsync(
+            new ProjectManagementProjectUpsertRequest("PM-INVALID-STATUS", "无效状态", Status: "Draft")));
     }
 
     [Fact]
@@ -99,16 +150,46 @@ public sealed class ProjectManagementProjectServiceTests
         await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
         await db.Insertable(new[]
         {
-            new ProjectManagementProjectEntity { Id = "visible", TenantId = "tenant-a", AppCode = "MES", ProjectCode = "VISIBLE", ProjectName = "Visible", OwnerUserId = "operator" },
-            new ProjectManagementProjectEntity { Id = "other-tenant", TenantId = "tenant-b", AppCode = "MES", ProjectCode = "TENANT-B", ProjectName = "Tenant B", OwnerUserId = "operator" },
+            new ProjectManagementProjectEntity { Id = "visible", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "VISIBLE", ProjectName = "Visible", OwnerUserId = "operator" },
+            new ProjectManagementProjectEntity { Id = "other-tenant", TenantId = "tenant-b", AppCode = "SYSTEM", ProjectCode = "TENANT-B", ProjectName = "Tenant B", OwnerUserId = "operator" },
             new ProjectManagementProjectEntity { Id = "other-app", TenantId = "tenant-a", AppCode = "CRM", ProjectCode = "CRM", ProjectName = "CRM", OwnerUserId = "operator" }
         }).ExecuteCommandAsync();
 
-        var service = new ProjectManagementProjectService(new TestWorkspaceDatabaseAccessor(db), CreateUser("operator", "tenant-a", "MES"));
+        var user = CreateUser("operator", "tenant-a", "SYSTEM");
+        Assert.True(ProjectManagementDataPermissionFilterRegistrar.TryRegister(
+            db,
+            typeof(ProjectManagementProjectEntity),
+            user,
+            "tenant-a",
+            ProjectManagementPlatformScope.AppCode));
+        var service = new ProjectManagementProjectService(new TestWorkspaceDatabaseAccessor(db), user);
         var result = await service.QueryAsync(new ProjectManagementProjectQuery());
 
         var project = Assert.Single(result.Items);
         Assert.Equal("visible", project.Id);
+    }
+
+    [Fact]
+    public async Task Project_service_requires_system_workspace_and_filters_by_status_and_owner()
+    {
+        using var db = new SqlSugarClient(new ConnectionConfig
+        {
+            ConnectionString = $"Data Source=file:project-management-project-filters-{Guid.NewGuid():N};Mode=Memory;Cache=Shared",
+            DbType = DbType.Sqlite,
+            IsAutoCloseConnection = false
+        });
+        await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
+        var systemUser = CreateUser("operator", "tenant-a", "SYSTEM");
+        var service = new ProjectManagementProjectService(new TestWorkspaceDatabaseAccessor(db), systemUser);
+        await service.CreateAsync(new ProjectManagementProjectUpsertRequest("PM-ACTIVE", "进行中", Status: "Active", OwnerUserId: "owner-a"));
+        await service.CreateAsync(new ProjectManagementProjectUpsertRequest("PM-PAUSED", "已暂停", Status: "Paused", OwnerUserId: "owner-b"));
+
+        var filtered = await service.QueryAsync(new ProjectManagementProjectQuery(Status: "Active", OwnerUserId: "owner-a"));
+        Assert.Single(filtered.Items);
+        Assert.Equal("PM-ACTIVE", filtered.Items[0].ProjectCode);
+
+        var nonSystemService = new ProjectManagementProjectService(new TestWorkspaceDatabaseAccessor(db), CreateUser("operator", "tenant-a", "MES"));
+        await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() => nonSystemService.QueryAsync(new ProjectManagementProjectQuery()));
     }
 
     private static FixedAsterErpCurrentUser CreateUser(string userId, string tenantId, string appCode)

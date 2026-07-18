@@ -4,7 +4,8 @@ public sealed record ProjectManagementProjectQuery(
     int PageIndex = 1,
     int PageSize = 20,
     string? Keyword = null,
-    string? Status = null);
+    string? Status = null,
+    string? OwnerUserId = null);
 
 public sealed record ProjectManagementProjectUpsertRequest(
     string ProjectCode,

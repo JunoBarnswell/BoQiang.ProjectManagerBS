@@ -69,6 +69,14 @@ describe('projectManagementQueryKeys', () => {
     ]);
   });
 
+  it('keeps project owner filtering in the cache key', () => {
+    const alice = projectManagementQueryKeys.projects(mesScope, { ownerUserId: 'alice' });
+    const bob = projectManagementQueryKeys.projects(mesScope, { ownerUserId: 'bob' });
+
+    expect(alice).not.toEqual(bob);
+    expect(alice.at(-1)).toBe('alice');
+  });
+
   it('provides a project root for precise cross-view invalidation', () => {
     expect(projectManagementQueryKeys.tasksProject(mesScope, 'project-a')).toEqual([
       'astererp',

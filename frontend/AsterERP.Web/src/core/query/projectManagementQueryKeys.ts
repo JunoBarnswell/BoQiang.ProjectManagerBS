@@ -94,6 +94,7 @@ export const projectManagementQueryKeys = {
     query.pageSize ?? 20,
     query.keyword ?? '',
     query.status ?? '',
+    query.ownerUserId ?? '',
   ] as const,
   recycle: (scope: ProjectManagementWorkspaceScope, query: ProjectManagementRecycleQuery) => [
     ...root(scope),
