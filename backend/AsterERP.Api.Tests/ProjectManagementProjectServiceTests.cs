@@ -195,6 +195,51 @@ public sealed class ProjectManagementProjectServiceTests
     }
 
     [Fact]
+    public async Task Project_query_uses_database_paging_and_combined_search_status_and_owner_filters()
+    {
+        using var db = CreateDb("query-projection");
+        await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
+        await db.Insertable(new[]
+        {
+            new ProjectManagementProjectEntity { Id = "matched-new", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "PM-MATCH-NEW", ProjectName = "匹配项目", Description = "关键字", Status = "Active", OwnerUserId = "operator", CreatedTime = new DateTime(2026, 7, 2) },
+            new ProjectManagementProjectEntity { Id = "matched-old", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "PM-MATCH-OLD", ProjectName = "匹配项目", Description = "关键字", Status = "Active", OwnerUserId = "operator", CreatedTime = new DateTime(2026, 7, 1) },
+            new ProjectManagementProjectEntity { Id = "wrong-status", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "PM-MATCH-PAUSED", ProjectName = "匹配项目", Description = "关键字", Status = "Paused", OwnerUserId = "operator", CreatedTime = new DateTime(2026, 7, 3) },
+            new ProjectManagementProjectEntity { Id = "wrong-keyword", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "PM-OTHER", ProjectName = "其他项目", Status = "Active", OwnerUserId = "operator", CreatedTime = new DateTime(2026, 7, 4) }
+        }).ExecuteCommandAsync();
+        var service = new ProjectManagementProjectService(new TestWorkspaceDatabaseAccessor(db), CreateUser("operator", "tenant-a", "SYSTEM"));
+        var query = new ProjectManagementProjectQuery(PageSize: 1, Keyword: "MATCH", Status: "Active", OwnerUserId: "operator");
+
+        var firstPage = await service.QueryAsync(query);
+        var secondPage = await service.QueryAsync(query with { PageIndex = 2 });
+
+        Assert.Equal(2, firstPage.Total);
+        Assert.Equal("matched-new", Assert.Single(firstPage.Items).Id);
+        Assert.Equal(2, secondPage.Total);
+        Assert.Equal("matched-old", Assert.Single(secondPage.Items).Id);
+    }
+
+    [Fact]
+    public async Task Project_service_rejects_direct_update_by_non_owner_or_manager()
+    {
+        using var db = CreateDb("direct-authorization");
+        await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
+        await db.Insertable(new ProjectManagementProjectEntity
+        {
+            Id = "managed-project", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "PM-MANAGED",
+            ProjectName = "受控项目", Status = "Planning", OwnerUserId = "owner", VersionNo = 1
+        }).ExecuteCommandAsync();
+        var service = new ProjectManagementProjectService(new TestWorkspaceDatabaseAccessor(db), CreateUser("intruder", "tenant-a", "SYSTEM"));
+
+        var exception = await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() => service.UpdateAsync(
+            "managed-project", new ProjectManagementProjectUpsertRequest("PM-MANAGED", "越权更新", VersionNo: 1)));
+
+        Assert.Equal(ErrorCodes.PermissionDenied, exception.Code);
+        var persisted = await db.Queryable<ProjectManagementProjectEntity>().SingleAsync(item => item.Id == "managed-project");
+        Assert.Equal("受控项目", persisted.ProjectName);
+        Assert.Equal(1, persisted.VersionNo);
+    }
+
+    [Fact]
     public async Task Archived_project_is_read_only_and_requires_the_current_version()
     {
         using var db = new SqlSugarClient(new ConnectionConfig { ConnectionString = $"Data Source=file:project-management-project-archive-{Guid.NewGuid():N};Mode=Memory;Cache=Shared", DbType = DbType.Sqlite, IsAutoCloseConnection = false });
