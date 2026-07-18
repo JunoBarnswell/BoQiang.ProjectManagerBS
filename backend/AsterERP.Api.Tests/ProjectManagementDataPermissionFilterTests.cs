@@ -127,4 +127,38 @@ public sealed class ProjectManagementDataPermissionFilterTests
         Assert.Equal("participant-visible", Assert.Single(await db.Queryable<ProjectManagementTaskParticipantEntity>().ToListAsync()).Id);
         Assert.Equal("link-visible", Assert.Single(await db.Queryable<ProjectManagementImConversationLinkEntity>().ToListAsync()).Id);
     }
+
+    [Fact]
+    public async Task Scoped_lead_filter_uses_current_membership_scope_immediately()
+    {
+        using var db = new SqlSugarClient(new ConnectionConfig
+        {
+            ConnectionString = $"Data Source=file:project-management-scope-filter-{Guid.NewGuid():N};Mode=Memory;Cache=Shared",
+            DbType = DbType.Sqlite,
+            IsAutoCloseConnection = false
+        });
+        await new AsterERP.Api.Infrastructure.Abp.ProjectManagement.ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
+        await db.Insertable(new ProjectManagementProjectEntity { Id = "project-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "A", ProjectName = "A", OwnerUserId = "owner" }).ExecuteCommandAsync();
+        await db.Insertable(new[]
+        {
+            new ProjectManagementTaskEntity { Id = "root-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", TaskCode = "A", Title = "A" },
+            new ProjectManagementTaskEntity { Id = "child-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", ParentTaskId = "root-a", TaskCode = "A-1", Title = "A-1" },
+            new ProjectManagementTaskEntity { Id = "root-b", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", TaskCode = "B", Title = "B" }
+        }).ExecuteCommandAsync();
+        var member = new ProjectManagementProjectMemberEntity { Id = "lead-member", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", UserId = "lead", RoleCode = "Lead", ScopeRootTaskId = "root-a", IsActive = true };
+        await db.Insertable(member).ExecuteCommandAsync();
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(AsterErpClaimTypes.UserId, "lead"), new Claim(AsterErpClaimTypes.TenantId, "tenant-a"), new Claim(AsterErpClaimTypes.AppCode, "SYSTEM"), new Claim(AsterErpClaimTypes.DataScope, "SELF")
+        }, "test"));
+        Assert.True(ProjectManagementDataPermissionFilterRegistrar.TryRegister(db, typeof(ProjectManagementTaskEntity), new FixedAsterErpCurrentUser(principal), "tenant-a", "SYSTEM"));
+
+        Assert.Equal(["child-a", "root-a"], (await db.Queryable<ProjectManagementTaskEntity>().OrderBy(item => item.Id).Select(item => item.Id).ToListAsync()).OrderBy(item => item).ToArray());
+        member.ScopeRootTaskId = "root-b";
+        await db.Updateable(member).ExecuteCommandAsync();
+        Assert.Equal(["root-b"], await db.Queryable<ProjectManagementTaskEntity>().Select(item => item.Id).ToListAsync());
+        member.IsActive = false;
+        await db.Updateable(member).ExecuteCommandAsync();
+        Assert.Empty(await db.Queryable<ProjectManagementTaskEntity>().ToListAsync());
+    }
 }
