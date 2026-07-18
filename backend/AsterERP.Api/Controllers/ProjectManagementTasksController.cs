@@ -15,6 +15,10 @@ public sealed class ProjectManagementTasksController(IProjectManagementTaskServi
     public async Task<IActionResult> QueryAsync([FromQuery] ProjectManagementTaskQuery query, CancellationToken cancellationToken)
         => ApiOk(await service.QueryAsync(query, cancellationToken));
 
+    [HttpGet("{id}")]
+    public async Task<IActionResult> GetAsync(string id, CancellationToken cancellationToken)
+        => ApiOk(await service.GetAsync(id, cancellationToken));
+
     [HttpPost("{projectId}")]
     [Permission(PermissionCodes.ProjectManagementTaskAdd)]
     public async Task<IActionResult> CreateAsync(string projectId, [FromBody] ProjectManagementTaskUpsertRequest request, CancellationToken cancellationToken)

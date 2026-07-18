@@ -21,7 +21,7 @@ public sealed class ProjectManagementTaskServiceTests
         await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
         await db.Insertable(new ProjectManagementProjectEntity
         {
-            Id = "project-a", TenantId = "tenant-a", AppCode = "MES", ProjectCode = "A",
+            Id = "project-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "A",
             ProjectName = "A", OwnerUserId = "operator"
         }).ExecuteCommandAsync();
         var service = new ProjectManagementTaskService(new TestWorkspaceDatabaseAccessor(db), CreateUser());
@@ -37,7 +37,7 @@ public sealed class ProjectManagementTaskServiceTests
         Assert.Equal(0, moved.Depth);
         await db.Insertable(new ProjectManagementTaskDependencyEntity
         {
-            ProjectId = "project-a", TenantId = "tenant-a", AppCode = "MES", PredecessorTaskId = root.Id,
+            ProjectId = "project-a", TenantId = "tenant-a", AppCode = "SYSTEM", PredecessorTaskId = root.Id,
             SuccessorTaskId = child.Id, CreatedBy = "operator", CreatedTime = DateTime.UtcNow
         }).ExecuteCommandAsync();
         var board = await service.QueryAsync(new ProjectManagementTaskQuery("project-a", ViewKey: "board", SortBy: "status"));
@@ -55,7 +55,7 @@ public sealed class ProjectManagementTaskServiceTests
         await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
         await db.Insertable(new ProjectManagementProjectEntity
         {
-            Id = "project-a", TenantId = "tenant-a", AppCode = "MES", ProjectCode = "A",
+            Id = "project-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "A",
             ProjectName = "A", OwnerUserId = "operator", WipLimit = 1
         }).ExecuteCommandAsync();
         var service = new ProjectManagementTaskService(new TestWorkspaceDatabaseAccessor(db), CreateUser());
@@ -80,6 +80,36 @@ public sealed class ProjectManagementTaskServiceTests
     }
 
     [Fact]
+    public async Task Tasks_expose_lightweight_page_and_validated_detail_crud()
+    {
+        using var db = CreateDb("task-list-detail");
+        await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
+        await db.Insertable(new ProjectManagementProjectEntity
+        {
+            Id = "project-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "A", ProjectName = "A", OwnerUserId = "operator"
+        }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementProjectMemberEntity
+        {
+            Id = "member-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", UserId = "member-a", RoleCode = "Member", IsActive = true, CreatedBy = "operator", CreatedTime = DateTime.UtcNow, JoinedAt = DateTime.UtcNow
+        }).ExecuteCommandAsync();
+        var service = new ProjectManagementTaskService(new TestWorkspaceDatabaseAccessor(db), CreateUser());
+
+        var created = await service.CreateAsync("project-a", new ProjectManagementTaskUpsertRequest("T-1", "任务", "完整详情", AssigneeUserId: "member-a", EstimateMinutes: 120, Weight: 2));
+        var page = await service.QueryAsync(new ProjectManagementTaskQuery("project-a", PageIndex: 1, PageSize: 20));
+        var listItem = Assert.Single(page.Items);
+        Assert.Equal(created.Id, listItem.Id);
+        Assert.Null(typeof(ProjectManagementTaskListItemResponse).GetProperty("Description"));
+
+        var detail = await service.GetAsync(created.Id);
+        Assert.Equal("完整详情", detail.Description);
+        Assert.Equal(120, detail.EstimateMinutes);
+        await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() =>
+            service.CreateAsync("project-a", new ProjectManagementTaskUpsertRequest("T-2", "无效负责人", AssigneeUserId: "outside-user")));
+        await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() =>
+            service.QueryAsync(new ProjectManagementTaskQuery("project-a", DueFrom: DateTime.UtcNow.AddDays(1), DueTo: DateTime.UtcNow)));
+    }
+
+    [Fact]
     public void Task_controller_separates_view_add_edit_move_and_delete_permissions()
     {
         Assert.Contains(typeof(ProjectManagementTasksController).GetCustomAttributes(typeof(PermissionAttribute), true), attribute => ((PermissionAttribute)attribute).Code == PermissionCodes.ProjectManagementTaskView);
@@ -97,7 +127,7 @@ public sealed class ProjectManagementTaskServiceTests
         await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
         await db.Insertable(new ProjectManagementProjectEntity
         {
-            Id = "project-a", TenantId = "tenant-a", AppCode = "MES", ProjectCode = "A",
+            Id = "project-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "A",
             ProjectName = "A", OwnerUserId = "operator"
         }).ExecuteCommandAsync();
         var service = new ProjectManagementTaskService(
@@ -116,7 +146,7 @@ public sealed class ProjectManagementTaskServiceTests
         await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
         await db.Insertable(new ProjectManagementProjectEntity
         {
-            Id = "project-a", TenantId = "tenant-a", AppCode = "MES", ProjectCode = "A", ProjectName = "A", OwnerUserId = "operator"
+            Id = "project-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "A", ProjectName = "A", OwnerUserId = "operator"
         }).ExecuteCommandAsync();
         var service = new ProjectManagementTaskService(new TestWorkspaceDatabaseAccessor(db), CreateUser());
         var first = await service.CreateAsync("project-a", new ProjectManagementTaskUpsertRequest("T-1", "First"));
@@ -157,12 +187,12 @@ public sealed class ProjectManagementTaskServiceTests
         await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
         await db.Insertable(new ProjectManagementProjectEntity
         {
-            Id = "project-a", TenantId = "tenant-a", AppCode = "MES", ProjectCode = "A", ProjectName = "A", OwnerUserId = "operator"
+            Id = "project-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "A", ProjectName = "A", OwnerUserId = "operator"
         }).ExecuteCommandAsync();
         await db.Insertable(new[]
         {
-            new ProjectManagementMilestoneEntity { Id = "milestone-a", TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-a", MilestoneName = "A", CreatedBy = "operator", CreatedTime = DateTime.UtcNow },
-            new ProjectManagementMilestoneEntity { Id = "milestone-b", TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-a", MilestoneName = "B", CreatedBy = "operator", CreatedTime = DateTime.UtcNow }
+            new ProjectManagementMilestoneEntity { Id = "milestone-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", MilestoneName = "A", CreatedBy = "operator", CreatedTime = DateTime.UtcNow },
+            new ProjectManagementMilestoneEntity { Id = "milestone-b", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", MilestoneName = "B", CreatedBy = "operator", CreatedTime = DateTime.UtcNow }
         }).ExecuteCommandAsync();
         var service = new ProjectManagementTaskService(new TestWorkspaceDatabaseAccessor(db), CreateUser());
         var root = await service.CreateAsync("project-a", new ProjectManagementTaskUpsertRequest("T-1", "Root", MilestoneId: "milestone-a", ProgressPercent: 80));
@@ -190,11 +220,11 @@ public sealed class ProjectManagementTaskServiceTests
         IsAutoCloseConnection = false
     });
 
-    private static FixedAsterErpCurrentUser CreateUser() => new(new ClaimsPrincipal(new ClaimsIdentity(new[]
+    private static FixedAsterErpCurrentUser CreateUser(string userId = "operator") => new(new ClaimsPrincipal(new ClaimsIdentity(new[]
     {
-        new Claim(AsterErpClaimTypes.UserId, "operator"),
+        new Claim(AsterErpClaimTypes.UserId, userId),
         new Claim(AsterErpClaimTypes.TenantId, "tenant-a"),
-        new Claim(AsterErpClaimTypes.AppCode, "MES"),
+        new Claim(AsterErpClaimTypes.AppCode, "SYSTEM"),
         new Claim(AsterErpClaimTypes.DataScope, "SELF"),
         new Claim(AsterErpClaimTypes.PermissionCode, PermissionCodes.ProjectManagementProjectView)
     }, "test")));

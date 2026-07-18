@@ -1,8 +1,8 @@
-import type { ProjectManagementTask } from '../../../api/project-management/projectManagement.types';
+import type { ProjectManagementTaskListItem } from '../../../api/project-management/projectManagement.types';
 
 export type TaskMoveDropTarget =
-  | { kind: 'before'; task: ProjectManagementTask }
-  | { kind: 'child'; task: ProjectManagementTask }
+  | { kind: 'before'; task: ProjectManagementTaskListItem }
+  | { kind: 'child'; task: ProjectManagementTaskListItem }
   | { kind: 'root' };
 
 export interface ProjectManagementTaskMoveRequest {
@@ -15,7 +15,7 @@ export interface ProjectManagementTaskMoveRequest {
 const appendSortOrder = 2_147_483_647;
 
 export function createTaskMoveRequest(
-  task: ProjectManagementTask,
+  task: ProjectManagementTaskListItem,
   target: TaskMoveDropTarget,
 ): ProjectManagementTaskMoveRequest | null {
   if (target.kind === 'before') {

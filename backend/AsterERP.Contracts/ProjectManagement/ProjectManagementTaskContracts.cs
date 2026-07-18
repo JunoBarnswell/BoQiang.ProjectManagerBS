@@ -47,6 +47,60 @@ public sealed record ProjectManagementTaskMoveRequest(
     string? MilestoneId = null,
     bool UpdateMilestone = false);
 
+/// <summary>
+/// 任务工作台列表投影。刻意不包含描述、工时和审计字段；选中任务后应读取详情接口。
+/// </summary>
+public sealed record ProjectManagementTaskListItemResponse(
+    string Id,
+    string ProjectId,
+    string? MilestoneId,
+    string? ParentTaskId,
+    string TaskCode,
+    string Title,
+    string Status,
+    string Priority,
+    string? AssigneeUserId,
+    DateTime? StartDate,
+    DateTime? DueDate,
+    decimal ProgressPercent,
+    int SortOrder,
+    int Depth,
+    long VersionNo,
+    int BlockedByCount,
+    bool CanStart,
+    string? BlockedReason);
+
+/// <summary>
+/// 单任务详情，用于编辑和任务侧栏；列表加载不返回这些扩展字段。
+/// </summary>
+public sealed record ProjectManagementTaskDetailResponse(
+    string Id,
+    string ProjectId,
+    string? MilestoneId,
+    string? ParentTaskId,
+    string TaskCode,
+    string Title,
+    string? Description,
+    string Status,
+    string Priority,
+    string? AssigneeUserId,
+    string? AssigneeEmploymentId,
+    DateTime? StartDate,
+    DateTime? DueDate,
+    decimal ProgressPercent,
+    decimal Weight,
+    int? EstimateMinutes,
+    int ActualMinutes,
+    int SortOrder,
+    int Depth,
+    long VersionNo,
+    DateTime CreatedTime,
+    DateTime? UpdatedTime,
+    int BlockedByCount,
+    bool CanStart,
+    string? BlockedReason);
+
+/// <summary>保留给既有批量、模板和我的任务契约的完整任务载荷。</summary>
 public sealed record ProjectManagementTaskResponse(
     string Id,
     string ProjectId,

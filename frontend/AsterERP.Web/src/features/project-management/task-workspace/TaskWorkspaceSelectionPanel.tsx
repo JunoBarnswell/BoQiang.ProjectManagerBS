@@ -1,5 +1,5 @@
 import type {
-  ProjectManagementTask,
+  ProjectManagementTaskDetail,
   ProjectManagementTaskAttachment,
   ProjectManagementTaskComment,
   ProjectManagementTaskCommentUpsertRequest,
@@ -38,7 +38,7 @@ interface TaskWorkspaceSelectionPanelProps {
   onCancelReminder: (reminder: ProjectManagementTaskReminder) => void;
   onDeleteReminder: (reminder: ProjectManagementTaskReminder) => void;
   saving: boolean;
-  selectedTask?: ProjectManagementTask;
+  selectedTask?: ProjectManagementTaskDetail;
 }
 
 export function TaskWorkspaceSelectionPanel({
