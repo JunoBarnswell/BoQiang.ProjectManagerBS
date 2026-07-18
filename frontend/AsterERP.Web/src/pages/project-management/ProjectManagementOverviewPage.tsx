@@ -1,14 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 
-import {
-  getProjectManagementActivities,
-  getProjectManagementOverview
-} from '../../api/project-management/projectManagement.api';
+import { getProjectManagementActivities } from '../../api/project-management/projectManagement.api';
 import { usePermission } from '../../core/auth/usePermission';
 import { isHttpError } from '../../core/http/httpError';
 import { projectManagementQueryKeys } from '../../core/query/projectManagementQueryKeys';
 import '../../features/project-management/projectManagement.css';
+import {
+  getProjectManagementDashboardOverview,
+  getProjectManagementDashboardWorkload
+} from '../../features/project-management/dashboard/projectManagementDashboard.api';
 import { toProjectManagementPlatformRoute } from '../../features/project-management/state/projectManagementPlatformRoutes';
 import { useProjectManagementWorkspaceScope } from '../../features/project-management/state/projectManagementWorkspaceScope';
 import { ResponsivePage } from '../../shared/responsive/ResponsivePage';
@@ -31,11 +32,16 @@ export function ProjectManagementOverviewPage() {
   const { projectId = '' } = useParams<{ projectId: string }>();
   const overviewQuery = useQuery({
     queryKey: projectManagementQueryKeys.overview(scope, { projectId, pageIndex: 1, pageSize: 1 }),
-    queryFn: ({ signal }) => getProjectManagementOverview({ projectId, pageIndex: 1, pageSize: 1 }, signal),
+    queryFn: ({ signal }) => getProjectManagementDashboardOverview({ projectId, pageIndex: 1, pageSize: 1 }, signal),
     enabled: scope.isAvailable && Boolean(projectId)
   });
   const overview = overviewQuery.data?.data?.items[0];
   const project = overview?.project;
+  const workloadQuery = useQuery({
+    queryKey: [...projectManagementQueryKeys.overview(scope, { projectId }), 'workload'],
+    queryFn: ({ signal }) => getProjectManagementDashboardWorkload(projectId, signal),
+    enabled: scope.isAvailable && Boolean(overview) && canViewTasks
+  });
   const activitiesQuery = useQuery({
     queryKey: projectManagementQueryKeys.activities(scope, projectId, activityQuery),
     queryFn: ({ signal }) => getProjectManagementActivities(projectId, activityQuery, signal),
@@ -83,9 +89,22 @@ export function ProjectManagementOverviewPage() {
       <section aria-label="项目指标" className="pm-metric-grid">
         {metrics.map((metric) => <div className="pm-metric-card" data-tone={metric.tone} key={metric.label}><span className="pm-metric-card__label">{metric.label}</span><strong className="pm-metric-card__value">{metric.value}</strong></div>)}
       </section>
+      <section className="pm-panel" aria-labelledby="project-risk-title">
+        <div className="pm-panel__heading"><div><h2 id="project-risk-title">风险与执行信号</h2><p className="pm-panel__meta">风险指标来自当前项目叶子任务和 WIP 限制的实时聚合。</p></div><HealthBadge health={overview.riskSummary.hasScheduleRisk || overview.riskSummary.isWipExceeded ? 'AtRisk' : 'OnTrack'} /></div>
+        <div className="pm-metric-grid">
+          <div className="pm-metric-card" data-tone={overview.riskSummary.overdueTaskCount > 0 ? 'danger' : 'neutral'}><span className="pm-metric-card__label">逾期任务</span><strong className="pm-metric-card__value">{overview.riskSummary.overdueTaskCount}</strong></div>
+          <div className="pm-metric-card" data-tone={overview.riskSummary.blockedTaskCount > 0 ? 'warning' : 'neutral'}><span className="pm-metric-card__label">阻塞任务</span><strong className="pm-metric-card__value">{overview.riskSummary.blockedTaskCount}</strong></div>
+          <div className="pm-metric-card" data-tone={overview.riskSummary.dueSoonIncompleteTaskCount > 0 ? 'warning' : 'neutral'}><span className="pm-metric-card__label">7 日内到期</span><strong className="pm-metric-card__value">{overview.riskSummary.dueSoonIncompleteTaskCount}</strong></div>
+          <div className="pm-metric-card" data-tone={overview.riskSummary.isWipExceeded ? 'danger' : 'neutral'}><span className="pm-metric-card__label">WIP</span><strong className="pm-metric-card__value">{overview.riskSummary.inProgressTaskCount}{overview.riskSummary.wipLimit == null ? '' : ` / ${overview.riskSummary.wipLimit}`}</strong></div>
+        </div>
+      </section>
       <section className="pm-panel" aria-labelledby="milestone-health-title">
         <div className="pm-panel__heading"><div><h2 id="milestone-health-title">里程碑健康</h2><p className="pm-panel__meta">里程碑进度和健康状态由当前项目数据计算。</p></div><span className="pm-view-note">共 {overview.milestoneCount} 个</span></div>
         {overview.milestones.length === 0 ? <p className="pm-muted">暂无里程碑。创建里程碑后会在此显示健康状态和进度。</p> : <ul className="pm-list">{overview.milestones.map((milestone) => <li key={milestone.id}><div className="pm-milestone-row"><div><div className="pm-milestone-row__name">{milestone.name}</div><div className="pm-milestone-row__meta"><HealthBadge health={milestone.healthStatus} /><span>{milestone.dueDate ? `截止 ${formatDate(milestone.dueDate)}` : '未设置截止日期'}</span></div></div><div className="pm-progress"><progress aria-label={`${milestone.name} 完成进度 ${milestone.progressPercent}%`} max={100} value={milestone.progressPercent} /><span>{milestone.progressPercent}%</span></div></div></li>)}</ul>}
+      </section>
+      <section className="pm-panel" aria-labelledby="workload-title">
+        <div className="pm-panel__heading"><div><h2 id="workload-title">人员工作量</h2><p className="pm-panel__meta">任务归属负责人，已登记工时归属实际填写日志的人员。</p></div></div>
+        {!canViewTasks ? <p className="pm-muted">当前账号没有任务查看权限。</p> : workloadQuery.isLoading ? <p className="pm-muted">工作量加载中…</p> : workloadQuery.isError ? <div className="pm-inline-error"><p>人员工作量加载失败。</p><button type="button" onClick={() => void workloadQuery.refetch()}>重试</button></div> : (workloadQuery.data?.data ?? []).length === 0 ? <p className="pm-muted">暂无已分配任务或工时记录。</p> : <div className="overflow-x-auto"><table className="min-w-full text-sm"><thead><tr><th className="px-2 py-2 text-left">人员</th><th className="px-2 py-2 text-right">待办</th><th className="px-2 py-2 text-right">进行中</th><th className="px-2 py-2 text-right">已完成</th><th className="px-2 py-2 text-right">逾期</th><th className="px-2 py-2 text-right">预计</th><th className="px-2 py-2 text-right">已登记</th></tr></thead><tbody>{(workloadQuery.data?.data ?? []).map((person) => <tr className="border-t border-gray-100" key={person.userId}><td className="px-2 py-2 font-medium">{person.userId}</td><td className="px-2 py-2 text-right">{person.todoTaskCount}</td><td className="px-2 py-2 text-right">{person.inProgressTaskCount}</td><td className="px-2 py-2 text-right">{person.completedTaskCount}</td><td className="px-2 py-2 text-right">{person.overdueTaskCount}</td><td className="px-2 py-2 text-right">{formatMinutes(person.estimatedMinutes)}</td><td className="px-2 py-2 text-right">{formatMinutes(person.loggedMinutes)}</td></tr>)}</tbody></table></div>}
       </section>
       <ProjectManagementActivityTimeline
         canView={canViewActivities}
@@ -115,4 +134,11 @@ function projectStatusLabel(status: string) {
 
 function formatDate(value: string) {
   return new Date(value).toLocaleDateString();
+}
+
+function formatMinutes(value: number) {
+  if (value < 60) return `${value} 分钟`;
+  const hours = Math.floor(value / 60);
+  const minutes = value % 60;
+  return minutes === 0 ? `${hours} 小时` : `${hours} 小时 ${minutes} 分钟`;
 }

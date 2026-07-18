@@ -45,10 +45,10 @@ public sealed class ProjectManagementOverviewService(
         var ids = page.Select(project => project.Id).ToList();
         if (ids.Count == 0) return new GridPageResult<ProjectManagementOverviewItem> { Total = total.Value };
 
-        var tasks = await db.Queryable<ProjectManagementTaskEntity>().Where(task => ids.Contains(task.ProjectId)).ToListAsync(cancellationToken);
-        var milestones = await db.Queryable<ProjectManagementMilestoneEntity>().Where(milestone => ids.Contains(milestone.ProjectId) && !milestone.IsDeleted)
+        var tasks = await db.Queryable<ProjectManagementTaskEntity>().Where(task => ids.Contains(task.ProjectId) && task.TenantId == tenantId && task.AppCode == appCode && !task.IsDeleted).ToListAsync(cancellationToken);
+        var milestones = await db.Queryable<ProjectManagementMilestoneEntity>().Where(milestone => ids.Contains(milestone.ProjectId) && milestone.TenantId == tenantId && milestone.AppCode == appCode && !milestone.IsDeleted)
             .OrderBy(milestone => milestone.DueDate, OrderByType.Asc).ToListAsync(cancellationToken);
-        var members = await db.Queryable<ProjectManagementProjectMemberEntity>().Where(member => ids.Contains(member.ProjectId) && member.IsActive && !member.IsDeleted).ToListAsync(cancellationToken);
+        var members = await db.Queryable<ProjectManagementProjectMemberEntity>().Where(member => ids.Contains(member.ProjectId) && member.TenantId == tenantId && member.AppCode == appCode && member.IsActive && !member.IsDeleted).ToListAsync(cancellationToken);
         var now = DateTime.UtcNow;
         return new GridPageResult<ProjectManagementOverviewItem>
         {
