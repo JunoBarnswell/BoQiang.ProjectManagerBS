@@ -37,4 +37,16 @@ public sealed record ProjectManagementRecycleResponse(
 
 public sealed record ProjectManagementRecycleRestoreRequest(long VersionNo, bool RestoreDescendants = false);
 
-public sealed record ProjectManagementRecyclePurgeRequest(long VersionNo);
+public sealed record ProjectManagementRecyclePurgeRequest(long VersionNo, string CurrentPassword, bool ConfirmRisk);
+
+public sealed record ProjectManagementRecyclePurgePreviewResponse(
+    string ProjectId,
+    string ProjectCode,
+    string ProjectName,
+    long VersionNo,
+    int MemberReferenceCount,
+    int MilestoneReferenceCount,
+    int TaskReferenceCount,
+    bool CanExecute,
+    string? BlockingReason,
+    string RollbackHint);

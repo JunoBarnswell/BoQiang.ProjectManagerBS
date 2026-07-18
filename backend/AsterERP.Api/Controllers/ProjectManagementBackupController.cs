@@ -16,6 +16,9 @@ public sealed class ProjectManagementBackupController(IProjectManagementBackupSe
     [HttpPost]
     public async Task<IActionResult> CreateAsync([FromBody] ProjectManagementBackupRequest request, CancellationToken cancellationToken) => ApiOk(await service.CreateAsync(request, cancellationToken));
 
+    [HttpGet("{id}/restore-preview")]
+    public async Task<IActionResult> PreviewRestoreAsync(string id, CancellationToken cancellationToken) => ApiOk(await service.PreviewRestoreAsync(id, cancellationToken));
+
     [HttpPost("{id}/restore")]
     public async Task<IActionResult> RestoreAsync(string id, [FromBody] ProjectManagementRestoreRequest request, CancellationToken cancellationToken) => ApiOk(await service.RestoreAsync(id, request, cancellationToken));
 }

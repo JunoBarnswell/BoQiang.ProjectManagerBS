@@ -81,7 +81,7 @@ public sealed class ProjectManagementOverviewRecycleTests
         await db.Insertable(new ProjectManagementTaskEntity { TenantId = "tenant-a", AppCode = "MES", ProjectId = "deleted-project", TaskCode = "T-1", Title = "task", IsDeleted = true }).ExecuteCommandAsync();
 
         var service = new ProjectManagementRecycleService(new TestWorkspaceDatabaseAccessor(db), CreateUser("operator", PermissionCodes.ProjectManagementProjectPurge));
-        await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() => service.PurgeProjectAsync("deleted-project", 1));
+        await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() => service.PurgeProjectAsync("deleted-project", new ProjectManagementRecyclePurgeRequest(1, "secret", true)));
     }
 
     [Fact]
