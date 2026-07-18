@@ -1,9 +1,14 @@
 using System.Reflection;
 using AsterERP.Api.Infrastructure.Abp.DevelopmentSeed;
+using AsterERP.Api.Modules.System.Menus;
+using AsterERP.Api.Modules.System.Permissions;
+using AsterERP.Api.Modules.System.Roles;
+using AsterERP.Api.Modules.Workflows;
 using AsterERP.Api.Infrastructure.Security;
 using AsterERP.Api.Modules.Platform;
 using AsterERP.Api.Modules.Runtime;
 using AsterERP.Api.Tests.Support;
+using AsterERP.Shared;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
@@ -125,6 +130,41 @@ public sealed class DevelopmentSeedDataServiceTests : IDisposable
         Assert.True(result.Failed);
     }
 
+    [Fact]
+    public void Platform_seed_registers_project_management_menu_and_grants_system_admin()
+    {
+        using var db = CreateDb();
+        db.CodeFirst.InitTables<SystemPermissionCodeEntity, SystemRoleEntity, SystemRolePermissionEntity, SystemMenuEntity, WorkflowCategoryEntity>();
+        var service = CreateService(db);
+
+        InvokePrivateSeedStep(service, "SeedPermissionCodes");
+        InvokePrivateSeedStep(service, "SeedRoles");
+        InvokePrivateSeedStep(service, "SeedRolePermissions");
+        InvokePrivateSeedStep(service, "SeedMenus");
+
+        var projectManagementPermissionCodes = db.Queryable<SystemPermissionCodeEntity>()
+            .Where(item => !item.IsDeleted && item.ModuleName == "ProjectManagement")
+            .Select(item => item.PermissionCode)
+            .ToList();
+        var systemAdmin = db.Queryable<SystemRoleEntity>()
+            .First(item => item.TenantId == "tenant-system" && item.AppCode == "SYSTEM" && item.RoleCode == "admin" && !item.IsDeleted);
+        var systemAdminPermissions = db.Queryable<SystemRolePermissionEntity, SystemPermissionCodeEntity>(
+                (grant, permission) => grant.PermissionCodeId == permission.Id)
+            .Where((grant, permission) => grant.RoleId == systemAdmin.Id && !grant.IsDeleted && !permission.IsDeleted)
+            .Select((grant, permission) => permission.PermissionCode)
+            .ToList();
+        var projectManagementMenu = db.Queryable<SystemMenuEntity>()
+            .First(item => item.TenantId == "tenant-system" && item.AppCode == "SYSTEM" && item.MenuCode == "project-management" && !item.IsDeleted);
+
+        Assert.Equal(
+            PermissionCodes.ProjectManagementPermissionCodes.OrderBy(item => item, StringComparer.Ordinal),
+            projectManagementPermissionCodes.OrderBy(item => item, StringComparer.Ordinal));
+        Assert.Contains(PermissionCodes.ProjectManagementProjectView, systemAdminPermissions);
+        Assert.Equal("platform", projectManagementMenu.ParentCode);
+        Assert.Equal("/project-management", projectManagementMenu.RoutePath);
+        Assert.Equal(PermissionCodes.ProjectManagementProjectView, projectManagementMenu.PermissionCode);
+    }
+
     [Theory]
     [InlineData("Development", true)]
     [InlineData("Testing", true)]
@@ -177,6 +217,13 @@ public sealed class DevelopmentSeedDataServiceTests : IDisposable
     private static void InvokeSeedDataModels(DevelopmentSeedDataService service)
     {
         var method = typeof(DevelopmentSeedDataService).GetMethod("SeedDataModels", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(method);
+        method.Invoke(service, null);
+    }
+
+    private static void InvokePrivateSeedStep(DevelopmentSeedDataService service, string methodName)
+    {
+        var method = typeof(DevelopmentSeedDataService).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.NotNull(method);
         method.Invoke(service, null);
     }

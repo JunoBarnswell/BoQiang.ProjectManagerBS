@@ -1,5 +1,6 @@
 using AsterERP.Api.Infrastructure.Abp.ProjectManagement;
 using AsterERP.Api.Application.ApplicationConsole;
+using AsterERP.Api.Application.ProjectManagement;
 using AsterERP.Shared;
 using Volo.Abp.Modularity;
 using Xunit;
@@ -41,16 +42,25 @@ public sealed class ProjectManagementAbpModuleTests
     }
 
     [Fact]
-    public void Project_management_permission_catalog_and_fixed_menu_use_the_same_view_permission()
+    public void Project_management_permissions_and_menu_are_platform_only()
     {
         var viewPermission = PermissionCodes.ProjectManagementProjectView;
 
         Assert.Contains(
+            ProjectManagementPlatformPermissionCatalog.Definitions,
+            item => item.PermissionCode == viewPermission);
+        Assert.Equal(
+            PermissionCodes.ProjectManagementPermissionCodes.OrderBy(item => item, StringComparer.Ordinal),
+            ProjectManagementPlatformPermissionCatalog.Definitions.Select(item => item.PermissionCode).OrderBy(item => item, StringComparer.Ordinal));
+        Assert.DoesNotContain(
             ApplicationShellPermissionCatalog.Definitions,
-            item => item.PermissionCode == viewPermission && item.ModuleName == "ProjectManagement");
+            item => item.PermissionCode.StartsWith("project-management:", StringComparison.Ordinal));
         Assert.Contains(
+            PermissionCodes.ProjectManagementPermissionCodes,
+            item => string.Equals(item, viewPermission, StringComparison.Ordinal));
+        Assert.DoesNotContain(
             ApplicationShellMenuCatalog.CoreItems,
-            item => item.MenuCode == "project-management" && item.PermissionCode == viewPermission);
+            item => item.MenuCode == "project-management");
     }
 
     [Fact]

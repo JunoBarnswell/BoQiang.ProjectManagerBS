@@ -3,6 +3,7 @@ using AsterERP.Api.Modules.System.Organizations;
 using AsterERP.Api.Modules.System.Permissions;
 using AsterERP.Api.Modules.System.Roles;
 using AsterERP.Api.Modules.System.Users;
+using AsterERP.Shared;
 using SqlSugar;
 
 namespace AsterERP.Api.Application.ApplicationConsole;
@@ -17,7 +18,11 @@ public sealed class ApplicationRbacBaselineSeeder
     private const string DefaultPositionId = "app-default-position";
     private const string DefaultPositionCode = "APP_ADMIN";
     private const string DefaultPositionName = "应用管理员";
-    private const string RetiredAdminCenterPermissionCode = "app:admin-center:view";
+    private static readonly IReadOnlyList<string> RetiredPermissionCodes =
+    [
+        "app:admin-center:view",
+        .. PermissionCodes.ProjectManagementPermissionCodes
+    ];
 
     public async Task SeedAsync(
         ISqlSugarClient appDb,
@@ -159,8 +164,9 @@ public sealed class ApplicationRbacBaselineSeeder
         string currentUserId,
         CancellationToken cancellationToken)
     {
+        var retiredPermissionCodes = RetiredPermissionCodes.ToArray();
         var retiredPermissions = await appDb.Queryable<SystemPermissionCodeEntity>()
-            .Where(item => item.PermissionCode == RetiredAdminCenterPermissionCode && !item.IsDeleted)
+            .Where(item => retiredPermissionCodes.Contains(item.PermissionCode) && !item.IsDeleted)
             .ToListAsync(cancellationToken);
         if (retiredPermissions.Count == 0)
         {
