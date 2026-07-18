@@ -10,6 +10,7 @@ import { useApiMutation } from '../../core/query/useApiMutation';
 import { useProjectManagementWorkspaceScope } from '../../features/project-management/state/projectManagementWorkspaceScope';
 import { useAuthStore } from '../../core/state/authStore';
 import { clearProjectManagementOperationTracking, getProjectManagementOperationTrackingKey, readProjectManagementOperationTracking, writeProjectManagementOperationTracking } from '../../features/project-management/state/projectManagementOperationTracking';
+import { toProjectManagementPlatformRoute } from '../../features/project-management/state/projectManagementPlatformRoutes';
 import { ProjectManagementOperationProgress } from '../../features/project-management/components/ProjectManagementOperationProgress';
 import { PermissionButton } from '../../shared/auth/PermissionButton';
 import { PermissionGuard } from '../../shared/auth/PermissionGuard';
@@ -94,7 +95,7 @@ export function ProjectManagementAuditPage() {
       title="项目审计中心"
       eyebrow="ProjectManagement / Audit"
       description="查看当前授权范围内的项目、里程碑和任务活动；导出结果沿用同一数据权限过滤。"
-      toolbar={<div className="flex flex-wrap items-center gap-3"><PermissionButton code="project-management:audit:export" disabled={exportMutation.isPending} onClick={() => exportMutation.mutate()}>{exportMutation.isPending ? '导出中…' : '导出 CSV'}</PermissionButton><Link className="text-sm" to="/project-search">项目搜索</Link><PermissionGuard code="project-management:sync:export" fallback={null}><Link className="text-sm" to="/project-sync">同步水位</Link></PermissionGuard></div>}
+      toolbar={<div className="flex flex-wrap items-center gap-3"><PermissionButton code="project-management:audit:export" disabled={exportMutation.isPending} onClick={() => exportMutation.mutate()}>{exportMutation.isPending ? '导出中…' : '导出 CSV'}</PermissionButton><Link className="text-sm" to={toProjectManagementPlatformRoute('project-search')}>项目搜索</Link><PermissionGuard code="project-management:sync:export" fallback={null}><Link className="text-sm" to={toProjectManagementPlatformRoute('project-sync')}>同步水位</Link></PermissionGuard></div>}
     >
       <div className="mb-3 flex items-center gap-2">
         <form className="flex items-center gap-2" onSubmit={(event) => { event.preventDefault(); setPageIndex(1); setSubmittedKeyword(keyword.trim()); }}><input className="rounded border border-gray-300 px-3 py-2" aria-label="审计关键字" placeholder="搜索摘要、操作者或对象" value={keyword} onChange={(event) => setKeyword(event.target.value)} /><button type="submit">搜索</button>{submittedKeyword ? <button type="button" onClick={() => { setKeyword(''); setSubmittedKeyword(''); setPageIndex(1); }}>清空</button> : null}</form>

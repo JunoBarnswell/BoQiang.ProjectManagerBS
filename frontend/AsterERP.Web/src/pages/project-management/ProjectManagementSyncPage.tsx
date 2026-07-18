@@ -6,6 +6,7 @@ import { acknowledgeProjectManagementSync, getProjectManagementSyncChanges, getP
 import { isHttpError } from '../../core/http/httpError';
 import { useApiMutation } from '../../core/query/useApiMutation';
 import { useProjectManagementWorkspaceScope } from '../../features/project-management/state/projectManagementWorkspaceScope';
+import { toProjectManagementPlatformRoute } from '../../features/project-management/state/projectManagementPlatformRoutes';
 import { PermissionButton } from '../../shared/auth/PermissionButton';
 import { useMessage } from '../../shared/feedback/useMessage';
 import { ResponsivePage } from '../../shared/responsive/ResponsivePage';
@@ -54,7 +55,7 @@ export function ProjectManagementSyncPage() {
     title="项目同步"
     eyebrow="ProjectManagement / Sync"
     description="查看当前工作区的同步水位和变更 journal；导入/导出同步包仍在数据空间执行，所有确认操作由服务端校验序号。"
-    toolbar={<Link to="/project-data-space">前往数据空间导入或导出同步包</Link>}
+    toolbar={<Link to={toProjectManagementPlatformRoute('project-data-space')}>前往数据空间导入或导出同步包</Link>}
   >
     <section className="rounded-lg border border-gray-200 p-4">
       <form className="flex flex-wrap items-end gap-2" onSubmit={(event) => { event.preventDefault(); setSubmittedDeviceId(deviceId.trim()); }}>

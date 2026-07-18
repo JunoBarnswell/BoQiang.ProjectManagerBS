@@ -14,6 +14,7 @@ import { isHttpError } from "../../core/http/httpError";
 import { projectManagementQueryKeys } from "../../core/query/projectManagementQueryKeys";
 import { useApiMutation } from "../../core/query/useApiMutation";
 import { useProjectManagementWorkspaceScope } from "../../features/project-management/state/projectManagementWorkspaceScope";
+import { toProjectManagementPlatformRoute } from "../../features/project-management/state/projectManagementPlatformRoutes";
 import { PermissionButton } from "../../shared/auth/PermissionButton";
 import { PermissionGuard } from "../../shared/auth/PermissionGuard";
 import { useConfirm } from "../../shared/feedback/useConfirm";
@@ -82,7 +83,7 @@ export function ProjectManagementRecycleBinPage() {
         title="项目回收站"
         description="按当前工作区和项目成员范围查看已删除对象；恢复和永久删除会再次由服务端校验对象权限与版本。"
         eyebrow="ProjectManagement / Recycle Bin"
-        toolbar={<div className="flex flex-wrap gap-3 text-sm"><Link to="/project-search">项目搜索</Link><PermissionGuard code="project-management:audit:view" fallback={null}><Link to="/project-audit-center">审计中心</Link></PermissionGuard></div>}
+        toolbar={<div className="flex flex-wrap gap-3 text-sm"><Link to={toProjectManagementPlatformRoute('project-search')}>项目搜索</Link><PermissionGuard code="project-management:audit:view" fallback={null}><Link to={toProjectManagementPlatformRoute('project-audit-center')}>审计中心</Link></PermissionGuard></div>}
       >
         <form className="mb-4 flex flex-wrap gap-2" onSubmit={(event) => { event.preventDefault(); setPageIndex(1); setSubmittedKeyword(keyword.trim()); }}>
           <input aria-label="搜索已删除对象" className="min-w-56 rounded border border-gray-300 px-3 py-2" value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="按项目编码、项目名或任务搜索" />

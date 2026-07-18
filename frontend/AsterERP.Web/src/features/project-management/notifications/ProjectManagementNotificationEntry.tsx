@@ -8,6 +8,7 @@ import {
   openProjectManagementNotification,
 } from '../../../api/project-management/projectManagement.api';
 import type { ProjectManagementNotification } from '../../../api/project-management/projectManagement.types';
+import { normalizeProjectManagementTargetRoute } from '../state/projectManagementPlatformRoutes';
 import { projectManagementQueryKeys } from '../../../core/query/projectManagementQueryKeys';
 import { useApiMutation } from '../../../core/query/useApiMutation';
 import { useAuthStore } from '../../../core/state';
@@ -56,7 +57,7 @@ function ProjectManagementNotificationEntryContent() {
         return;
       }
       setOpen(false);
-      navigate(target.targetRoute);
+      navigate(normalizeProjectManagementTargetRoute(target.targetRoute));
     },
     [message, navigate, refresh],
   );

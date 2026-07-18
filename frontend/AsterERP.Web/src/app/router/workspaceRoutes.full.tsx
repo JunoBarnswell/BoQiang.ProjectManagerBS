@@ -3,6 +3,7 @@ import { Navigate, type RouteObject } from 'react-router-dom';
 
 import { Page403 } from '../../shared/status/Page403';
 import { Page404 } from '../../shared/status/Page404';
+import { projectManagementPlatformRoutePrefix, projectManagementRoutePaths } from '../../features/project-management/state/projectManagementPlatformRoutes';
 import { routeMeta, type AppRouteMeta } from '../navigation/routeMeta';
 
 import { ApplicationDatabaseRequiredRoute } from './ApplicationDatabaseRequiredRoute';
@@ -40,55 +41,9 @@ const AsterSceneDashboardPage = lazy(() => import('../../features/aster-scene/pa
 const AsterSceneAssetsPage = lazy(() => import('../../features/aster-scene/pages/AsterSceneAssetsPage').then((module) => ({ default: module.AsterSceneAssetsPage })));
 const AsterSceneAdminPage = lazy(() => import('../../features/aster-scene/pages/AsterSceneAdminPage').then((module) => ({ default: module.AsterSceneAdminPage })));
 const ImMessagesPage = lazy(() => import('../../pages/im/ImMessagesPage'));
-const ProjectManagementPage = lazy(() => import('../../pages/project-management/ProjectManagementPage').then((module) => ({ default: module.ProjectManagementPage })));
-const ProjectManagementTaskWorkspacePage = lazy(() => import('../../pages/project-management/ProjectManagementTaskWorkspacePage').then((module) => ({ default: module.ProjectManagementTaskWorkspacePage })));
-const ProjectManagementDataSpacePage = lazy(() => import('../../pages/project-management/ProjectManagementDataSpacePage').then((module) => ({ default: module.ProjectManagementDataSpacePage })));
-const ProjectManagementAuditPage = lazy(() => import('../../pages/project-management/ProjectManagementAuditPage').then((module) => ({ default: module.ProjectManagementAuditPage })));
-const ProjectManagementOverviewPage = lazy(() => import('../../pages/project-management/ProjectManagementOverviewPage').then((module) => ({ default: module.ProjectManagementOverviewPage })));
-const ProjectManagementMembersPage = lazy(() => import('../../pages/project-management/ProjectManagementMembersPage').then((module) => ({ default: module.ProjectManagementMembersPage })));
-const ProjectManagementMilestonesPage = lazy(() => import('../../pages/project-management/ProjectManagementMilestonesPage').then((module) => ({ default: module.ProjectManagementMilestonesPage })));
-const ProjectManagementMyWorkPage = lazy(() => import('../../pages/project-management/ProjectManagementMyWorkPage').then((module) => ({ default: module.ProjectManagementMyWorkPage })));
-const ProjectManagementRecycleBinPage = lazy(() => import('../../pages/project-management/ProjectManagementRecycleBinPage').then((module) => ({ default: module.ProjectManagementRecycleBinPage })));
-const ProjectManagementReportsPage = lazy(() => import('../../pages/project-management/ProjectManagementReportsPage').then((module) => ({ default: module.ProjectManagementReportsPage })));
-const ProjectManagementSearchPage = lazy(() => import('../../pages/project-management/ProjectManagementSearchPage').then((module) => ({ default: module.ProjectManagementSearchPage })));
-const ProjectManagementSyncPage = lazy(() => import('../../pages/project-management/ProjectManagementSyncPage').then((module) => ({ default: module.ProjectManagementSyncPage })));
-
-const projectManagementRoutePaths = [
-  'projects',
-  'my-work',
-  'projects/:projectId/overview',
-  'projects/:projectId/members',
-  'projects/:projectId/tasks',
-  'projects/:projectId/list',
-  'projects/:projectId/card',
-  'projects/:projectId/board',
-  'projects/:projectId/gantt',
-  'projects/:projectId/calendar',
-  'projects/:projectId/milestones',
-  'projects/:projectId/reports',
-  'projects/:projectId/settings',
-  'project-search',
-  'project-sync',
-  'project-recycle-bin',
-  'project-data-space',
-  'project-audit-center'
-] as const;
-
-const projectManagementRoutes: RouteObject[] = projectManagementRoutePaths.map((path) => ({
+const legacyProjectManagementRoutes: RouteObject[] = projectManagementRoutePaths.map((path) => ({
   path,
-  handle: routeMeta({
-    breadcrumbKey: path === 'my-work' ? 'breadcrumbs.projectManagementMyWork' : 'breadcrumbs.projectManagement',
-    cachePolicy: 'tab-alive',
-    iconKey: 'activity',
-    labelKey: path === 'my-work' ? 'nav.projectManagementMyWork' : 'nav.projectManagement',
-    layoutVariant: 'app',
-    path: `/${path}`
-  }),
-  element: (
-    <PermissionRoute permissionCode={path === 'project-audit-center' ? 'project-management:audit:view' : path === 'project-sync' ? 'project-management:sync:export' : path === 'projects/:projectId/reports' ? 'project-management:report:export' : path === 'projects/:projectId/overview' ? 'project-management:project:view' : path.includes('projects/:projectId') ? 'project-management:task:view' : 'project-management:project:view'}>
-      {lazyPage(path === 'project-data-space' ? <ProjectManagementDataSpacePage /> : path === 'project-sync' ? <ProjectManagementSyncPage /> : path === 'project-search' ? <ProjectManagementSearchPage /> : path === 'project-audit-center' ? <ProjectManagementAuditPage /> : path === 'my-work' ? <ProjectManagementMyWorkPage /> : path === 'project-recycle-bin' ? <ProjectManagementRecycleBinPage /> : path === 'projects/:projectId/overview' ? <ProjectManagementOverviewPage /> : path === 'projects/:projectId/milestones' ? <ProjectManagementMilestonesPage /> : path === 'projects/:projectId/members' ? <ProjectManagementMembersPage /> : path === 'projects/:projectId/reports' ? <ProjectManagementReportsPage /> : path.includes('projects/:projectId') ? <ProjectManagementTaskWorkspacePage /> : <ProjectManagementPage />)}
-    </PermissionRoute>
-  )
+  element: <Navigate replace to={projectManagementPlatformRoutePrefix} />,
 }));
 
 export const workspaceRoutes: RouteObject[] = [
@@ -165,7 +120,7 @@ export const workspaceRoutes: RouteObject[] = [
   ...workflowRoutes,
   ...aiRoutes,
   ...flowiseRoutes,
-  ...projectManagementRoutes,
+  ...legacyProjectManagementRoutes,
   {
     path: 'im/messages',
     handle: routeMeta({
@@ -281,15 +236,14 @@ const fixedApplicationWorkspaceRoutes: RouteObject[] = [
   applicationConsoleRoute('data-center/dictionaries-codes', 'breadcrumbs.dataCenter', '字典与编码', 'book', 'app:data-center:dictionary-code:view', <DictionariesCodesPage />),
   applicationConsoleRoute('data-center/query-datasets', 'breadcrumbs.dataCenter', '查询视图与数据集', 'activity', 'app:data-center:query-dataset:view', <QueryDatasetsPage />),
   applicationConsoleRoute('data-center/integration-tasks', 'breadcrumbs.dataCenter', '数据同步与集成任务', 'refresh', 'app:data-center:integration-task:view', <IntegrationTasksPage />),
-  applicationConsoleRoute('project-management', 'breadcrumbs.projectManagement', '项目管理', 'activity', 'project-management:project:view', <ProjectManagementPage />),
-  ...projectManagementRoutePaths.map((path) => applicationConsoleRoute(
+  {
+    path: 'project-management',
+    element: <Navigate replace to={projectManagementPlatformRoutePrefix} />,
+  },
+  ...projectManagementRoutePaths.map((path) => ({
     path,
-    path === 'my-work' ? 'breadcrumbs.projectManagementMyWork' : 'breadcrumbs.projectManagement',
-    path === 'my-work' ? 'nav.projectManagementMyWork' : 'nav.projectManagement',
-    'activity',
-    path === 'project-audit-center' ? 'project-management:audit:view' : path === 'project-sync' ? 'project-management:sync:export' : path === 'projects/:projectId/reports' ? 'project-management:report:export' : path === 'projects/:projectId/overview' ? 'project-management:project:view' : path.includes('projects/:projectId') ? 'project-management:task:view' : 'project-management:project:view',
-    path === 'project-data-space' ? <ProjectManagementDataSpacePage /> : path === 'project-sync' ? <ProjectManagementSyncPage /> : path === 'project-search' ? <ProjectManagementSearchPage /> : path === 'project-audit-center' ? <ProjectManagementAuditPage /> : path === 'my-work' ? <ProjectManagementMyWorkPage /> : path === 'project-recycle-bin' ? <ProjectManagementRecycleBinPage /> : path === 'projects/:projectId/overview' ? <ProjectManagementOverviewPage /> : path === 'projects/:projectId/milestones' ? <ProjectManagementMilestonesPage /> : path === 'projects/:projectId/members' ? <ProjectManagementMembersPage /> : path === 'projects/:projectId/reports' ? <ProjectManagementReportsPage /> : path.includes('projects/:projectId') ? <ProjectManagementTaskWorkspacePage /> : <ProjectManagementPage />
-  ))
+    element: <Navigate replace to={projectManagementPlatformRoutePrefix} />,
+  }))
 ];
 
 function applicationConsoleRoute(

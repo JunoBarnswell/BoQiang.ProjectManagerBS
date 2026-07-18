@@ -25,7 +25,7 @@ vi.mock('../../core/auth/usePermission', () => ({
 }));
 
 vi.mock('../../features/project-management/state/projectManagementWorkspaceScope', () => ({
-  useProjectManagementWorkspaceScope: () => ({ isAvailable: true, tenantId: 'tenant-a', appCode: 'MES' })
+  useProjectManagementWorkspaceScope: () => ({ isAvailable: true, tenantId: 'tenant-a', appCode: 'SYSTEM' })
 }));
 
 vi.mock('../../shared/responsive/ResponsivePage', () => ({
@@ -73,8 +73,8 @@ describe('ProjectManagementOverviewPage', () => {
   it('keeps the overview available and does not enable the activity query without audit:view', () => {
     render(<ProjectManagementOverviewPage />);
 
-    expect(screen.getByText('进度')).toBeTruthy();
-    expect(screen.getByText('当前账号无查看项目活动的权限')).toBeTruthy();
+    expect(screen.getByText('整体进度')).toBeTruthy();
+    expect(screen.getByText((content) => content.includes('无查看项目活动的权限'))).toBeTruthy();
     expect(queryCalls).toHaveLength(2);
     expect(queryCalls[0]?.enabled).toBe(true);
     expect(queryCalls[1]?.enabled).toBe(false);

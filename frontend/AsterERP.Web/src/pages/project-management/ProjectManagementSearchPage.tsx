@@ -6,6 +6,7 @@ import { searchProjectManagement } from '../../api/project-management/projectMan
 import type { ProjectManagementSearchItem, ProjectManagementSearchScope } from '../../api/project-management/projectManagement.types';
 import { isHttpError } from '../../core/http/httpError';
 import { useProjectManagementWorkspaceScope } from '../../features/project-management/state/projectManagementWorkspaceScope';
+import { normalizeProjectManagementTargetRoute } from '../../features/project-management/state/projectManagementPlatformRoutes';
 import { ResponsivePage } from '../../shared/responsive/ResponsivePage';
 import { Page403 } from '../../shared/status/Page403';
 import { PageError } from '../../shared/status/PageError';
@@ -56,9 +57,9 @@ export function ProjectManagementSearchPage() {
     >
       {!submittedKeyword ? <SearchEmptyState /> : <div className="space-y-5" aria-live="polite">
         <p className="text-sm text-gray-500">“{submittedKeyword}”共找到 {total} 条结果。</p>
-        <SearchResultGroup title="项目" emptyText="没有匹配的项目" items={result?.projects ?? []} onOpen={(item) => navigate(item.targetRoute)} />
-        <SearchResultGroup title="任务" emptyText="没有匹配的任务" items={result?.tasks ?? []} onOpen={(item) => navigate(item.targetRoute)} />
-        <SearchResultGroup title="评论" emptyText="没有匹配的评论" items={result?.comments ?? []} onOpen={(item) => navigate(item.targetRoute)} />
+        <SearchResultGroup title="项目" emptyText="没有匹配的项目" items={result?.projects ?? []} onOpen={(item) => navigate(normalizeProjectManagementTargetRoute(item.targetRoute))} />
+        <SearchResultGroup title="任务" emptyText="没有匹配的任务" items={result?.tasks ?? []} onOpen={(item) => navigate(normalizeProjectManagementTargetRoute(item.targetRoute))} />
+        <SearchResultGroup title="评论" emptyText="没有匹配的评论" items={result?.comments ?? []} onOpen={(item) => navigate(normalizeProjectManagementTargetRoute(item.targetRoute))} />
       </div>}
     </ResponsivePage>
   );
