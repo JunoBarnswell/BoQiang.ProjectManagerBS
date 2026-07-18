@@ -20,6 +20,8 @@ public sealed record ProjectManagementProjectUpsertRequest(
     decimal ProgressPercent = 0,
     long VersionNo = 0);
 
+public sealed record ProjectManagementProjectArchiveRequest(long VersionNo);
+
 public sealed record ProjectManagementProjectResponse(
     string Id,
     string TenantId,

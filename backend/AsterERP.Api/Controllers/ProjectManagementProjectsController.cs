@@ -24,6 +24,11 @@ public sealed class ProjectManagementProjectsController(IProjectManagementProjec
     public async Task<IActionResult> UpdateAsync(string id, [FromBody] ProjectManagementProjectUpsertRequest request, CancellationToken cancellationToken) =>
         ApiOk(await service.UpdateAsync(id, request, cancellationToken));
 
+    [HttpPost("{id}/archive")]
+    [Permission(PermissionCodes.ProjectManagementProjectArchive)]
+    public async Task<IActionResult> ArchiveAsync(string id, [FromBody] ProjectManagementProjectArchiveRequest request, CancellationToken cancellationToken) =>
+        ApiOk(await service.ArchiveAsync(id, request, cancellationToken));
+
     [HttpPost("{id}/restore")]
     [Permission(PermissionCodes.ProjectManagementProjectRestore)]
     public async Task<IActionResult> RestoreAsync(string id, [FromQuery] long versionNo, CancellationToken cancellationToken) =>

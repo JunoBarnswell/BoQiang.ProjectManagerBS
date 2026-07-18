@@ -23,6 +23,7 @@ public sealed class ProjectManagementProjectServiceTests
         Assert.Contains(controller.GetMethod(nameof(ProjectManagementProjectsController.CreateAsync))!.GetCustomAttributes(typeof(PermissionAttribute), true), attribute => ((PermissionAttribute)attribute).Code == PermissionCodes.ProjectManagementProjectAdd);
         Assert.Contains(controller.GetMethod(nameof(ProjectManagementProjectsController.UpdateAsync))!.GetCustomAttributes(typeof(PermissionAttribute), true), attribute => ((PermissionAttribute)attribute).Code == PermissionCodes.ProjectManagementProjectEdit);
         Assert.Contains(controller.GetMethod(nameof(ProjectManagementProjectsController.DeleteAsync))!.GetCustomAttributes(typeof(PermissionAttribute), true), attribute => ((PermissionAttribute)attribute).Code == PermissionCodes.ProjectManagementProjectDelete);
+        Assert.Contains(controller.GetMethod(nameof(ProjectManagementProjectsController.ArchiveAsync))!.GetCustomAttributes(typeof(PermissionAttribute), true), attribute => ((PermissionAttribute)attribute).Code == PermissionCodes.ProjectManagementProjectArchive);
     }
 
     [Fact]
@@ -190,6 +191,21 @@ public sealed class ProjectManagementProjectServiceTests
 
         var nonSystemService = new ProjectManagementProjectService(new TestWorkspaceDatabaseAccessor(db), CreateUser("operator", "tenant-a", "MES"));
         await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() => nonSystemService.QueryAsync(new ProjectManagementProjectQuery()));
+    }
+
+    [Fact]
+    public async Task Archived_project_is_read_only_and_requires_the_current_version()
+    {
+        using var db = new SqlSugarClient(new ConnectionConfig { ConnectionString = $"Data Source=file:project-management-project-archive-{Guid.NewGuid():N};Mode=Memory;Cache=Shared", DbType = DbType.Sqlite, IsAutoCloseConnection = false });
+        await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
+        var service = new ProjectManagementProjectService(new TestWorkspaceDatabaseAccessor(db), CreateUser("operator", "tenant-a", "SYSTEM"));
+        var project = await service.CreateAsync(new ProjectManagementProjectUpsertRequest("PM-ARCHIVE", "归档项目"));
+
+        await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() => service.ArchiveAsync(project.Id, new ProjectManagementProjectArchiveRequest(project.VersionNo + 1)));
+        var archived = await service.ArchiveAsync(project.Id, new ProjectManagementProjectArchiveRequest(project.VersionNo));
+
+        Assert.Equal("Archived", archived.Status);
+        await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() => service.UpdateAsync(archived.Id, new ProjectManagementProjectUpsertRequest("PM-ARCHIVE", "不应更新", Status: "Archived", VersionNo: archived.VersionNo)));
     }
 
     private static FixedAsterErpCurrentUser CreateUser(string userId, string tenantId, string appCode)

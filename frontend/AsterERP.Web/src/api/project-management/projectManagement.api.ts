@@ -116,6 +116,10 @@ export function deleteProjectManagementProject(id: string, versionNo: number): P
   return httpClient.delete<{ id: string }>(`/project-management/projects/${id}${buildQueryString({ versionNo })}`);
 }
 
+export function archiveProjectManagementProject(id: string, versionNo: number): Promise<ApiEnvelope<ProjectManagementProject>> {
+  return httpClient.post<ProjectManagementProject, { versionNo: number }>(`/project-management/projects/${id}/archive`, { versionNo });
+}
+
 export function getProjectManagementRecycle(
   query: ProjectManagementRecycleQuery,
   signal?: AbortSignal,

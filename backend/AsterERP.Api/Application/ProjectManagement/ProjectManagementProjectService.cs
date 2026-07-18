@@ -133,6 +133,8 @@ public sealed class ProjectManagementProjectService(
     {
         RequirePlatformScope();
         var entity = await GetRequiredAsync(id, cancellationToken);
+        if (entity.Status == ProjectManagementDomainRules.ProjectArchived)
+            throw new ValidationException("项目已归档，只读不可编辑");
         await (accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser)).EnsureCanManageProjectAsync(id, cancellationToken);
         ValidateRequest(request);
         var projectCode = NormalizeRequired(request.ProjectCode, "项目编码不能为空");
@@ -170,6 +172,32 @@ public sealed class ProjectManagementProjectService(
         {
             await imConversationService.SynchronizeProjectLinksAsync(entity.Id, cancellationToken);
         }
+        return Map(entity);
+    }
+
+    public async Task<ProjectManagementProjectResponse> ArchiveAsync(
+        string id,
+        ProjectManagementProjectArchiveRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        RequirePlatformScope();
+        var entity = await GetRequiredAsync(id, cancellationToken);
+        await (accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser)).EnsureCanManageProjectAsync(id, cancellationToken);
+        EnsureVersion(entity, request.VersionNo);
+        ProjectManagementDomainRules.EnsureProjectStatusTransition(entity.Status, ProjectManagementDomainRules.ProjectArchived);
+        entity.Status = ProjectManagementDomainRules.ProjectArchived;
+        entity.VersionNo++;
+        entity.UpdatedBy = RequireUserId();
+        entity.UpdatedTime = DateTime.UtcNow;
+        var db = databaseAccessor.GetProjectManagementDb();
+        await ProjectManagementMutationTransaction.RunAsync(db, async () =>
+        {
+            await db.Updateable(entity).ExecuteCommandAsync(cancellationToken);
+            await WriteActivityAsync(entity, "archived", $"归档项目 {entity.ProjectName}", cancellationToken);
+            await WriteSyncJournalAsync(entity, "archived", cancellationToken);
+        });
+        if (imConversationService is not null)
+            await imConversationService.ArchiveProjectLinksAsync(entity.Id, cancellationToken);
         return Map(entity);
     }
 
