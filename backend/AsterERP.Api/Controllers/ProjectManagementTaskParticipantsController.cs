@@ -13,6 +13,12 @@ public sealed class ProjectManagementTaskParticipantsController(IProjectManageme
     [HttpGet]
     public async Task<IActionResult> QueryAsync(string taskId, CancellationToken cancellationToken) => ApiOk(await service.QueryAsync(taskId, cancellationToken));
 
+    [HttpGet("history")]
+    public async Task<IActionResult> QueryHistoryAsync(string taskId, CancellationToken cancellationToken) => ApiOk(await service.QueryHistoryAsync(taskId, cancellationToken));
+
+    [HttpGet("candidates")]
+    public async Task<IActionResult> QueryCandidatesAsync(string taskId, [FromQuery] ProjectManagementTaskParticipantCandidateQuery query, CancellationToken cancellationToken) => ApiOk(await service.QueryCandidatesAsync(taskId, query, cancellationToken));
+
     [HttpPost]
     [Permission(PermissionCodes.ProjectManagementTaskAssign)]
     public async Task<IActionResult> AddAsync(string taskId, [FromBody] ProjectManagementTaskParticipantUpsertRequest request, CancellationToken cancellationToken) => ApiOk(await service.AddAsync(taskId, request, cancellationToken));
