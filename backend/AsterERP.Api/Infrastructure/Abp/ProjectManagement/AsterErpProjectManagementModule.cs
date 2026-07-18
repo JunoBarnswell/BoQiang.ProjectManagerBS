@@ -41,6 +41,8 @@ public sealed class AsterErpProjectManagementModule : AbpModule
         context.Services.AddScoped<IProjectManagementReversibleCommandHandler, ProjectManagementReversibleCommandHandler>();
         context.Services.AddScoped<ProjectManagementWorkspaceValidationExecutor>();
         context.Services.AddScoped<ProjectManagementReportSnapshotExecutor>();
+        context.Services.AddScoped<ProjectManagementPurgeFileDeletionExecutor>();
+        context.Services.AddScoped<IProjectManagementPurgeFileDeletionService, ProjectManagementPurgeFileDeletionService>();
         context.Services.AddTransient<ProjectManagementOperationRunner>();
         context.Services.AddTransient<ProjectManagementOperationJob>();
         context.Services.AddScoped<IProjectManagementSyncJournalWriter, ProjectManagementSyncJournalWriter>();

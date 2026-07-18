@@ -11,7 +11,8 @@ public sealed class ProjectManagementOperationRunner(
     IHttpContextAccessor httpContextAccessor,
     IDataPermissionFilterRegistrar dataPermissionFilterRegistrar,
     ProjectManagementWorkspaceValidationExecutor workspaceValidationExecutor,
-    ProjectManagementReportSnapshotExecutor? reportSnapshotExecutor = null)
+    ProjectManagementReportSnapshotExecutor? reportSnapshotExecutor = null,
+    ProjectManagementPurgeFileDeletionExecutor? purgeFileDeletionExecutor = null)
 {
     public async Task ExecuteAsync(ProjectManagementOperationJobArgs args)
     {
@@ -22,6 +23,7 @@ public sealed class ProjectManagementOperationRunner(
         {
             using var filterScope = await dataPermissionFilterRegistrar.RegisterAsync(CancellationToken.None);
             if (reportSnapshotExecutor is not null && await reportSnapshotExecutor.TryExecuteAsync(args, CancellationToken.None)) return;
+            if (purgeFileDeletionExecutor is not null && await purgeFileDeletionExecutor.TryExecuteAsync(args, CancellationToken.None)) return;
             await workspaceValidationExecutor.ExecuteAsync(args, CancellationToken.None);
         }
         finally

@@ -345,6 +345,12 @@ CREATE TABLE IF NOT EXISTS pm_operations (
     CreatedBy TEXT NULL, CreatedTime TEXT NOT NULL, UpdatedBy TEXT NULL, UpdatedTime TEXT NULL,
     DeletedBy TEXT NULL, DeletedTime TEXT NULL, IsDeleted INTEGER NOT NULL DEFAULT 0, Remark TEXT NULL
 );
+CREATE TABLE IF NOT EXISTS pm_purge_file_deletions (
+    Id TEXT NOT NULL PRIMARY KEY, TenantId TEXT NOT NULL, AppCode TEXT NOT NULL, OperationId TEXT NOT NULL, FileId TEXT NOT NULL,
+    Status TEXT NOT NULL DEFAULT 'Pending', AttemptCount INTEGER NOT NULL DEFAULT 0, CompletedTime TEXT NULL, LastError TEXT NULL,
+    CreatedBy TEXT NULL, CreatedTime TEXT NOT NULL, UpdatedBy TEXT NULL, UpdatedTime TEXT NULL,
+    DeletedBy TEXT NULL, DeletedTime TEXT NULL, IsDeleted INTEGER NOT NULL DEFAULT 0, Remark TEXT NULL
+);
 CREATE TABLE IF NOT EXISTS pm_operation_events (
     Id TEXT NOT NULL PRIMARY KEY, TenantId TEXT NOT NULL, AppCode TEXT NOT NULL, OperationId TEXT NOT NULL,
     Status TEXT NOT NULL, Phase TEXT NOT NULL, ProgressPercent INTEGER NOT NULL DEFAULT 0,
@@ -428,6 +434,8 @@ CREATE TABLE IF NOT EXISTS pm_reversible_commands (
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_maintenance_locks_expiry ON pm_maintenance_locks(TenantId, AppCode, ExpiresAt, IsDeleted);");
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_backups_created ON pm_backups(TenantId, AppCode, CreatedTime, IsDeleted);");
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_operations_status_time ON pm_operations(TenantId, AppCode, Status, StartedTime, IsDeleted);");
+        schema.Execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_pm_purge_file_deletions_operation_file ON pm_purge_file_deletions(TenantId, AppCode, OperationId, FileId) WHERE IsDeleted = 0;");
+        schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_purge_file_deletions_pending ON pm_purge_file_deletions(TenantId, AppCode, Status, CreatedTime, IsDeleted);");
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_operation_events_operation_time ON pm_operation_events(TenantId, AppCode, OperationId, CreatedTime, IsDeleted);");
         schema.Execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_pm_reversible_commands_origin ON pm_reversible_commands(TenantId, AppCode, ActorUserId, OriginRequestId) WHERE IsDeleted = 0;");
         schema.Execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_pm_reversible_commands_sequence ON pm_reversible_commands(TenantId, AppCode, ActorUserId, SequenceNo) WHERE IsDeleted = 0;");
