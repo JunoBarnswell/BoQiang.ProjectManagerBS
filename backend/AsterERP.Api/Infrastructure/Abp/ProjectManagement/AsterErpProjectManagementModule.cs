@@ -7,6 +7,7 @@ using AsterERP.Api.Infrastructure.ProjectManagement;
 using AsterERP.Api.Infrastructure.Scheduling;
 using AsterERP.Api.Infrastructure.Security.DataPermissions;
 using AsterERP.Api.Modules.ProjectManagement;
+using Microsoft.Extensions.Configuration;
 
 namespace AsterERP.Api.Infrastructure.Abp.ProjectManagement;
 
@@ -21,6 +22,7 @@ public sealed class AsterErpProjectManagementModule : AbpModule
 {
     public override void ConfigureServices(ServiceConfigurationContext context)
     {
+        context.Services.Configure<ProjectManagementTaskRecurrenceOptions>(context.Configuration.GetSection(ProjectManagementTaskRecurrenceOptions.SectionName));
         context.Services.AddScoped<ProjectManagementSchemaMigrator>();
         context.Services.AddScoped<ProjectManagementAccessPolicy>();
         context.Services.AddScoped<IProjectManagementActivityService, ProjectManagementActivityService>();
@@ -63,6 +65,11 @@ public sealed class AsterErpProjectManagementModule : AbpModule
         context.Services.AddScoped<IProjectManagementMemberService, ProjectManagementMemberService>();
         context.Services.AddScoped<IProjectManagementMilestoneService, ProjectManagementMilestoneService>();
         context.Services.AddScoped<IProjectManagementTaskService, ProjectManagementTaskService>();
+        context.Services.AddScoped<IProjectManagementTaskOccurrenceCommandService>(provider => (ProjectManagementTaskService)provider.GetRequiredService<IProjectManagementTaskService>());
+        context.Services.AddScoped<IProjectManagementTaskRecurrenceScheduler, HangfireProjectManagementTaskRecurrenceScheduler>();
+        context.Services.AddScoped<IProjectManagementTaskRecurrenceService, ProjectManagementTaskRecurrenceService>();
+        context.Services.AddTransient<ProjectManagementTaskRecurrenceGenerationRunner>();
+        context.Services.AddTransient<ProjectManagementTaskRecurrenceGenerationJob>();
         context.Services.AddScoped<IProjectManagementTaskDependencyService, ProjectManagementTaskDependencyService>();
         context.Services.AddScoped<IProjectManagementLabelService, ProjectManagementLabelService>();
         context.Services.AddScoped<IProjectManagementTaskParticipantService, ProjectManagementTaskParticipantService>();
@@ -85,6 +92,8 @@ public sealed class AsterErpProjectManagementModule : AbpModule
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementTaskTimeLogEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementTaskTemplateEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementTaskOccurrenceEntity));
+        registry.RegisterProjectManagementFilter(typeof(ProjectManagementTaskRecurrenceEntity));
+        registry.RegisterProjectManagementFilter(typeof(ProjectManagementTaskRecurrenceOccurrenceEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementActivityEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementTaskCommentEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementTaskCommentMentionEntity));
