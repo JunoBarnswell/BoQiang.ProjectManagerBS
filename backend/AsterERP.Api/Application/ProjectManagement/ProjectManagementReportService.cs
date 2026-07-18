@@ -28,7 +28,8 @@ public sealed class ProjectManagementReportService(
     private static readonly string[] Headers =
     [
         "ProjectCode", "ProjectName", "Status", "Priority", "OwnerUserId",
-        "ProgressPercent", "TaskCount", "StartDate", "DueDate", "CreatedTime"
+        "ProgressPercent", "TaskCount", "StartDate", "DueDate", "CreatedTime",
+        "EstimatedMinutes", "ActualMinutes"
     ];
 
     private static readonly JsonSerializerOptions SnapshotJsonOptions = new(JsonSerializerDefaults.Web);
@@ -233,23 +234,35 @@ public sealed class ProjectManagementReportService(
         var taskCountsQuery = db.Queryable<ProjectManagementTaskEntity>()
             .Where(item => !item.IsDeleted && projectIds.Contains(item.ProjectId));
         taskCountsQuery = ProjectManagementTaskLabelFilterQuery.ApplyToTasks(taskCountsQuery, labelFilter, tenantId, appCode);
-        var taskCounts = await taskCountsQuery
+        var taskSummaries = await taskCountsQuery
             .GroupBy(item => item.ProjectId)
-            .Select(item => new ProjectTaskCount { ProjectId = item.ProjectId, TaskCount = SqlFunc.AggregateCount(item.Id) })
+            .Select(item => new ProjectTaskSummary
+            {
+                ProjectId = item.ProjectId,
+                TaskCount = SqlFunc.AggregateCount(item.Id),
+                EstimatedMinutes = SqlFunc.AggregateSum(item.EstimateMinutes ?? 0),
+                ActualMinutes = SqlFunc.AggregateSum(item.ActualMinutes)
+            })
             .ToListAsync(cancellationToken);
-        var countByProject = taskCounts.ToDictionary(item => item.ProjectId, item => item.TaskCount, StringComparer.Ordinal);
+        var summariesByProject = taskSummaries.ToDictionary(item => item.ProjectId, StringComparer.Ordinal);
 
-        return page.Select(item => new ProjectManagementReportRow(
-            item.ProjectCode,
-            item.ProjectName,
-            item.Status,
-            item.Priority,
-            item.OwnerUserId,
-            item.ProgressPercent,
-            countByProject.GetValueOrDefault(item.Id),
-            item.StartDate,
-            item.DueDate,
-            item.CreatedTime)).ToList();
+        return page.Select(item =>
+        {
+            summariesByProject.TryGetValue(item.Id, out var summary);
+            return new ProjectManagementReportRow(
+                item.ProjectCode,
+                item.ProjectName,
+                item.Status,
+                item.Priority,
+                item.OwnerUserId,
+                item.ProgressPercent,
+                summary?.TaskCount ?? 0,
+                item.StartDate,
+                item.DueDate,
+                item.CreatedTime,
+                summary?.EstimatedMinutes ?? 0,
+                summary?.ActualMinutes ?? 0);
+        }).ToList();
     }
 
     private string RequireTenantId() => currentUser.GetAsterErpTenantId()?.Trim() ?? throw new ValidationException("当前会话缺少租户");
@@ -306,7 +319,8 @@ public sealed class ProjectManagementReportService(
     [
         row.ProjectCode, row.ProjectName, row.Status, row.Priority, row.OwnerUserId,
         row.ProgressPercent.ToString(CultureInfo.InvariantCulture), row.TaskCount.ToString(CultureInfo.InvariantCulture),
-        FormatDate(row.StartDate), FormatDate(row.DueDate), FormatDate(row.CreatedTime)
+        FormatDate(row.StartDate), FormatDate(row.DueDate), FormatDate(row.CreatedTime),
+        row.EstimatedMinutes.ToString(CultureInfo.InvariantCulture), row.ActualMinutes.ToString(CultureInfo.InvariantCulture)
     ];
 
     private static string FormatDate(DateTime? value) => value?.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture) ?? string.Empty;
@@ -335,10 +349,12 @@ public sealed class ProjectManagementReportService(
         return value[0] is '=' or '+' or '-' or '@' or '\t' or '\r' or '\n' ? "''" + value : value;
     }
 
-    private sealed class ProjectTaskCount
+    private sealed class ProjectTaskSummary
     {
         public string ProjectId { get; set; } = string.Empty;
         public int TaskCount { get; set; }
+        public int EstimatedMinutes { get; set; }
+        public int ActualMinutes { get; set; }
     }
 
     private sealed record SnapshotImpact(

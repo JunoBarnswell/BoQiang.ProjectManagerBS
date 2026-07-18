@@ -37,7 +37,7 @@ public sealed class ProjectManagementReportTests
             new ProjectManagementProjectEntity { Id = "other-tenant", TenantId = "tenant-b", AppCode = "SYSTEM", ProjectCode = "OTHER", ProjectName = "Other tenant", OwnerUserId = "operator" },
             new ProjectManagementProjectEntity { Id = "other-app", TenantId = "tenant-a", AppCode = "CRM", ProjectCode = "OTHER-APP", ProjectName = "Other app", OwnerUserId = "operator" }
         }).ExecuteCommandAsync();
-        await db.Insertable(new ProjectManagementTaskEntity { TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "visible", TaskCode = "T-001", Title = "Task" }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementTaskEntity { TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "visible", TaskCode = "T-001", Title = "Task", EstimateMinutes = 120, ActualMinutes = 45 }).ExecuteCommandAsync();
 
         var user = CreateUser("operator", "tenant-a", "SYSTEM");
         Assert.True(ProjectManagementDataPermissionFilterRegistrar.TryRegister(db, typeof(ProjectManagementProjectEntity), user, "tenant-a", "SYSTEM"));
@@ -49,6 +49,9 @@ public sealed class ProjectManagementReportTests
         Assert.Equal(1, csv.RowCount);
         Assert.Contains("'=VISIBLE", csvText);
         Assert.Contains("\"1\"", csvText);
+        Assert.Contains("\"EstimatedMinutes\"", csvText);
+        Assert.Contains("\"ActualMinutes\"", csvText);
+        Assert.Contains("\"120\",\"45\"", csvText);
         Assert.DoesNotContain("Other tenant", csvText);
         Assert.DoesNotContain("Other app", csvText);
 

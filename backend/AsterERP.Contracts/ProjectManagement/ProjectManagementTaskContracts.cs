@@ -31,7 +31,10 @@ public sealed record ProjectManagementTaskUpsertRequest(
     DateTime? StartDate = null,
     DateTime? DueDate = null,
     decimal ProgressPercent = 0,
-    decimal Weight = 1,
+    /// <summary>
+    /// 显式进度权重。未提供时服务端使用正的 <see cref="EstimateMinutes"/>，否则回退为 1。
+    /// </summary>
+    decimal? Weight = null,
     int? EstimateMinutes = null,
     long VersionNo = 0,
     bool OverrideWip = false);

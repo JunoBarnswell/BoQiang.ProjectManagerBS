@@ -123,6 +123,7 @@ public sealed class ProjectManagementTaskService(
         await EnsureMilestoneAsync(projectId, request.MilestoneId, cancellationToken);
         await EnsureWipAsync(projectId, status, request.OverrideWip, cancellationToken);
         var now = DateTime.UtcNow;
+        var weight = ResolveProgressWeight(request.Weight, request.EstimateMinutes);
         var entity = new ProjectManagementTaskEntity
         {
             TenantId = RequireTenantId(), AppCode = RequireAppCode(), ProjectId = projectId,
@@ -130,7 +131,7 @@ public sealed class ProjectManagementTaskService(
             TaskCode = taskCode, Title = NormalizeRequired(request.Title, "任务标题不能为空"), Description = NormalizeOptional(request.Description),
             Status = status, BlockedReason = status == ProjectManagementDomainRules.TaskBlocked ? "手工阻塞" : null, Priority = NormalizePriority(request.Priority), AssigneeUserId = NormalizeOptional(request.AssigneeUserId),
             AssigneeEmploymentId = NormalizeOptional(request.AssigneeEmploymentId), StartDate = request.StartDate, DueDate = request.DueDate,
-            ProgressPercent = request.ProgressPercent, Weight = request.Weight, EstimateMinutes = request.EstimateMinutes,
+            ProgressPercent = request.ProgressPercent, Weight = weight, EstimateMinutes = request.EstimateMinutes,
             SortOrder = await GetNextSiblingSortOrderAsync(projectId, parent?.Id, cancellationToken), Depth = depth, VersionNo = 1, CreatedBy = RequireUserId(), CreatedTime = now
         };
         await ProjectManagementMutationTransaction.RunAsync(db, async () =>
@@ -176,7 +177,7 @@ public sealed class ProjectManagementTaskService(
         entity.StartDate = request.StartDate;
         entity.DueDate = request.DueDate;
         entity.ProgressPercent = request.ProgressPercent;
-        entity.Weight = request.Weight;
+        entity.Weight = ResolveProgressWeight(request.Weight, request.EstimateMinutes);
         entity.EstimateMinutes = request.EstimateMinutes;
         var expectedVersion = entity.VersionNo;
         entity.VersionNo++;
@@ -600,9 +601,12 @@ public sealed class ProjectManagementTaskService(
     {
         ProjectManagementDomainRules.ValidateDates(request.StartDate, request.DueDate, "任务");
         ProjectManagementDomainRules.RequireProgress(request.ProgressPercent, "任务");
-        if (request.Weight <= 0) throw new ValidationException("任务权重必须大于 0");
+        if (request.Weight is <= 0) throw new ValidationException("任务权重必须大于 0");
         if (request.EstimateMinutes is < 0) throw new ValidationException("预估工时不能为负数");
     }
+
+    private static decimal ResolveProgressWeight(decimal? explicitWeight, int? estimateMinutes) =>
+        explicitWeight ?? (estimateMinutes is > 0 ? estimateMinutes.Value : 1m);
 
     private static void ValidateQuery(ProjectManagementTaskQuery query, string? status)
     {

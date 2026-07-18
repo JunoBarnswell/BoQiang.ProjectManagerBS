@@ -47,7 +47,9 @@ internal static class ProjectManagementTaskProgressCalculator
 
     public static decimal CalculateProgress(IEnumerable<ProjectManagementTaskEntity> tasks)
     {
-        var weighted = tasks.Select(task => new { Task = task, Weight = task.EstimateMinutes ?? 1 }).ToList();
+        // TaskService 在写入时将“显式权重 / 预计分钟 / 1”的优先级折叠为 Weight。
+        // 投影只读这一持久化事实，避免同一任务在父任务、项目和里程碑间出现不同权重。
+        var weighted = tasks.Select(task => new { Task = task, Weight = task.Weight > 0 ? task.Weight : 1m }).ToList();
         var totalWeight = weighted.Sum(item => item.Weight);
         return totalWeight <= 0
             ? 0

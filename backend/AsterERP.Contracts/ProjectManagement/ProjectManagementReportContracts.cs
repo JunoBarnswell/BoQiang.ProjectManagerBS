@@ -17,7 +17,9 @@ public sealed record ProjectManagementReportRow(
     int TaskCount,
     DateTime? StartDate,
     DateTime? DueDate,
-    DateTime CreatedTime);
+    DateTime CreatedTime,
+    int EstimatedMinutes,
+    int ActualMinutes);
 
 public sealed record ProjectManagementReportFile(
     string FileName,

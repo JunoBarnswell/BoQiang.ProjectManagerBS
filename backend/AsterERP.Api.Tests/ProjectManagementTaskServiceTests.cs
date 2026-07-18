@@ -110,6 +110,27 @@ public sealed class ProjectManagementTaskServiceTests
     }
 
     [Fact]
+    public async Task Task_estimate_is_the_default_progress_weight_and_explicit_weight_wins_in_parent_and_project_projection()
+    {
+        using var db = CreateDb("task-estimate-progress-weight");
+        await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
+        await db.Insertable(new ProjectManagementProjectEntity
+        {
+            Id = "project-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "A", ProjectName = "A", OwnerUserId = "operator"
+        }).ExecuteCommandAsync();
+        var service = new ProjectManagementTaskService(new TestWorkspaceDatabaseAccessor(db), CreateUser());
+
+        var root = await service.CreateAsync("project-a", new ProjectManagementTaskUpsertRequest("ROOT", "Root"));
+        var estimateDefault = await service.CreateAsync("project-a", new ProjectManagementTaskUpsertRequest("ESTIMATE", "Estimated", ParentTaskId: root.Id, EstimateMinutes: 100, ProgressPercent: 10));
+        var explicitWeight = await service.CreateAsync("project-a", new ProjectManagementTaskUpsertRequest("EXPLICIT", "Explicit", ParentTaskId: root.Id, EstimateMinutes: 100, Weight: 1, ProgressPercent: 90));
+
+        Assert.Equal(100m, estimateDefault.Weight);
+        Assert.Equal(1m, explicitWeight.Weight);
+        Assert.Equal(10.79m, (await service.GetAsync(root.Id)).ProgressPercent);
+        Assert.Equal(10.79m, (await db.Queryable<ProjectManagementProjectEntity>().Where(item => item.Id == "project-a").FirstAsync()).ProgressPercent);
+    }
+
+    [Fact]
     public void Task_controller_separates_view_add_edit_move_and_delete_permissions()
     {
         Assert.Contains(typeof(ProjectManagementTasksController).GetCustomAttributes(typeof(PermissionAttribute), true), attribute => ((PermissionAttribute)attribute).Code == PermissionCodes.ProjectManagementTaskView);
