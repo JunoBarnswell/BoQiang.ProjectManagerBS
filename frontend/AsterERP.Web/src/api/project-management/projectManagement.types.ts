@@ -153,6 +153,7 @@ export interface ProjectManagementRecycleProjectItem {
   versionNo: number;
   deletedTime?: string;
   deletedBy?: string;
+  affectedTaskCount?: number;
   canRestore: boolean;
   canPurge: boolean;
 }
@@ -179,6 +180,7 @@ export interface ProjectManagementRecycleTaskItem {
   versionNo: number;
   deletedTime?: string;
   deletedBy?: string;
+  affectedDescendantCount?: number;
   canRestore: boolean;
   canPurge: boolean;
 }
