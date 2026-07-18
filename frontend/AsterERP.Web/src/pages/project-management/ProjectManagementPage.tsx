@@ -17,9 +17,19 @@ import { usePermission } from '../../core/auth/usePermission';
 import { isHttpError } from '../../core/http/httpError';
 import { queryKeys } from '../../core/query/queryKeys';
 import { useApiMutation } from '../../core/query/useApiMutation';
+import { useAuthStore } from '../../core/state';
 import '../../features/project-management/projectManagement.css';
 import { ProjectManagementPageStateView } from '../../features/project-management/components/ProjectManagementPageState';
 import { ProjectManagementReversibleCommandControls } from '../../features/project-management/components/ProjectManagementReversibleCommandControls';
+import {
+  projectCenterPreferenceKey,
+  readProjectCenterPreferences,
+  rememberRecentProject,
+  toggleProjectFavorite,
+  writeProjectCenterPreferences,
+  type ProjectCenterCollection,
+  type ProjectCenterPreferences
+} from '../../features/project-management/state/projectCenterPreferences';
 import { toProjectManagementPlatformRoute } from '../../features/project-management/state/projectManagementPlatformRoutes';
 import { useProjectManagementWorkspaceScope } from '../../features/project-management/state/projectManagementWorkspaceScope';
 import { PermissionButton } from '../../shared/auth/PermissionButton';
@@ -57,6 +67,7 @@ const projectFormFields: FormFieldConfig<ProjectManagementProjectUpsertRequest>[
 
 export function ProjectManagementPage() {
   const scope = useProjectManagementWorkspaceScope();
+  const userId = useAuthStore((state) => state.user?.userId ?? '');
   const { hasPermission: canViewProjectManagement } = usePermission('project-management:project:view');
   const { hasPermission: canExportSync } = usePermission('project-management:sync:export');
   const { hasPermission: canImportSync } = usePermission('project-management:sync:import');
@@ -75,13 +86,24 @@ export function ProjectManagementPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [formDirty, setFormDirty] = useState(false);
+  const [collection, setCollection] = useState<ProjectCenterCollection>('all');
+  const [viewMode, setViewMode] = useState<'list' | 'card'>('list');
+  const preferenceKey = projectCenterPreferenceKey(userId, scope.tenantId, scope.appCode);
+  const [preferences, setPreferences] = useState<ProjectCenterPreferences>(() => readProjectCenterPreferences(preferenceKey));
+  useEffect(() => {
+    setPreferences(readProjectCenterPreferences(preferenceKey));
+  }, [preferenceKey]);
+  const updatePreferences = (next: ProjectCenterPreferences) => {
+    setPreferences(next);
+    writeProjectCenterPreferences(preferenceKey, next);
+  };
   const projectQuery = useMemo(() => ({
-    pageIndex,
-    pageSize,
+    pageIndex: collection === 'all' ? pageIndex : 1,
+    pageSize: collection === 'all' ? pageSize : 200,
     keyword: submittedKeyword || undefined,
     status: status || undefined,
     ownerUserId: ownerUserId.trim() || undefined
-  }), [ownerUserId, pageIndex, pageSize, status, submittedKeyword]);
+  }), [collection, ownerUserId, pageIndex, pageSize, status, submittedKeyword]);
   const projectsQuery = useQuery({
     enabled: scope.isAvailable,
     queryFn: ({ signal }) => getProjectManagementProjects(projectQuery, signal),
@@ -137,14 +159,21 @@ export function ProjectManagementPage() {
     }
   });
 
+  const openProject = (projectId: string) => {
+    updatePreferences(rememberRecentProject(preferences, projectId));
+    navigate(toProjectManagementPlatformRoute(`projects/${encodeURIComponent(projectId)}/overview`));
+  };
+  const toggleFavorite = (projectId: string) => updatePreferences(toggleProjectFavorite(preferences, projectId));
+
   const columns: DataTableColumn<ProjectManagementProject>[] = useMemo(() => [
+    { key: 'favorite', title: '收藏', width: '72px', render: (row) => <button aria-label={(preferences.favoriteProjectIds.includes(row.id) ? '取消收藏' : '收藏') + '项目 ' + row.projectName} onClick={() => toggleFavorite(row.id)} type="button">{preferences.favoriteProjectIds.includes(row.id) ? '★' : '☆'}</button> },
     { key: 'projectCode', title: '项目编码', width: '140px', responsivePriority: 100 },
     { key: 'projectName', title: '项目名称', responsivePriority: 100, render: (row) => <strong>{row.projectName}</strong> },
     { key: 'status', title: '状态', width: '118px', render: (row) => <ProjectStatus status={row.status} /> },
     { key: 'priority', title: '优先级', width: '106px', render: (row) => <PriorityBadge priority={row.priority} /> },
     { key: 'progressPercent', title: '进度', width: '142px', render: (row) => <Progress value={row.progressPercent} /> },
     { key: 'ownerUserId', title: '负责人', width: '140px', render: (row) => row.ownerUserId || '未分配' }
-  ], []);
+  ], [preferences.favoriteProjectIds, toggleFavorite]);
 
   if (!scope.isAvailable) {
     return <PageError description="项目管理仅支持 SYSTEM 平台工作区。请切换至 SYSTEM 后再访问项目管理。" />;
@@ -156,7 +185,12 @@ export function ProjectManagementPage() {
     return <PageError action={<button type="button" onClick={() => void projectsQuery.refetch()}>重试</button>} description="项目列表加载失败，请检查当前工作区后重试。" />;
   }
 
-  const rows = projectsQuery.data?.data?.items ?? [];
+  const loadedRows = projectsQuery.data?.data?.items ?? [];
+  const rows = collection === 'favorites'
+    ? loadedRows.filter((project) => preferences.favoriteProjectIds.includes(project.id))
+    : collection === 'recent'
+      ? [...loadedRows].sort((left, right) => preferences.recentProjectIds.indexOf(left.id) - preferences.recentProjectIds.indexOf(right.id))
+      : loadedRows;
   const editorPermission = editingId ? 'project-management:project:edit' : 'project-management:project:add';
 
   return (
@@ -178,6 +212,10 @@ export function ProjectManagementPage() {
             <button type="submit">搜索</button>
             {submittedKeyword || status || ownerUserId ? <button type="button" onClick={() => { setKeyword(''); setSubmittedKeyword(''); setStatus(''); setOwnerUserId(''); setPageIndex(1); }}>清空</button> : null}
           </form>
+          <div className="flex flex-wrap items-center gap-2" aria-label="项目中心集合与视图">
+            {(['all', 'favorites', 'recent'] as ProjectCenterCollection[]).map((value) => <button className={collection === value ? 'rounded bg-slate-800 px-2 py-1 text-white' : 'rounded border px-2 py-1'} key={value} onClick={() => { setCollection(value); setPageIndex(1); }} type="button">{value === 'all' ? '全部项目' : value === 'favorites' ? '我的收藏' : '最近访问'}</button>)}
+            <button className="rounded border px-2 py-1" onClick={() => setViewMode(viewMode === 'list' ? 'card' : 'list')} type="button">{viewMode === 'list' ? '卡片视图' : '列表视图'}</button>
+          </div>
           <ProjectManagementReversibleCommandControls />
           <span>当前工作区共 <strong>{projectsQuery.data?.data?.total ?? 0}</strong> 个项目</span>
         </div>
@@ -205,7 +243,7 @@ export function ProjectManagementPage() {
           <p className="mt-3 text-xs text-gray-500">说明：SYSTEM 工作台暂不提供物理数据库备份或恢复入口。</p>
         </section>
       ) : null}
-      {rows.length === 0 ? <ProjectManagementPageStateView state="empty" /> : <DataTable
+      {rows.length === 0 ? <ProjectManagementPageStateView state="empty" /> : viewMode === 'card' ? <ProjectCardGrid favoriteProjectIds={preferences.favoriteProjectIds} onOpen={openProject} onToggleFavorite={toggleFavorite} projects={rows} /> : <DataTable
         columnSettingsKey="project-management-projects"
         columns={columns}
         emptyText="暂无符合筛选条件的项目"
@@ -213,7 +251,7 @@ export function ProjectManagementPage() {
         onPageChange={setPageIndex}
         onPageSizeChange={(nextPageSize) => { setPageSize(nextPageSize); setPageIndex(1); }}
         pagination={{ current: pageIndex, pageSize, total: projectsQuery.data?.data?.total ?? 0 }}
-        rowActions={(row) => <div className="pm-project-actions"><button type="button" onClick={() => navigate(toProjectManagementPlatformRoute(`projects/${encodeURIComponent(row.id)}/overview`))}>进入项目</button><PermissionButton code="project-management:project:edit" disabled={row.status === 'Archived'} onClick={() => { setEditingId(row.id); setForm({ projectCode: row.projectCode, projectName: row.projectName, description: row.description, status: row.status, priority: row.priority, ownerUserId: row.ownerUserId, startDate: row.startDate, dueDate: row.dueDate, progressPercent: row.progressPercent, versionNo: row.versionNo }); setFormDirty(false); setEditorOpen(true); }}>编辑</PermissionButton><PermissionButton code="project-management:project:archive" disabled={row.status === 'Archived' || archiveMutation.isPending} onClick={() => confirm({ title: '归档项目', content: `项目“${row.projectName}”归档后将只读，后续修改需先由治理人员处理。`, confirmText: '归档', onConfirm: () => archiveMutation.mutate(row) })}>归档</PermissionButton><PermissionButton code="project-management:project:delete" disabled={deleteMutation.isPending} onClick={() => confirm({ title: '移入项目回收站', content: `项目“${row.projectName}”将被移入回收站，关联对象的恢复规则由服务端校验。`, confirmText: '移入回收站', onConfirm: () => deleteMutation.mutate(row) })}>删除</PermissionButton></div>}
+        rowActions={(row) => <div className="pm-project-actions"><button type="button" onClick={() => openProject(row.id)}>进入项目</button><PermissionButton code="project-management:project:edit" disabled={row.status === 'Archived'} onClick={() => { setEditingId(row.id); setForm({ projectCode: row.projectCode, projectName: row.projectName, description: row.description, status: row.status, priority: row.priority, ownerUserId: row.ownerUserId, startDate: row.startDate, dueDate: row.dueDate, progressPercent: row.progressPercent, versionNo: row.versionNo }); setFormDirty(false); setEditorOpen(true); }}>编辑</PermissionButton><PermissionButton code="project-management:project:archive" disabled={row.status === 'Archived' || archiveMutation.isPending} onClick={() => confirm({ title: '归档项目', content: `项目“${row.projectName}”归档后将只读，后续修改需先由治理人员处理。`, confirmText: '归档', onConfirm: () => archiveMutation.mutate(row) })}>归档</PermissionButton><PermissionButton code="project-management:project:delete" disabled={deleteMutation.isPending} onClick={() => confirm({ title: '移入项目回收站', content: `项目“${row.projectName}”将被移入回收站，关联对象的恢复规则由服务端校验。`, confirmText: '移入回收站', onConfirm: () => deleteMutation.mutate(row) })}>删除</PermissionButton></div>}
         rowKey={(row) => row.id}
         rows={rows}
         showColumnSettings
@@ -236,6 +274,17 @@ export function ProjectManagementPage() {
       </PermissionGuard>
     </ResponsivePage>
   );
+}
+
+function ProjectCardGrid({ projects, favoriteProjectIds, onOpen, onToggleFavorite }: { projects: ProjectManagementProject[]; favoriteProjectIds: string[]; onOpen: (projectId: string) => void; onToggleFavorite: (projectId: string) => void }) {
+  return <div className="pm-task-grid" aria-label="项目卡片视图">{projects.map((project) => <article className="pm-panel" key={project.id}>
+    <div className="pm-panel__heading"><div><span className="pm-panel__meta">{project.projectCode}</span><h2>{project.projectName}</h2></div><button aria-label={(favoriteProjectIds.includes(project.id) ? '取消收藏' : '收藏') + '项目 ' + project.projectName} onClick={() => onToggleFavorite(project.id)} type="button">{favoriteProjectIds.includes(project.id) ? '★' : '☆'}</button></div>
+    <div className="pm-task-card__meta"><ProjectStatus status={project.status} /><PriorityBadge priority={project.priority} /></div>
+    <Progress value={project.progressPercent} />
+    <p className="pm-muted">{project.description || '暂无项目说明'}</p>
+    <div className="pm-task-card__signals"><span>负责人：{project.ownerUserId || '未分配'}</span><span>截止：{project.dueDate ? new Date(project.dueDate).toLocaleDateString() : '未设置'}</span></div>
+    <button className="pm-task-card__open" onClick={() => onOpen(project.id)} type="button">进入项目</button>
+  </article>)}</div>;
 }
 
 function ProjectStatus({ status }: { status: string }) {
