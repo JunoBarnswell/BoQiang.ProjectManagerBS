@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 
-import { getProjectManagementMyWork, getProjectManagementProjects, updateProjectManagementTask } from '../../api/project-management/projectManagement.api';
+import { getProjectManagementMyWork, updateProjectManagementTask } from '../../api/project-management/projectManagement.api';
 import type { ProjectManagementMyWorkCategory, ProjectManagementTaskUpsertRequest } from '../../api/project-management/projectManagement.types';
 import { isHttpError } from '../../core/http/httpError';
 import { queryKeys } from '../../core/query/queryKeys';
@@ -38,9 +38,8 @@ export function ProjectManagementMyWorkPage() {
   const category = readCategory(searchParams.get('category'));
   const pageIndex = readPage(searchParams.get('page'));
   const projectId = searchParams.get('projectId')?.trim() || undefined;
-  const sortBy: 'dueDate' | 'updated' = searchParams.get('sortBy') === 'updated' ? 'updated' : 'dueDate';
+  const sortBy: 'dueDate' | 'updated' | 'created' | 'priority' = searchParams.get('sortBy') === 'updated' || searchParams.get('sortBy') === 'created' || searchParams.get('sortBy') === 'priority' ? searchParams.get('sortBy') as 'updated' | 'created' | 'priority' : 'dueDate';
   const query = useMemo(() => ({ category, pageIndex, pageSize, projectId, sortBy, sortDirection: 'asc' as const }), [category, pageIndex, projectId, sortBy]);
-  const projectsQuery = useQuery({ enabled: scope.isAvailable, queryFn: ({ signal }) => getProjectManagementProjects({ pageIndex: 1, pageSize: 100 }, signal), queryKey: queryKeys.projectManagement.projects(scope, { pageIndex: 1, pageSize: 100 }) });
   const myWorkQuery = useQuery({ enabled: scope.isAvailable, queryFn: ({ signal }) => getProjectManagementMyWork(query, signal), queryKey: queryKeys.projectManagement.myWork(scope, query) });
   const updateMutation = useApiMutation({
     mutationFn: ({ id, request }: { id: string; request: ProjectManagementTaskUpsertRequest }) => updateProjectManagementTask(id, request),
@@ -48,7 +47,7 @@ export function ProjectManagementMyWorkPage() {
     onSuccess: async () => {
       message.success('任务已更新');
       setSelectedTaskId(null);
-      await queryClient.invalidateQueries({ queryKey: queryKeys.projectManagement.myWork(scope, query) });
+      await queryClient.invalidateQueries({ queryKey: [...queryKeys.projectManagement.all(scope), 'my-work'] });
       await queryClient.invalidateQueries({ queryKey: queryKeys.projectManagement.tasksProject(scope, selected?.task.projectId ?? '') });
     },
   });
@@ -63,18 +62,18 @@ export function ProjectManagementMyWorkPage() {
   };
 
   if (!scope.isAvailable) return <PageError description="当前会话没有可用的租户和应用工作区" />;
-  if (myWorkQuery.isLoading || projectsQuery.isLoading) return <PageLoading />;
-  if (myWorkQuery.isError || projectsQuery.isError) {
-    const error = myWorkQuery.error ?? projectsQuery.error;
+  if (myWorkQuery.isLoading) return <PageLoading />;
+  if (myWorkQuery.isError) {
+    const error = myWorkQuery.error;
     if (isHttpError(error) && error.status === 403) return <Page403 />;
-    return <PageError action={<button type="button" onClick={() => { void myWorkQuery.refetch(); void projectsQuery.refetch(); }}>重试</button>} description="我的工作加载失败" />;
+    return <PageError action={<button type="button" onClick={() => void myWorkQuery.refetch()}>重试</button>} description="我的工作加载失败" />;
   }
   return (
     <ResponsivePage description="一个受项目权限与 ORM 数据过滤约束的跨项目聚合查询。" eyebrow="ProjectManagement / My Work" title="我的工作">
       <div className="mb-4 flex flex-wrap gap-2">
         {categories.map((item) => <button className={category === item.value ? 'rounded bg-blue-600 px-3 py-1.5 text-sm text-white' : 'rounded border border-gray-300 px-3 py-1.5 text-sm'} key={item.value} onClick={() => setParameter('category', item.value === 'all' ? undefined : item.value)} type="button">{item.label}</button>)}
       </div>
-      <div className="mb-4 flex flex-wrap gap-3"><label className="text-sm">项目<select className="ml-2 rounded border border-gray-300 p-2" onChange={(event) => setParameter('projectId', event.target.value || undefined)} value={projectId ?? ''}><option value="">全部授权项目</option>{(projectsQuery.data?.data?.items ?? []).map((project) => <option key={project.id} value={project.id}>{project.projectName}</option>)}</select></label><label className="text-sm">排序<select className="ml-2 rounded border border-gray-300 p-2" onChange={(event) => setParameter('sortBy', event.target.value)} value={sortBy}><option value="dueDate">截止日期</option><option value="updated">最近更新</option></select></label></div>
+      <div className="mb-4 flex flex-wrap gap-3"><label className="text-sm">项目 ID<input aria-label="按项目 ID 筛选" className="ml-2 rounded border border-gray-300 p-2" onChange={(event) => setParameter('projectId', event.target.value.trim() || undefined)} placeholder="可选，不展示未授权项目" value={projectId ?? ''} /></label><label className="text-sm">排序<select className="ml-2 rounded border border-gray-300 p-2" onChange={(event) => setParameter('sortBy', event.target.value)} value={sortBy}><option value="dueDate">截止日期</option><option value="updated">最近更新</option><option value="created">创建时间</option><option value="priority">优先级</option></select></label></div>
       <MyWorkTaskCommandPanel item={selected} onCancel={() => setSelectedTaskId(null)} onSubmit={(request) => selected && updateMutation.mutate({ id: selected.task.id, request })} saving={updateMutation.isPending} />
       {rows.length === 0 ? <div className="rounded-lg border border-dashed border-gray-300 p-8 text-center text-sm text-gray-500">暂无匹配任务</div> : <div className="overflow-x-auto rounded-lg border border-gray-200"><table className="min-w-full text-left text-sm"><thead className="bg-gray-50"><tr><th className="px-3 py-2">项目</th><th className="px-3 py-2">任务</th><th className="px-3 py-2">关系</th><th className="px-3 py-2">状态</th><th className="px-3 py-2">截止日期</th><th className="px-3 py-2">操作</th></tr></thead><tbody>{rows.map((item) => <tr className="border-t border-gray-100" key={item.task.id}><td className="px-3 py-2">{item.projectName}</td><td className="px-3 py-2"><Link className="text-blue-600 underline" to={`${toProjectManagementPlatformRoute(`projects/${encodeURIComponent(item.task.projectId)}/tasks`)}?taskId=${encodeURIComponent(item.task.id)}`}>{item.task.title}</Link></td><td className="px-3 py-2">{[item.isAssignee && '负责', item.isParticipant && '参与', item.isCreator && '创建', item.isMentioned && '提及'].filter(Boolean).join('、')}</td><td className="px-3 py-2">{item.task.status}</td><td className="px-3 py-2">{item.task.dueDate ? new Date(item.task.dueDate).toLocaleDateString() : '-'}</td><td className="px-3 py-2"><button onClick={() => setSelectedTaskId(item.task.id)} type="button">快速更新</button></td></tr>)}</tbody></table></div>}
       <div className="mt-4 flex items-center gap-3 text-sm"><span>共 {total} 项</span><button disabled={pageIndex <= 1} onClick={() => setParameter('page', String(pageIndex - 1))} type="button">上一页</button><span>第 {pageIndex} 页</span><button disabled={pageIndex * pageSize >= total} onClick={() => setParameter('page', String(pageIndex + 1))} type="button">下一页</button></div>
