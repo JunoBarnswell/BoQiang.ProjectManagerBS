@@ -145,7 +145,9 @@ public sealed class ProjectManagementProjectService(
             throw new ValidationException("项目编码已存在");
         }
 
-        EnsureVersion(entity, request.VersionNo);
+        var localValues = ProjectManagementProjectConflictLocalValues.FromUpdate(request);
+        EnsureVersion(entity, request.VersionNo, localValues);
+        var expectedVersion = entity.VersionNo;
         var before = ProjectActivitySnapshot.From(entity);
         entity.ProjectCode = projectCode;
         entity.ProjectName = NormalizeRequired(request.ProjectName, "项目名称不能为空");
@@ -165,7 +167,7 @@ public sealed class ProjectManagementProjectService(
         entity.UpdatedTime = DateTime.UtcNow;
         await ProjectManagementMutationTransaction.RunAsync(db, async () =>
         {
-            await db.Updateable(entity).ExecuteCommandAsync(cancellationToken);
+            await UpdateWithExpectedVersionAsync(db, entity, expectedVersion, expectedDeleted: false, localValues, cancellationToken);
             await WriteActivityAsync(entity, "updated", $"更新项目 {entity.ProjectName}", CreateChanges(before, entity), entity.UpdatedTime ?? DateTime.UtcNow, cancellationToken);
             await WriteSyncJournalAsync(entity, "updated", cancellationToken);
         });
@@ -184,7 +186,9 @@ public sealed class ProjectManagementProjectService(
         RequirePlatformScope();
         var entity = await GetRequiredAsync(id, cancellationToken);
         await (accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser)).EnsureCanManageProjectAsync(id, cancellationToken);
-        EnsureVersion(entity, request.VersionNo);
+        var localValues = ProjectManagementProjectConflictLocalValues.ForArchive(request.VersionNo);
+        EnsureVersion(entity, request.VersionNo, localValues);
+        var expectedVersion = entity.VersionNo;
         var before = ProjectActivitySnapshot.From(entity);
         ProjectManagementDomainRules.EnsureProjectStatusTransition(entity.Status, ProjectManagementDomainRules.ProjectArchived);
         entity.Status = ProjectManagementDomainRules.ProjectArchived;
@@ -194,7 +198,7 @@ public sealed class ProjectManagementProjectService(
         var db = databaseAccessor.GetProjectManagementDb();
         await ProjectManagementMutationTransaction.RunAsync(db, async () =>
         {
-            await db.Updateable(entity).ExecuteCommandAsync(cancellationToken);
+            await UpdateWithExpectedVersionAsync(db, entity, expectedVersion, expectedDeleted: false, localValues, cancellationToken);
             await WriteActivityAsync(entity, "archived", $"归档项目 {entity.ProjectName}", CreateChanges(before, entity), entity.UpdatedTime ?? DateTime.UtcNow, cancellationToken);
             await WriteSyncJournalAsync(entity, "archived", cancellationToken);
         });
@@ -208,7 +212,11 @@ public sealed class ProjectManagementProjectService(
         RequirePlatformScope();
         var entity = await GetRequiredAsync(id, cancellationToken, includeDeleted: true);
         await (accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser)).EnsureCanManageDeletedProjectAsync(id, cancellationToken);
-        EnsureVersion(entity, versionNo);
+        if (!entity.IsDeleted)
+            throw new ValidationException("项目未删除，不能恢复");
+        var localValues = ProjectManagementProjectConflictLocalValues.ForRestore(versionNo);
+        EnsureVersion(entity, versionNo, localValues);
+        var expectedVersion = entity.VersionNo;
         var before = ProjectActivitySnapshot.From(entity);
         entity.IsDeleted = false;
         entity.DeletedBy = null;
@@ -219,7 +227,7 @@ public sealed class ProjectManagementProjectService(
         var db = databaseAccessor.GetProjectManagementDb();
         await ProjectManagementMutationTransaction.RunAsync(db, async () =>
         {
-            await db.Updateable(entity).ExecuteCommandAsync(cancellationToken);
+            await UpdateWithExpectedVersionAsync(db, entity, expectedVersion, expectedDeleted: true, localValues, cancellationToken);
             await WriteActivityAsync(entity, "restored", $"恢复项目 {entity.ProjectName}", CreateChanges(before, entity), entity.UpdatedTime ?? DateTime.UtcNow, cancellationToken);
             await WriteSyncJournalAsync(entity, "restored", cancellationToken);
         });
@@ -235,7 +243,9 @@ public sealed class ProjectManagementProjectService(
         RequirePlatformScope();
         var entity = await GetRequiredAsync(id, cancellationToken);
         await (accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser)).EnsureCanManageProjectAsync(id, cancellationToken);
-        EnsureVersion(entity, versionNo);
+        var localValues = ProjectManagementProjectConflictLocalValues.ForDelete(versionNo);
+        EnsureVersion(entity, versionNo, localValues);
+        var expectedVersion = entity.VersionNo;
         var before = ProjectActivitySnapshot.From(entity);
         entity.IsDeleted = true;
         entity.DeletedBy = RequireUserId();
@@ -250,7 +260,7 @@ public sealed class ProjectManagementProjectService(
         }
         await ProjectManagementMutationTransaction.RunAsync(db, async () =>
         {
-            await db.Updateable(entity).ExecuteCommandAsync(cancellationToken);
+            await UpdateWithExpectedVersionAsync(db, entity, expectedVersion, expectedDeleted: false, localValues, cancellationToken);
             await WriteActivityAsync(entity, "deleted", $"删除项目 {entity.ProjectName}", CreateChanges(before, entity), entity.UpdatedTime ?? DateTime.UtcNow, cancellationToken);
             await WriteSyncJournalAsync(entity, "deleted", cancellationToken);
         });
@@ -303,13 +313,84 @@ public sealed class ProjectManagementProjectService(
         ProjectManagementDomainRules.ValidateDates(request.StartDate, request.DueDate, "项目");
     }
 
-    private static void EnsureVersion(ProjectManagementProjectEntity entity, long versionNo)
+    private static void EnsureVersion(
+        ProjectManagementProjectEntity entity,
+        long versionNo,
+        ProjectManagementProjectConflictLocalValues localValues)
     {
         if (versionNo <= 0 || versionNo != entity.VersionNo)
         {
-            throw new ValidationException("项目已被其他用户修改，请刷新后重试", ErrorCodes.ApplicationDevelopmentPageRevisionConflict);
+            throw CreateVersionConflictException(entity, localValues);
         }
     }
+
+    private static async Task UpdateWithExpectedVersionAsync(
+        ISqlSugarClient db,
+        ProjectManagementProjectEntity entity,
+        long expectedVersion,
+        bool expectedDeleted,
+        ProjectManagementProjectConflictLocalValues localValues,
+        CancellationToken cancellationToken)
+    {
+        var affectedRows = await db.Updateable(entity)
+            .Where(item => item.Id == entity.Id && item.VersionNo == expectedVersion && item.IsDeleted == expectedDeleted)
+            .ExecuteCommandAsync(cancellationToken);
+        if (affectedRows == 1)
+            return;
+
+        var server = (await db.Queryable<ProjectManagementProjectEntity>()
+            .Where(item => item.Id == entity.Id)
+            .Take(1)
+            .ToListAsync(cancellationToken))
+            .FirstOrDefault();
+        if (server is null)
+            throw new NotFoundException("项目已不存在", ErrorCodes.PlatformResourceNotFound);
+        throw CreateVersionConflictException(server, localValues);
+    }
+
+    private static ProjectManagementProjectVersionConflictException CreateVersionConflictException(
+        ProjectManagementProjectEntity entity,
+        ProjectManagementProjectConflictLocalValues localValues) =>
+        new(new ProjectManagementProjectVersionConflictResponse(
+            Map(entity),
+            localValues,
+            CreateVersionConflictFields(entity, localValues)));
+
+    private static IReadOnlyList<ProjectManagementProjectConflictField> CreateVersionConflictFields(
+        ProjectManagementProjectEntity entity,
+        ProjectManagementProjectConflictLocalValues localValues)
+    {
+        var fields = new List<ProjectManagementProjectConflictField>();
+        foreach (var field in localValues.SubmittedFields)
+        {
+            var conflict = field switch
+            {
+                "VersionNo" => CreateVersionConflictField(field, "版本号", entity.VersionNo, localValues.VersionNo),
+                "ProjectCode" => CreateVersionConflictField(field, "项目编码", entity.ProjectCode, localValues.ProjectCode),
+                "ProjectName" => CreateVersionConflictField(field, "项目名称", entity.ProjectName, localValues.ProjectName),
+                "Description" => CreateVersionConflictField(field, "项目描述", entity.Description, localValues.Description),
+                "Status" => CreateVersionConflictField(field, "项目状态", entity.Status, localValues.Status),
+                "Priority" => CreateVersionConflictField(field, "优先级", entity.Priority, localValues.Priority),
+                "OwnerUserId" => CreateVersionConflictField(field, "负责人", entity.OwnerUserId, localValues.OwnerUserId),
+                "StartDate" => CreateVersionConflictField(field, "开始日期", entity.StartDate, localValues.StartDate),
+                "DueDate" => CreateVersionConflictField(field, "截止日期", entity.DueDate, localValues.DueDate),
+                "WipLimit" => CreateVersionConflictField(field, "WIP 上限", entity.WipLimit, localValues.WipLimit),
+                "ProgressPercent" => CreateVersionConflictField(field, "进度", entity.ProgressPercent, localValues.ProgressPercent),
+                "IsDeleted" => CreateVersionConflictField(field, "已删除", entity.IsDeleted, localValues.IsDeleted),
+                _ => null
+            };
+            if (conflict is not null)
+                fields.Add(conflict);
+        }
+        return fields;
+    }
+
+    private static ProjectManagementProjectConflictField? CreateVersionConflictField(
+        string field,
+        string displayName,
+        object? serverValue,
+        object? localValue) =>
+        Equals(serverValue, localValue) ? null : new ProjectManagementProjectConflictField(field, displayName, serverValue, localValue);
 
     private static string NormalizeRequired(string value, string message) => string.IsNullOrWhiteSpace(value) ? throw new ValidationException(message) : value.Trim();
 
