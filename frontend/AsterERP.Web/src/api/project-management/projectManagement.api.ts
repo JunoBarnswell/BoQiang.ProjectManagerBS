@@ -69,6 +69,7 @@ import type {
   ProjectManagementReportSnapshotStartResponse,
   ProjectManagementSearchQuery,
   ProjectManagementSearchResponse,
+  ProjectManagementSearchIndexStatus,
   ProjectManagementSyncJournalItem,
   ProjectManagementSyncWatermark,
 } from "./projectManagement.types";
@@ -601,6 +602,16 @@ export function searchProjectManagement(
 ): Promise<ApiEnvelope<ProjectManagementSearchResponse>> {
   return httpClient.get<ProjectManagementSearchResponse>(
     `/project-management/search${buildQueryString(query)}`,
+    undefined,
+    signal,
+  );
+}
+
+export function getProjectManagementSearchIndexStatus(
+  signal?: AbortSignal,
+): Promise<ApiEnvelope<ProjectManagementSearchIndexStatus>> {
+  return httpClient.get<ProjectManagementSearchIndexStatus>(
+    "/project-management/search/index/status",
     undefined,
     signal,
   );

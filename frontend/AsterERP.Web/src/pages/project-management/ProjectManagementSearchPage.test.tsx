@@ -61,7 +61,8 @@ describe('ProjectManagementSearchPage', () => {
       expect(screen.getByText(title)).toBeTruthy();
     }
     expect(queryCalls.length).toBeGreaterThanOrEqual(2);
-    expect(queryCalls.at(-1)?.enabled).toBe(true);
-    expect(queryCalls.at(-1)?.queryKey).toContain('search');
+    const authorizedSearchCall = queryCalls.find((call) => call.enabled && call.queryKey?.includes('search'));
+    expect(authorizedSearchCall?.enabled).toBe(true);
+    expect(authorizedSearchCall?.queryKey).toContain('search');
   });
 });

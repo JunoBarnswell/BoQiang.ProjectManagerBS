@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { searchProjectManagement } from '../../api/project-management/projectManagement.api';
 import type { ProjectManagementSearchItem, ProjectManagementSearchScope } from '../../api/project-management/projectManagement.types';
 import { isHttpError } from '../../core/http/httpError';
+import { ProjectManagementGlobalSearch } from '../../features/project-management/search/ProjectManagementGlobalSearch';
 import { normalizeProjectManagementTargetRoute } from '../../features/project-management/state/projectManagementPlatformRoutes';
 import { useProjectManagementWorkspaceScope } from '../../features/project-management/state/projectManagementWorkspaceScope';
 import { ResponsivePage } from '../../shared/responsive/ResponsivePage';
@@ -63,16 +64,19 @@ export function ProjectManagementSearchPage() {
       eyebrow="ProjectManagement / Search"
       description="搜索结果由当前工作区的服务端权限和数据过滤决定；点击结果后仍会在目标页面重新校验访问权限。"
       toolbar={
-        <form className="flex flex-wrap items-center gap-2" onSubmit={(event) => { event.preventDefault(); setSubmittedKeyword(keyword.trim()); }}>
-          <input aria-label="搜索关键字" className="min-w-64" maxLength={200} placeholder="搜索项目、任务、成员或评论" value={keyword} onChange={(event) => setKeyword(event.target.value)} />
-          <select aria-label="搜索范围" value={searchScope} onChange={(event) => setSearchScope(event.target.value as ProjectManagementSearchScope)}>{scopes.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select>
-          <input aria-label="按项目筛选" placeholder="项目 ID（可选）" value={projectId} onChange={(event) => setProjectId(event.target.value)} />
-          <input aria-label="按状态筛选" placeholder="状态（可选）" value={status} onChange={(event) => setStatus(event.target.value)} />
-          <label className="text-sm">从 <input aria-label="开始时间" type="date" value={from} onChange={(event) => setFrom(event.target.value)} /></label>
-          <label className="text-sm">至 <input aria-label="结束时间" type="date" value={to} onChange={(event) => setTo(event.target.value)} /></label>
-          <button disabled={!keyword.trim()} type="submit">搜索</button>
-          {submittedKeyword || projectId || status || from || to ? <button type="button" onClick={() => { setKeyword(''); setSubmittedKeyword(''); setProjectId(''); setStatus(''); setFrom(''); setTo(''); }}>清空</button> : null}
-        </form>
+        <div className="flex flex-wrap items-center gap-2">
+          <ProjectManagementGlobalSearch />
+          <form className="flex flex-wrap items-center gap-2" onSubmit={(event) => { event.preventDefault(); setSubmittedKeyword(keyword.trim()); }}>
+            <input aria-label="搜索关键字" className="min-w-64" maxLength={200} placeholder="搜索项目、任务、成员或评论" value={keyword} onChange={(event) => setKeyword(event.target.value)} />
+            <select aria-label="搜索范围" value={searchScope} onChange={(event) => setSearchScope(event.target.value as ProjectManagementSearchScope)}>{scopes.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select>
+            <input aria-label="按项目筛选" placeholder="项目 ID（可选）" value={projectId} onChange={(event) => setProjectId(event.target.value)} />
+            <input aria-label="按状态筛选" placeholder="状态（可选）" value={status} onChange={(event) => setStatus(event.target.value)} />
+            <label className="text-sm">从 <input aria-label="开始时间" type="date" value={from} onChange={(event) => setFrom(event.target.value)} /></label>
+            <label className="text-sm">至 <input aria-label="结束时间" type="date" value={to} onChange={(event) => setTo(event.target.value)} /></label>
+            <button disabled={!keyword.trim()} type="submit">搜索</button>
+            {submittedKeyword || projectId || status || from || to ? <button type="button" onClick={() => { setKeyword(''); setSubmittedKeyword(''); setProjectId(''); setStatus(''); setFrom(''); setTo(''); }}>清空</button> : null}
+          </form>
+        </div>
       }
     >
       {!submittedKeyword ? <SearchEmptyState /> : <div className="space-y-5" aria-live="polite">

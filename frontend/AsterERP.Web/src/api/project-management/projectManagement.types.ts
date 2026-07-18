@@ -654,6 +654,20 @@ export interface ProjectManagementSearchResponse {
   comments: ProjectManagementSearchItem[];
 }
 
+export interface ProjectManagementSearchIndexStatus {
+  status: 'Unavailable' | 'Rebuilding' | 'Incremental' | 'Ready' | 'Failed' | string;
+  mode: 'none' | 'rebuild' | 'incremental' | string;
+  appliedSequenceNo: number;
+  targetSequenceNo: number;
+  documentCount: number;
+  failureCount: number;
+  lastError?: string | null;
+  operationId?: string | null;
+  startedTime?: string | null;
+  completedTime?: string | null;
+  updatedTime: string;
+}
+
 export interface ProjectManagementReportQuery {
   pageIndex?: number;
   pageSize?: number;
