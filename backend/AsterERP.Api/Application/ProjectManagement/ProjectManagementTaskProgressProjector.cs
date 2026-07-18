@@ -11,15 +11,28 @@ public sealed class ProjectManagementTaskProgressProjector(IWorkspaceDatabaseAcc
     public async Task RefreshAsync(string projectId, CancellationToken cancellationToken = default)
     {
         var db = databaseAccessor.GetCurrentDb();
-        var tasks = await db.Queryable<ProjectManagementTaskEntity>().Where(item => item.ProjectId == projectId && !item.IsDeleted).ToListAsync(cancellationToken);
-        var leaves = tasks.Where(task => !tasks.Any(child => child.ParentTaskId == task.Id)).ToList();
-        var progress = Calculate(leaves);
+        var tasks = await db.Queryable<ProjectManagementTaskEntity>().Where(item => item.ProjectId == projectId).ToListAsync(cancellationToken);
+        var snapshot = ProjectManagementTaskProgressCalculator.Create(tasks);
+        foreach (var task in tasks.Where(task => snapshot.ParentProgressByTaskId.TryGetValue(task.Id, out var progress) && task.ProgressPercent != progress))
+        {
+            task.ProgressPercent = snapshot.ParentProgressByTaskId[task.Id];
+            await db.Updateable(task).UpdateColumns(item => new { item.ProgressPercent }).ExecuteCommandAsync(cancellationToken);
+        }
+
         var project = (await db.Queryable<ProjectManagementProjectEntity>().Where(item => item.Id == projectId && !item.IsDeleted).Take(1).ToListAsync(cancellationToken)).FirstOrDefault();
-        if (project is not null && project.ProgressPercent != progress) { project.ProgressPercent = progress; await db.Updateable(project).UpdateColumns(item => new { item.ProgressPercent }).ExecuteCommandAsync(cancellationToken); }
-        var milestoneIds = tasks.Where(task => !string.IsNullOrWhiteSpace(task.MilestoneId)).Select(task => task.MilestoneId!).Distinct(StringComparer.Ordinal).ToList();
-        if (milestoneIds.Count == 0) return;
-        var milestones = await db.Queryable<ProjectManagementMilestoneEntity>().Where(item => milestoneIds.Contains(item.Id) && !item.IsDeleted).ToListAsync(cancellationToken);
-        foreach (var milestone in milestones) { var value = Calculate(leaves.Where(task => task.MilestoneId == milestone.Id).ToList()); if (milestone.ProgressPercent != value) { milestone.ProgressPercent = value; await db.Updateable(milestone).UpdateColumns(item => new { item.ProgressPercent }).ExecuteCommandAsync(cancellationToken); } }
+        if (project is not null && project.ProgressPercent != snapshot.ProjectProgressPercent)
+        {
+            project.ProgressPercent = snapshot.ProjectProgressPercent;
+            await db.Updateable(project).UpdateColumns(item => new { item.ProgressPercent }).ExecuteCommandAsync(cancellationToken);
+        }
+
+        var milestones = await db.Queryable<ProjectManagementMilestoneEntity>().Where(item => item.ProjectId == projectId && !item.IsDeleted).ToListAsync(cancellationToken);
+        foreach (var milestone in milestones)
+        {
+            var progress = snapshot.GetMilestoneProgress(milestone.Id);
+            if (milestone.ProgressPercent == progress) continue;
+            milestone.ProgressPercent = progress;
+            await db.Updateable(milestone).UpdateColumns(item => new { item.ProgressPercent }).ExecuteCommandAsync(cancellationToken);
+        }
     }
-    private static decimal Calculate(IReadOnlyList<ProjectManagementTaskEntity> tasks) { var weight = tasks.Sum(task => task.Weight); return weight <= 0 ? 0 : Math.Round(tasks.Sum(task => task.ProgressPercent * task.Weight) / weight, 2); }
 }
