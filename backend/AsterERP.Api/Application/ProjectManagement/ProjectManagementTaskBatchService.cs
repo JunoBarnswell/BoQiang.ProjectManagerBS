@@ -22,7 +22,8 @@ public sealed class ProjectManagementTaskBatchService(
     ProjectManagementTaskLabelMutation? labelMutation = null,
     IProjectManagementTaskDependencyService? dependencyService = null,
     ProjectManagementTaskHierarchy? taskHierarchy = null,
-    IProjectManagementTaskParticipantService? participantService = null) : IProjectManagementTaskBatchService
+    IProjectManagementTaskParticipantService? participantService = null,
+    ProjectManagementTaskStateMachine? taskStateMachine = null) : IProjectManagementTaskBatchService
 {
     public async Task<IReadOnlyList<ProjectManagementTaskResponse>> UpdateAsync(ProjectManagementTaskBatchUpdateRequest request, CancellationToken cancellationToken = default)
     {
@@ -40,6 +41,15 @@ public sealed class ProjectManagementTaskBatchService(
         var beforeSnapshots = tasks.ToDictionary(item => item.Id, TaskActivitySnapshot.From, StringComparer.Ordinal);
         var nextStatus = string.IsNullOrWhiteSpace(request.Status) ? null : ProjectManagementDomainRules.RequireTaskStatus(request.Status);
         var nextPriority = string.IsNullOrWhiteSpace(request.Priority) ? null : RequirePriority(request.Priority);
+        var now = DateTime.UtcNow;
+        var transitions = new Dictionary<string, ProjectManagementTaskStateTransition>(StringComparer.Ordinal);
+        if (nextStatus is not null)
+            foreach (var task in tasks)
+                transitions[task.Id] = StateMachine.Resolve(task.Status, nextStatus, task.ProgressPercent, task.ActualStartAt, task.ActualEndAt, now);
+        var newlyCompletedParentIds = transitions
+            .Where(pair => pair.Value.Status == ProjectManagementDomainRules.TaskDone && byId[pair.Key].Status != ProjectManagementDomainRules.TaskDone)
+            .Select(pair => pair.Key)
+            .ToList();
         if (request.UpdateMilestone) await EnsureMilestoneAsync(request.ProjectId, request.MilestoneId, cancellationToken);
         if (request.UpdateSchedule) ProjectManagementDomainRules.ValidateDates(request.StartDate, request.DueDate, "任务");
         if (!request.UpdateParent && !string.IsNullOrWhiteSpace(request.BeforeTaskId)) throw new ValidationException("指定同级排序位置时必须同时移动父任务");
@@ -74,21 +84,25 @@ public sealed class ProjectManagementTaskBatchService(
         var canOverrideWip = request.OverrideWip && currentUser.HasAsterErpPermission(PermissionCodes.ProjectManagementTaskOverrideWip);
         if (request.OverrideWip && !canOverrideWip)
             throw new ValidationException("没有 WIP 强制绕过权限", ErrorCodes.PermissionDenied);
-        if (nextStatus == ProjectManagementDomainRules.TaskInProgress && !canOverrideWip)
+        if (transitions.Values.Any(item => item.Status == ProjectManagementDomainRules.TaskInProgress) && !canOverrideWip)
         {
             var activeCount = await db.Queryable<ProjectManagementTaskEntity>().Where(item => item.ProjectId == request.ProjectId && !item.IsDeleted && item.Status == ProjectManagementDomainRules.TaskInProgress && !ids.Contains(item.Id)).CountAsync(cancellationToken);
-            var adding = tasks.Count(item => item.Status != ProjectManagementDomainRules.TaskInProgress);
+            var adding = tasks.Count(item => transitions.TryGetValue(item.Id, out var transition) && transition.Status == ProjectManagementDomainRules.TaskInProgress && item.Status != ProjectManagementDomainRules.TaskInProgress);
             var wipLimit = project[0].WipLimit;
             if (wipLimit is int limit && activeCount + adding > limit) throw new ValidationException("批量更新将超过项目 WIP 上限");
         }
-        var now = DateTime.UtcNow;
         var actorUserId = User();
         foreach (var item in request.Items)
         {
             var task = byId[item.TaskId];
             if (task.VersionNo != item.VersionNo || item.VersionNo <= 0) throw new ValidationException($"任务 {task.TaskCode} 已被其他用户修改，请刷新后重试", ErrorCodes.ApplicationDevelopmentPageRevisionConflict);
-            if (nextStatus is not null) ProjectManagementDomainRules.EnsureTaskStatusTransition(task.Status, nextStatus);
-            task.Status = nextStatus ?? task.Status;
+            if (transitions.TryGetValue(task.Id, out var transition))
+            {
+                task.Status = transition.Status;
+                task.ProgressPercent = transition.ProgressPercent;
+                task.ActualStartAt = transition.ActualStartAt;
+                task.ActualEndAt = transition.ActualEndAt;
+            }
             task.Priority = nextPriority ?? task.Priority;
             if (request.AssigneeUserId is not null) task.AssigneeUserId = string.IsNullOrWhiteSpace(request.AssigneeUserId) ? null : request.AssigneeUserId.Trim();
             if (request.UpdateMilestone) task.MilestoneId = NormalizeOptional(request.MilestoneId);
@@ -107,6 +121,18 @@ public sealed class ProjectManagementTaskBatchService(
             if (request.UpdateParent)
                 await ApplyMovesAsync(db, request, moveRoots, placements, now, actorUserId, cancellationToken);
             await db.Updateable(tasks).ExecuteCommandAsync(cancellationToken);
+            if (request.AssigneeUserId is not null)
+            {
+                if (participantService is null) throw new InvalidOperationException("任务负责人校验服务未配置");
+                await participantService.EnsureAssigneeEligibleForTasksAsync(db, request.ProjectId, ids, request.AssigneeUserId, cancellationToken);
+            }
+            await Policy().EnsureCanCompleteTasksAsync(
+                request.ProjectId,
+                newlyCompletedParentIds,
+                new HashSet<string>(StringComparer.Ordinal),
+                request.ForceComplete,
+                request.ForceCompleteReason,
+                cancellationToken);
             if (labelIds is not null)
             {
                 foreach (var task in tasks)
@@ -141,6 +167,7 @@ public sealed class ProjectManagementTaskBatchService(
     }
 
     private ProjectManagementAccessPolicy Policy() => accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser);
+    private ProjectManagementTaskStateMachine StateMachine => taskStateMachine ?? new ProjectManagementTaskStateMachine();
     private string User() => currentUser.GetAsterErpUserId()?.Trim() ?? throw new ValidationException("当前会话缺少用户", ErrorCodes.PermissionDenied);
     private string Tenant() => currentUser.GetAsterErpTenantId()?.Trim() ?? throw new ValidationException("当前会话缺少租户", ErrorCodes.PermissionDenied);
     private string App() => currentUser.GetAsterErpAppCode()?.Trim().ToUpperInvariant() ?? throw new ValidationException("当前会话缺少应用", ErrorCodes.PermissionDenied);

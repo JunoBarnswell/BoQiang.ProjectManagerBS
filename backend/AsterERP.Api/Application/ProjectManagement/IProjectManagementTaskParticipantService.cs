@@ -10,6 +10,11 @@ public interface IProjectManagementTaskParticipantService
     Task<IReadOnlyList<ProjectManagementTaskParticipantResponse>> QueryHistoryAsync(string taskId, CancellationToken cancellationToken = default);
     Task<GridPageResult<ProjectManagementTaskParticipantCandidateResponse>> QueryCandidatesAsync(string taskId, ProjectManagementTaskParticipantCandidateQuery query, CancellationToken cancellationToken = default);
     /// <summary>
+    /// 校验负责人属于当前项目、租户和应用的有效成员，且其主题范围覆盖全部目标任务。
+    /// 调用方可在外层事务开始前执行该只读校验。
+    /// </summary>
+    Task EnsureAssigneeEligibleForTasksAsync(ISqlSugarClient db, string projectId, IReadOnlyCollection<string> taskIds, string? assigneeUserId, CancellationToken cancellationToken = default);
+    /// <summary>
     /// 批量协作入口：调用方必须已在 <paramref name="db"/> 上开启外层事务。
     /// 本方法只执行参与人关系、成员范围校验和活动写入，不会提交或回滚该事务。
     /// </summary>

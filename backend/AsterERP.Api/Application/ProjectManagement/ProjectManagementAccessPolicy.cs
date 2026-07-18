@@ -157,6 +157,31 @@ public sealed class ProjectManagementAccessPolicy(IWorkspaceDatabaseAccessor dat
         }
     }
 
+    /// <summary>
+    /// 统一父任务完成门禁。<paramref name="completingTaskIds"/> 可包含同一批次内一并完成的子任务，
+    /// 其余未完成直接子任务仍要求显式强制完成权限和原因。
+    /// </summary>
+    public async Task EnsureCanCompleteTasksAsync(
+        string projectId,
+        IReadOnlyCollection<string> parentTaskIds,
+        IReadOnlySet<string> completingTaskIds,
+        bool forceComplete,
+        string? forceCompleteReason,
+        CancellationToken cancellationToken = default)
+    {
+        if (parentTaskIds.Count == 0) return;
+        var parentIds = parentTaskIds.Distinct(StringComparer.Ordinal).ToList();
+        var incompleteChildren = await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementTaskEntity>()
+            .Where(item => item.ProjectId == projectId && parentIds.Contains(item.ParentTaskId!) && !item.IsDeleted && item.Status != ProjectManagementDomainRules.TaskDone)
+            .ToListAsync(cancellationToken);
+        if (!incompleteChildren.Any(item => !completingTaskIds.Contains(item.Id))) return;
+        if (!forceComplete) throw new ValidationException("存在未完成子任务，不能完成父任务");
+        if (string.IsNullOrWhiteSpace(forceCompleteReason)) throw new ValidationException("强制完成父任务必须填写原因");
+        if (!currentUser.HasAsterErpPermission(PermissionCodes.ProjectManagementTaskOverrideWip))
+            throw new ValidationException("没有强制完成父任务权限", ErrorCodes.PermissionDenied);
+        await EnsureCanManageProjectAsync(projectId, cancellationToken);
+    }
+
     private async Task EnsureRoleAsync(string projectId, string[] roles, string message, CancellationToken cancellationToken, bool includeDeleted = false)
     {
         ProjectManagementPlatformScope.RequireSystemWorkspace(currentUser);

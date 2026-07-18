@@ -20,4 +20,6 @@ public sealed record ProjectManagementTaskBatchUpdateRequest(
     bool UpdateParent = false,
     string? BeforeTaskId = null,
     IReadOnlyList<string>? ParticipantUserIds = null,
-    bool ReplaceParticipants = false);
+    bool ReplaceParticipants = false,
+    bool ForceComplete = false,
+    string? ForceCompleteReason = null);

@@ -42,6 +42,37 @@ public sealed class ProjectManagementTaskParticipantService(
         return await Projection.QueryCandidatesAsync(task.ProjectId, query, cancellationToken);
     }
 
+    public async Task EnsureAssigneeEligibleForTasksAsync(
+        ISqlSugarClient db,
+        string projectId,
+        IReadOnlyCollection<string> taskIds,
+        string? assigneeUserId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(db);
+        var userId = Optional(assigneeUserId);
+        if (userId is null) return;
+        if (taskIds.Count == 0) throw new ValidationException("负责人校验缺少任务");
+
+        var project = (await db.Queryable<ProjectManagementProjectEntity>()
+            .Where(item => item.Id == projectId && item.TenantId == Tenant() && item.AppCode == App() && !item.IsDeleted)
+            .Take(1).ToListAsync(cancellationToken)).FirstOrDefault()
+            ?? throw new NotFoundException("项目不存在", ErrorCodes.PlatformResourceNotFound);
+        if (string.Equals(project.OwnerUserId, userId, StringComparison.OrdinalIgnoreCase)) return;
+
+        var member = (await db.Queryable<ProjectManagementProjectMemberEntity>()
+            .Where(item => item.ProjectId == projectId && item.UserId == userId && item.TenantId == Tenant() && item.AppCode == App() && item.IsActive && !item.IsDeleted)
+            .Take(1).ToListAsync(cancellationToken)).FirstOrDefault()
+            ?? throw new ValidationException("任务负责人必须是项目负责人或有效项目成员");
+        var ids = taskIds.Distinct(StringComparer.Ordinal).ToList();
+        var tasks = await db.Queryable<ProjectManagementTaskEntity>()
+            .Where(item => ids.Contains(item.Id) && item.ProjectId == projectId && item.TenantId == Tenant() && item.AppCode == App() && !item.IsDeleted)
+            .ToListAsync(cancellationToken);
+        if (tasks.Count != ids.Count) throw new ValidationException("存在不属于当前项目、当前租户或已删除的任务");
+        var desiredByTaskId = tasks.ToDictionary(item => item.Id, _ => new HashSet<string>([userId], StringComparer.Ordinal), StringComparer.Ordinal);
+        await EnsureMemberScopesAsync(db, tasks, desiredByTaskId, new Dictionary<string, ProjectManagementProjectMemberEntity>(StringComparer.Ordinal) { [userId] = member }, cancellationToken);
+    }
+
     public async Task<ProjectManagementTaskParticipantBatchMutationResult> ReplaceParticipantsForTasksAsync(
         ISqlSugarClient db,
         ProjectManagementTaskParticipantBatchReplaceRequest request,
