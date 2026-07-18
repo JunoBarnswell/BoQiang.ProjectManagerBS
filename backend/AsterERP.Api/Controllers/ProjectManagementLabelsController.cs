@@ -6,6 +6,30 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace AsterERP.Api.Controllers;
 
+[Route("api/project-management/labels")]
+[Permission(PermissionCodes.ProjectManagementLabelView)]
+public sealed class ProjectManagementPublicLabelsController(IProjectManagementLabelService service) : BaseApiController
+{
+    [HttpGet]
+    public async Task<IActionResult> QueryAsync(CancellationToken cancellationToken) => ApiOk(await service.QueryPublicAsync(cancellationToken));
+
+    [HttpPost]
+    [Permission(PermissionCodes.ProjectManagementLabelManage)]
+    public async Task<IActionResult> CreateAsync([FromBody] ProjectManagementLabelUpsertRequest request, CancellationToken cancellationToken) => ApiOk(await service.CreatePublicAsync(request, cancellationToken));
+
+    [HttpPut("{id}")]
+    [Permission(PermissionCodes.ProjectManagementLabelManage)]
+    public async Task<IActionResult> UpdateAsync(string id, [FromBody] ProjectManagementLabelUpsertRequest request, CancellationToken cancellationToken) => ApiOk(await service.UpdatePublicAsync(id, request, cancellationToken));
+
+    [HttpDelete("{id}")]
+    [Permission(PermissionCodes.ProjectManagementLabelManage)]
+    public async Task<IActionResult> DeleteAsync(string id, [FromQuery] long versionNo, CancellationToken cancellationToken)
+    {
+        await service.DeletePublicAsync(id, versionNo, cancellationToken);
+        return ApiOk(new { id });
+    }
+}
+
 [Route("api/project-management/projects/{projectId}/labels")]
 [Permission(PermissionCodes.ProjectManagementLabelView)]
 public sealed class ProjectManagementLabelsController(IProjectManagementLabelService service) : BaseApiController

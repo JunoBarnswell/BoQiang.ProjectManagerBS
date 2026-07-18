@@ -52,6 +52,10 @@ import type {
   ProjectManagementMilestone,
   ProjectManagementMilestoneUpsertRequest,
   ProjectManagementLabel,
+  ProjectManagementLabelUpsertRequest,
+  ProjectManagementTaskLabel,
+  ProjectManagementTaskLabelFilter,
+  ProjectManagementTaskLabelSetRequest,
   ProjectManagementActivity,
   ProjectManagementReportQuery,
   ProjectManagementReportSnapshotRequest,
@@ -249,6 +253,60 @@ export function getProjectManagementLabels(
   );
 }
 
+export function getProjectManagementPublicLabels(signal?: AbortSignal): Promise<ApiEnvelope<ProjectManagementLabel[]>> {
+  return httpClient.get<ProjectManagementLabel[]>("/project-management/labels", undefined, signal);
+}
+
+export function createProjectManagementProjectLabel(
+  projectId: string,
+  request: ProjectManagementLabelUpsertRequest,
+): Promise<ApiEnvelope<ProjectManagementLabel>> {
+  return httpClient.post<ProjectManagementLabel, ProjectManagementLabelUpsertRequest>(`/project-management/projects/${projectId}/labels`, request);
+}
+
+export function createProjectManagementPublicLabel(
+  request: ProjectManagementLabelUpsertRequest,
+): Promise<ApiEnvelope<ProjectManagementLabel>> {
+  return httpClient.post<ProjectManagementLabel, ProjectManagementLabelUpsertRequest>("/project-management/labels", request);
+}
+
+export function updateProjectManagementProjectLabel(
+  projectId: string,
+  id: string,
+  request: ProjectManagementLabelUpsertRequest,
+): Promise<ApiEnvelope<ProjectManagementLabel>> {
+  return httpClient.put<ProjectManagementLabel, ProjectManagementLabelUpsertRequest>(`/project-management/projects/${projectId}/labels/${id}`, request);
+}
+
+export function updateProjectManagementPublicLabel(
+  id: string,
+  request: ProjectManagementLabelUpsertRequest,
+): Promise<ApiEnvelope<ProjectManagementLabel>> {
+  return httpClient.put<ProjectManagementLabel, ProjectManagementLabelUpsertRequest>(`/project-management/labels/${id}`, request);
+}
+
+export function deleteProjectManagementProjectLabel(projectId: string, id: string, versionNo: number): Promise<ApiEnvelope<{ id: string }>> {
+  return httpClient.delete<{ id: string }>(`/project-management/projects/${projectId}/labels/${id}${buildQueryString({ versionNo })}`);
+}
+
+export function deleteProjectManagementPublicLabel(id: string, versionNo: number): Promise<ApiEnvelope<{ id: string }>> {
+  return httpClient.delete<{ id: string }>(`/project-management/labels/${id}${buildQueryString({ versionNo })}`);
+}
+
+export function getProjectManagementTaskLabels(
+  taskId: string,
+  signal?: AbortSignal,
+): Promise<ApiEnvelope<ProjectManagementTaskLabel[]>> {
+  return httpClient.get<ProjectManagementTaskLabel[]>(`/project-management/tasks/${taskId}/labels`, undefined, signal);
+}
+
+export function setProjectManagementTaskLabels(
+  taskId: string,
+  request: ProjectManagementTaskLabelSetRequest,
+): Promise<ApiEnvelope<{ taskId: string }>> {
+  return httpClient.put<{ taskId: string }, ProjectManagementTaskLabelSetRequest>(`/project-management/tasks/${taskId}/labels`, request);
+}
+
 export function createProjectManagementMilestone(
   projectId: string,
   request: ProjectManagementMilestoneUpsertRequest,
@@ -326,7 +384,7 @@ export function getProjectManagementTasks(
   signal?: AbortSignal,
 ): Promise<ApiEnvelope<{ total: number; items: ProjectManagementTaskListItem[] }>> {
   return httpClient.get<{ total: number; items: ProjectManagementTaskListItem[] }>(
-    `/project-management/tasks${buildQueryString(query)}`,
+    `/project-management/tasks${buildProjectManagementLabelFilterQuery(query)}`,
     undefined,
     signal,
   );
@@ -521,7 +579,7 @@ export function exportProjectManagementReportCsv(
   query: ProjectManagementReportQuery,
 ): Promise<{ blob: Blob; fileName: string }> {
   return httpClient.downloadBlob(
-    `/project-management/reports/projects.csv${buildQueryString(query)}`,
+    `/project-management/reports/projects.csv${buildProjectManagementLabelFilterQuery(query)}`,
     { timeoutMs: 120_000 },
   );
 }
@@ -530,7 +588,7 @@ export function exportProjectManagementReportExcel(
   query: ProjectManagementReportQuery,
 ): Promise<{ blob: Blob; fileName: string }> {
   return httpClient.downloadBlob(
-    `/project-management/reports/projects.xlsx${buildQueryString(query)}`,
+    `/project-management/reports/projects.xlsx${buildProjectManagementLabelFilterQuery(query)}`,
     { timeoutMs: 120_000 },
   );
 }
@@ -695,4 +753,14 @@ export function deleteProjectManagementSavedView(
   return httpClient.delete<{ id: string }>(
     `/project-management/projects/${projectId}/saved-views/${id}${buildQueryString({ versionNo })}`,
   );
+}
+
+function buildProjectManagementLabelFilterQuery<TQuery extends { labelFilter?: ProjectManagementTaskLabelFilter }>(query: TQuery): string {
+  const { labelFilter, ...baseQuery } = query;
+  const searchParams = new URLSearchParams(buildQueryString(baseQuery));
+  if (!labelFilter || labelFilter.labelIds.length === 0) return searchParams.size ? `?${searchParams.toString()}` : '';
+
+  labelFilter.labelIds.forEach((labelId, index) => searchParams.append(`labelFilter.labelIds[${index}]`, labelId));
+  if (labelFilter.matchMode) searchParams.set('labelFilter.matchMode', labelFilter.matchMode);
+  return `?${searchParams.toString()}`;
 }
