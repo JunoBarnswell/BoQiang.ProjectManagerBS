@@ -35,6 +35,7 @@ export function ProjectManagementDataSpacePage() {
   const [confirmRisk, setConfirmRisk] = useState(false);
   const [restorePreview, setRestorePreview] = useState<NonNullable<Awaited<ReturnType<typeof previewProjectManagementBackupRestore>>['data']> | null>(null);
   const { hasPermission: canManageBackup } = usePermission('project-management:backup:manage');
+  const isSystemPlatform = scope.appCode === 'SYSTEM';
   const summaryQuery = useQuery({
     enabled: scope.isAvailable,
     queryKey: queryKeys.projectManagement.dataSpaceSummary(scope),
@@ -43,7 +44,7 @@ export function ProjectManagementDataSpacePage() {
   const backupsQuery = useQuery({
     queryKey: queryKeys.projectManagement.backups(scope),
     queryFn: () => getProjectManagementBackups(),
-    enabled: scope.isAvailable && canManageBackup,
+    enabled: scope.isAvailable && canManageBackup && !isSystemPlatform,
   });
   const backupMutation = useApiMutation({
     mutationFn: () => createProjectManagementBackup({ currentPassword: password, confirmRisk, reason: '项目管理数据空间手动备份' }),
@@ -56,9 +57,10 @@ export function ProjectManagementDataSpacePage() {
   const restoreMutation = useApiMutation({
     mutationFn: (id: string) => restoreProjectManagementBackup(id, { currentPassword: password, confirmRisk }),
     onError: (error) => message.error(getErrorMessage(error, '恢复失败')),
-    onSuccess: () => {
-      message.success('恢复已完成，请刷新页面确认数据'); setRestorePreview(null);
-      void queryClient.invalidateQueries({ queryKey: queryKeys.projectManagement.backups(scope) });
+    onSuccess: async () => {
+      setRestorePreview(null);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.projectManagement.all(scope) });
+      message.success('恢复已完成，项目管理数据已刷新');
     }
   });
   const restorePreviewMutation = useApiMutation({
@@ -113,6 +115,7 @@ export function ProjectManagementDataSpacePage() {
       </section>
       <section className="mt-4 rounded-lg border border-gray-200 p-4">
         <h2 className="font-semibold">备份与恢复</h2>
+        {isSystemPlatform ? <p className="mt-1 text-sm text-gray-500">平台项目管理暂不支持物理备份/恢复，待 pm_* 逻辑备份能力。</p> : <>
         <p className="mt-1 text-sm text-gray-500">仅支持当前 SQLite 数据空间。恢复会覆盖整个当前数据空间，不只是项目管理记录。</p>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <input className="rounded border border-gray-300 px-3 py-2" type="password" aria-label="当前密码" placeholder="当前密码" value={password} onChange={(event) => setPassword(event.target.value)} />
@@ -121,6 +124,7 @@ export function ProjectManagementDataSpacePage() {
         </div>
         {restorePreview ? <div className="mt-3 rounded border border-amber-300 bg-amber-50 p-3 text-sm"><div className="font-medium">恢复影响确认 · {restorePreview.backup.backupName}</div><p className="mt-1">{restorePreview.impactScope}</p><p className="mt-1">当前记录：项目 {restorePreview.currentDataSpace.projectCount}、任务 {restorePreview.currentDataSpace.taskCount}；备份记录：项目 {restorePreview.backupDataSpace.projectCount}、任务 {restorePreview.backupDataSpace.taskCount}。</p><p className="mt-1">{restorePreview.failureCompensationHint}</p><p className="mt-1">{restorePreview.successfulRestoreRollbackHint}</p><div className="mt-2 flex gap-2"><PermissionButton code="project-management:backup:manage" disabled={!password || !confirmRisk || restoreMutation.isPending} onClick={() => restoreMutation.mutate(restorePreview.backup.id)}>{restoreMutation.isPending ? '恢复中…' : '确认恢复'}</PermissionButton><button type="button" onClick={() => setRestorePreview(null)}>取消</button></div></div> : null}
         {backupsQuery.isLoading ? <div className="mt-3 text-sm text-gray-500">备份列表加载中…</div> : backupsQuery.isError ? <div className="mt-3 rounded bg-amber-50 p-3 text-sm text-amber-800"><div>备份列表加载失败。</div><button type="button" className="mt-2 underline" onClick={() => void backupsQuery.refetch()}>重试</button></div> : backupsQuery.data?.data?.length ? <div className="mt-3 space-y-2">{backupsQuery.data.data.map((backup) => <div className="flex flex-wrap items-center justify-between gap-2 rounded border border-gray-100 p-3 text-sm" key={backup.id}><span>{backup.backupName} · {Math.round(backup.fileSize / 1024)} KB · {backup.sha256.slice(0, 12)}…</span><PermissionButton code="project-management:backup:manage" disabled={restorePreviewMutation.isPending} onClick={() => restorePreviewMutation.mutate(backup.id)}>{restorePreviewMutation.isPending ? '预览中…' : '查看恢复影响'}</PermissionButton></div>)}</div> : <div className="mt-3 text-sm text-gray-500">暂无备份</div>}
+        </>}
       </section>
     </ResponsivePage>
   );

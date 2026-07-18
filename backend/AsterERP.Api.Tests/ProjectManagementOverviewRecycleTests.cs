@@ -21,25 +21,25 @@ public sealed class ProjectManagementOverviewRecycleTests
         await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
         await db.Insertable(new[]
         {
-            new ProjectManagementProjectEntity { Id = "project-visible", TenantId = "tenant-a", AppCode = "MES", ProjectCode = "VISIBLE", ProjectName = "Visible", OwnerUserId = "owner" },
-            new ProjectManagementProjectEntity { Id = "project-hidden", TenantId = "tenant-a", AppCode = "MES", ProjectCode = "HIDDEN", ProjectName = "Hidden", OwnerUserId = "other" }
+            new ProjectManagementProjectEntity { Id = "project-visible", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "VISIBLE", ProjectName = "Visible", OwnerUserId = "owner" },
+            new ProjectManagementProjectEntity { Id = "project-hidden", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "HIDDEN", ProjectName = "Hidden", OwnerUserId = "other" }
         }).ExecuteCommandAsync();
-        await db.Insertable(new ProjectManagementProjectMemberEntity { TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-visible", UserId = "operator", RoleCode = "Member", IsActive = true }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementProjectMemberEntity { TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-visible", UserId = "operator", RoleCode = "Member", IsActive = true }).ExecuteCommandAsync();
         await db.Insertable(new[]
         {
-            new ProjectManagementTaskEntity { Id = "assigned", TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-visible", TaskCode = "A", Title = "assigned", AssigneeUserId = "operator", Status = "Todo" },
-            new ProjectManagementTaskEntity { Id = "participant", TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-visible", TaskCode = "P", Title = "participant", Status = "Todo" },
-            new ProjectManagementTaskEntity { Id = "mentioned", TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-visible", TaskCode = "M", Title = "mentioned", Status = "Todo" },
-            new ProjectManagementTaskEntity { Id = "hidden", TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-hidden", TaskCode = "X", Title = "hidden", AssigneeUserId = "operator", Status = "Todo" }
+            new ProjectManagementTaskEntity { Id = "assigned", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-visible", TaskCode = "A", Title = "assigned", AssigneeUserId = "operator", Status = "Todo" },
+            new ProjectManagementTaskEntity { Id = "participant", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-visible", TaskCode = "P", Title = "participant", Status = "Todo" },
+            new ProjectManagementTaskEntity { Id = "mentioned", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-visible", TaskCode = "M", Title = "mentioned", Status = "Todo" },
+            new ProjectManagementTaskEntity { Id = "hidden", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-hidden", TaskCode = "X", Title = "hidden", AssigneeUserId = "operator", Status = "Todo" }
         }).ExecuteCommandAsync();
-        await db.Insertable(new ProjectManagementTaskParticipantEntity { TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-visible", TaskId = "participant", UserId = "operator" }).ExecuteCommandAsync();
-        await db.Insertable(new ProjectManagementTaskCommentEntity { TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-visible", TaskId = "mentioned", AuthorUserId = "owner", Markdown = "@operator", MentionUserIdsJson = "[\"operator\"]" }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementTaskParticipantEntity { TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-visible", TaskId = "participant", UserId = "operator" }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementTaskCommentEntity { TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-visible", TaskId = "mentioned", AuthorUserId = "owner", Markdown = "@operator", MentionUserIdsJson = "[\"operator\"]" }).ExecuteCommandAsync();
 
         var user = CreateUser("operator");
-        Assert.True(ProjectManagementDataPermissionFilterRegistrar.TryRegister(db, typeof(ProjectManagementTaskEntity), user, "tenant-a", "MES"));
-        Assert.True(ProjectManagementDataPermissionFilterRegistrar.TryRegister(db, typeof(ProjectManagementProjectEntity), user, "tenant-a", "MES"));
-        Assert.True(ProjectManagementDataPermissionFilterRegistrar.TryRegister(db, typeof(ProjectManagementTaskParticipantEntity), user, "tenant-a", "MES"));
-        Assert.True(ProjectManagementDataPermissionFilterRegistrar.TryRegister(db, typeof(ProjectManagementTaskCommentEntity), user, "tenant-a", "MES"));
+        Assert.True(ProjectManagementDataPermissionFilterRegistrar.TryRegister(db, typeof(ProjectManagementTaskEntity), user, "tenant-a", "SYSTEM"));
+        Assert.True(ProjectManagementDataPermissionFilterRegistrar.TryRegister(db, typeof(ProjectManagementProjectEntity), user, "tenant-a", "SYSTEM"));
+        Assert.True(ProjectManagementDataPermissionFilterRegistrar.TryRegister(db, typeof(ProjectManagementTaskParticipantEntity), user, "tenant-a", "SYSTEM"));
+        Assert.True(ProjectManagementDataPermissionFilterRegistrar.TryRegister(db, typeof(ProjectManagementTaskCommentEntity), user, "tenant-a", "SYSTEM"));
 
         var result = await new ProjectManagementMyWorkService(new TestWorkspaceDatabaseAccessor(db), user).QueryAsync(new ProjectManagementMyWorkQuery());
 
@@ -57,14 +57,14 @@ public sealed class ProjectManagementOverviewRecycleTests
         await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
         await db.Insertable(new[]
         {
-            new ProjectManagementProjectEntity { Id = "deleted-visible", TenantId = "tenant-a", AppCode = "MES", ProjectCode = "A", ProjectName = "A", OwnerUserId = "owner", IsDeleted = true },
-            new ProjectManagementProjectEntity { Id = "deleted-other", TenantId = "tenant-b", AppCode = "MES", ProjectCode = "B", ProjectName = "B", OwnerUserId = "operator", IsDeleted = true }
+            new ProjectManagementProjectEntity { Id = "deleted-visible", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "A", ProjectName = "A", OwnerUserId = "owner", IsDeleted = true },
+            new ProjectManagementProjectEntity { Id = "deleted-other", TenantId = "tenant-b", AppCode = "SYSTEM", ProjectCode = "B", ProjectName = "B", OwnerUserId = "operator", IsDeleted = true }
         }).ExecuteCommandAsync();
-        await db.Insertable(new ProjectManagementProjectMemberEntity { TenantId = "tenant-a", AppCode = "MES", ProjectId = "deleted-visible", UserId = "operator", RoleCode = "Manager" }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementProjectMemberEntity { TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "deleted-visible", UserId = "operator", RoleCode = "Manager" }).ExecuteCommandAsync();
 
         var user = CreateUser("operator");
-        Assert.True(ProjectManagementDataPermissionFilterRegistrar.TryRegister(db, typeof(ProjectManagementProjectEntity), user, "tenant-a", "MES"));
-        Assert.True(ProjectManagementDataPermissionFilterRegistrar.TryRegister(db, typeof(ProjectManagementTaskEntity), user, "tenant-a", "MES"));
+        Assert.True(ProjectManagementDataPermissionFilterRegistrar.TryRegister(db, typeof(ProjectManagementProjectEntity), user, "tenant-a", "SYSTEM"));
+        Assert.True(ProjectManagementDataPermissionFilterRegistrar.TryRegister(db, typeof(ProjectManagementTaskEntity), user, "tenant-a", "SYSTEM"));
         var service = new ProjectManagementRecycleService(new TestWorkspaceDatabaseAccessor(db), user);
         var result = await service.QueryAsync(new ProjectManagementRecycleQuery());
 
@@ -77,11 +77,33 @@ public sealed class ProjectManagementOverviewRecycleTests
     {
         using var db = CreateDb();
         await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
-        await db.Insertable(new ProjectManagementProjectEntity { Id = "deleted-project", TenantId = "tenant-a", AppCode = "MES", ProjectCode = "A", ProjectName = "A", OwnerUserId = "operator", IsDeleted = true }).ExecuteCommandAsync();
-        await db.Insertable(new ProjectManagementTaskEntity { TenantId = "tenant-a", AppCode = "MES", ProjectId = "deleted-project", TaskCode = "T-1", Title = "task", IsDeleted = true }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementProjectEntity { Id = "deleted-project", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "A", ProjectName = "A", OwnerUserId = "operator", IsDeleted = true }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementTaskEntity { TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "deleted-project", TaskCode = "T-1", Title = "task", IsDeleted = true }).ExecuteCommandAsync();
 
         var service = new ProjectManagementRecycleService(new TestWorkspaceDatabaseAccessor(db), CreateUser("operator", PermissionCodes.ProjectManagementProjectPurge));
         await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() => service.PurgeProjectAsync("deleted-project", new ProjectManagementRecyclePurgeRequest(1, "secret", true)));
+    }
+
+    [Fact]
+    public async Task Purge_preview_is_blocked_by_project_scoped_history_reference()
+    {
+        using var db = CreateDb();
+        await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
+        await db.Insertable(new ProjectManagementProjectEntity { Id = "deleted-project", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "A", ProjectName = "A", OwnerUserId = "operator", IsDeleted = true }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementActivityEntity
+        {
+            TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "deleted-project", AggregateType = "Project", AggregateId = "deleted-project",
+            ActivityType = "deleted", TraceId = "trace", ActorUserId = "operator"
+        }).ExecuteCommandAsync();
+
+        var service = new ProjectManagementRecycleService(new TestWorkspaceDatabaseAccessor(db), CreateUser("operator"));
+        var preview = await service.PreviewPurgeProjectAsync("deleted-project", 1);
+
+        Assert.False(preview.CanExecute);
+        Assert.Equal(0, preview.MemberReferenceCount);
+        Assert.Equal(0, preview.MilestoneReferenceCount);
+        Assert.Equal(0, preview.TaskReferenceCount);
+        Assert.Contains("关联记录", preview.BlockingReason);
     }
 
     [Fact]
@@ -89,8 +111,8 @@ public sealed class ProjectManagementOverviewRecycleTests
     {
         using var db = CreateDb();
         await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
-        await db.Insertable(new ProjectManagementProjectEntity { Id = "deleted-project", TenantId = "tenant-a", AppCode = "MES", ProjectCode = "A", ProjectName = "A", OwnerUserId = "operator", IsDeleted = true }).ExecuteCommandAsync();
-        await db.Insertable(new ProjectManagementTaskEntity { Id = "deleted-task", TenantId = "tenant-a", AppCode = "MES", ProjectId = "deleted-project", TaskCode = "T-1", Title = "task", IsDeleted = true }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementProjectEntity { Id = "deleted-project", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "A", ProjectName = "A", OwnerUserId = "operator", IsDeleted = true }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementTaskEntity { Id = "deleted-task", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "deleted-project", TaskCode = "T-1", Title = "task", IsDeleted = true }).ExecuteCommandAsync();
 
         var service = new ProjectManagementRecycleService(new TestWorkspaceDatabaseAccessor(db), CreateUser("operator"));
 
@@ -105,7 +127,7 @@ public sealed class ProjectManagementOverviewRecycleTests
     {
         using var db = CreateDb();
         await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
-        await db.Insertable(new ProjectManagementProjectEntity { Id = "deleted-project", TenantId = "tenant-a", AppCode = "MES", ProjectCode = "A", ProjectName = "A", OwnerUserId = "operator", IsDeleted = true }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementProjectEntity { Id = "deleted-project", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "A", ProjectName = "A", OwnerUserId = "operator", IsDeleted = true }).ExecuteCommandAsync();
 
         var service = new ProjectManagementRecycleService(
             new TestWorkspaceDatabaseAccessor(db),
@@ -124,11 +146,11 @@ public sealed class ProjectManagementOverviewRecycleTests
     {
         using var db = CreateDb();
         await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
-        await db.Insertable(new ProjectManagementProjectEntity { Id = "project-a", TenantId = "tenant-a", AppCode = "MES", ProjectCode = "A", ProjectName = "A", OwnerUserId = "operator" }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementProjectEntity { Id = "project-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "A", ProjectName = "A", OwnerUserId = "operator" }).ExecuteCommandAsync();
         await db.Insertable(new[]
         {
-            new ProjectManagementTaskEntity { Id = "root", TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-a", TaskCode = "T-1", Title = "root", IsDeleted = true, VersionNo = 2 },
-            new ProjectManagementTaskEntity { Id = "child", TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-a", ParentTaskId = "root", TaskCode = "T-2", Title = "child", IsDeleted = true, VersionNo = 2 }
+            new ProjectManagementTaskEntity { Id = "root", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", TaskCode = "T-1", Title = "root", IsDeleted = true, VersionNo = 2 },
+            new ProjectManagementTaskEntity { Id = "child", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", ParentTaskId = "root", TaskCode = "T-2", Title = "child", IsDeleted = true, VersionNo = 2 }
         }).ExecuteCommandAsync();
 
         var service = new ProjectManagementRecycleService(new TestWorkspaceDatabaseAccessor(db), CreateUser("operator"));
@@ -150,7 +172,7 @@ public sealed class ProjectManagementOverviewRecycleTests
     {
         new Claim(AsterErpClaimTypes.UserId, userId),
         new Claim(AsterErpClaimTypes.TenantId, "tenant-a"),
-        new Claim(AsterErpClaimTypes.AppCode, "MES"),
+        new Claim(AsterErpClaimTypes.AppCode, "SYSTEM"),
         permission is null ? new Claim("unused", "unused") : new Claim(AsterErpClaimTypes.PermissionCode, permission)
     }, "test")));
 
