@@ -323,6 +323,7 @@ export interface ProjectManagementTaskQuery {
   dueFrom?: string;
   dueTo?: string;
   includeCompleted?: boolean;
+  labelFilter?: ProjectManagementTaskLabelFilter;
 }
 
 export interface ProjectManagementTaskListItem {
@@ -397,9 +398,35 @@ export interface ProjectManagementTaskBatchUpdateRequest {
 export interface ProjectManagementLabel {
   id: string;
   projectId?: string;
+  scope: "Public" | "Project";
   labelName: string;
   color: string;
   versionNo: number;
+}
+
+export interface ProjectManagementLabelUpsertRequest {
+  labelName: string;
+  color?: string;
+  versionNo?: number;
+}
+
+export interface ProjectManagementTaskLabel {
+  id: string;
+  taskId: string;
+  labelId: string;
+  labelName: string;
+  color: string;
+}
+
+export interface ProjectManagementTaskLabelSetRequest {
+  labelIds: string[];
+  versionNo: number;
+}
+
+// 与后端 ProjectManagementTaskLabelFilter 对齐；任务列表、看板、甘特和导出在后续查询实现中复用此语义。
+export interface ProjectManagementTaskLabelFilter {
+  labelIds: string[];
+  matchMode?: "Any" | "All";
 }
 
 export interface ProjectManagementTaskComment {
@@ -545,6 +572,7 @@ export interface ProjectManagementReportQuery {
   pageSize?: number;
   keyword?: string;
   status?: string;
+  labelFilter?: ProjectManagementTaskLabelFilter;
 }
 
 export type ProjectManagementReportSnapshotFormat = 'csv' | 'xlsx' | 'pdf';

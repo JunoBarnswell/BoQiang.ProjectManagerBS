@@ -33,6 +33,9 @@ public sealed class ProjectManagementTaskService(
         var keyword = NormalizeOptional(query.Keyword);
         var status = NormalizeOptional(query.Status);
         var assignee = NormalizeOptional(query.AssigneeUserId);
+        var labelFilter = ProjectManagementTaskLabelFilterQuery.Normalize(query.LabelFilter);
+        var tenantId = RequireTenantId();
+        var appCode = RequireAppCode();
         EnsureViewProtocol(query);
         ValidateQuery(query, status);
         var taskQuery = databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskEntity>()
@@ -53,6 +56,7 @@ public sealed class ProjectManagementTaskService(
             taskQuery = taskQuery.Where(item => item.DueDate <= query.DueTo);
         if (!query.IncludeCompleted)
             taskQuery = taskQuery.Where(item => item.Status != ProjectManagementDomainRules.TaskDone && item.Status != ProjectManagementDomainRules.TaskCancelled);
+        taskQuery = ProjectManagementTaskLabelFilterQuery.ApplyToTasks(taskQuery, labelFilter, tenantId, appCode);
 
         var total = new RefAsync<int>();
         var orderedQuery = query.SortBy switch

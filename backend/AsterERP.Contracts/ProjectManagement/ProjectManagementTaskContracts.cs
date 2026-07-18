@@ -15,7 +15,8 @@ public sealed record ProjectManagementTaskQuery(
     string? ParentTaskId = null,
     DateTime? DueFrom = null,
     DateTime? DueTo = null,
-    bool IncludeCompleted = true);
+    bool IncludeCompleted = true,
+    ProjectManagementTaskLabelFilter? LabelFilter = null);
 
 public sealed record ProjectManagementTaskUpsertRequest(
     string TaskCode,

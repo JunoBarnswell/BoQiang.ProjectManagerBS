@@ -199,6 +199,9 @@ public sealed class ProjectManagementReportService(
         var pageSize = Math.Clamp(query.PageSize, 1, MaxPageSize);
         var keyword = NormalizeOptional(query.Keyword);
         var status = NormalizeOptional(query.Status);
+        var labelFilter = ProjectManagementTaskLabelFilterQuery.Normalize(query.LabelFilter);
+        var tenantId = RequireTenantId();
+        var appCode = RequireAppCode();
         var db = databaseAccessor.GetCurrentDb();
 
         var projects = db.Queryable<ProjectManagementProjectEntity>()
@@ -215,6 +218,7 @@ public sealed class ProjectManagementReportService(
         {
             projects = projects.Where(item => item.Status == status);
         }
+        projects = ProjectManagementTaskLabelFilterQuery.ApplyToProjects(projects, labelFilter, tenantId, appCode);
 
         var page = await projects
             .OrderBy(item => item.UpdatedTime, OrderByType.Desc)
@@ -226,8 +230,10 @@ public sealed class ProjectManagementReportService(
         }
 
         var projectIds = page.Select(item => item.Id).ToArray();
-        var taskCounts = await db.Queryable<ProjectManagementTaskEntity>()
-            .Where(item => !item.IsDeleted && projectIds.Contains(item.ProjectId))
+        var taskCountsQuery = db.Queryable<ProjectManagementTaskEntity>()
+            .Where(item => !item.IsDeleted && projectIds.Contains(item.ProjectId));
+        taskCountsQuery = ProjectManagementTaskLabelFilterQuery.ApplyToTasks(taskCountsQuery, labelFilter, tenantId, appCode);
+        var taskCounts = await taskCountsQuery
             .GroupBy(item => item.ProjectId)
             .Select(item => new ProjectTaskCount { ProjectId = item.ProjectId, TaskCount = SqlFunc.AggregateCount(item.Id) })
             .ToListAsync(cancellationToken);

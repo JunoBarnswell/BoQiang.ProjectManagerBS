@@ -31,6 +31,7 @@ import {
 import type {
   ProjectManagementTaskCommentUpsertRequest,
   ProjectManagementTaskBatchUpdateRequest,
+  ProjectManagementTaskLabelFilter,
   ProjectManagementTaskReminder,
   ProjectManagementTaskReminderCreateRequest,
   ProjectManagementTaskUpsertRequest,
@@ -49,6 +50,7 @@ import { SavedViewManager } from '../../features/project-management/task-workspa
 import { createTaskMoveRequest } from '../../features/project-management/task-workspace/taskMoveIntent';
 import { TaskWorkspaceBatchCommandPanel } from '../../features/project-management/task-workspace/TaskWorkspaceBatchCommandPanel';
 import { TaskWorkspaceImConversationPanel } from '../../features/project-management/task-workspace/TaskWorkspaceImConversationPanel';
+import { TaskWorkspaceLabelManager } from '../../features/project-management/task-workspace/TaskWorkspaceLabelManager';
 import { TaskWorkspaceProjection } from '../../features/project-management/task-workspace/TaskWorkspaceProjection';
 import { TaskWorkspaceSelectionPanel } from '../../features/project-management/task-workspace/TaskWorkspaceSelectionPanel';
 import { TaskWorkspaceToolbar } from '../../features/project-management/task-workspace/TaskWorkspaceToolbar';
@@ -103,7 +105,11 @@ export function ProjectManagementTaskWorkspacePage() {
   const [openingConversationScope, setOpeningConversationScope] = useState<'project' | 'task' | null>(null);
   const [form, setForm] = useState<ProjectManagementTaskUpsertRequest>(emptyForm);
   const [commentForm, setCommentForm] = useState<ProjectManagementTaskCommentUpsertRequest>({ markdown: '' });
-  const query = useMemo(() => taskWorkspaceStateToQuery(projectId, state), [projectId, state]);
+  const [labelFilter, setLabelFilter] = useState<ProjectManagementTaskLabelFilter>({ labelIds: [], matchMode: 'Any' });
+  const query = useMemo(() => ({
+    ...taskWorkspaceStateToQuery(projectId, state),
+    labelFilter: labelFilter.labelIds.length > 0 ? labelFilter : undefined,
+  }), [labelFilter, projectId, state]);
   const activeView = taskViewMeta[state.viewKey];
 
   useProjectManagementRealtimeConnection('/hubs/system-notification', scope, projectId, scope.isAvailable && Boolean(projectId));
@@ -438,6 +444,16 @@ export function ProjectManagementTaskWorkspacePage() {
           scope="task"
         />
       ) : null}
+      <TaskWorkspaceLabelManager
+        filter={labelFilter}
+        labels={labelsQuery.data?.data ?? []}
+        onFilterChange={(next) => {
+          setLabelFilter(next);
+          setState({ pageIndex: 1 }, { replace: true });
+        }}
+        onChanged={async () => { await queryClient.invalidateQueries({ queryKey: queryKeys.projectManagement.labels(scope, projectId) }); }}
+        projectId={projectId}
+      />
       <SavedViewManager
         onCopy={(view, viewName) => copySavedViewMutation.mutate({ queryJson: view.queryJson, viewKey: view.viewKey, viewName })}
         onDelete={(view) => deleteSavedViewMutation.mutate({ id: view.id, versionNo: view.versionNo })}

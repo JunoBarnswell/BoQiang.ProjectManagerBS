@@ -4,7 +4,8 @@ public sealed record ProjectManagementReportQuery(
     int PageIndex = 1,
     int PageSize = 100,
     string? Keyword = null,
-    string? Status = null);
+    string? Status = null,
+    ProjectManagementTaskLabelFilter? LabelFilter = null);
 
 public sealed record ProjectManagementReportRow(
     string ProjectCode,

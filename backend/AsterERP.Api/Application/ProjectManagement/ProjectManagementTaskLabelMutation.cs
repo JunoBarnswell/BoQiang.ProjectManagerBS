@@ -31,26 +31,35 @@ public sealed class ProjectManagementTaskLabelMutation
         var allowed = labelIds.Count == 0
             ? []
             : await db.Queryable<ProjectManagementLabelEntity>()
-                .Where(label => labelIds.Contains(label.Id) && !label.IsDeleted &&
+                .Where(label => labelIds.Contains(label.Id) && label.TenantId == tenantId && label.AppCode == appCode && !label.IsDeleted &&
                     (label.ProjectId == null || label.ProjectId == task.ProjectId))
                 .ToListAsync(cancellationToken);
         if (allowed.Count != labelIds.Count)
             throw new ValidationException("存在不属于当前项目的标签");
 
-        await db.Updateable<ProjectManagementTaskLabelEntity>()
-            .SetColumns(item => new ProjectManagementTaskLabelEntity
-            {
-                IsDeleted = true,
-                DeletedBy = actorUserId,
-                DeletedTime = now,
-                UpdatedBy = actorUserId,
-                UpdatedTime = now
-            })
-            .Where(item => item.TaskId == task.Id && !item.IsDeleted)
-            .ExecuteCommandAsync(cancellationToken);
+        var current = await db.Queryable<ProjectManagementTaskLabelEntity>()
+            .Where(item => item.TaskId == task.Id && item.TenantId == tenantId && item.AppCode == appCode && !item.IsDeleted)
+            .ToListAsync(cancellationToken);
+        var requested = labelIds.ToHashSet(StringComparer.Ordinal);
+        var removed = current.Where(item => !requested.Contains(item.LabelId)).ToList();
+        foreach (var link in removed)
+        {
+            link.IsDeleted = true;
+            link.DeletedBy = actorUserId;
+            link.DeletedTime = now;
+            link.UpdatedBy = actorUserId;
+            link.UpdatedTime = now;
+            link.VersionNo++;
+        }
+        if (removed.Count > 0)
+        {
+            await db.Updateable(removed)
+                .UpdateColumns(item => new { item.IsDeleted, item.DeletedBy, item.DeletedTime, item.UpdatedBy, item.UpdatedTime, item.VersionNo })
+                .ExecuteCommandAsync(cancellationToken);
+        }
 
-        if (labelIds.Count == 0) return;
-        await db.Insertable(labelIds.Select(labelId => new ProjectManagementTaskLabelEntity
+        var currentIds = current.Select(item => item.LabelId).ToHashSet(StringComparer.Ordinal);
+        var added = labelIds.Where(labelId => !currentIds.Contains(labelId)).Select(labelId => new ProjectManagementTaskLabelEntity
         {
             TenantId = tenantId,
             AppCode = appCode,
@@ -60,6 +69,10 @@ public sealed class ProjectManagementTaskLabelMutation
             VersionNo = 1,
             CreatedBy = actorUserId,
             CreatedTime = now
-        }).ToList()).ExecuteCommandAsync(cancellationToken);
+        }).ToList();
+        if (added.Count > 0)
+        {
+            await db.Insertable(added).ExecuteCommandAsync(cancellationToken);
+        }
     }
 }
