@@ -18,7 +18,7 @@ public sealed class ProjectManagementTaskDependencyService(
     IWorkspaceDatabaseAccessor databaseAccessor,
     ICurrentUser currentUser,
     ProjectManagementAccessPolicy? accessPolicy = null,
-    IProjectManagementActivityWriter? activityWriter = null) : IProjectManagementTaskDependencyService
+    IProjectManagementActivityWriter? activityWriter = null) : IProjectManagementTaskDependencyService, IProjectManagementTaskTemplateDependencyCommandService
 {
     private const string FinishToStart = "FinishToStart";
     private const string ForcedStartReasonPrefix = "已强制开始：";
@@ -51,6 +51,29 @@ public sealed class ProjectManagementTaskDependencyService(
         if (request.Dependencies is null || request.Dependencies.Count == 0 || request.Dependencies.Count > MaxBatchSize)
             throw new ValidationException($"依赖批量导入数量必须在 1 到 {MaxBatchSize} 之间");
         return await CreateInternalAsync(projectId, request.Dependencies, cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<ProjectManagementTaskDependencyResponse>> CreateBatchInTransactionAsync(ProjectManagementTaskTemplateDependencyCapability capability, string projectId, ProjectManagementTaskDependencyBatchCreateRequest request, CancellationToken cancellationToken = default)
+    {
+        if (!ReferenceEquals(capability, ProjectManagementTaskTemplateDependencyCapability.Instance)) throw new InvalidOperationException("任务模板依赖命令缺少内部 capability");
+        if (request.Dependencies is null || request.Dependencies.Count == 0 || request.Dependencies.Count > MaxBatchSize) throw new ValidationException($"依赖批量导入数量必须在 1 到 {MaxBatchSize} 之间");
+        await EnsureProjectAsync(projectId, cancellationToken);
+        await Policy().EnsureCanManageDependenciesAsync(projectId, cancellationToken);
+        var candidates = await NormalizeCandidatesAsync(projectId, request.Dependencies, cancellationToken);
+        var existing = await LoadActiveDependenciesAsync(projectId, cancellationToken);
+        EnsureGraphSize(existing.Count + candidates.Count);
+        ValidateNewEdges(existing, candidates, cancellationToken);
+        var now = DateTime.UtcNow;
+        var userId = RequireUserId();
+        var created = candidates.Select(item => new ProjectManagementTaskDependencyEntity
+        {
+            TenantId = RequireTenantId(), AppCode = RequireAppCode(), ProjectId = projectId, PredecessorTaskId = item.PredecessorTaskId, SuccessorTaskId = item.SuccessorTaskId,
+            DependencyType = item.DependencyType, LagMinutes = item.LagMinutes, VersionNo = 1, CreatedBy = userId, CreatedTime = now
+        }).ToList();
+        await databaseAccessor.GetCurrentDb().Insertable(created).ExecuteCommandAsync(cancellationToken);
+        await RefreshBlockedStatesCoreAsync(projectId, cancellationToken);
+        foreach (var entity in created) await WriteAuditAsync(entity, "task.dependency.created", $"创建任务依赖 {entity.PredecessorTaskId} -> {entity.SuccessorTaskId}", cancellationToken);
+        return created.Select(Map).ToList();
     }
 
     public async Task DeleteAsync(string projectId, string id, long versionNo, CancellationToken cancellationToken = default)
