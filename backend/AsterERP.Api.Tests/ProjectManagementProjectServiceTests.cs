@@ -24,6 +24,7 @@ public sealed class ProjectManagementProjectServiceTests
         Assert.Contains(controller.GetMethod(nameof(ProjectManagementProjectsController.UpdateAsync))!.GetCustomAttributes(typeof(PermissionAttribute), true), attribute => ((PermissionAttribute)attribute).Code == PermissionCodes.ProjectManagementProjectEdit);
         Assert.Contains(controller.GetMethod(nameof(ProjectManagementProjectsController.DeleteAsync))!.GetCustomAttributes(typeof(PermissionAttribute), true), attribute => ((PermissionAttribute)attribute).Code == PermissionCodes.ProjectManagementProjectDelete);
         Assert.Contains(controller.GetMethod(nameof(ProjectManagementProjectsController.ArchiveAsync))!.GetCustomAttributes(typeof(PermissionAttribute), true), attribute => ((PermissionAttribute)attribute).Code == PermissionCodes.ProjectManagementProjectArchive);
+        Assert.Contains(controller.GetMethod(nameof(ProjectManagementProjectsController.RestoreAsync))!.GetCustomAttributes(typeof(PermissionAttribute), true), attribute => ((PermissionAttribute)attribute).Code == PermissionCodes.ProjectManagementProjectRestore);
     }
 
     [Fact]
@@ -57,7 +58,7 @@ public sealed class ProjectManagementProjectServiceTests
         var updated = await service.UpdateAsync(created.Id, new ProjectManagementProjectUpsertRequest(
             "PM-001", "项目一（更新）", VersionNo: created.VersionNo));
         Assert.Equal(2, updated.VersionNo);
-        await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() =>
+        await Assert.ThrowsAsync<ProjectManagementProjectVersionConflictException>(() =>
             service.UpdateAsync(created.Id, new ProjectManagementProjectUpsertRequest("PM-001", "旧版本", VersionNo: 1)));
 
         await service.DeleteAsync(created.Id, updated.VersionNo);
@@ -201,12 +202,103 @@ public sealed class ProjectManagementProjectServiceTests
         var service = new ProjectManagementProjectService(new TestWorkspaceDatabaseAccessor(db), CreateUser("operator", "tenant-a", "SYSTEM"));
         var project = await service.CreateAsync(new ProjectManagementProjectUpsertRequest("PM-ARCHIVE", "归档项目"));
 
-        await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() => service.ArchiveAsync(project.Id, new ProjectManagementProjectArchiveRequest(project.VersionNo + 1)));
+        await Assert.ThrowsAsync<ProjectManagementProjectVersionConflictException>(() => service.ArchiveAsync(project.Id, new ProjectManagementProjectArchiveRequest(project.VersionNo + 1)));
         var archived = await service.ArchiveAsync(project.Id, new ProjectManagementProjectArchiveRequest(project.VersionNo));
 
         Assert.Equal("Archived", archived.Status);
         await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() => service.UpdateAsync(archived.Id, new ProjectManagementProjectUpsertRequest("PM-ARCHIVE", "不应更新", Status: "Archived", VersionNo: archived.VersionNo)));
     }
+
+    [Fact]
+    public async Task Project_version_conflict_returns_server_local_and_conflicting_fields_with_http_409()
+    {
+        using var db = CreateDb("conflict");
+        await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
+        var user = CreateUser("operator", "tenant-a", "SYSTEM");
+        var service = new ProjectManagementProjectService(new TestWorkspaceDatabaseAccessor(db), user);
+        var created = await service.CreateAsync(new ProjectManagementProjectUpsertRequest("PM-CONFLICT", "初始名称"));
+        await service.UpdateAsync(created.Id, new ProjectManagementProjectUpsertRequest("PM-CONFLICT", "服务端名称", VersionNo: created.VersionNo));
+        var controller = new ProjectManagementProjectsController(service)
+        {
+            ControllerContext = new Microsoft.AspNetCore.Mvc.ControllerContext
+            {
+                HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext()
+            }
+        };
+
+        var result = await controller.UpdateAsync(
+            created.Id,
+            new ProjectManagementProjectUpsertRequest("PM-CONFLICT", "本地名称", VersionNo: created.VersionNo),
+            CancellationToken.None);
+
+        var response = Assert.IsType<Microsoft.AspNetCore.Mvc.ObjectResult>(result);
+        Assert.Equal(Microsoft.AspNetCore.Http.StatusCodes.Status409Conflict, response.StatusCode);
+        var envelope = Assert.IsType<ApiResult<ProjectManagementProjectVersionConflictResponse>>(response.Value);
+        Assert.Equal("服务端名称", envelope.Data!.ServerValues.ProjectName);
+        Assert.Equal("本地名称", envelope.Data.LocalValues.ProjectName);
+        var projectNameConflict = Assert.Single(envelope.Data.FieldConflicts, item => item.Field == "ProjectName");
+        Assert.Equal("服务端名称", projectNameConflict.ServerValue);
+        Assert.Equal("本地名称", projectNameConflict.LocalValue);
+        Assert.Contains(envelope.Data.FieldConflicts, item => item.Field == "VersionNo");
+    }
+
+    [Fact]
+    public async Task Project_delete_hides_normal_pages_and_restore_preserves_independent_child_deletions()
+    {
+        using var db = CreateDb("restore-visibility");
+        await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
+        var user = CreateUser("operator", "tenant-a", "SYSTEM");
+        var accessor = new TestWorkspaceDatabaseAccessor(db);
+        var service = new ProjectManagementProjectService(accessor, user);
+        var project = await service.CreateAsync(new ProjectManagementProjectUpsertRequest("PM-RESTORE", "恢复语义"));
+        await db.Insertable(new[]
+        {
+            new ProjectManagementMilestoneEntity { Id = "milestone-active", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = project.Id, MilestoneName = "保留里程碑", Status = "Planned" },
+            new ProjectManagementMilestoneEntity { Id = "milestone-deleted", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = project.Id, MilestoneName = "独立删除里程碑", Status = "Planned", IsDeleted = true }
+        }).ExecuteCommandAsync();
+        await db.Insertable(new[]
+        {
+            new ProjectManagementTaskEntity { Id = "task-active", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = project.Id, TaskCode = "ACTIVE", Title = "保留任务", Status = "Todo" },
+            new ProjectManagementTaskEntity { Id = "task-deleted", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = project.Id, TaskCode = "DELETED", Title = "独立删除任务", Status = "Todo", IsDeleted = true }
+        }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementProjectMemberEntity
+        {
+            Id = "member-deleted", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = project.Id,
+            UserId = "former-member", RoleCode = "Member", IsActive = false, IsDeleted = true
+        }).ExecuteCommandAsync();
+        var tasks = new ProjectManagementTaskService(accessor, user);
+        var milestones = new ProjectManagementMilestoneService(accessor, user);
+
+        Assert.Single((await service.QueryAsync(new ProjectManagementProjectQuery())).Items);
+        Assert.Single((await tasks.QueryAsync(new ProjectManagementTaskQuery(project.Id))).Items);
+        Assert.Single((await milestones.QueryAsync(project.Id)).Items);
+
+        await service.DeleteAsync(project.Id, project.VersionNo);
+
+        Assert.Empty((await service.QueryAsync(new ProjectManagementProjectQuery())).Items);
+        await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.NotFoundException>(() => tasks.QueryAsync(new ProjectManagementTaskQuery(project.Id)));
+        await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.NotFoundException>(() => milestones.QueryAsync(project.Id));
+
+        var restored = await service.RestoreAsync(project.Id, 2);
+
+        Assert.Single((await service.QueryAsync(new ProjectManagementProjectQuery())).Items);
+        Assert.Single((await tasks.QueryAsync(new ProjectManagementTaskQuery(project.Id))).Items);
+        Assert.Single((await milestones.QueryAsync(project.Id)).Items);
+        Assert.True((await db.Queryable<ProjectManagementProjectMemberEntity>().SingleAsync(item => item.Id == "member-deleted")).IsDeleted);
+        Assert.True((await db.Queryable<ProjectManagementMilestoneEntity>().SingleAsync(item => item.Id == "milestone-deleted")).IsDeleted);
+        Assert.True((await db.Queryable<ProjectManagementTaskEntity>().SingleAsync(item => item.Id == "task-deleted")).IsDeleted);
+
+        var duplicateRestore = await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() => service.RestoreAsync(project.Id, restored.VersionNo));
+        Assert.Equal("项目未删除，不能恢复", duplicateRestore.Message);
+        Assert.Equal(restored.VersionNo, (await db.Queryable<ProjectManagementProjectEntity>().SingleAsync(item => item.Id == project.Id)).VersionNo);
+    }
+
+    private static SqlSugarClient CreateDb(string scenario) => new(new ConnectionConfig
+    {
+        ConnectionString = $"Data Source=file:project-management-project-{scenario}-{Guid.NewGuid():N};Mode=Memory;Cache=Shared",
+        DbType = DbType.Sqlite,
+        IsAutoCloseConnection = false
+    });
 
     private static FixedAsterErpCurrentUser CreateUser(string userId, string tenantId, string appCode)
     {

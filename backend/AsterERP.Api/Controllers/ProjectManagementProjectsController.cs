@@ -21,24 +21,61 @@ public sealed class ProjectManagementProjectsController(IProjectManagementProjec
 
     [HttpPut("{id}")]
     [Permission(PermissionCodes.ProjectManagementProjectEdit)]
-    public async Task<IActionResult> UpdateAsync(string id, [FromBody] ProjectManagementProjectUpsertRequest request, CancellationToken cancellationToken) =>
-        ApiOk(await service.UpdateAsync(id, request, cancellationToken));
+    public async Task<IActionResult> UpdateAsync(string id, [FromBody] ProjectManagementProjectUpsertRequest request, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return ApiOk(await service.UpdateAsync(id, request, cancellationToken));
+        }
+        catch (ProjectManagementProjectVersionConflictException exception)
+        {
+            return ApiConflict(exception);
+        }
+    }
 
     [HttpPost("{id}/archive")]
     [Permission(PermissionCodes.ProjectManagementProjectArchive)]
-    public async Task<IActionResult> ArchiveAsync(string id, [FromBody] ProjectManagementProjectArchiveRequest request, CancellationToken cancellationToken) =>
-        ApiOk(await service.ArchiveAsync(id, request, cancellationToken));
+    public async Task<IActionResult> ArchiveAsync(string id, [FromBody] ProjectManagementProjectArchiveRequest request, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return ApiOk(await service.ArchiveAsync(id, request, cancellationToken));
+        }
+        catch (ProjectManagementProjectVersionConflictException exception)
+        {
+            return ApiConflict(exception);
+        }
+    }
 
     [HttpPost("{id}/restore")]
     [Permission(PermissionCodes.ProjectManagementProjectRestore)]
-    public async Task<IActionResult> RestoreAsync(string id, [FromQuery] long versionNo, CancellationToken cancellationToken) =>
-        ApiOk(await service.RestoreAsync(id, versionNo, cancellationToken));
+    public async Task<IActionResult> RestoreAsync(string id, [FromQuery] long versionNo, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return ApiOk(await service.RestoreAsync(id, versionNo, cancellationToken));
+        }
+        catch (ProjectManagementProjectVersionConflictException exception)
+        {
+            return ApiConflict(exception);
+        }
+    }
 
     [HttpDelete("{id}")]
     [Permission(PermissionCodes.ProjectManagementProjectDelete)]
     public async Task<IActionResult> DeleteAsync(string id, [FromQuery] long versionNo, CancellationToken cancellationToken)
     {
-        await service.DeleteAsync(id, versionNo, cancellationToken);
-        return ApiOk(new { id });
+        try
+        {
+            await service.DeleteAsync(id, versionNo, cancellationToken);
+            return ApiOk(new { id });
+        }
+        catch (ProjectManagementProjectVersionConflictException exception)
+        {
+            return ApiConflict(exception);
+        }
     }
+
+    private IActionResult ApiConflict(ProjectManagementProjectVersionConflictException exception) =>
+        StatusCode(StatusCodes.Status409Conflict, ApiResultFactory.Ok(exception.Conflict, HttpContext.TraceIdentifier, exception.Message));
 }
