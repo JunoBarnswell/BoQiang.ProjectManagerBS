@@ -49,6 +49,9 @@ const ProjectManagementMembersPage = lazy(() => import('../../pages/project-mana
 const ProjectManagementMilestonesPage = lazy(() => import('../../pages/project-management/ProjectManagementMilestonesPage').then((module) => ({ default: module.ProjectManagementMilestonesPage })));
 const ProjectManagementMyWorkPage = lazy(() => import('../../pages/project-management/ProjectManagementMyWorkPage').then((module) => ({ default: module.ProjectManagementMyWorkPage })));
 const ProjectManagementRecycleBinPage = lazy(() => import('../../pages/project-management/ProjectManagementRecycleBinPage').then((module) => ({ default: module.ProjectManagementRecycleBinPage })));
+const ProjectManagementReportsPage = lazy(() => import('../../pages/project-management/ProjectManagementReportsPage').then((module) => ({ default: module.ProjectManagementReportsPage })));
+const ProjectManagementSearchPage = lazy(() => import('../../pages/project-management/ProjectManagementSearchPage').then((module) => ({ default: module.ProjectManagementSearchPage })));
+const ProjectManagementSyncPage = lazy(() => import('../../pages/project-management/ProjectManagementSyncPage').then((module) => ({ default: module.ProjectManagementSyncPage })));
 
 const projectManagementRoutePaths = [
   'projects',
@@ -64,6 +67,8 @@ const projectManagementRoutePaths = [
   'projects/:projectId/milestones',
   'projects/:projectId/reports',
   'projects/:projectId/settings',
+  'project-search',
+  'project-sync',
   'project-recycle-bin',
   'project-data-space',
   'project-audit-center'
@@ -80,8 +85,8 @@ const projectManagementRoutes: RouteObject[] = projectManagementRoutePaths.map((
     path: `/${path}`
   }),
   element: (
-    <PermissionRoute permissionCode={path === 'project-audit-center' ? 'project-management:audit:view' : path.includes('projects/:projectId') ? 'project-management:task:view' : 'project-management:project:view'}>
-      {lazyPage(path === 'project-data-space' ? <ProjectManagementDataSpacePage /> : path === 'project-audit-center' ? <ProjectManagementAuditPage /> : path === 'my-work' ? <ProjectManagementMyWorkPage /> : path === 'project-recycle-bin' ? <ProjectManagementRecycleBinPage /> : path === 'projects/:projectId/overview' ? <ProjectManagementOverviewPage /> : path === 'projects/:projectId/milestones' ? <ProjectManagementMilestonesPage /> : path === 'projects/:projectId/members' ? <ProjectManagementMembersPage /> : path.includes('projects/:projectId') ? <ProjectManagementTaskWorkspacePage /> : <ProjectManagementPage />)}
+    <PermissionRoute permissionCode={path === 'project-audit-center' ? 'project-management:audit:view' : path === 'project-sync' ? 'project-management:sync:export' : path === 'projects/:projectId/reports' ? 'project-management:report:export' : path.includes('projects/:projectId') ? 'project-management:task:view' : 'project-management:project:view'}>
+      {lazyPage(path === 'project-data-space' ? <ProjectManagementDataSpacePage /> : path === 'project-sync' ? <ProjectManagementSyncPage /> : path === 'project-search' ? <ProjectManagementSearchPage /> : path === 'project-audit-center' ? <ProjectManagementAuditPage /> : path === 'my-work' ? <ProjectManagementMyWorkPage /> : path === 'project-recycle-bin' ? <ProjectManagementRecycleBinPage /> : path === 'projects/:projectId/overview' ? <ProjectManagementOverviewPage /> : path === 'projects/:projectId/milestones' ? <ProjectManagementMilestonesPage /> : path === 'projects/:projectId/members' ? <ProjectManagementMembersPage /> : path === 'projects/:projectId/reports' ? <ProjectManagementReportsPage /> : path.includes('projects/:projectId') ? <ProjectManagementTaskWorkspacePage /> : <ProjectManagementPage />)}
     </PermissionRoute>
   )
 }));
@@ -282,8 +287,8 @@ const fixedApplicationWorkspaceRoutes: RouteObject[] = [
     path === 'my-work' ? 'breadcrumbs.projectManagementMyWork' : 'breadcrumbs.projectManagement',
     path === 'my-work' ? 'nav.projectManagementMyWork' : 'nav.projectManagement',
     'activity',
-    path.includes('projects/:projectId') ? 'project-management:task:view' : 'project-management:project:view',
-    path === 'project-data-space' ? <ProjectManagementDataSpacePage /> : path === 'project-audit-center' ? <ProjectManagementAuditPage /> : path === 'my-work' ? <ProjectManagementMyWorkPage /> : path === 'project-recycle-bin' ? <ProjectManagementRecycleBinPage /> : path === 'projects/:projectId/overview' ? <ProjectManagementOverviewPage /> : path === 'projects/:projectId/milestones' ? <ProjectManagementMilestonesPage /> : path === 'projects/:projectId/members' ? <ProjectManagementMembersPage /> : path.includes('projects/:projectId') ? <ProjectManagementTaskWorkspacePage /> : <ProjectManagementPage />
+    path === 'project-audit-center' ? 'project-management:audit:view' : path === 'project-sync' ? 'project-management:sync:export' : path === 'projects/:projectId/reports' ? 'project-management:report:export' : path.includes('projects/:projectId') ? 'project-management:task:view' : 'project-management:project:view',
+    path === 'project-data-space' ? <ProjectManagementDataSpacePage /> : path === 'project-sync' ? <ProjectManagementSyncPage /> : path === 'project-search' ? <ProjectManagementSearchPage /> : path === 'project-audit-center' ? <ProjectManagementAuditPage /> : path === 'my-work' ? <ProjectManagementMyWorkPage /> : path === 'project-recycle-bin' ? <ProjectManagementRecycleBinPage /> : path === 'projects/:projectId/overview' ? <ProjectManagementOverviewPage /> : path === 'projects/:projectId/milestones' ? <ProjectManagementMilestonesPage /> : path === 'projects/:projectId/members' ? <ProjectManagementMembersPage /> : path === 'projects/:projectId/reports' ? <ProjectManagementReportsPage /> : path.includes('projects/:projectId') ? <ProjectManagementTaskWorkspacePage /> : <ProjectManagementPage />
   ))
 ];
 
