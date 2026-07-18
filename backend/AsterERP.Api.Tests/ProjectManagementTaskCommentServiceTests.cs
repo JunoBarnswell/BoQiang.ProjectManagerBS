@@ -68,6 +68,7 @@ public sealed class ProjectManagementTaskCommentServiceTests
         await db.Insertable(new ProjectManagementTaskEntity { Id = "task-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", TaskCode = "T-1", Title = "Task", CreatedBy = "operator", CreatedTime = DateTime.UtcNow }).ExecuteCommandAsync();
         await db.Insertable(new[]
         {
+            new SystemUserEntity { Id = "operator", UserName = "operator", DisplayName = "Project Owner", Status = "Enabled" },
             new SystemUserEntity { Id = "user-a", UserName = "alice", DisplayName = "Alice 项目成员", Status = "Enabled" },
             new SystemUserEntity { Id = "user-b", UserName = "bob", DisplayName = "Bob 已停用", Status = "Disabled" },
             new SystemUserEntity { Id = "user-c", UserName = "carol", DisplayName = "Carol 非成员", Status = "Enabled" },
@@ -85,8 +86,9 @@ public sealed class ProjectManagementTaskCommentServiceTests
         var service = new ProjectManagementTaskCommentService(new TestWorkspaceDatabaseAccessor(db), CreateUser());
         var paged = await service.QueryMentionCandidatesAsync("task-a", new ProjectManagementTaskCommentMentionCandidateQuery(PageSize: 1));
         var result = await service.QueryMentionCandidatesAsync("task-a", new ProjectManagementTaskCommentMentionCandidateQuery("Alice", PageIndex: 0, PageSize: 200));
+        var ownerResult = await service.QueryMentionCandidatesAsync("task-a", new ProjectManagementTaskCommentMentionCandidateQuery("Project Owner", PageIndex: 0, PageSize: 200));
 
-        Assert.Equal(2, paged.Total);
+        Assert.Equal(3, paged.Total);
         Assert.Single(paged.Items);
         Assert.Equal("user-e", paged.Items[0].UserId);
         Assert.Equal(1, result.Total);
@@ -94,6 +96,10 @@ public sealed class ProjectManagementTaskCommentServiceTests
         Assert.Equal("user-a", candidate.UserId);
         Assert.Equal("alice", candidate.UserName);
         Assert.Equal("Alice 项目成员", candidate.DisplayName);
+        var ownerCandidate = Assert.Single(ownerResult.Items);
+        Assert.Equal(1, ownerResult.Total);
+        Assert.Equal("operator", ownerCandidate.UserId);
+        Assert.Equal("Project Owner", ownerCandidate.DisplayName);
         var outsider = new ProjectManagementTaskCommentService(new TestWorkspaceDatabaseAccessor(db), CreateUser("outsider"));
         await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() => outsider.QueryMentionCandidatesAsync("task-a", new ProjectManagementTaskCommentMentionCandidateQuery()));
     }
@@ -137,6 +143,57 @@ public sealed class ProjectManagementTaskCommentServiceTests
         var service = new ProjectManagementTaskCommentService(new TestWorkspaceDatabaseAccessor(db), CreateUser());
         await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() => service.CreateAsync("task-a", new ProjectManagementTaskCommentUpsertRequest("blocked")));
         Assert.Empty(await service.QueryAsync("task-a"));
+    }
+
+    [Fact]
+    public async Task Mentions_keep_snapshots_incrementally_update_and_publish_one_idempotent_notification()
+    {
+        using var db = new SqlSugarClient(new ConnectionConfig { ConnectionString = $"Data Source=file:project-management-comment-mention-{Guid.NewGuid():N};Mode=Memory;Cache=Shared", DbType = DbType.Sqlite, IsAutoCloseConnection = false });
+        await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
+        db.CodeFirst.InitTables<SystemUserEntity>();
+        await db.Insertable(new[]
+        {
+            new SystemUserEntity { Id = "user-a", UserName = "alice", DisplayName = "Alice", Status = "Enabled" },
+            new SystemUserEntity { Id = "user-b", UserName = "bob", DisplayName = "Bob Disabled", Status = "Disabled" },
+            new SystemUserEntity { Id = "user-c", UserName = "carol", DisplayName = "Carol Other Project", Status = "Enabled" }
+        }).ExecuteCommandAsync();
+        await db.Insertable(new[]
+        {
+            new ProjectManagementProjectEntity { Id = "project-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "A", ProjectName = "A", OwnerUserId = "operator" },
+            new ProjectManagementProjectEntity { Id = "project-b", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "B", ProjectName = "B", OwnerUserId = "operator" }
+        }).ExecuteCommandAsync();
+        await db.Insertable(new[]
+        {
+            new ProjectManagementProjectMemberEntity { TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", UserId = "user-a", IsActive = true },
+            new ProjectManagementProjectMemberEntity { TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", UserId = "user-b", IsActive = true },
+            new ProjectManagementProjectMemberEntity { TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-b", UserId = "user-c", IsActive = true }
+        }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementTaskEntity { Id = "task-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", TaskCode = "T-1", Title = "Task", CreatedBy = "operator" }).ExecuteCommandAsync();
+
+        var notificationPublisher = new ProjectManagementNotificationService(new TestWorkspaceDatabaseAccessor(db), CreateUser());
+        var service = new ProjectManagementTaskCommentService(new TestWorkspaceDatabaseAccessor(db), CreateUser(), notificationPublisher: notificationPublisher);
+        var created = await service.CreateAsync("task-a", new ProjectManagementTaskCommentUpsertRequest("hello @alice", MentionUserIds: ["user-a"]));
+        Assert.Equal("Alice", Assert.Single(created.Mentions).DisplayName);
+
+        var recipientNotifications = new ProjectManagementNotificationService(new TestWorkspaceDatabaseAccessor(db), CreateUser("user-a"));
+        Assert.Single((await recipientNotifications.QueryAsync(new ProjectManagementNotificationQuery())).Items);
+        await notificationPublisher.PublishAsync(new ProjectManagementNotification("tenant-a", "SYSTEM", "task.comment.mentioned", "user-a", "任务评论提及", "重复", $"/projects/project-a/tasks?selectedTaskId=task-a", $"mention:{created.Id}:user-a", "project-a", "task-a"));
+        Assert.Single((await recipientNotifications.QueryAsync(new ProjectManagementNotificationQuery())).Items);
+
+        await db.Updateable<SystemUserEntity>().SetColumns(user => new SystemUserEntity { DisplayName = "Alice Renamed" }).Where(user => user.Id == "user-a").ExecuteCommandAsync();
+        var snapshot = Assert.Single(await service.QueryAsync("task-a"));
+        Assert.Equal("Alice", Assert.Single(snapshot.Mentions).DisplayName);
+
+        var removed = await service.UpdateAsync("task-a", created.Id, new ProjectManagementTaskCommentUpsertRequest("removed", VersionNo: created.VersionNo));
+        Assert.Empty(removed.Mentions);
+        var readded = await service.UpdateAsync("task-a", created.Id, new ProjectManagementTaskCommentUpsertRequest("readded", MentionUserIds: ["user-a"], VersionNo: removed.VersionNo));
+        Assert.Equal("Alice Renamed", Assert.Single(readded.Mentions).DisplayName);
+        Assert.Single((await recipientNotifications.QueryAsync(new ProjectManagementNotificationQuery())).Items);
+
+        await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() => service.CreateAsync("task-a", new ProjectManagementTaskCommentUpsertRequest("disabled", MentionUserIds: ["user-b"])));
+        await db.Updateable<ProjectManagementProjectMemberEntity>().SetColumns(member => new ProjectManagementProjectMemberEntity { IsActive = false }).Where(member => member.ProjectId == "project-a" && member.UserId == "user-a").ExecuteCommandAsync();
+        await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() => service.CreateAsync("task-a", new ProjectManagementTaskCommentUpsertRequest("removed", MentionUserIds: ["user-a"])));
+        await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() => service.CreateAsync("task-a", new ProjectManagementTaskCommentUpsertRequest("cross project", MentionUserIds: ["user-c"])));
     }
 
     [Fact]

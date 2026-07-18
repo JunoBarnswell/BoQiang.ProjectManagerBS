@@ -61,11 +61,16 @@ public sealed class ProjectManagementTaskCommentService(
         var tenantId = Tenant();
         var appCode = App();
         var db = databaseAccessor.GetCurrentDb();
+        var projectOwnerUserId = (await db.Queryable<ProjectManagementProjectEntity>()
+            .Where(project => project.Id == task.ProjectId && project.TenantId == tenantId && project.AppCode == appCode && !project.IsDeleted)
+            .Select(project => project.OwnerUserId)
+            .Take(1)
+            .ToListAsync(cancellationToken)).FirstOrDefault();
         var candidates = db.Queryable<SystemUserEntity>()
             .Where(user =>
                 !user.IsDeleted &&
                 user.Status == "Enabled" &&
-                SqlFunc.Subqueryable<ProjectManagementProjectMemberEntity>()
+                (user.Id == projectOwnerUserId || SqlFunc.Subqueryable<ProjectManagementProjectMemberEntity>()
                     .Where(member =>
                         member.ProjectId == task.ProjectId &&
                         member.TenantId == tenantId &&
@@ -73,7 +78,7 @@ public sealed class ProjectManagementTaskCommentService(
                         member.UserId == user.Id &&
                         member.IsActive &&
                         !member.IsDeleted)
-                    .Any());
+                    .Any()));
 
         if (!string.IsNullOrWhiteSpace(keyword))
         {
@@ -109,19 +114,20 @@ public sealed class ProjectManagementTaskCommentService(
         var markdown = NormalizeMarkdown(request.Markdown);
         await EnsureParentAsync(task, request.ParentCommentId, cancellationToken);
         var mentions = NormalizeMentions(request.MentionUserIds);
-        await EnsureMentionsAsync(task.ProjectId, mentions, cancellationToken);
+        var mentionSnapshots = await ResolveMentionSnapshotsAsync(task.ProjectId, mentions, cancellationToken);
         var now = DateTime.UtcNow;
         var entity = new ProjectManagementTaskCommentEntity
         {
             TenantId = Tenant(), AppCode = App(), ProjectId = task.ProjectId, TaskId = task.Id,
             ParentCommentId = Optional(request.ParentCommentId), Markdown = markdown,
-            MentionUserIdsJson = JsonSerializer.Serialize(mentions), AuthorUserId = User(),
+            MentionUserIdsJson = JsonSerializer.Serialize(mentionSnapshots.Select(item => item.UserId)),
+            Remark = SerializeMentionSnapshots(mentionSnapshots), AuthorUserId = User(),
             CreatedBy = User(), CreatedTime = now, VersionNo = 1
         };
         await ProjectManagementMutationTransaction.RunAsync(databaseAccessor.GetCurrentDb(), async () =>
         {
             await databaseAccessor.GetCurrentDb().Insertable(entity).ExecuteCommandAsync(cancellationToken);
-            await PublishMentionsAsync(task, entity, mentions, cancellationToken);
+            await PublishMentionsAsync(task, entity, mentionSnapshots.Select(item => item.UserId).ToList(), cancellationToken);
             await WriteActivityAsync(task, entity, "comment.created", "新增任务评论", CreateChanges(null, entity), now, cancellationToken);
         });
         await PublishInvalidationAsync(task, entity, "comment.created", cancellationToken);
@@ -140,10 +146,16 @@ public sealed class ProjectManagementTaskCommentService(
         var before = CommentActivitySnapshot.From(entity);
         await EnsureParentAsync(task, request.ParentCommentId, cancellationToken, entity.Id);
         var mentions = NormalizeMentions(request.MentionUserIds);
-        await EnsureMentionsAsync(task.ProjectId, mentions, cancellationToken);
+        var mentionSnapshots = await ResolveMentionSnapshotsAsync(task.ProjectId, mentions, cancellationToken);
+        var previousMentions = DeserializeMentionUserIds(entity.MentionUserIdsJson).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var addedMentions = mentionSnapshots
+            .Select(item => item.UserId)
+            .Where(userId => !previousMentions.Contains(userId))
+            .ToList();
         entity.Markdown = NormalizeMarkdown(request.Markdown);
         entity.ParentCommentId = Optional(request.ParentCommentId);
-        entity.MentionUserIdsJson = JsonSerializer.Serialize(mentions);
+        entity.MentionUserIdsJson = JsonSerializer.Serialize(mentionSnapshots.Select(item => item.UserId));
+        entity.Remark = SerializeMentionSnapshots(mentionSnapshots);
         entity.EditedTime = DateTime.UtcNow;
         entity.VersionNo++;
         entity.UpdatedBy = User();
@@ -151,7 +163,7 @@ public sealed class ProjectManagementTaskCommentService(
         await ProjectManagementMutationTransaction.RunAsync(db, async () =>
         {
             await db.Updateable(entity).ExecuteCommandAsync(cancellationToken);
-            await PublishMentionsAsync(task, entity, mentions, cancellationToken);
+            await PublishMentionsAsync(task, entity, addedMentions, cancellationToken);
             await WriteActivityAsync(task, entity, "comment.updated", "编辑任务评论", CreateChanges(before, entity), entity.UpdatedTime ?? DateTime.UtcNow, cancellationToken);
         });
         await PublishInvalidationAsync(task, entity, "comment.updated", cancellationToken);
@@ -214,22 +226,36 @@ public sealed class ProjectManagementTaskCommentService(
             throw new ValidationException("父评论不存在或不属于当前任务");
     }
 
-    private async Task EnsureMentionsAsync(string projectId, IReadOnlyList<string> mentions, CancellationToken cancellationToken)
+    private async Task<IReadOnlyList<MentionSnapshot>> ResolveMentionSnapshotsAsync(string projectId, IReadOnlyList<string> mentions, CancellationToken cancellationToken)
     {
-        if (mentions.Count == 0) return;
-        var activeMembers = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementProjectMemberEntity>()
-            .Where(item => item.ProjectId == projectId && item.IsActive && !item.IsDeleted && mentions.Contains(item.UserId))
+        if (mentions.Count == 0) return [];
+        var db = databaseAccessor.GetCurrentDb();
+        var activeMembers = await db.Queryable<ProjectManagementProjectMemberEntity>()
+            .Where(item => item.ProjectId == projectId && item.TenantId == Tenant() && item.AppCode == App() && item.IsActive && !item.IsDeleted && mentions.Contains(item.UserId))
             .Select(item => item.UserId)
             .ToListAsync(cancellationToken);
-        if (activeMembers.Count != mentions.Count) throw new ValidationException("只能提及当前项目的有效成员");
+        var projectOwnerUserId = (await db.Queryable<ProjectManagementProjectEntity>()
+            .Where(item => item.Id == projectId && item.TenantId == Tenant() && item.AppCode == App() && !item.IsDeleted)
+            .Select(item => item.OwnerUserId)
+            .Take(1)
+            .ToListAsync(cancellationToken)).FirstOrDefault();
+        var validMemberIds = activeMembers.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (!string.IsNullOrWhiteSpace(projectOwnerUserId)) validMemberIds.Add(projectOwnerUserId);
+        var users = await db.Queryable<SystemUserEntity>()
+            .Where(user => mentions.Contains(user.Id) && !user.IsDeleted && user.Status == "Enabled")
+            .ToListAsync(cancellationToken);
+        var usersById = users.ToDictionary(user => user.Id, StringComparer.OrdinalIgnoreCase);
+        if (mentions.Any(userId => !validMemberIds.Contains(userId) || !usersById.ContainsKey(userId)))
+            throw new ValidationException("只能提及当前项目的有效成员");
+        return mentions.Select(userId => new MentionSnapshot(userId, usersById[userId].DisplayName)).ToList();
     }
 
     private async Task PublishMentionsAsync(ProjectManagementTaskEntity task, ProjectManagementTaskCommentEntity comment, IReadOnlyList<string> mentions, CancellationToken cancellationToken)
     {
         if (notificationPublisher is null) return;
-        var traceId = Activity.Current?.Id ?? Guid.NewGuid().ToString("N");
         foreach (var userId in mentions.Where(id => !string.Equals(id, User(), StringComparison.OrdinalIgnoreCase)))
         {
+            var traceId = $"mention:{comment.Id}:{userId}";
             await notificationPublisher.PublishAsync(new ProjectManagementNotification(Tenant(), App(), "task.comment.mentioned", userId, "任务评论提及", $"{User()} 在任务 {task.Title} 的评论中提及了你", $"/projects/{task.ProjectId}/tasks?selectedTaskId={task.Id}", traceId, task.ProjectId, task.Id), cancellationToken);
         }
     }
@@ -290,6 +316,8 @@ public sealed class ProjectManagementTaskCommentService(
     {
         public static CommentActivitySnapshot From(ProjectManagementTaskCommentEntity entity) => new(entity.Markdown, entity.ParentCommentId, entity.MentionUserIdsJson, entity.IsDeleted);
     }
+    private sealed record MentionSnapshot(string UserId, string DisplayName);
+    private sealed record CommentMentionMetadata(IReadOnlyList<MentionSnapshot> MentionSnapshots);
     private async Task<ProjectManagementTaskCommentResponse> MapAsync(ProjectManagementTaskCommentEntity entity, CancellationToken cancellationToken)
         => (await MapManyAsync([entity], cancellationToken))[0];
 
@@ -306,15 +334,20 @@ public sealed class ProjectManagementTaskCommentService(
             return comments.Select(comment => Map(comment, [])).ToList();
         }
 
+        var snapshots = comments
+            .SelectMany(comment => DeserializeMentionSnapshots(comment.Remark))
+            .GroupBy(item => item.UserId, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First().DisplayName, StringComparer.OrdinalIgnoreCase);
+        var missingUserIds = mentionedUserIds.Where(userId => !snapshots.ContainsKey(userId)).ToList();
         var users = await databaseAccessor.GetCurrentDb().Queryable<SystemUserEntity>()
-            .Where(user => mentionedUserIds.Contains(user.Id) && !user.IsDeleted)
+            .Where(user => missingUserIds.Contains(user.Id) && !user.IsDeleted)
             .ToListAsync(cancellationToken);
-        var displayNames = users.ToDictionary(user => user.Id, user => user.DisplayName, StringComparer.OrdinalIgnoreCase);
+        foreach (var user in users) snapshots[user.Id] = user.DisplayName;
         return comments.Select(comment => Map(
             comment,
             DeserializeMentionUserIds(comment.MentionUserIdsJson)
-                .Where(userId => displayNames.ContainsKey(userId))
-                .Select(userId => new ProjectManagementTaskCommentMentionResponse(userId, displayNames[userId]))
+                .Where(userId => snapshots.ContainsKey(userId))
+                .Select(userId => new ProjectManagementTaskCommentMentionResponse(userId, snapshots[userId]))
                 .ToList())).ToList();
     }
 
@@ -330,6 +363,22 @@ public sealed class ProjectManagementTaskCommentService(
             return string.IsNullOrWhiteSpace(json)
                 ? []
                 : JsonSerializer.Deserialize<List<string>>(json) ?? [];
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
+    }
+    private static string? SerializeMentionSnapshots(IReadOnlyList<MentionSnapshot> snapshots) => snapshots.Count == 0
+        ? null
+        : JsonSerializer.Serialize(new CommentMentionMetadata(snapshots));
+    private static IReadOnlyList<MentionSnapshot> DeserializeMentionSnapshots(string? json)
+    {
+        try
+        {
+            return string.IsNullOrWhiteSpace(json)
+                ? []
+                : JsonSerializer.Deserialize<CommentMentionMetadata>(json)?.MentionSnapshots ?? [];
         }
         catch (JsonException)
         {
