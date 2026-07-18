@@ -24,6 +24,9 @@ import type {
   ProjectManagementOperationPage,
   ProjectManagementOperationQuery,
   ProjectManagementOperation,
+  ProjectManagementReversibleCommand,
+  ProjectManagementReversibleCommandExecuteRequest,
+  ProjectManagementReversibleCommandStack,
   ProjectManagementBackup,
   ProjectManagementBackupRestorePreview,
   ProjectManagementRecyclePurgePreview,
@@ -692,6 +695,30 @@ export function startProjectManagementWorkspaceValidation(): Promise<ApiEnvelope
 
 export function cancelProjectManagementOperation(id: string): Promise<ApiEnvelope<ProjectManagementOperation>> {
   return httpClient.post<ProjectManagementOperation, undefined>(`/project-management/operations/${id}/cancel`, undefined);
+}
+
+export function getProjectManagementReversibleCommandStack(
+  signal?: AbortSignal,
+): Promise<ApiEnvelope<ProjectManagementReversibleCommandStack>> {
+  return httpClient.get<ProjectManagementReversibleCommandStack>("/project-management/reversible-commands", undefined, signal);
+}
+
+export function undoProjectManagementReversibleCommand(
+  request: ProjectManagementReversibleCommandExecuteRequest,
+): Promise<ApiEnvelope<ProjectManagementReversibleCommand>> {
+  return httpClient.post<ProjectManagementReversibleCommand, ProjectManagementReversibleCommandExecuteRequest>(
+    "/project-management/reversible-commands/undo",
+    request,
+  );
+}
+
+export function redoProjectManagementReversibleCommand(
+  request: ProjectManagementReversibleCommandExecuteRequest,
+): Promise<ApiEnvelope<ProjectManagementReversibleCommand>> {
+  return httpClient.post<ProjectManagementReversibleCommand, ProjectManagementReversibleCommandExecuteRequest>(
+    "/project-management/reversible-commands/redo",
+    request,
+  );
 }
 
 export function exportProjectManagementAudit(

@@ -19,6 +19,7 @@ import { queryKeys } from '../../core/query/queryKeys';
 import { useApiMutation } from '../../core/query/useApiMutation';
 import '../../features/project-management/projectManagement.css';
 import { ProjectManagementPageStateView } from '../../features/project-management/components/ProjectManagementPageState';
+import { ProjectManagementReversibleCommandControls } from '../../features/project-management/components/ProjectManagementReversibleCommandControls';
 import { toProjectManagementPlatformRoute } from '../../features/project-management/state/projectManagementPlatformRoutes';
 import { useProjectManagementWorkspaceScope } from '../../features/project-management/state/projectManagementWorkspaceScope';
 import { PermissionButton } from '../../shared/auth/PermissionButton';
@@ -177,6 +178,7 @@ export function ProjectManagementPage() {
             <button type="submit">搜索</button>
             {submittedKeyword || status || ownerUserId ? <button type="button" onClick={() => { setKeyword(''); setSubmittedKeyword(''); setStatus(''); setOwnerUserId(''); setPageIndex(1); }}>清空</button> : null}
           </form>
+          <ProjectManagementReversibleCommandControls />
           <span>当前工作区共 <strong>{projectsQuery.data?.data?.total ?? 0}</strong> 个项目</span>
         </div>
       }

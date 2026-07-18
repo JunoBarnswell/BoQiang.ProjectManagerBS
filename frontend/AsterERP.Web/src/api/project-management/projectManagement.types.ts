@@ -70,11 +70,36 @@ export interface ProjectManagementOperationItem {
   completedTime?: string;
 }
 
-export interface ProjectManagementOperation extends ProjectManagementOperationItem {}
+export type ProjectManagementOperation = ProjectManagementOperationItem;
 
 export interface ProjectManagementOperationPage {
   total: number;
   items: ProjectManagementOperationItem[];
+}
+
+export interface ProjectManagementReversibleCommand {
+  id: string;
+  sequenceNo: number;
+  commandType: string;
+  projectId: string;
+  aggregateType: string;
+  aggregateId: string;
+  state: 'Applied' | 'Undone' | 'Invalidated';
+  summary?: string;
+  traceId: string;
+  createdTime: string;
+  lastReplayedTime?: string;
+  isReplayPending: boolean;
+}
+
+export interface ProjectManagementReversibleCommandStack {
+  commands: ProjectManagementReversibleCommand[];
+  canUndo: boolean;
+  canRedo: boolean;
+}
+
+export interface ProjectManagementReversibleCommandExecuteRequest {
+  requestId: string;
 }
 
 export interface ProjectManagementBackup {

@@ -3,8 +3,9 @@ import { Link, useLocation } from 'react-router-dom';
 
 import type { ProjectManagementSavedView, ProjectManagementTaskView } from '../../../api/project-management/projectManagement.types';
 import { PermissionButton } from '../../../shared/auth/PermissionButton';
-import type { TaskWorkspaceState } from '../state/taskWorkspaceState';
+import { ProjectManagementReversibleCommandControls } from '../components/ProjectManagementReversibleCommandControls';
 import { toProjectManagementPlatformRoute } from '../state/projectManagementPlatformRoutes';
+import type { TaskWorkspaceState } from '../state/taskWorkspaceState';
 
 interface TaskWorkspaceToolbarProps {
   onOpenBatch: () => void;
@@ -115,6 +116,7 @@ export function TaskWorkspaceToolbar({
         <span className="text-sm text-gray-500">共 {total} 个任务</span>
         <PermissionButton code="project-management:task:edit" disabled={selectedCount === 0} onClick={onOpenBatch}>批量更新{selectedCount ? ` (${selectedCount})` : ''}</PermissionButton>
         <PermissionButton code="project-management:task:add" onClick={onCreateTask}>新建任务</PermissionButton>
+        <ProjectManagementReversibleCommandControls />
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <select
