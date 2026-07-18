@@ -1,13 +1,16 @@
-import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 
-import { exportProjectManagementAudit, getProjectManagementAudit, getProjectManagementOperations } from '../../api/project-management/projectManagement.api';
+import { exportProjectManagementAudit, getProjectManagementAudit, getProjectManagementOperations, startProjectManagementWorkspaceValidation } from '../../api/project-management/projectManagement.api';
 import type { ProjectManagementAuditQuery, ProjectManagementOperationQuery } from '../../api/project-management/projectManagement.types';
 import { isHttpError } from '../../core/http/httpError';
 import { projectManagementQueryKeys } from '../../core/query/projectManagementQueryKeys';
 import { useApiMutation } from '../../core/query/useApiMutation';
 import { useProjectManagementWorkspaceScope } from '../../features/project-management/state/projectManagementWorkspaceScope';
+import { useAuthStore } from '../../core/state/authStore';
+import { clearProjectManagementOperationTracking, getProjectManagementOperationTrackingKey, readProjectManagementOperationTracking, writeProjectManagementOperationTracking } from '../../features/project-management/state/projectManagementOperationTracking';
+import { ProjectManagementOperationProgress } from '../../features/project-management/components/ProjectManagementOperationProgress';
 import { PermissionButton } from '../../shared/auth/PermissionButton';
 import { PermissionGuard } from '../../shared/auth/PermissionGuard';
 import { useMessage } from '../../shared/feedback/useMessage';
@@ -19,10 +22,17 @@ import { getErrorMessage } from '../../shared/utils/errorMessage';
 
 export function ProjectManagementAuditPage() {
   const scope = useProjectManagementWorkspaceScope();
+  const userId = useAuthStore((state) => state.user?.userId ?? 'anonymous');
+  const queryClient = useQueryClient();
   const message = useMessage();
   const [keyword, setKeyword] = useState('');
   const [submittedKeyword, setSubmittedKeyword] = useState('');
   const [pageIndex, setPageIndex] = useState(1);
+  const [operationId, setOperationId] = useState<string | null>(null);
+  const operationStorageKey = useMemo(
+    () => scope.isAvailable ? getProjectManagementOperationTrackingKey(scope.tenantId, scope.appCode, userId) : null,
+    [scope.appCode, scope.isAvailable, scope.tenantId, userId],
+  );
   const pageSize = 100;
   const query: ProjectManagementAuditQuery = { pageIndex, pageSize, keyword: submittedKeyword || undefined };
   const auditQuery = useQuery({
@@ -37,6 +47,14 @@ export function ProjectManagementAuditPage() {
     queryFn: () => getProjectManagementOperations(operationQuery),
   });
 
+  useEffect(() => {
+    if (!operationStorageKey) {
+      setOperationId(null);
+      return;
+    }
+    setOperationId(readProjectManagementOperationTracking(operationStorageKey));
+  }, [operationStorageKey]);
+
   const exportMutation = useApiMutation({
     mutationFn: () => exportProjectManagementAudit(query),
     onError: (error) => message.error(getErrorMessage(error, '审计记录导出失败')),
@@ -48,6 +66,18 @@ export function ProjectManagementAuditPage() {
       anchor.click();
       URL.revokeObjectURL(url);
       message.success('审计记录已导出');
+    }
+  });
+  const workspaceValidationMutation = useApiMutation({
+    mutationFn: startProjectManagementWorkspaceValidation,
+    onError: (error) => message.error(getErrorMessage(error, '工作区校验失败')),
+    onSuccess: (result) => {
+      const operation = result.data;
+      if (!operation) return;
+      setOperationId(operation.id);
+      writeProjectManagementOperationTracking(operationStorageKey, operation.id);
+      void queryClient.invalidateQueries({ queryKey: projectManagementQueryKeys.operations(scope, operationQuery) });
+      message.success('工作区校验已启动，正在后台执行');
     }
   });
 
@@ -78,8 +108,9 @@ export function ProjectManagementAuditPage() {
       </div>
       <nav aria-label="审计记录分页" className="mt-3 flex items-center gap-2 text-sm"><button disabled={pageIndex === 1} type="button" onClick={() => setPageIndex((current) => current - 1)}>上一页</button><span>第 {pageIndex} 页</span><button disabled={page.total <= pageIndex * pageSize} type="button" onClick={() => setPageIndex((current) => current + 1)}>下一页</button></nav>
       <section className="mt-5">
-        <div className="mb-3 flex items-center gap-2"><h2 className="font-semibold">高风险操作记录</h2><span className="text-sm text-gray-500">共 {operationsQuery.data?.data?.total ?? 0} 条</span></div>
-        {operationsQuery.isError ? <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">{isHttpError(operationsQuery.error) && operationsQuery.error.status === 403 ? '无权查看高风险操作记录' : '高风险操作记录暂时无法加载'} <button type="button" className="ml-2 underline" onClick={() => void operationsQuery.refetch()}>重试</button></div> : <div className="overflow-x-auto rounded-lg border border-gray-200"><table className="min-w-full text-left text-sm"><thead className="bg-gray-50"><tr><th className="px-3 py-2">开始时间</th><th className="px-3 py-2">操作</th><th className="px-3 py-2">状态</th><th className="px-3 py-2">失败原因</th><th className="px-3 py-2">操作者</th><th className="px-3 py-2">TraceId</th></tr></thead><tbody>{(operationsQuery.data?.data?.items ?? []).length === 0 ? <tr><td className="px-3 py-6 text-center text-gray-500" colSpan={6}>暂无高风险操作记录</td></tr> : (operationsQuery.data?.data?.items ?? []).map((item) => <tr className="border-t border-gray-100" key={item.id}><td className="whitespace-nowrap px-3 py-2">{new Date(item.startedTime).toLocaleString()}</td><td className="px-3 py-2">{item.operationType}</td><td className="px-3 py-2">{item.status}</td><td className="max-w-md px-3 py-2">{item.errorMessage ?? '-'}</td><td className="px-3 py-2">{item.actorUserId}</td><td className="px-3 py-2 font-mono text-xs">{item.traceId}</td></tr>)}</tbody></table></div>}
+        <div className="mb-3 flex flex-wrap items-center gap-2"><h2 className="font-semibold">高风险操作记录</h2><span className="text-sm text-gray-500">共 {operationsQuery.data?.data?.total ?? 0} 条</span><PermissionButton code="project-management:operation:manage" disabled={workspaceValidationMutation.isPending} onClick={() => workspaceValidationMutation.mutate()}>{workspaceValidationMutation.isPending ? '校验中…' : '运行工作区校验'}</PermissionButton></div>
+        {operationId ? <div className="mb-3"><ProjectManagementOperationProgress operationId={operationId} onChanged={() => void operationsQuery.refetch()} onTrackingEnded={() => { clearProjectManagementOperationTracking(operationStorageKey); setOperationId(null); }} /></div> : null}
+        {operationsQuery.isError ? <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">{isHttpError(operationsQuery.error) && operationsQuery.error.status === 403 ? '无权查看高风险操作记录' : '高风险操作记录暂时无法加载'} <button type="button" className="ml-2 underline" onClick={() => void operationsQuery.refetch()}>重试</button></div> : <div className="overflow-x-auto rounded-lg border border-gray-200"><table className="min-w-full text-left text-sm"><thead className="bg-gray-50"><tr><th className="px-3 py-2">开始时间</th><th className="px-3 py-2">操作</th><th className="px-3 py-2">状态</th><th className="px-3 py-2">失败原因</th><th className="px-3 py-2">操作者</th><th className="px-3 py-2">TraceId</th><th className="px-3 py-2">跟踪</th></tr></thead><tbody>{(operationsQuery.data?.data?.items ?? []).length === 0 ? <tr><td className="px-3 py-6 text-center text-gray-500" colSpan={7}>暂无高风险操作记录</td></tr> : (operationsQuery.data?.data?.items ?? []).map((item) => <tr className="border-t border-gray-100" key={item.id}><td className="whitespace-nowrap px-3 py-2">{new Date(item.startedTime).toLocaleString()}</td><td className="px-3 py-2">{item.operationType}</td><td className="px-3 py-2">{item.status}</td><td className="max-w-md px-3 py-2">{item.errorMessage ?? '-'}</td><td className="px-3 py-2">{item.actorUserId}</td><td className="px-3 py-2 font-mono text-xs">{item.traceId}</td><td className="px-3 py-2"><button type="button" className="underline" onClick={() => { setOperationId(item.id); writeProjectManagementOperationTracking(operationStorageKey, item.id); }}>继续跟踪</button></td></tr>)}</tbody></table></div>}
       </section>
     </ResponsivePage>
   );

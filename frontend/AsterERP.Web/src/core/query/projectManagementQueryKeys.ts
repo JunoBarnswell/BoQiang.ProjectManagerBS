@@ -75,6 +75,7 @@ export const projectManagementQueryKeys = {
     query.operationType ?? '',
     query.status ?? '',
   ] as const,
+  operation: (scope: ProjectManagementWorkspaceScope, operationId: string) => [...root(scope), 'operation', operationId] as const,
   notifications: (scope: ProjectManagementWorkspaceScope, query: ProjectManagementNotificationQuery) => [
     ...root(scope), 'notifications', query.pageIndex ?? 1, query.pageSize ?? 20, query.unreadOnly ?? false, query.notificationType ?? '',
   ] as const,

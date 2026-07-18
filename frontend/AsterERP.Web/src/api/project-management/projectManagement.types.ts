@@ -59,6 +59,9 @@ export interface ProjectManagementOperationItem {
   id: string;
   operationType: string;
   status: string;
+  phase: string;
+  progressPercent: number;
+  isCancellationRequested: boolean;
   impactJson: string;
   errorMessage?: string;
   traceId: string;
@@ -66,6 +69,8 @@ export interface ProjectManagementOperationItem {
   startedTime: string;
   completedTime?: string;
 }
+
+export interface ProjectManagementOperation extends ProjectManagementOperationItem {}
 
 export interface ProjectManagementOperationPage {
   total: number;
