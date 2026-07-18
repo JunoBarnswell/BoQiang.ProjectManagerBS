@@ -635,6 +635,15 @@ export function exportProjectManagementReportExcel(
   );
 }
 
+export function exportProjectManagementTasksCsv(
+  query: ProjectManagementTaskQuery,
+): Promise<{ blob: Blob; fileName: string }> {
+  return httpClient.downloadBlob(
+    `/project-management/reports/tasks.csv${buildProjectManagementLabelFilterQuery(query)}`,
+    { timeoutMs: 120_000 },
+  );
+}
+
 export function startProjectManagementReportSnapshot(
   request: ProjectManagementReportSnapshotRequest,
 ): Promise<ApiEnvelope<ProjectManagementReportSnapshotStartResponse>> {

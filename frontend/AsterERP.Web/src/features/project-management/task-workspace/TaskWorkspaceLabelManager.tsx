@@ -14,6 +14,7 @@ import { PermissionButton } from '../../../shared/auth/PermissionButton';
 import { useConfirm } from '../../../shared/feedback/useConfirm';
 import { useMessage } from '../../../shared/feedback/useMessage';
 import { getErrorMessage } from '../../../shared/utils/errorMessage';
+import { ProjectManagementTaskCsvExportButton } from '../reports/ProjectManagementTaskCsvExportButton';
 
 interface TaskWorkspaceLabelManagerProps {
   filter: ProjectManagementTaskLabelFilter;
@@ -89,6 +90,10 @@ export function TaskWorkspaceLabelManager({ filter, labels, onChanged, onFilterC
       </div>
       <fieldset className="mt-4 grid gap-2 rounded border p-3 text-sm" style={{ borderColor: 'var(--pm-border)', background: 'var(--pm-surface-subtle)' }}>
         <legend className="px-1 font-medium">筛选当前视图</legend>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span style={{ color: 'var(--pm-muted)' }}>导出将复用当前工作台的关键字、状态、负责人、日期、排序和标签筛选。</span>
+          <ProjectManagementTaskCsvExportButton filter={filter} projectId={projectId} />
+        </div>
         <select aria-label="标签筛选匹配模式" value={filter.matchMode ?? 'Any'} onChange={(event) => onFilterChange({ ...filter, matchMode: event.target.value as 'Any' | 'All' })}>
           <option value="Any">匹配任一标签</option>
           <option value="All">匹配全部标签</option>

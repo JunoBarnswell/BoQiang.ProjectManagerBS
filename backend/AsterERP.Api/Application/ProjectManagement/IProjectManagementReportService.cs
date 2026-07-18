@@ -12,6 +12,10 @@ public interface IProjectManagementReportService
         ProjectManagementReportQuery query,
         CancellationToken cancellationToken = default);
 
+    Task<ProjectManagementReportFile> ExportTasksCsvAsync(
+        ProjectManagementTaskQuery query,
+        CancellationToken cancellationToken = default);
+
     Task<ProjectManagementReportSnapshotStartResponse> StartSnapshotAsync(
         ProjectManagementReportSnapshotRequest request,
         CancellationToken cancellationToken = default);

@@ -20,16 +20,26 @@ public sealed class ProjectManagementReportService(
     ICurrentUser currentUser,
     IProjectManagementOperationWriter? operationWriter = null,
     IBackgroundJobManager? backgroundJobManager = null,
-    IHostEnvironment? environment = null) : IProjectManagementReportService, ITransientDependency
+    IHostEnvironment? environment = null,
+    IProjectManagementTaskService? taskService = null) : IProjectManagementReportService, ITransientDependency
 {
     private const int MaxPageSize = 500;
     private const int MaxExportRows = 5000;
+    private const int TaskExportPageSize = 200;
 
     private static readonly string[] Headers =
     [
         "ProjectCode", "ProjectName", "Status", "Priority", "OwnerUserId",
         "ProgressPercent", "TaskCount", "StartDate", "DueDate", "CreatedTime",
         "EstimatedMinutes", "ActualMinutes"
+    ];
+
+    private static readonly string[] TaskHeaders =
+    [
+        "TaskId", "ProjectId", "MilestoneId", "ParentTaskId", "TaskCode", "Title", "Summary",
+        "Status", "Priority", "AssigneeUserId", "StartDate", "DueDate", "ProgressPercent",
+        "SortOrder", "Depth", "VersionNo", "BlockedByCount", "CanStart", "BlockedReason",
+        "IsOverdue", "ActualStartAt", "ActualEndAt", "HasChildren"
     ];
 
     private static readonly JsonSerializerOptions SnapshotJsonOptions = new(JsonSerializerDefaults.Web);
@@ -90,6 +100,44 @@ public sealed class ProjectManagementReportService(
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             stream.ToArray(),
             rows.Count);
+    }
+
+    public async Task<ProjectManagementReportFile> ExportTasksCsvAsync(
+        ProjectManagementTaskQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        var service = taskService ?? throw new InvalidOperationException("任务报表服务未注册");
+        query = ProjectManagementTaskQueryProtocol.Normalize(query);
+        var builder = new StringBuilder();
+        AppendCsvRow(builder, TaskHeaders);
+        var totalWritten = 0;
+        var pageIndex = 1;
+        long total = 0;
+
+        do
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var page = await service.QueryAsync(query with { PageIndex = pageIndex, PageSize = TaskExportPageSize }, cancellationToken);
+            total = page.Total;
+            if (total > MaxExportRows)
+                throw new ValidationException($"当前筛选结果超过单次导出上限 {MaxExportRows} 行，请缩小筛选条件");
+
+            foreach (var row in page.Items)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                AppendCsvRow(builder, ToTaskValues(row));
+                totalWritten++;
+            }
+
+            if (page.Items.Count == 0 || totalWritten >= total) break;
+            pageIndex++;
+        } while (true);
+
+        return new ProjectManagementReportFile(
+            BuildTaskCsvFileName(query.ProjectId),
+            "text/csv; charset=utf-8",
+            Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(builder.ToString())).ToArray(),
+            totalWritten);
     }
 
     public async Task<ProjectManagementReportSnapshotStartResponse> StartSnapshotAsync(
@@ -322,6 +370,24 @@ public sealed class ProjectManagementReportService(
         FormatDate(row.StartDate), FormatDate(row.DueDate), FormatDate(row.CreatedTime),
         row.EstimatedMinutes.ToString(CultureInfo.InvariantCulture), row.ActualMinutes.ToString(CultureInfo.InvariantCulture)
     ];
+
+    private static string[] ToTaskValues(ProjectManagementTaskListItemResponse row) =>
+    [
+        row.Id, row.ProjectId, row.MilestoneId ?? string.Empty, row.ParentTaskId ?? string.Empty, row.TaskCode,
+        row.Title, row.Summary ?? string.Empty, row.Status, row.Priority, row.AssigneeUserId ?? string.Empty,
+        FormatDate(row.StartDate), FormatDate(row.DueDate), row.ProgressPercent.ToString(CultureInfo.InvariantCulture),
+        row.SortOrder.ToString(CultureInfo.InvariantCulture), row.Depth.ToString(CultureInfo.InvariantCulture),
+        row.VersionNo.ToString(CultureInfo.InvariantCulture), row.BlockedByCount.ToString(CultureInfo.InvariantCulture),
+        row.CanStart ? "true" : "false", row.BlockedReason ?? string.Empty, row.IsOverdue ? "true" : "false",
+        FormatDate(row.ActualStartAt), FormatDate(row.ActualEndAt), row.HasChildren ? "true" : "false"
+    ];
+
+    private static string BuildTaskCsvFileName(string projectId)
+    {
+        var safeProjectId = new string(projectId.Where(char.IsLetterOrDigit).Take(48).ToArray());
+        if (safeProjectId.Length == 0) safeProjectId = "project";
+        return $"project-management-tasks-{safeProjectId}-{DateTime.UtcNow:yyyyMMddHHmmss}.csv";
+    }
 
     private static string FormatDate(DateTime? value) => value?.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture) ?? string.Empty;
 
