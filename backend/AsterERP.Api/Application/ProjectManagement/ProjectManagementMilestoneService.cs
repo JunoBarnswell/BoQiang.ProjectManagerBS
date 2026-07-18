@@ -15,11 +15,13 @@ public sealed class ProjectManagementMilestoneService(
     IWorkspaceDatabaseAccessor databaseAccessor,
     ICurrentUser currentUser,
     IProjectManagementActivityWriter? activityWriter = null,
-    IProjectManagementSyncJournalWriter? syncJournalWriter = null) : IProjectManagementMilestoneService
+    IProjectManagementSyncJournalWriter? syncJournalWriter = null,
+    ProjectManagementAccessPolicy? accessPolicy = null) : IProjectManagementMilestoneService
 {
     public async Task<GridPageResult<ProjectManagementMilestoneResponse>> QueryAsync(string projectId, CancellationToken cancellationToken = default)
     {
         await EnsureProjectAsync(projectId, cancellationToken);
+        await AccessPolicy.EnsureCanViewProjectAsync(projectId, cancellationToken);
         var total = new RefAsync<int>();
         var items = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementMilestoneEntity>()
             .Where(item => item.ProjectId == projectId && !item.IsDeleted)
@@ -34,8 +36,10 @@ public sealed class ProjectManagementMilestoneService(
 
     public async Task<ProjectManagementMilestoneResponse> CreateAsync(string projectId, ProjectManagementMilestoneUpsertRequest request, CancellationToken cancellationToken = default)
     {
-        await EnsureProjectAsync(projectId, cancellationToken);
+        var project = await EnsureProjectAsync(projectId, cancellationToken);
+        await AccessPolicy.EnsureCanManageProjectAsync(projectId, cancellationToken);
         Validate(request);
+        await EnsureOwnerAsync(project, request.OwnerUserId, cancellationToken);
         var now = DateTime.UtcNow;
         var entity = new ProjectManagementMilestoneEntity
         {
@@ -52,14 +56,17 @@ public sealed class ProjectManagementMilestoneService(
             await WriteActivityAsync(entity, "created", $"创建里程碑 {entity.MilestoneName}", cancellationToken);
             await WriteSyncJournalAsync(entity, "created", cancellationToken);
         });
-        return Map(entity);
+        return await MapAsync(entity, cancellationToken);
     }
 
     public async Task<ProjectManagementMilestoneResponse> UpdateAsync(string projectId, string id, ProjectManagementMilestoneUpsertRequest request, CancellationToken cancellationToken = default)
     {
+        var project = await EnsureProjectAsync(projectId, cancellationToken);
+        await AccessPolicy.EnsureCanManageProjectAsync(projectId, cancellationToken);
         var entity = await GetRequiredAsync(projectId, id, cancellationToken);
         EnsureVersion(entity.VersionNo, request.VersionNo);
         Validate(request);
+        await EnsureOwnerAsync(project, request.OwnerUserId, cancellationToken);
         entity.MilestoneName = NormalizeRequired(request.MilestoneName, "里程碑名称不能为空");
         entity.Description = NormalizeOptional(request.Description);
         entity.OwnerUserId = NormalizeOptional(request.OwnerUserId);
@@ -81,11 +88,13 @@ public sealed class ProjectManagementMilestoneService(
             await WriteActivityAsync(entity, "updated", $"更新里程碑 {entity.MilestoneName}", cancellationToken);
             await WriteSyncJournalAsync(entity, "updated", cancellationToken);
         });
-        return Map(entity);
+        return await MapAsync(entity, cancellationToken);
     }
 
     public async Task DeleteAsync(string projectId, string id, long versionNo, CancellationToken cancellationToken = default)
     {
+        await EnsureProjectAsync(projectId, cancellationToken);
+        await AccessPolicy.EnsureCanManageProjectAsync(projectId, cancellationToken);
         var entity = await GetRequiredAsync(projectId, id, cancellationToken);
         EnsureVersion(entity.VersionNo, versionNo);
         entity.IsDeleted = true;
@@ -103,11 +112,18 @@ public sealed class ProjectManagementMilestoneService(
         });
     }
 
-    private async Task EnsureProjectAsync(string projectId, CancellationToken cancellationToken)
+    private ProjectManagementAccessPolicy AccessPolicy => accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser);
+
+    private async Task<ProjectManagementProjectEntity> EnsureProjectAsync(string projectId, CancellationToken cancellationToken)
     {
-        RequireTenantId(); RequireAppCode();
-        if (!await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementProjectEntity>().Where(item => item.Id == projectId && !item.IsDeleted).AnyAsync(cancellationToken))
-            throw new NotFoundException("项目不存在", ErrorCodes.PlatformResourceNotFound);
+        var tenantId = RequireTenantId();
+        var appCode = RequireAppCode();
+        var project = (await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementProjectEntity>()
+            .Where(item => item.Id == projectId && item.TenantId == tenantId && item.AppCode == appCode && !item.IsDeleted)
+            .Take(1)
+            .ToListAsync(cancellationToken))
+            .FirstOrDefault();
+        return project ?? throw new NotFoundException("项目不存在", ErrorCodes.PlatformResourceNotFound);
     }
 
     private async Task<ProjectManagementMilestoneEntity> GetRequiredAsync(string projectId, string id, CancellationToken cancellationToken)
@@ -121,6 +137,16 @@ public sealed class ProjectManagementMilestoneService(
     {
         ProjectManagementDomainRules.ValidateDates(request.StartDate, request.DueDate, "里程碑");
         ProjectManagementDomainRules.RequireProgress(request.ProgressPercent, "里程碑");
+    }
+
+    private async Task EnsureOwnerAsync(ProjectManagementProjectEntity project, string? ownerUserId, CancellationToken cancellationToken)
+    {
+        var normalizedOwnerUserId = NormalizeOptional(ownerUserId);
+        if (normalizedOwnerUserId is null || string.Equals(normalizedOwnerUserId, project.OwnerUserId, StringComparison.OrdinalIgnoreCase)) return;
+        var isActiveMember = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementProjectMemberEntity>()
+            .Where(item => item.ProjectId == project.Id && item.UserId == normalizedOwnerUserId && item.IsActive && !item.IsDeleted)
+            .AnyAsync(cancellationToken);
+        if (!isActiveMember) throw new ValidationException("里程碑负责人必须是项目负责人或有效项目成员");
     }
 
     private string RequireTenantId() => currentUser.GetAsterErpTenantId()?.Trim() ?? throw new ValidationException("当前会话缺少租户");
@@ -141,15 +167,23 @@ public sealed class ProjectManagementMilestoneService(
     private static string NormalizeRequired(string value, string message) => string.IsNullOrWhiteSpace(value) ? throw new ValidationException(message) : value.Trim();
     private static string? NormalizeOptional(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     private static void EnsureVersion(long current, long requested) { if (requested <= 0 || current != requested) throw new ValidationException("里程碑已被其他用户修改，请刷新后重试", ErrorCodes.ApplicationDevelopmentPageRevisionConflict); }
+    private async Task<ProjectManagementMilestoneResponse> MapAsync(ProjectManagementMilestoneEntity entity, CancellationToken cancellationToken)
+    {
+        var tasks = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskEntity>()
+            .Where(task => task.ProjectId == entity.ProjectId && task.MilestoneId == entity.Id && !task.IsDeleted)
+            .ToListAsync(cancellationToken);
+        return Map(entity, tasks);
+    }
+
     private static ProjectManagementMilestoneResponse Map(ProjectManagementMilestoneEntity entity, IReadOnlyList<ProjectManagementTaskEntity>? tasks = null)
     {
         var taskList = tasks ?? [];
         var leaves = taskList.Where(task => !taskList.Any(child => child.ParentTaskId == task.Id)).ToList();
         var weight = leaves.Sum(task => task.Weight);
-        var progress = weight > 0 ? leaves.Sum(task => task.ProgressPercent * task.Weight) / weight : entity.ProgressPercent;
+        var progress = weight > 0 ? Math.Round(leaves.Sum(task => task.ProgressPercent * task.Weight) / weight, 2) : entity.ProgressPercent;
         var health = entity.Status == ProjectManagementDomainRules.MilestoneCompleted || progress >= 100 ? "Done" :
             entity.DueDate.HasValue && entity.DueDate.Value.Date < DateTime.UtcNow.Date ? "OffTrack" :
             entity.DueDate.HasValue && entity.DueDate.Value.Date <= DateTime.UtcNow.Date.AddDays(7) && progress < 80 ? "AtRisk" : "OnTrack";
-        return new(entity.Id, entity.ProjectId, entity.MilestoneName, entity.Description, entity.OwnerUserId, entity.Status, health, entity.StartDate, entity.DueDate, entity.CompletedAt, progress, entity.SortOrder, entity.VersionNo);
+        return new(entity.Id, entity.ProjectId, entity.MilestoneName, entity.Description, entity.OwnerUserId, entity.Status, health, entity.StartDate, entity.DueDate, entity.CompletedAt, progress, leaves.Count, leaves.Count(task => task.Status == ProjectManagementDomainRules.TaskDone), entity.SortOrder, entity.VersionNo);
     }
 }

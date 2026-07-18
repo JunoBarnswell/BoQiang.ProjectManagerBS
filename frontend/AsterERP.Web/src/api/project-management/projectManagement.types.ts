@@ -635,6 +635,8 @@ export interface ProjectManagementMilestone {
   dueDate?: string;
   completedAt?: string;
   progressPercent: number;
+  leafTaskCount: number;
+  completedLeafTaskCount: number;
   sortOrder: number;
   versionNo: number;
 }

@@ -118,7 +118,7 @@ export function ProjectManagementMilestonesPage() {
               value={form.status}
               onChange={(event) => update({ ...form, status: event.target.value })}
             >
-              {["Planned", "InProgress", "Completed", "Cancelled"].map((status) => (
+              {["Planned", "Active", "Completed", "Archived"].map((status) => (
                 <option key={status}>{status}</option>
               ))}
             </select>
@@ -135,6 +135,25 @@ export function ProjectManagementMilestonesPage() {
               max={100}
               value={form.progressPercent ?? 0}
               onChange={(event) => update({ ...form, progressPercent: Number(event.target.value) })}
+            />
+            <input
+              aria-label="目标日期"
+              type="date"
+              value={form.dueDate?.slice(0, 10) ?? ""}
+              onChange={(event) => update({ ...form, dueDate: event.target.value || undefined })}
+            />
+            <input
+              aria-label="排序"
+              type="number"
+              value={form.sortOrder ?? 0}
+              onChange={(event) => update({ ...form, sortOrder: Number(event.target.value) })}
+              placeholder="排序"
+            />
+            <textarea
+              aria-label="里程碑描述"
+              value={form.description ?? ""}
+              onChange={(event) => update({ ...form, description: event.target.value || undefined })}
+              placeholder="描述"
             />
           </div>
           <div className="mt-3 flex gap-2">
@@ -173,6 +192,9 @@ export function ProjectManagementMilestonesPage() {
                   <h3 className="font-semibold">{milestone.milestoneName}</h3>
                   <p className="mt-1 text-sm text-gray-500">
                     {milestone.status} · 健康度 {milestone.healthStatus} · 负责人 {milestone.ownerUserId ?? "未设置"}
+                  </p>
+                  <p className="mt-1 text-sm text-gray-500">
+                    目标日期 {milestone.dueDate?.slice(0, 10) ?? "未设置"} · 叶子任务 {milestone.completedLeafTaskCount}/{milestone.leafTaskCount}
                   </p>
                 </div>
                 <div className="flex gap-2">
