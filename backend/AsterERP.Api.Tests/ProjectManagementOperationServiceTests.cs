@@ -116,15 +116,15 @@ public sealed class ProjectManagementOperationServiceTests
     }
 
     [Fact]
-    public async Task Real_data_permission_registrar_filters_the_separate_application_database_for_operation_runner()
+    public async Task Real_data_permission_registrar_filters_the_platform_database_for_operation_runner()
     {
         using var mainDb = CreateDatabase();
         using var workspaceDb = CreateDatabase();
-        await new ProjectManagementSchemaMigrator().MigrateAsync(workspaceDb, CancellationToken.None);
-        await workspaceDb.Insertable(new[]
+        await new ProjectManagementSchemaMigrator().MigrateAsync(mainDb, CancellationToken.None);
+        await mainDb.Insertable(new[]
         {
-            new ProjectManagementProjectEntity { Id = "visible", TenantId = "tenant-a", AppCode = "MES", ProjectCode = "VISIBLE", ProjectName = "Visible", OwnerUserId = "operator" },
-            new ProjectManagementProjectEntity { Id = "hidden", TenantId = "tenant-a", AppCode = "MES", ProjectCode = "HIDDEN", ProjectName = "Hidden", OwnerUserId = "other" }
+            new ProjectManagementProjectEntity { Id = "visible", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "VISIBLE", ProjectName = "Visible", OwnerUserId = "operator" },
+            new ProjectManagementProjectEntity { Id = "hidden", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "HIDDEN", ProjectName = "Hidden", OwnerUserId = "other" }
         }).ExecuteCommandAsync();
         var user = CreateUser("operator", "tenant-a", "MES");
         var accessor = new SplitWorkspaceDatabaseAccessor(mainDb, workspaceDb);
@@ -137,7 +137,8 @@ public sealed class ProjectManagementOperationServiceTests
         var operation = await service.RunWorkspaceValidationAsync();
 
         Assert.Contains("\"projectCount\":1", operation.ImpactJson, StringComparison.Ordinal);
-        Assert.False(mainDb.DbMaintenance.IsAnyTable("pm_operations"));
+        Assert.True(mainDb.DbMaintenance.IsAnyTable("pm_operations"));
+        Assert.Equal("SYSTEM", (await mainDb.Queryable<ProjectManagementOperationEntity>().FirstAsync()).AppCode);
     }
 
     [Fact]

@@ -23,16 +23,16 @@ public sealed class ProjectManagementDataPermissionFilterTests
 
         await db.Insertable(new[]
         {
-            new ProjectManagementProjectEntity { Id = "project-visible", TenantId = "tenant-a", AppCode = "MES", ProjectCode = "VISIBLE", ProjectName = "Visible", OwnerUserId = "owner" },
-            new ProjectManagementProjectEntity { Id = "project-hidden", TenantId = "tenant-a", AppCode = "MES", ProjectCode = "HIDDEN", ProjectName = "Hidden", OwnerUserId = "other" },
-            new ProjectManagementProjectEntity { Id = "project-other", TenantId = "tenant-b", AppCode = "MES", ProjectCode = "OTHER", ProjectName = "Other", OwnerUserId = "operator" },
+            new ProjectManagementProjectEntity { Id = "project-visible", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "VISIBLE", ProjectName = "Visible", OwnerUserId = "owner" },
+            new ProjectManagementProjectEntity { Id = "project-hidden", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "HIDDEN", ProjectName = "Hidden", OwnerUserId = "other" },
+            new ProjectManagementProjectEntity { Id = "project-other", TenantId = "tenant-b", AppCode = "SYSTEM", ProjectCode = "OTHER", ProjectName = "Other", OwnerUserId = "operator" },
             new ProjectManagementProjectEntity { Id = "project-other-app", TenantId = "tenant-a", AppCode = "CRM", ProjectCode = "OTHER_APP", ProjectName = "Other app", OwnerUserId = "operator" }
         }).ExecuteCommandAsync();
         await db.Insertable(new ProjectManagementProjectMemberEntity
         {
             Id = "member-visible",
             TenantId = "tenant-a",
-            AppCode = "MES",
+            AppCode = "SYSTEM",
             ProjectId = "project-visible",
             UserId = "operator",
             IsActive = true
@@ -42,7 +42,7 @@ public sealed class ProjectManagementDataPermissionFilterTests
         {
             new Claim(AsterErpClaimTypes.UserId, "operator"),
             new Claim(AsterErpClaimTypes.TenantId, "tenant-a"),
-            new Claim(AsterErpClaimTypes.AppCode, "MES"),
+            new Claim(AsterErpClaimTypes.AppCode, "SYSTEM"),
             new Claim(AsterErpClaimTypes.DataScope, "SELF"),
             new Claim(AsterErpClaimTypes.PermissionCode, "project-management:project:view")
         }, "test"));
@@ -52,7 +52,7 @@ public sealed class ProjectManagementDataPermissionFilterTests
             typeof(ProjectManagementProjectEntity),
             new FixedAsterErpCurrentUser(principal),
             "tenant-a",
-            "MES");
+            "SYSTEM");
 
         var visible = await db.Queryable<ProjectManagementProjectEntity>()
             .OrderBy(item => item.ProjectCode)
@@ -76,50 +76,50 @@ public sealed class ProjectManagementDataPermissionFilterTests
 
         await db.Insertable(new[]
         {
-            new ProjectManagementProjectEntity { Id = "project-visible", TenantId = "tenant-a", AppCode = "MES", ProjectCode = "VISIBLE", ProjectName = "Visible", OwnerUserId = "operator" },
-            new ProjectManagementProjectEntity { Id = "project-hidden", TenantId = "tenant-a", AppCode = "MES", ProjectCode = "HIDDEN", ProjectName = "Hidden", OwnerUserId = "other" }
+            new ProjectManagementProjectEntity { Id = "project-visible", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "VISIBLE", ProjectName = "Visible", OwnerUserId = "operator" },
+            new ProjectManagementProjectEntity { Id = "project-hidden", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "HIDDEN", ProjectName = "Hidden", OwnerUserId = "other" }
         }).ExecuteCommandAsync();
         await db.Insertable(new[]
         {
-            new ProjectManagementMilestoneEntity { Id = "milestone-visible", TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-visible", MilestoneName = "Visible milestone" },
-            new ProjectManagementMilestoneEntity { Id = "milestone-hidden", TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-hidden", MilestoneName = "Hidden milestone" }
+            new ProjectManagementMilestoneEntity { Id = "milestone-visible", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-visible", MilestoneName = "Visible milestone" },
+            new ProjectManagementMilestoneEntity { Id = "milestone-hidden", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-hidden", MilestoneName = "Hidden milestone" }
         }).ExecuteCommandAsync();
         await db.Insertable(new[]
         {
-            new ProjectManagementTaskEntity { Id = "task-visible", TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-visible", TaskCode = "T-V", Title = "Visible task" },
-            new ProjectManagementTaskEntity { Id = "task-hidden", TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-hidden", TaskCode = "T-H", Title = "Hidden task" }
+            new ProjectManagementTaskEntity { Id = "task-visible", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-visible", TaskCode = "T-V", Title = "Visible task" },
+            new ProjectManagementTaskEntity { Id = "task-hidden", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-hidden", TaskCode = "T-H", Title = "Hidden task" }
         }).ExecuteCommandAsync();
         await db.Insertable(new[]
         {
-            new ProjectManagementTaskDependencyEntity { Id = "dependency-visible", TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-visible", PredecessorTaskId = "task-visible", SuccessorTaskId = "task-visible" },
-            new ProjectManagementTaskDependencyEntity { Id = "dependency-hidden", TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-hidden", PredecessorTaskId = "task-hidden", SuccessorTaskId = "task-hidden" }
+            new ProjectManagementTaskDependencyEntity { Id = "dependency-visible", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-visible", PredecessorTaskId = "task-visible", SuccessorTaskId = "task-visible" },
+            new ProjectManagementTaskDependencyEntity { Id = "dependency-hidden", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-hidden", PredecessorTaskId = "task-hidden", SuccessorTaskId = "task-hidden" }
         }).ExecuteCommandAsync();
         await db.Insertable(new[]
         {
-            new ProjectManagementTaskParticipantEntity { Id = "participant-visible", TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-visible", TaskId = "task-visible", UserId = "operator" },
-            new ProjectManagementTaskParticipantEntity { Id = "participant-hidden", TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-hidden", TaskId = "task-hidden", UserId = "operator" }
+            new ProjectManagementTaskParticipantEntity { Id = "participant-visible", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-visible", TaskId = "task-visible", UserId = "operator" },
+            new ProjectManagementTaskParticipantEntity { Id = "participant-hidden", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-hidden", TaskId = "task-hidden", UserId = "operator" }
         }).ExecuteCommandAsync();
         await db.Insertable(new[]
         {
-            new ProjectManagementImConversationLinkEntity { Id = "link-visible", TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-visible", ConversationKey = "pm:visible", Status = "Active" },
-            new ProjectManagementImConversationLinkEntity { Id = "link-hidden", TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-hidden", ConversationKey = "pm:hidden", Status = "Active" }
+            new ProjectManagementImConversationLinkEntity { Id = "link-visible", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-visible", ConversationKey = "pm:visible", Status = "Active" },
+            new ProjectManagementImConversationLinkEntity { Id = "link-hidden", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-hidden", ConversationKey = "pm:hidden", Status = "Active" }
         }).ExecuteCommandAsync();
 
         var principal = new ClaimsPrincipal(new ClaimsIdentity(new[]
         {
             new Claim(AsterErpClaimTypes.UserId, "operator"),
             new Claim(AsterErpClaimTypes.TenantId, "tenant-a"),
-            new Claim(AsterErpClaimTypes.AppCode, "MES"),
+            new Claim(AsterErpClaimTypes.AppCode, "SYSTEM"),
             new Claim(AsterErpClaimTypes.DataScope, "SELF"),
             new Claim(AsterErpClaimTypes.PermissionCode, "project-management:project:view")
         }, "test"));
         var currentUser = new FixedAsterErpCurrentUser(principal);
 
-        Assert.True(ProjectManagementDataPermissionFilterRegistrar.TryRegister(db, typeof(ProjectManagementMilestoneEntity), currentUser, "tenant-a", "MES"));
-        Assert.True(ProjectManagementDataPermissionFilterRegistrar.TryRegister(db, typeof(ProjectManagementTaskEntity), currentUser, "tenant-a", "MES"));
-        Assert.True(ProjectManagementDataPermissionFilterRegistrar.TryRegister(db, typeof(ProjectManagementTaskDependencyEntity), currentUser, "tenant-a", "MES"));
-        Assert.True(ProjectManagementDataPermissionFilterRegistrar.TryRegister(db, typeof(ProjectManagementTaskParticipantEntity), currentUser, "tenant-a", "MES"));
-        Assert.True(ProjectManagementDataPermissionFilterRegistrar.TryRegister(db, typeof(ProjectManagementImConversationLinkEntity), currentUser, "tenant-a", "MES"));
+        Assert.True(ProjectManagementDataPermissionFilterRegistrar.TryRegister(db, typeof(ProjectManagementMilestoneEntity), currentUser, "tenant-a", "SYSTEM"));
+        Assert.True(ProjectManagementDataPermissionFilterRegistrar.TryRegister(db, typeof(ProjectManagementTaskEntity), currentUser, "tenant-a", "SYSTEM"));
+        Assert.True(ProjectManagementDataPermissionFilterRegistrar.TryRegister(db, typeof(ProjectManagementTaskDependencyEntity), currentUser, "tenant-a", "SYSTEM"));
+        Assert.True(ProjectManagementDataPermissionFilterRegistrar.TryRegister(db, typeof(ProjectManagementTaskParticipantEntity), currentUser, "tenant-a", "SYSTEM"));
+        Assert.True(ProjectManagementDataPermissionFilterRegistrar.TryRegister(db, typeof(ProjectManagementImConversationLinkEntity), currentUser, "tenant-a", "SYSTEM"));
 
         Assert.Equal("milestone-visible", Assert.Single(await db.Queryable<ProjectManagementMilestoneEntity>().ToListAsync()).Id);
         Assert.Equal("task-visible", Assert.Single(await db.Queryable<ProjectManagementTaskEntity>().ToListAsync()).Id);

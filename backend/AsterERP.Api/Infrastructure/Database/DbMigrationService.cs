@@ -6,6 +6,7 @@ using AsterERP.Api.Infrastructure.Abp.AsterScene;
 using AsterERP.Api.Infrastructure.Abp.Im;
 using AsterERP.Api.Infrastructure.Abp.PlatformFoundation;
 using AsterERP.Api.Infrastructure.Abp.PlatformPublish;
+using AsterERP.Api.Infrastructure.Abp.ProjectManagement;
 using AsterERP.Api.Infrastructure.Abp.RuntimeCore;
 using AsterERP.Api.Infrastructure.Abp.SystemAdministration;
 using AsterERP.Api.Infrastructure.Abp.TenantApps;
@@ -27,6 +28,7 @@ public sealed class DbMigrationService(
     ImSchemaMigrator imSchemaMigrator,
     AiCenterSchemaMigrator aiCenterSchemaMigrator,
     AsterSceneSchemaMigrator asterSceneSchemaMigrator,
+    ProjectManagementSchemaMigrator projectManagementSchemaMigrator,
     ApplicationDataCenterSchemaMigrator applicationDataCenterSchemaMigrator,
     ApplicationDevelopmentCenterSchemaMigrator applicationDevelopmentCenterSchemaMigrator,
     ApplicationDatabaseBindingMigrationService applicationDatabaseBindingMigrationService,
@@ -46,6 +48,7 @@ public sealed class DbMigrationService(
         await imSchemaMigrator.MigrateAsync(db, cancellationToken);
         await aiCenterSchemaMigrator.MigrateAsync(db, cancellationToken);
         await asterSceneSchemaMigrator.MigrateAsync(db, cancellationToken);
+        await projectManagementSchemaMigrator.MigrateAsync(db, cancellationToken);
         await applicationDataCenterSchemaMigrator.MigrateAsync(db, cancellationToken);
         await applicationDatabaseBindingMigrationService.MigrateAsync(cancellationToken);
         await applicationDevelopmentCenterSchemaMigrator.EnsureCurrentSchemaAsync(db, cancellationToken);
