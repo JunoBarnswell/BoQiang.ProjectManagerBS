@@ -4,7 +4,7 @@ import type {
   ProjectManagementLabel,
   ProjectManagementMemberCandidate,
   ProjectManagementMilestone,
-  ProjectManagementTask,
+  ProjectManagementTaskListItem,
   ProjectManagementTaskBatchUpdateRequest,
 } from '../../../api/project-management/projectManagement.types';
 import { PermissionButton } from '../../../shared/auth/PermissionButton';
@@ -22,7 +22,7 @@ interface TaskWorkspaceBatchCommandPanelProps {
   open: boolean;
   pending: boolean;
   projectId: string;
-  tasks: ProjectManagementTask[];
+  tasks: ProjectManagementTaskListItem[];
 }
 
 interface BatchFormState {

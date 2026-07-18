@@ -1,6 +1,6 @@
 import { useMemo, useState, type CSSProperties, type DragEvent } from 'react';
 
-import type { ProjectManagementTask } from '../../../api/project-management/projectManagement.types';
+import type { ProjectManagementTaskListItem } from '../../../api/project-management/projectManagement.types';
 import { DataTable } from '../../../shared/table/DataTable';
 import type { DataTableColumn } from '../../../shared/table/tableTypes';
 import type { TaskWorkspaceState } from '../state/taskWorkspaceState';
@@ -9,20 +9,20 @@ import type { TaskMoveDropTarget } from './taskMoveIntent';
 
 interface TaskWorkspaceProjectionProps {
   onSelectTask: (taskId: string) => void;
-  onMoveTask: (task: ProjectManagementTask, target: TaskMoveDropTarget) => void;
+  onMoveTask: (task: ProjectManagementTaskListItem, target: TaskMoveDropTarget) => void;
   onToggleTaskSelection: (taskId: string) => void;
-  rows: ProjectManagementTask[];
+  rows: ProjectManagementTaskListItem[];
   selectedTaskIds: ReadonlySet<string>;
   state: TaskWorkspaceState;
 }
 
 export function TaskWorkspaceProjection({ onMoveTask, onSelectTask, onToggleTaskSelection, rows, selectedTaskIds, state }: TaskWorkspaceProjectionProps) {
-  const [draggedTask, setDraggedTask] = useState<ProjectManagementTask>();
+  const [draggedTask, setDraggedTask] = useState<ProjectManagementTaskListItem>();
   const drag = {
     draggedTaskId: draggedTask?.id,
     onDragEnd: () => setDraggedTask(undefined),
     onDragOver: (event: DragEvent<HTMLElement>) => event.preventDefault(),
-    onDragStart: (event: DragEvent<HTMLElement>, task: ProjectManagementTask) => {
+    onDragStart: (event: DragEvent<HTMLElement>, task: ProjectManagementTaskListItem) => {
       event.dataTransfer.effectAllowed = 'move';
       event.dataTransfer.setData('text/plain', task.id);
       setDraggedTask(task);
@@ -47,12 +47,12 @@ interface TaskDragHandlers {
   draggedTaskId?: string;
   onDragEnd: () => void;
   onDragOver: (event: DragEvent<HTMLElement>) => void;
-  onDragStart: (event: DragEvent<HTMLElement>, task: ProjectManagementTask) => void;
+  onDragStart: (event: DragEvent<HTMLElement>, task: ProjectManagementTaskListItem) => void;
   onDrop: (event: DragEvent<HTMLElement>, target: TaskMoveDropTarget) => void;
 }
 
 function TaskTableProjection({ drag, onSelectTask, onToggleTaskSelection, rows, selectedTaskIds, state }: Pick<TaskWorkspaceProjectionProps, 'onSelectTask' | 'onToggleTaskSelection' | 'rows' | 'selectedTaskIds' | 'state'> & { drag: TaskDragHandlers }) {
-  const columns = useMemo<DataTableColumn<ProjectManagementTask>[]>(() => [
+  const columns = useMemo<DataTableColumn<ProjectManagementTaskListItem>[]>(() => [
     { key: 'select', title: '选择', width: '64px', render: (row) => <input aria-label={`选择任务 ${row.title}`} checked={selectedTaskIds.has(row.id)} type="checkbox" onChange={() => onToggleTaskSelection(row.id)} /> },
     { key: 'taskCode', title: '编码', width: '120px', responsivePriority: 100 },
     {
@@ -118,7 +118,7 @@ function TaskGanttProjection({ onSelectTask, onToggleTaskSelection, rows, select
 function TaskCalendarProjection({ onSelectTask, onToggleTaskSelection, rows, selectedTaskIds }: Pick<TaskWorkspaceProjectionProps, 'onSelectTask' | 'onToggleTaskSelection' | 'rows' | 'selectedTaskIds'>) {
   const [mode, setMode] = useState<'month' | 'week'>('month');
   const [anchorDate, setAnchorDate] = useState(() => firstDueDate(rows) ?? new Date());
-  const groups = rows.filter((task) => task.dueDate).reduce<Record<string, ProjectManagementTask[]>>((result, task) => {
+  const groups = rows.filter((task) => task.dueDate).reduce<Record<string, ProjectManagementTaskListItem[]>>((result, task) => {
     const key = task.dueDate?.slice(0, 10) ?? '';
     result[key] = [...(result[key] ?? []), task];
     return result;
@@ -134,7 +134,7 @@ function TaskCalendarProjection({ onSelectTask, onToggleTaskSelection, rows, sel
   </div>;
 }
 
-function TaskCard({ drag, onSelectTask, onToggleTaskSelection, selected, task }: { drag?: TaskDragHandlers; onSelectTask: (taskId: string) => void; onToggleTaskSelection: (taskId: string) => void; selected: boolean; task: ProjectManagementTask }) {
+function TaskCard({ drag, onSelectTask, onToggleTaskSelection, selected, task }: { drag?: TaskDragHandlers; onSelectTask: (taskId: string) => void; onToggleTaskSelection: (taskId: string) => void; selected: boolean; task: ProjectManagementTaskListItem }) {
   return <article className={`pm-task-card${selected ? ' is-selected' : ''}${drag?.draggedTaskId === task.id ? ' is-dragging' : ''}`} draggable={drag ? true : undefined} onDragEnd={drag?.onDragEnd} onDragOver={drag?.onDragOver} onDragStart={drag ? (event) => drag.onDragStart(event, task) : undefined} onDrop={drag ? (event) => drag.onDrop(event, { kind: 'before', task }) : undefined}><input aria-label={`选择任务 ${task.title}`} checked={selected} type="checkbox" onChange={() => onToggleTaskSelection(task.id)} /><div className="pm-task-card__content"><div className="pm-task-card__meta"><code>{task.taskCode}</code><StatusBadge status={task.status} /></div><button className="pm-task-card__open" type="button" onClick={() => onSelectTask(task.id)}>{task.title}</button><div className="pm-task-card__signals"><PriorityBadge priority={task.priority} /><span>{task.canStart ? '可开始' : task.blockedReason ?? '受阻塞'}</span></div><Progress value={task.progressPercent} /><footer><span>截止：{formatDate(task.dueDate)}</span>{task.blockedByCount ? <span>{task.blockedByCount} 项前置</span> : null}</footer></div>{drag ? <span className="pm-child-drop-zone" onDragOver={drag.onDragOver} onDrop={(event) => drag.onDrop(event, { kind: 'child', task })}>作为子任务</span> : null}</article>;
 }
 
@@ -162,14 +162,14 @@ function formatDate(value: string | undefined): string {
   return value ? new Date(value).toLocaleDateString() : '未设置';
 }
 
-function createGanttRange(rows: ProjectManagementTask[], dayCount: number) {
+function createGanttRange(rows: ProjectManagementTaskListItem[], dayCount: number) {
   const dates = rows.flatMap((task) => [task.startDate, task.dueDate]).flatMap((value) => value ? [toLocalDate(value)] : []).filter((value): value is Date => Boolean(value));
   const first = dates.length ? new Date(Math.min(...dates.map((value) => value.getTime()))) : new Date();
   const start = startOfDay(first);
   return { start, days: Array.from({ length: dayCount }, (_, index) => addCalendarDays(start, index)) };
 }
 
-function getGanttPlacement(task: ProjectManagementTask, range: ReturnType<typeof createGanttRange>) {
+function getGanttPlacement(task: ProjectManagementTaskListItem, range: ReturnType<typeof createGanttRange>) {
   const start = toLocalDate(task.startDate ?? task.dueDate);
   const end = toLocalDate(task.dueDate ?? task.startDate);
   if (!start || !end) return undefined;
@@ -189,7 +189,7 @@ function createCalendarRange(anchor: Date, mode: 'month' | 'week') {
   return { days: Array.from({ length: mode === 'week' ? 7 : 42 }, (_, index) => addCalendarDays(start, index)) };
 }
 
-function firstDueDate(rows: ProjectManagementTask[]): Date | undefined {
+function firstDueDate(rows: ProjectManagementTaskListItem[]): Date | undefined {
   const values = rows.flatMap((task) => task.dueDate ? [toLocalDate(task.dueDate)] : []).filter((value): value is Date => Boolean(value));
   return values.length ? new Date(Math.min(...values.map((value) => value.getTime()))) : undefined;
 }

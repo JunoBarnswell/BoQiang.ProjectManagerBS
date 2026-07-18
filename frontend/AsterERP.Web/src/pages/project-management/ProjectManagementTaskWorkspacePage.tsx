@@ -19,6 +19,7 @@ import {
   getProjectManagementSavedViews,
   getProjectManagementTaskAttachments,
   getProjectManagementTaskComments,
+  getProjectManagementTask,
   getProjectManagementTaskReminders,
   getProjectManagementTasks,
   moveProjectManagementTask,
@@ -113,6 +114,11 @@ export function ProjectManagementTaskWorkspacePage() {
     queryKey: queryKeys.projectManagement.tasks(scope, query),
   });
   const selectedTaskId = state.selectedTaskId ?? '';
+  const taskDetailQuery = useQuery({
+    enabled: scope.isAvailable && Boolean(projectId && selectedTaskId) && !creating,
+    queryFn: ({ signal }) => getProjectManagementTask(selectedTaskId, signal),
+    queryKey: queryKeys.projectManagement.task(scope, projectId, selectedTaskId),
+  });
   const projectConversationQuery = useQuery({
     enabled: scope.isAvailable && Boolean(projectId),
     queryFn: ({ signal }) => getProjectManagementImConversation(projectId, undefined, signal),
@@ -164,15 +170,16 @@ export function ProjectManagementTaskWorkspacePage() {
     queryKey: queryKeys.projectManagement.memberCandidates(scope, { pageIndex: 1, pageSize: 200 }),
   });
   const rows = useMemo(() => tasksQuery.data?.data?.items ?? [], [tasksQuery.data?.data?.items]);
-  const selectedTask = rows.find((task) => task.id === selectedTaskId);
+  const selectedListTask = rows.find((task) => task.id === selectedTaskId);
+  const selectedTask = taskDetailQuery.data?.data;
   const selectedTasks = useMemo(() => rows.filter((task) => selectedTaskIds.has(task.id)), [rows, selectedTaskIds]);
 
   useEffect(() => {
-    if (selectedTaskId && tasksQuery.isSuccess && !selectedTask) {
+    if (selectedTaskId && tasksQuery.isSuccess && !selectedListTask) {
       setState({ selectedTaskId: undefined }, { replace: true });
       setCreating(false);
     }
-  }, [selectedTask, selectedTaskId, setState, tasksQuery.isSuccess]);
+  }, [selectedListTask, selectedTaskId, setState, tasksQuery.isSuccess]);
 
   useEffect(() => {
     const availableIds = new Set(rows.map((task) => task.id));

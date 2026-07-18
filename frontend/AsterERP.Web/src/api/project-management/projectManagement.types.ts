@@ -323,33 +323,39 @@ export interface ProjectManagementTaskQuery {
   includeCompleted?: boolean;
 }
 
-export interface ProjectManagementTask {
+export interface ProjectManagementTaskListItem {
   id: string;
   projectId: string;
   milestoneId?: string;
   parentTaskId?: string;
   taskCode: string;
   title: string;
-  description?: string;
   status: string;
   priority: string;
   assigneeUserId?: string;
-  assigneeEmploymentId?: string;
   startDate?: string;
   dueDate?: string;
   progressPercent: number;
-  weight: number;
-  estimateMinutes?: number;
-  actualMinutes: number;
   sortOrder: number;
   depth: number;
   versionNo: number;
-  createdTime: string;
-  updatedTime?: string;
   blockedByCount: number;
   canStart: boolean;
   blockedReason?: string;
 }
+
+export interface ProjectManagementTaskDetail extends ProjectManagementTaskListItem {
+  description?: string;
+  assigneeEmploymentId?: string;
+  weight: number;
+  estimateMinutes?: number;
+  actualMinutes: number;
+  createdTime: string;
+  updatedTime?: string;
+}
+
+// 我的任务、批量命令等既有载荷继续使用完整任务；工作台列表使用 ProjectManagementTaskListItem。
+export type ProjectManagementTask = ProjectManagementTaskDetail;
 
 export interface ProjectManagementTaskUpsertRequest {
   taskCode: string;

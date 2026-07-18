@@ -152,6 +152,11 @@ export const projectManagementQueryKeys = {
     query.includeCompleted ?? true,
   ] as const,
   tasksProject: (scope: ProjectManagementWorkspaceScope, projectId: string) => [...root(scope), 'tasks', projectId] as const,
+  task: (scope: ProjectManagementWorkspaceScope, projectId: string, taskId: string) => [
+    ...projectManagementQueryKeys.tasksProject(scope, projectId),
+    'detail',
+    taskId,
+  ] as const,
   workspace: (scope: ProjectManagementWorkspaceScope, query: ProjectManagementWorkspaceQuery) => [
     ...root(scope),
     'workspace',

@@ -14,7 +14,9 @@ import type {
   ProjectManagementOverviewQuery,
   ProjectManagementMyWorkItem,
   ProjectManagementMyWorkQuery,
-  ProjectManagementTask,
+    ProjectManagementTask,
+    ProjectManagementTaskDetail,
+    ProjectManagementTaskListItem,
   ProjectManagementTaskBatchUpdateRequest,
   ProjectManagementTaskQuery,
   ProjectManagementAuditPage,
@@ -318,19 +320,26 @@ export function getProjectManagementActivities(
 export function getProjectManagementTasks(
   query: ProjectManagementTaskQuery,
   signal?: AbortSignal,
-): Promise<ApiEnvelope<{ total: number; items: ProjectManagementTask[] }>> {
-  return httpClient.get<{ total: number; items: ProjectManagementTask[] }>(
+): Promise<ApiEnvelope<{ total: number; items: ProjectManagementTaskListItem[] }>> {
+  return httpClient.get<{ total: number; items: ProjectManagementTaskListItem[] }>(
     `/project-management/tasks${buildQueryString(query)}`,
     undefined,
     signal,
   );
 }
 
+export function getProjectManagementTask(
+  id: string,
+  signal?: AbortSignal,
+): Promise<ApiEnvelope<ProjectManagementTaskDetail>> {
+  return httpClient.get<ProjectManagementTaskDetail>(`/project-management/tasks/${id}`, undefined, signal);
+}
+
 export function createProjectManagementTask(
   projectId: string,
   request: ProjectManagementTaskUpsertRequest,
-): Promise<ApiEnvelope<ProjectManagementTask>> {
-  return httpClient.post<ProjectManagementTask, ProjectManagementTaskUpsertRequest>(
+): Promise<ApiEnvelope<ProjectManagementTaskDetail>> {
+  return httpClient.post<ProjectManagementTaskDetail, ProjectManagementTaskUpsertRequest>(
     `/project-management/tasks/${projectId}`,
     request,
   );
@@ -339,8 +348,8 @@ export function createProjectManagementTask(
 export function updateProjectManagementTask(
   id: string,
   request: ProjectManagementTaskUpsertRequest,
-): Promise<ApiEnvelope<ProjectManagementTask>> {
-  return httpClient.put<ProjectManagementTask, ProjectManagementTaskUpsertRequest>(
+): Promise<ApiEnvelope<ProjectManagementTaskDetail>> {
+  return httpClient.put<ProjectManagementTaskDetail, ProjectManagementTaskUpsertRequest>(
     `/project-management/tasks/${id}`,
     request,
   );
@@ -356,8 +365,8 @@ export function moveProjectManagementTask(
     milestoneId?: string;
     updateMilestone?: boolean;
   },
-): Promise<ApiEnvelope<ProjectManagementTask>> {
-  return httpClient.post<ProjectManagementTask, typeof request>(`/project-management/tasks/${id}/move`, request);
+): Promise<ApiEnvelope<ProjectManagementTaskDetail>> {
+  return httpClient.post<ProjectManagementTaskDetail, typeof request>(`/project-management/tasks/${id}/move`, request);
 }
 
 export function updateProjectManagementTasksBatch(
