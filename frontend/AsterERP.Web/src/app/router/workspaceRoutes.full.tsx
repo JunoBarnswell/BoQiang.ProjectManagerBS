@@ -85,7 +85,7 @@ const projectManagementRoutes: RouteObject[] = projectManagementRoutePaths.map((
     path: `/${path}`
   }),
   element: (
-    <PermissionRoute permissionCode={path === 'project-audit-center' ? 'project-management:audit:view' : path === 'project-sync' ? 'project-management:sync:export' : path === 'projects/:projectId/reports' ? 'project-management:report:export' : path === 'projects/:projectId/overview' ? 'project-management:project:view' : path.includes('projects/:projectId') ? 'project-management:task:view' : 'project-management:project:view'}>
+    <PermissionRoute permissionCode={path === 'project-audit-center' ? 'project-management:audit:view' : path === 'project-sync' ? ['project-management:sync:export', 'project-management:sync:import'] : path === 'projects/:projectId/reports' ? 'project-management:report:export' : path === 'projects/:projectId/overview' ? 'project-management:project:view' : path.includes('projects/:projectId') ? 'project-management:task:view' : 'project-management:project:view'}>
       {lazyPage(path === 'project-data-space' ? <ProjectManagementDataSpacePage /> : path === 'project-sync' ? <ProjectManagementSyncPage /> : path === 'project-search' ? <ProjectManagementSearchPage /> : path === 'project-audit-center' ? <ProjectManagementAuditPage /> : path === 'my-work' ? <ProjectManagementMyWorkPage /> : path === 'project-recycle-bin' ? <ProjectManagementRecycleBinPage /> : path === 'projects/:projectId/overview' ? <ProjectManagementOverviewPage /> : path === 'projects/:projectId/milestones' ? <ProjectManagementMilestonesPage /> : path === 'projects/:projectId/members' ? <ProjectManagementMembersPage /> : path === 'projects/:projectId/reports' ? <ProjectManagementReportsPage /> : path.includes('projects/:projectId') ? <ProjectManagementTaskWorkspacePage /> : <ProjectManagementPage />)}
     </PermissionRoute>
   )
@@ -287,7 +287,7 @@ const fixedApplicationWorkspaceRoutes: RouteObject[] = [
     path === 'my-work' ? 'breadcrumbs.projectManagementMyWork' : 'breadcrumbs.projectManagement',
     path === 'my-work' ? 'nav.projectManagementMyWork' : 'nav.projectManagement',
     'activity',
-    path === 'project-audit-center' ? 'project-management:audit:view' : path === 'project-sync' ? 'project-management:sync:export' : path === 'projects/:projectId/reports' ? 'project-management:report:export' : path === 'projects/:projectId/overview' ? 'project-management:project:view' : path.includes('projects/:projectId') ? 'project-management:task:view' : 'project-management:project:view',
+    path === 'project-audit-center' ? 'project-management:audit:view' : path === 'project-sync' ? ['project-management:sync:export', 'project-management:sync:import'] : path === 'projects/:projectId/reports' ? 'project-management:report:export' : path === 'projects/:projectId/overview' ? 'project-management:project:view' : path.includes('projects/:projectId') ? 'project-management:task:view' : 'project-management:project:view',
     path === 'project-data-space' ? <ProjectManagementDataSpacePage /> : path === 'project-sync' ? <ProjectManagementSyncPage /> : path === 'project-search' ? <ProjectManagementSearchPage /> : path === 'project-audit-center' ? <ProjectManagementAuditPage /> : path === 'my-work' ? <ProjectManagementMyWorkPage /> : path === 'project-recycle-bin' ? <ProjectManagementRecycleBinPage /> : path === 'projects/:projectId/overview' ? <ProjectManagementOverviewPage /> : path === 'projects/:projectId/milestones' ? <ProjectManagementMilestonesPage /> : path === 'projects/:projectId/members' ? <ProjectManagementMembersPage /> : path === 'projects/:projectId/reports' ? <ProjectManagementReportsPage /> : path.includes('projects/:projectId') ? <ProjectManagementTaskWorkspacePage /> : <ProjectManagementPage />
   ))
 ];
@@ -297,7 +297,7 @@ function applicationConsoleRoute(
   breadcrumbKey: string,
   labelKey: string,
   iconKey: string,
-  permissionCode: string,
+  permissionCode: string | string[],
   children: ReactNode,
   tabMode: 'detail' | 'menu' = 'menu',
   requiresApplicationDatabase = path !== 'home' && path !== 'console'
