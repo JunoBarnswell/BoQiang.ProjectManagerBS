@@ -8,6 +8,7 @@ import {
   ensureProjectManagementImConversation,
   createProjectManagementTask,
   createProjectManagementTaskComment,
+  deleteProjectManagementTaskComment,
   createProjectManagementTaskReminders,
   cancelProjectManagementTaskReminder,
   deleteProjectManagementTaskReminder,
@@ -24,11 +25,13 @@ import {
   getProjectManagementTasks,
   moveProjectManagementTask,
   updateProjectManagementTask,
+  updateProjectManagementTaskComment,
   updateProjectManagementTasksBatch,
   updateProjectManagementSavedView,
   uploadProjectManagementTaskAttachment,
 } from '../../api/project-management/projectManagement.api';
 import type {
+  ProjectManagementTaskComment,
   ProjectManagementTaskCommentUpsertRequest,
   ProjectManagementTaskBatchUpdateRequest,
   ProjectManagementTaskLabelFilter,
@@ -105,6 +108,9 @@ export function ProjectManagementTaskWorkspacePage() {
   const [openingConversationScope, setOpeningConversationScope] = useState<'project' | 'task' | null>(null);
   const [form, setForm] = useState<ProjectManagementTaskUpsertRequest>(emptyForm);
   const [commentForm, setCommentForm] = useState<ProjectManagementTaskCommentUpsertRequest>({ markdown: '' });
+  const [commentPageIndex, setCommentPageIndex] = useState(1);
+  const [editingComment, setEditingComment] = useState<ProjectManagementTaskComment | null>(null);
+  const [commentEditForm, setCommentEditForm] = useState<ProjectManagementTaskCommentUpsertRequest>({ markdown: '' });
   const [labelFilter, setLabelFilter] = useState<ProjectManagementTaskLabelFilter>({ labelIds: [], matchMode: 'Any' });
   const query = useMemo(() => ({
     ...taskWorkspaceStateToQuery(projectId, state),
@@ -137,9 +143,14 @@ export function ProjectManagementTaskWorkspacePage() {
   });
   const commentsQuery = useQuery({
     enabled: scope.isAvailable && Boolean(projectId && selectedTaskId),
-    queryFn: ({ signal }) => getProjectManagementTaskComments(selectedTaskId, signal),
+    queryFn: ({ signal }) => getProjectManagementTaskComments(selectedTaskId, { pageIndex: commentPageIndex, pageSize: 50, sort: 'timeline' }, signal),
     queryKey: queryKeys.projectManagement.taskComments(scope, projectId, selectedTaskId),
   });
+  useEffect(() => {
+    setCommentPageIndex(1);
+    setEditingComment(null);
+    setCommentEditForm({ markdown: '' });
+  }, [selectedTaskId]);
   const attachmentsQuery = useQuery({
     enabled: scope.isAvailable && Boolean(projectId && selectedTaskId),
     queryFn: ({ signal }) => getProjectManagementTaskAttachments(selectedTaskId, signal),
@@ -258,6 +269,24 @@ export function ProjectManagementTaskWorkspacePage() {
     onSuccess: async () => {
       message.success('评论已发布');
       setCommentForm({ markdown: '' });
+      await commentsQuery.refetch();
+    },
+  });
+  const commentUpdateMutation = useApiMutation({
+    mutationFn: ({ comment, request }: { comment: ProjectManagementTaskComment; request: ProjectManagementTaskCommentUpsertRequest }) => updateProjectManagementTaskComment(selectedTaskId, comment.id, { ...request, versionNo: comment.versionNo }),
+    onError: (error) => message.error(getErrorMessage(error, '评论修改失败')),
+    onSuccess: async () => {
+      message.success('评论已修改');
+      setEditingComment(null);
+      setCommentEditForm({ markdown: '' });
+      await commentsQuery.refetch();
+    },
+  });
+  const commentDeleteMutation = useApiMutation({
+    mutationFn: (comment: ProjectManagementTaskComment) => deleteProjectManagementTaskComment(selectedTaskId, comment.id, comment.versionNo),
+    onError: (error) => message.error(getErrorMessage(error, '评论删除失败')),
+    onSuccess: async () => {
+      message.success('评论已删除');
       await commentsQuery.refetch();
     },
   });
@@ -406,10 +435,14 @@ export function ProjectManagementTaskWorkspacePage() {
           attachments={attachmentsQuery.data?.data ?? []}
           attachmentsError={attachmentsQuery.isError}
           attachmentUploading={attachmentMutation.isPending}
-          comments={commentsQuery.data?.data ?? []}
+          comments={commentsQuery.data?.data?.items ?? []}
+          commentsTotal={commentsQuery.data?.data?.total ?? 0}
           commentsError={commentsQuery.isError}
           commentForm={commentForm}
           commentSubmitting={commentMutation.isPending}
+          commentEditing={editingComment}
+          commentEditForm={commentEditForm}
+          commentEditSubmitting={commentUpdateMutation.isPending}
           creating={creating}
           form={form}
           onCancel={() => {
@@ -419,6 +452,20 @@ export function ProjectManagementTaskWorkspacePage() {
           }}
           onCommentChange={setCommentForm}
           onCommentSubmit={() => commentMutation.mutate()}
+          onCommentEditChange={setCommentEditForm}
+          onCommentEditStart={(comment) => {
+            setEditingComment(comment);
+            setCommentEditForm({ markdown: comment.markdown, versionNo: comment.versionNo });
+          }}
+          onCommentEditCancel={() => {
+            setEditingComment(null);
+            setCommentEditForm({ markdown: '' });
+          }}
+          onCommentEditSubmit={() => editingComment && commentUpdateMutation.mutate({ comment: editingComment, request: commentEditForm })}
+          onCommentDelete={(comment) => confirm({ title: '删除任务评论', content: '删除后保留审计记录，但评论正文不再显示。', confirmText: '删除评论', onConfirm: () => commentDeleteMutation.mutate(comment) })}
+          commentPageIndex={commentPageIndex}
+          commentPageSize={50}
+          onCommentPageChange={setCommentPageIndex}
           onCreateReminder={(request) => reminderCreateMutation.mutate(request)}
           onCancelReminder={(reminder) => confirm({ title: '取消任务提醒', content: '取消后不会再向接收人投递该提醒。', confirmText: '取消提醒', onConfirm: () => reminderCancelMutation.mutate(reminder) })}
           onDeleteReminder={(reminder) => confirm({ title: '删除提醒记录', content: '删除后不再保留该提醒的历史记录。', confirmText: '删除记录', onConfirm: () => reminderDeleteMutation.mutate(reminder) })}

@@ -6,6 +6,11 @@ public sealed record ProjectManagementTaskCommentUpsertRequest(
     IReadOnlyList<string>? MentionUserIds = null,
     long VersionNo = 0);
 
+public sealed record ProjectManagementTaskCommentQuery(
+    int PageIndex = 1,
+    int PageSize = 50,
+    string Sort = "timeline");
+
 public sealed record ProjectManagementTaskCommentResponse(
     string Id,
     string ProjectId,

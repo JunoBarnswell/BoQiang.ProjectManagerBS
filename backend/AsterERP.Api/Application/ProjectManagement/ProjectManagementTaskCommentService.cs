@@ -22,13 +22,31 @@ public sealed class ProjectManagementTaskCommentService(
 {
     public async Task<IReadOnlyList<ProjectManagementTaskCommentResponse>> QueryAsync(string taskId, CancellationToken cancellationToken = default)
     {
+        var page = await QueryAsync(taskId, new ProjectManagementTaskCommentQuery(PageSize: 200), cancellationToken);
+        return page.Items;
+    }
+
+    public async Task<GridPageResult<ProjectManagementTaskCommentResponse>> QueryAsync(
+        string taskId,
+        ProjectManagementTaskCommentQuery query,
+        CancellationToken cancellationToken = default)
+    {
         var task = await GetTaskAsync(taskId, cancellationToken);
         await Policy(task.ProjectId, task.AssigneeUserId).EnsureCanViewProjectAsync(task.ProjectId, cancellationToken);
-        var rows = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskCommentEntity>()
-            .Where(item => item.TenantId == Tenant() && item.AppCode == App() && item.TaskId == task.Id && !item.IsDeleted)
-            .OrderBy(item => item.CreatedTime, OrderByType.Asc)
-            .ToListAsync(cancellationToken);
-        return await MapManyAsync(rows, cancellationToken);
+        var pageIndex = Math.Max(query.PageIndex, 1);
+        var pageSize = Math.Clamp(query.PageSize, 1, 200);
+        var sort = NormalizeSort(query.Sort);
+        var comments = databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskCommentEntity>()
+            .Where(item => item.TenantId == Tenant() && item.AppCode == App() && item.TaskId == task.Id && !item.IsDeleted);
+        var total = new RefAsync<int>();
+        var rows = sort == "desc"
+            ? await comments.OrderBy(item => item.CreatedTime, OrderByType.Desc).OrderBy(item => item.Id, OrderByType.Desc).ToPageListAsync(pageIndex, pageSize, total, cancellationToken)
+            : await comments.OrderBy(item => item.CreatedTime, OrderByType.Asc).OrderBy(item => item.Id, OrderByType.Asc).ToPageListAsync(pageIndex, pageSize, total, cancellationToken);
+        return new GridPageResult<ProjectManagementTaskCommentResponse>
+        {
+            Total = total.Value,
+            Items = (await MapManyAsync(rows, cancellationToken)).ToList()
+        };
     }
 
     public async Task<GridPageResult<ProjectManagementTaskCommentMentionCandidateResponse>> QueryMentionCandidatesAsync(
@@ -86,6 +104,7 @@ public sealed class ProjectManagementTaskCommentService(
     public async Task<ProjectManagementTaskCommentResponse> CreateAsync(string taskId, ProjectManagementTaskCommentUpsertRequest request, CancellationToken cancellationToken = default)
     {
         var task = await GetTaskAsync(taskId, cancellationToken);
+        await EnsureCommentsMutableAsync(task, cancellationToken);
         await Policy(task.ProjectId, task.AssigneeUserId).EnsureCanManageTaskAsync(task.ProjectId, task.AssigneeUserId, cancellationToken);
         var markdown = NormalizeMarkdown(request.Markdown);
         await EnsureParentAsync(task, request.ParentCommentId, cancellationToken);
@@ -112,11 +131,11 @@ public sealed class ProjectManagementTaskCommentService(
     public async Task<ProjectManagementTaskCommentResponse> UpdateAsync(string taskId, string id, ProjectManagementTaskCommentUpsertRequest request, CancellationToken cancellationToken = default)
     {
         var task = await GetTaskAsync(taskId, cancellationToken);
+        await EnsureCommentsMutableAsync(task, cancellationToken);
         var db = databaseAccessor.GetCurrentDb();
         var entity = (await db.Queryable<ProjectManagementTaskCommentEntity>().Where(item => item.Id == id && item.TenantId == Tenant() && item.AppCode == App() && item.TaskId == task.Id && !item.IsDeleted).Take(1).ToListAsync(cancellationToken)).FirstOrDefault()
             ?? throw new NotFoundException("任务评论不存在", ErrorCodes.PlatformResourceNotFound);
-        if (!string.Equals(entity.AuthorUserId, User(), StringComparison.OrdinalIgnoreCase))
-            throw new ValidationException("只能编辑自己发布的评论", ErrorCodes.PermissionDenied);
+        await EnsureCanManageCommentAsync(task, entity, cancellationToken);
         EnsureVersion(entity.VersionNo, request.VersionNo);
         var before = CommentActivitySnapshot.From(entity);
         await EnsureParentAsync(task, request.ParentCommentId, cancellationToken, entity.Id);
@@ -142,12 +161,11 @@ public sealed class ProjectManagementTaskCommentService(
     public async Task DeleteAsync(string taskId, string id, long versionNo, CancellationToken cancellationToken = default)
     {
         var task = await GetTaskAsync(taskId, cancellationToken);
+        await EnsureCommentsMutableAsync(task, cancellationToken);
         var db = databaseAccessor.GetCurrentDb();
         var entity = (await db.Queryable<ProjectManagementTaskCommentEntity>().Where(item => item.Id == id && item.TenantId == Tenant() && item.AppCode == App() && item.TaskId == task.Id && !item.IsDeleted).Take(1).ToListAsync(cancellationToken)).FirstOrDefault()
             ?? throw new NotFoundException("任务评论不存在", ErrorCodes.PlatformResourceNotFound);
-        await Policy(task.ProjectId, task.AssigneeUserId).EnsureCanManageTaskAsync(task.ProjectId, task.AssigneeUserId, cancellationToken);
-        if (!string.Equals(entity.AuthorUserId, User(), StringComparison.OrdinalIgnoreCase))
-            throw new ValidationException("只能删除自己发布的评论", ErrorCodes.PermissionDenied);
+        await EnsureCanManageCommentAsync(task, entity, cancellationToken);
         EnsureVersion(entity.VersionNo, versionNo);
         var before = CommentActivitySnapshot.From(entity);
         entity.IsDeleted = true;
@@ -169,6 +187,23 @@ public sealed class ProjectManagementTaskCommentService(
         RequireTenant(); RequireApp();
         return (await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskEntity>().Where(item => item.Id == taskId && item.TenantId == Tenant() && item.AppCode == App() && !item.IsDeleted).Take(1).ToListAsync(cancellationToken)).FirstOrDefault()
             ?? throw new NotFoundException("任务不存在", ErrorCodes.PlatformResourceNotFound);
+    }
+
+    private async Task EnsureCommentsMutableAsync(ProjectManagementTaskEntity task, CancellationToken cancellationToken)
+    {
+        var projectStatus = (await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementProjectEntity>()
+            .Where(item => item.Id == task.ProjectId && !item.IsDeleted)
+            .Select(item => item.Status)
+            .Take(1)
+            .ToListAsync(cancellationToken)).FirstOrDefault();
+        if (string.Equals(projectStatus, ProjectManagementDomainRules.ProjectArchived, StringComparison.OrdinalIgnoreCase))
+            throw new ValidationException("已归档项目的任务评论不可新增、编辑或删除", ErrorCodes.PermissionDenied);
+    }
+
+    private async Task EnsureCanManageCommentAsync(ProjectManagementTaskEntity task, ProjectManagementTaskCommentEntity comment, CancellationToken cancellationToken)
+    {
+        if (string.Equals(comment.AuthorUserId, User(), StringComparison.OrdinalIgnoreCase)) return;
+        await Policy(task.ProjectId, task.AssigneeUserId).EnsureCanManageProjectAsync(task.ProjectId, cancellationToken);
     }
 
     private async Task EnsureParentAsync(ProjectManagementTaskEntity task, string? parentId, CancellationToken cancellationToken, string? currentId = null)
@@ -236,6 +271,12 @@ public sealed class ProjectManagementTaskCommentService(
         if (blocked.Any(item => markdown.Contains(item, StringComparison.OrdinalIgnoreCase))) throw new ValidationException("评论包含不安全内容");
         return markdown;
     }
+    private static string NormalizeSort(string? value) => value?.Trim().ToLowerInvariant() switch
+    {
+        null or "" or "timeline" or "asc" => "timeline",
+        "desc" or "newest" => "desc",
+        _ => throw new ValidationException("评论排序只支持 timeline 或 desc")
+    };
     private static IReadOnlyList<string> NormalizeMentions(IReadOnlyList<string>? values) => (values ?? []).Where(value => !string.IsNullOrWhiteSpace(value)).Select(value => value.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).Take(50).ToList();
     private static string? Optional(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     private static void EnsureVersion(long current, long requested) { if (requested <= 0 || current != requested) throw new ValidationException("评论已被其他用户修改，请刷新后重试", ErrorCodes.ApplicationDevelopmentPageRevisionConflict); }

@@ -33,6 +33,8 @@ import type {
   ProjectManagementRecycleTaskPurgePreview,
   ProjectManagementTaskUpsertRequest,
   ProjectManagementTaskComment,
+  ProjectManagementTaskCommentPage,
+  ProjectManagementTaskCommentQuery,
   ProjectManagementTaskCommentUpsertRequest,
   ProjectManagementTaskReminder,
   ProjectManagementTaskReminderCreateRequest,
@@ -459,11 +461,12 @@ export function deleteProjectManagementTask(id: string, versionNo: number): Prom
 
 export function getProjectManagementTaskComments(
   taskId: string,
+  query: ProjectManagementTaskCommentQuery = {},
   signal?: AbortSignal,
-): Promise<ApiEnvelope<ProjectManagementTaskComment[]>> {
-  return httpClient.get<ProjectManagementTaskComment[]>(
+): Promise<ApiEnvelope<ProjectManagementTaskCommentPage>> {
+  return httpClient.get<ProjectManagementTaskCommentPage>(
     `/project-management/tasks/${taskId}/comments`,
-    undefined,
+    query,
     signal,
   );
 }
@@ -476,6 +479,21 @@ export function createProjectManagementTaskComment(
     `/project-management/tasks/${taskId}/comments`,
     request,
   );
+}
+
+export function updateProjectManagementTaskComment(
+  taskId: string,
+  id: string,
+  request: ProjectManagementTaskCommentUpsertRequest,
+): Promise<ApiEnvelope<ProjectManagementTaskComment>> {
+  return httpClient.put<ProjectManagementTaskComment, ProjectManagementTaskCommentUpsertRequest>(
+    `/project-management/tasks/${taskId}/comments/${id}`,
+    request,
+  );
+}
+
+export function deleteProjectManagementTaskComment(taskId: string, id: string, versionNo: number): Promise<ApiEnvelope<{ id: string }>> {
+  return httpClient.delete<{ id: string }>(`/project-management/tasks/${taskId}/comments/${id}${buildQueryString({ versionNo })}`);
 }
 
 export function getProjectManagementTaskReminders(

@@ -11,7 +11,7 @@ namespace AsterERP.Api.Controllers;
 public sealed class ProjectManagementTaskCommentsController(IProjectManagementTaskCommentService service) : BaseApiController
 {
     [HttpGet]
-    public async Task<IActionResult> QueryAsync(string taskId, CancellationToken cancellationToken) => ApiOk(await service.QueryAsync(taskId, cancellationToken));
+    public async Task<IActionResult> QueryAsync(string taskId, [FromQuery] ProjectManagementTaskCommentQuery query, CancellationToken cancellationToken) => ApiOk(await service.QueryAsync(taskId, query, cancellationToken));
 
     [HttpGet("mention-candidates")]
     public async Task<IActionResult> QueryMentionCandidatesAsync(string taskId, [FromQuery] ProjectManagementTaskCommentMentionCandidateQuery query, CancellationToken cancellationToken)

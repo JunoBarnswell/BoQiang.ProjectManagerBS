@@ -498,11 +498,27 @@ export interface ProjectManagementTaskComment {
   taskId: string;
   parentCommentId?: string;
   markdown: string;
-  mentionUserIds: string[];
+  mentions: ProjectManagementTaskCommentMention[];
   authorUserId: string;
   versionNo: number;
   createdTime: string;
   editedTime?: string;
+}
+
+export interface ProjectManagementTaskCommentMention {
+  userId: string;
+  displayName: string;
+}
+
+export interface ProjectManagementTaskCommentPage {
+  total: number;
+  items: ProjectManagementTaskComment[];
+}
+
+export interface ProjectManagementTaskCommentQuery {
+  pageIndex?: number;
+  pageSize?: number;
+  sort?: 'timeline' | 'desc';
 }
 
 export interface ProjectManagementTaskCommentUpsertRequest {
@@ -606,27 +622,35 @@ export interface ProjectManagementDataSpaceSummary {
   lastActivityTime?: string | null;
 }
 
-export type ProjectManagementSearchScope = 'all' | 'projects' | 'tasks' | 'comments';
+export type ProjectManagementSearchScope = 'all' | 'projects' | 'tasks' | 'milestones' | 'labels' | 'members' | 'comments';
 
 export interface ProjectManagementSearchQuery {
   keyword: string;
   scope?: ProjectManagementSearchScope;
   limit?: number;
+  projectId?: string;
+  status?: string;
+  from?: string;
+  to?: string;
+  pageIndex?: number;
 }
 
 export interface ProjectManagementSearchItem {
-  resultType: 'project' | 'task' | 'comment';
+  resultType: 'project' | 'task' | 'milestone' | 'label' | 'member' | 'comment';
   id: string;
   projectId: string;
   title: string;
   summary?: string;
   targetRoute: string;
-  updatedTime?: string;
+  updatedTime?: string | null;
 }
 
 export interface ProjectManagementSearchResponse {
   projects: ProjectManagementSearchItem[];
   tasks: ProjectManagementSearchItem[];
+  milestones: ProjectManagementSearchItem[];
+  labels: ProjectManagementSearchItem[];
+  members: ProjectManagementSearchItem[];
   comments: ProjectManagementSearchItem[];
 }
 

@@ -22,9 +22,9 @@ public sealed class ProjectManagementTaskCommentServiceTests
         await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
         db.CodeFirst.InitTables<SystemUserEntity>();
         await db.Insertable(new SystemUserEntity { Id = "user-a", UserName = "alice", DisplayName = "Alice", Status = "Enabled" }).ExecuteCommandAsync();
-        await db.Insertable(new ProjectManagementProjectEntity { Id = "project-a", TenantId = "tenant-a", AppCode = "MES", ProjectCode = "A", ProjectName = "A", OwnerUserId = "operator" }).ExecuteCommandAsync();
-        await db.Insertable(new ProjectManagementProjectMemberEntity { TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-a", UserId = "user-a", RoleCode = "Member", IsActive = true }).ExecuteCommandAsync();
-        await db.Insertable(new ProjectManagementTaskEntity { Id = "task-a", TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-a", TaskCode = "T-1", Title = "Task", CreatedBy = "operator", CreatedTime = DateTime.UtcNow }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementProjectEntity { Id = "project-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "A", ProjectName = "A", OwnerUserId = "operator" }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementProjectMemberEntity { TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", UserId = "user-a", RoleCode = "Member", IsActive = true }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementTaskEntity { Id = "task-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", TaskCode = "T-1", Title = "Task", CreatedBy = "operator", CreatedTime = DateTime.UtcNow }).ExecuteCommandAsync();
         var realtime = new RecordingRealtimePublisher();
         var service = new ProjectManagementTaskCommentService(new TestWorkspaceDatabaseAccessor(db), CreateUser(), realtimePublisher: realtime);
         var root = await service.CreateAsync("task-a", new ProjectManagementTaskCommentUpsertRequest("**root**", MentionUserIds: ["user-a"]));
@@ -47,8 +47,8 @@ public sealed class ProjectManagementTaskCommentServiceTests
     {
         using var db = new SqlSugarClient(new ConnectionConfig { ConnectionString = $"Data Source=file:project-management-comment-security-{Guid.NewGuid():N};Mode=Memory;Cache=Shared", DbType = DbType.Sqlite, IsAutoCloseConnection = false });
         await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
-        await db.Insertable(new ProjectManagementProjectEntity { Id = "project-a", TenantId = "tenant-a", AppCode = "MES", ProjectCode = "A", ProjectName = "A", OwnerUserId = "owner" }).ExecuteCommandAsync();
-        await db.Insertable(new ProjectManagementTaskEntity { Id = "task-a", TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-a", TaskCode = "T-1", Title = "Task", CreatedBy = "owner", CreatedTime = DateTime.UtcNow }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementProjectEntity { Id = "project-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "A", ProjectName = "A", OwnerUserId = "owner" }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementTaskEntity { Id = "task-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", TaskCode = "T-1", Title = "Task", CreatedBy = "owner", CreatedTime = DateTime.UtcNow }).ExecuteCommandAsync();
 
         var outsider = new ProjectManagementTaskCommentService(new TestWorkspaceDatabaseAccessor(db), CreateUser("outsider"));
         await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() => outsider.QueryAsync("task-a"));
@@ -64,8 +64,8 @@ public sealed class ProjectManagementTaskCommentServiceTests
         using var db = new SqlSugarClient(new ConnectionConfig { ConnectionString = $"Data Source=file:project-management-comment-mentions-{Guid.NewGuid():N};Mode=Memory;Cache=Shared", DbType = DbType.Sqlite, IsAutoCloseConnection = false });
         await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
         db.CodeFirst.InitTables<SystemUserEntity>();
-        await db.Insertable(new ProjectManagementProjectEntity { Id = "project-a", TenantId = "tenant-a", AppCode = "MES", ProjectCode = "A", ProjectName = "A", OwnerUserId = "operator" }).ExecuteCommandAsync();
-        await db.Insertable(new ProjectManagementTaskEntity { Id = "task-a", TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-a", TaskCode = "T-1", Title = "Task", CreatedBy = "operator", CreatedTime = DateTime.UtcNow }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementProjectEntity { Id = "project-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "A", ProjectName = "A", OwnerUserId = "operator" }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementTaskEntity { Id = "task-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", TaskCode = "T-1", Title = "Task", CreatedBy = "operator", CreatedTime = DateTime.UtcNow }).ExecuteCommandAsync();
         await db.Insertable(new[]
         {
             new SystemUserEntity { Id = "user-a", UserName = "alice", DisplayName = "Alice 项目成员", Status = "Enabled" },
@@ -76,10 +76,10 @@ public sealed class ProjectManagementTaskCommentServiceTests
         }).ExecuteCommandAsync();
         await db.Insertable(new[]
         {
-            new ProjectManagementProjectMemberEntity { Id = "member-a", TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-a", UserId = "user-a", IsActive = true },
-            new ProjectManagementProjectMemberEntity { Id = "member-b", TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-a", UserId = "user-b", IsActive = true },
-            new ProjectManagementProjectMemberEntity { Id = "member-d", TenantId = "tenant-b", AppCode = "MES", ProjectId = "project-a", UserId = "user-d", IsActive = true },
-            new ProjectManagementProjectMemberEntity { Id = "member-e", TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-a", UserId = "user-e", IsActive = true }
+            new ProjectManagementProjectMemberEntity { Id = "member-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", UserId = "user-a", IsActive = true },
+            new ProjectManagementProjectMemberEntity { Id = "member-b", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", UserId = "user-b", IsActive = true },
+            new ProjectManagementProjectMemberEntity { Id = "member-d", TenantId = "tenant-b", AppCode = "SYSTEM", ProjectId = "project-a", UserId = "user-d", IsActive = true },
+            new ProjectManagementProjectMemberEntity { Id = "member-e", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", UserId = "user-e", IsActive = true }
         }).ExecuteCommandAsync();
 
         var service = new ProjectManagementTaskCommentService(new TestWorkspaceDatabaseAccessor(db), CreateUser());
@@ -99,6 +99,47 @@ public sealed class ProjectManagementTaskCommentServiceTests
     }
 
     [Fact]
+    public async Task Comment_query_is_database_paged_and_owner_can_govern_other_authors()
+    {
+        using var db = new SqlSugarClient(new ConnectionConfig { ConnectionString = $"Data Source=file:project-management-comment-page-{Guid.NewGuid():N};Mode=Memory;Cache=Shared", DbType = DbType.Sqlite, IsAutoCloseConnection = false });
+        await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
+        await db.Insertable(new ProjectManagementProjectEntity { Id = "project-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "A", ProjectName = "A", OwnerUserId = "owner" }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementProjectMemberEntity { TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", UserId = "operator", RoleCode = "Member", IsActive = true }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementTaskEntity { Id = "task-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", TaskCode = "T-1", Title = "Task", AssigneeUserId = "operator", CreatedBy = "owner", CreatedTime = DateTime.UtcNow }).ExecuteCommandAsync();
+
+        var author = new ProjectManagementTaskCommentService(new TestWorkspaceDatabaseAccessor(db), CreateUser("operator"));
+        var first = await author.CreateAsync("task-a", new ProjectManagementTaskCommentUpsertRequest("first"));
+        await author.CreateAsync("task-a", new ProjectManagementTaskCommentUpsertRequest("second"));
+        await author.CreateAsync("task-a", new ProjectManagementTaskCommentUpsertRequest("third"));
+
+        var page = await author.QueryAsync("task-a", new ProjectManagementTaskCommentQuery(PageIndex: 2, PageSize: 2));
+        Assert.Equal(3, page.Total);
+        Assert.Single(page.Items);
+        Assert.Equal("third", page.Items[0].Markdown);
+        var newest = await author.QueryAsync("task-a", new ProjectManagementTaskCommentQuery(PageSize: 2, Sort: "desc"));
+        Assert.Equal(["third", "second"], newest.Items.Select(item => item.Markdown));
+
+        var owner = new ProjectManagementTaskCommentService(new TestWorkspaceDatabaseAccessor(db), CreateUser("owner"));
+        var edited = await owner.UpdateAsync("task-a", first.Id, new ProjectManagementTaskCommentUpsertRequest("owner edit", VersionNo: first.VersionNo));
+        Assert.Equal("owner edit", edited.Markdown);
+        await owner.DeleteAsync("task-a", first.Id, edited.VersionNo);
+        Assert.Equal(2, (await owner.QueryAsync("task-a", new ProjectManagementTaskCommentQuery(PageSize: 10))).Total);
+    }
+
+    [Fact]
+    public async Task Archived_project_rejects_comment_mutations_but_keeps_existing_history()
+    {
+        using var db = new SqlSugarClient(new ConnectionConfig { ConnectionString = $"Data Source=file:project-management-comment-archive-{Guid.NewGuid():N};Mode=Memory;Cache=Shared", DbType = DbType.Sqlite, IsAutoCloseConnection = false });
+        await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
+        await db.Insertable(new ProjectManagementProjectEntity { Id = "project-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "A", ProjectName = "A", OwnerUserId = "operator", Status = "Archived" }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementTaskEntity { Id = "task-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", TaskCode = "T-1", Title = "Task", CreatedBy = "operator", CreatedTime = DateTime.UtcNow }).ExecuteCommandAsync();
+
+        var service = new ProjectManagementTaskCommentService(new TestWorkspaceDatabaseAccessor(db), CreateUser());
+        await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() => service.CreateAsync("task-a", new ProjectManagementTaskCommentUpsertRequest("blocked")));
+        Assert.Empty(await service.QueryAsync("task-a"));
+    }
+
+    [Fact]
     public void Comment_controller_separates_view_and_manage_permissions()
     {
         Assert.Contains(typeof(ProjectManagementTaskCommentsController).GetCustomAttributes(typeof(PermissionAttribute), true), attribute => ((PermissionAttribute)attribute).Code == PermissionCodes.ProjectManagementCommentView);
@@ -107,7 +148,7 @@ public sealed class ProjectManagementTaskCommentServiceTests
 
     private static FixedAsterErpCurrentUser CreateUser(string userId = "operator") => new(new ClaimsPrincipal(new ClaimsIdentity(new[]
     {
-        new Claim(AsterErpClaimTypes.UserId, userId), new Claim(AsterErpClaimTypes.TenantId, "tenant-a"), new Claim(AsterErpClaimTypes.AppCode, "MES")
+        new Claim(AsterErpClaimTypes.UserId, userId), new Claim(AsterErpClaimTypes.TenantId, "tenant-a"), new Claim(AsterErpClaimTypes.AppCode, "SYSTEM")
     }, "test")));
 
     private sealed class ThrowingActivityWriter : IProjectManagementActivityWriter
