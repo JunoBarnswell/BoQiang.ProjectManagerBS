@@ -758,4 +758,18 @@ export interface ProjectManagementActivity {
   createdTime: string;
 }
 
+export interface ProjectManagementActivityQuery {
+  pageIndex?: number;
+  pageSize?: number;
+  aggregateType?: string;
+  activityType?: string;
+  from?: string;
+  to?: string;
+}
+
+export interface ProjectManagementActivityPage {
+  total: number;
+  items: ProjectManagementActivity[];
+}
+
 export type ProjectManagementPageState = "loading" | "empty" | "error" | "forbidden";

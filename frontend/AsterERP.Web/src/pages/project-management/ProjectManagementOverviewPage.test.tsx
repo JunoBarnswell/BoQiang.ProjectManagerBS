@@ -5,18 +5,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ProjectManagementOverviewPage } from './ProjectManagementOverviewPage';
 
-const queryCalls = vi.hoisted(() => [] as Array<{ enabled?: boolean }>);
-const queryResults = vi.hoisted(() => [] as Array<Record<string, unknown>>);
+const queryCalls = vi.hoisted(() => [] as Array<{ enabled?: boolean; queryKey?: readonly unknown[] }>);
+const queryResults = vi.hoisted(() => ({
+  activities: {} as Record<string, unknown>,
+  overview: {} as Record<string, unknown>
+}));
 const permissionState = vi.hoisted(() => ({ canViewActivities: false }));
 
 vi.mock('@tanstack/react-query', () => ({
-  useQuery: (options: { enabled?: boolean }) => {
+  useQuery: (options: { enabled?: boolean; queryKey?: readonly unknown[] }) => {
     queryCalls.push(options);
-    return queryResults.shift();
+    return options.queryKey?.includes('activities') ? queryResults.activities : queryResults.overview;
   }
 }));
 
 vi.mock('react-router-dom', () => ({
+  Link: ({ children }: { children: React.ReactNode }) => <a>{children}</a>,
   useParams: () => ({ projectId: 'project-1' })
 }));
 
@@ -36,39 +40,45 @@ vi.mock('../../shared/status/Page403', () => ({ Page403: () => <p>403</p> }));
 vi.mock('../../shared/status/PageError', () => ({ PageError: ({ description }: { description?: React.ReactNode }) => <p>{description}</p> }));
 vi.mock('../../shared/status/PageLoading', () => ({ PageLoading: () => <p>loading</p> }));
 
+function overviewQueryResult() {
+  return {
+    data: {
+      data: {
+        items: [{
+          blockedTaskCount: 0,
+          milestones: [],
+          overdueTaskCount: 0,
+          project: { description: null, projectName: '项目 A', status: '进行中' },
+          taskCount: 2,
+          taskProgressPercent: 50
+        }]
+      }
+    },
+    error: null,
+    isError: false,
+    isLoading: false,
+    refetch: vi.fn()
+  };
+}
+
+function activityQueryResult(data: unknown, isError = false) {
+  return {
+    data,
+    error: isError ? new Error('activity unavailable') : null,
+    isError,
+    isLoading: false,
+    refetch: vi.fn()
+  };
+}
+
 describe('ProjectManagementOverviewPage', () => {
   afterEach(cleanup);
+
   beforeEach(() => {
     queryCalls.length = 0;
-    queryResults.length = 0;
     permissionState.canViewActivities = false;
-    queryResults.push(
-      {
-        data: {
-          data: {
-            items: [{
-              blockedTaskCount: 0,
-              milestones: [],
-              overdueTaskCount: 0,
-              project: { description: null, projectName: '项目 A', status: '进行中' },
-              taskCount: 2,
-              taskProgressPercent: 50
-            }]
-          }
-        },
-        error: null,
-        isError: false,
-        isLoading: false,
-        refetch: vi.fn()
-      },
-      {
-        data: { data: [] },
-        error: null,
-        isError: false,
-        isLoading: false,
-        refetch: vi.fn()
-      }
-    );
+    queryResults.overview = overviewQueryResult();
+    queryResults.activities = activityQueryResult({ data: { total: 0, items: [] } });
   });
 
   it('keeps the overview available and does not enable the activity query without audit:view', () => {
@@ -83,33 +93,37 @@ describe('ProjectManagementOverviewPage', () => {
 
   it('keeps the overview available when an authorized activity request fails', () => {
     permissionState.canViewActivities = true;
-    queryResults.length = 0;
-    queryResults.push(
-      {
-        data: {
-          data: {
-            items: [{
-              blockedTaskCount: 0,
-              milestones: [],
-              overdueTaskCount: 0,
-              project: { description: null, projectName: '项目 A', status: '进行中' },
-              taskCount: 2,
-              taskProgressPercent: 50
-            }]
-          }
-        },
-        error: null,
-        isError: false,
-        isLoading: false,
-        refetch: vi.fn()
-      },
-      { data: undefined, error: new Error('activity unavailable'), isError: true, isLoading: false, refetch: vi.fn() }
-    );
+    queryResults.activities = activityQueryResult(undefined, true);
 
     render(<ProjectManagementOverviewPage />);
 
     expect(screen.getByText('整体进度')).toBeTruthy();
     expect(screen.getByText('项目活动暂时无法加载。')).toBeTruthy();
     expect(queryCalls[1]?.enabled).toBe(true);
+  });
+
+  it('renders items from the paged activity response instead of treating the response as an array', () => {
+    permissionState.canViewActivities = true;
+    queryResults.activities = activityQueryResult({
+      data: {
+        total: 21,
+        items: [{
+          activityType: 'task.updated',
+          aggregateId: 'task-1',
+          aggregateType: 'Task',
+          actorUserId: 'user-a',
+          createdTime: '2026-07-19T00:00:00.000Z',
+          id: 'activity-1',
+          projectId: 'project-1',
+          summary: '更新任务 A',
+          traceId: 'trace-activity-1'
+        }]
+      }
+    });
+
+    render(<ProjectManagementOverviewPage />);
+
+    expect(screen.getByText('更新任务 A')).toBeTruthy();
+    expect(screen.queryByText('暂无活动。项目和任务发生可审计变更后会在这里显示。')).toBeNull();
   });
 });

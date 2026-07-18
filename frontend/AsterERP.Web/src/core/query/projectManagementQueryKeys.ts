@@ -1,5 +1,6 @@
 import type {
   ProjectManagementAuditQuery,
+  ProjectManagementActivityQuery,
   ProjectManagementMemberCandidateQuery,
   ProjectManagementMyWorkQuery,
   ProjectManagementNotificationQuery,
@@ -18,11 +19,16 @@ function root(scope: ProjectManagementWorkspaceScope) {
 
 export const projectManagementQueryKeys = {
   all: (scope: ProjectManagementWorkspaceScope) => root(scope),
-  activities: (scope: ProjectManagementWorkspaceScope, projectId: string, limit: number) => [
+  activities: (scope: ProjectManagementWorkspaceScope, projectId: string, query: ProjectManagementActivityQuery) => [
     ...root(scope),
     'activities',
     projectId,
-    limit,
+    query.pageIndex ?? 1,
+    query.pageSize ?? 50,
+    query.aggregateType ?? '',
+    query.activityType ?? '',
+    query.from ?? '',
+    query.to ?? '',
   ] as const,
   audit: (scope: ProjectManagementWorkspaceScope, query: ProjectManagementAuditQuery) => [
     ...root(scope),
