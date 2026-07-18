@@ -20,6 +20,19 @@ public sealed record ProjectManagementOverviewPersonSummary(
     int CompletedTaskCount,
     int OverdueTaskCount);
 
+/// <summary>
+/// 项目列表与详情共用的轻量风险摘要；仅基于有效叶子任务计算，避免父子任务重复计数。
+/// </summary>
+public sealed record ProjectManagementProjectRiskSummary(
+    int OverdueTaskCount,
+    int BlockedTaskCount,
+    int DueSoonIncompleteTaskCount,
+    int InProgressTaskCount,
+    int? WipLimit,
+    bool IsWipExceeded,
+    int WipExceededBy,
+    bool HasScheduleRisk);
+
 public sealed record ProjectManagementOverviewItem(
     ProjectManagementProjectResponse Project,
     int TaskCount,
@@ -31,4 +44,5 @@ public sealed record ProjectManagementOverviewItem(
     int MilestoneCount,
     int MemberCount,
     IReadOnlyList<ProjectManagementOverviewMilestoneSummary> Milestones,
-    IReadOnlyList<ProjectManagementOverviewPersonSummary> People);
+    IReadOnlyList<ProjectManagementOverviewPersonSummary> People,
+    ProjectManagementProjectRiskSummary RiskSummary);

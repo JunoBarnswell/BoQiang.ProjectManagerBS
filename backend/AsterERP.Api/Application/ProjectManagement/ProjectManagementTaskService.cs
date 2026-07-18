@@ -26,7 +26,8 @@ public sealed class ProjectManagementTaskService(
     ProjectManagementTaskLabelMutation? labelMutation = null,
     IProjectManagementTaskTemplateDependencyCommandService? templateDependencyCommand = null,
     ProjectManagementTaskStateMachine? taskStateMachine = null,
-    IProjectManagementReversibleCommandWriter? reversibleCommandWriter = null) : IProjectManagementTaskService, IProjectManagementTaskOccurrenceCommandService, IProjectManagementTaskTemplateCommandService
+    IProjectManagementReversibleCommandWriter? reversibleCommandWriter = null,
+    ProjectManagementWipCoordinator? wipCoordinator = null) : IProjectManagementTaskService, IProjectManagementTaskOccurrenceCommandService, IProjectManagementTaskTemplateCommandService
 {
     private static readonly string[] Priorities = ["Low", "Medium", "High", "Urgent"];
 
@@ -133,7 +134,9 @@ public sealed class ProjectManagementTaskService(
         var depth = placement.RootDepth;
         var state = StateMachine.Resolve(string.Empty, request.Status, request.ProgressPercent, null, null, now: DateTime.UtcNow, isNew: true);
         await EnsureMilestoneAsync(projectId, request.MilestoneId, cancellationToken);
-        await EnsureWipAsync(projectId, state.Status, request.OverrideWip, cancellationToken);
+        await using var wipLease = state.Status == ProjectManagementDomainRules.TaskInProgress
+            ? await WipCoordinator.EnterAsync(RequireTenantId(), RequireAppCode(), projectId, cancellationToken)
+            : null;
         var now = DateTime.UtcNow;
         var weight = ResolveProgressWeight(request.Weight, request.EstimateMinutes);
         var entity = new ProjectManagementTaskEntity
@@ -148,6 +151,7 @@ public sealed class ProjectManagementTaskService(
         };
         await ProjectManagementMutationTransaction.RunAsync(db, async () =>
         {
+            var wipOverride = await EnsureWipAsync(db, projectId, state.Status == ProjectManagementDomainRules.TaskInProgress, request.OverrideWip, request.OverrideWipReason, cancellationToken);
             if (recurrenceOccurrence is not null)
             {
                 recurrenceOccurrence.State = "Generating";
@@ -166,6 +170,7 @@ public sealed class ProjectManagementTaskService(
             }
             await RefreshProgressProjectionsAsync(projectId, cancellationToken);
             await WriteActivityAsync(entity, "created", $"创建任务 {entity.Title}", cancellationToken);
+            await WriteWipOverrideActivityAsync(entity, wipOverride, cancellationToken);
             await WriteSyncJournalAsync(entity, "created", cancellationToken);
         });
         await PublishInvalidationAsync(entity, "task.created", cancellationToken);
@@ -205,6 +210,9 @@ public sealed class ProjectManagementTaskService(
         await EnsureTaskWriteAccessAsync(projectId, null, null, null, cancellationToken);
         var db = databaseAccessor.GetCurrentDb();
         var created = new Dictionary<string, ProjectManagementTaskEntity>(StringComparer.Ordinal);
+        await using var wipLease = nodes.Any(node => string.Equals(node.Task.Status, ProjectManagementDomainRules.TaskInProgress, StringComparison.OrdinalIgnoreCase))
+            ? await WipCoordinator.EnterAsync(RequireTenantId(), RequireAppCode(), projectId, cancellationToken)
+            : null;
         await ProjectManagementMutationTransaction.RunAsync(db, async () =>
         {
             foreach (var node in nodes)
@@ -214,9 +222,11 @@ public sealed class ProjectManagementTaskService(
                     ?? throw new ValidationException("模板父任务节点不存在或排序无效");
                 var task = node.Task with { ParentTaskId = parentId };
                 var entity = await PrepareTemplateTaskAsync(projectId, task, cancellationToken);
+                var wipOverride = await EnsureWipAsync(db, projectId, entity.Status == ProjectManagementDomainRules.TaskInProgress, task.OverrideWip, task.OverrideWipReason, cancellationToken);
                 await db.Insertable(entity).ExecuteCommandAsync(cancellationToken);
                 if (node.LabelIds.Count > 0) await (labelMutation ?? new ProjectManagementTaskLabelMutation()).ReplaceAsync(db, entity, node.LabelIds, RequireTenantId(), RequireAppCode(), RequireUserId(), DateTime.UtcNow, cancellationToken);
                 await WriteActivityAsync(entity, "created", $"从模板创建任务 {entity.Title}", cancellationToken);
+                await WriteWipOverrideActivityAsync(entity, wipOverride, cancellationToken);
                 await WriteSyncJournalAsync(entity, "created", cancellationToken);
                 created.Add(node.NodeKey, entity);
             }
@@ -288,7 +298,10 @@ public sealed class ProjectManagementTaskService(
         var parent = placement.Parent;
         await EnsureTaskWriteAccessAsync(entity.ProjectId, entity.Id, parent?.Id, request.AssigneeUserId, cancellationToken, requireParentScope: true);
         await EnsureAssigneeAsync(entity.ProjectId, request.AssigneeUserId, cancellationToken);
-        await EnsureWipAsync(entity.ProjectId, state.Status, request.OverrideWip, cancellationToken, entity.Id);
+        var entersInProgress = state.Status == ProjectManagementDomainRules.TaskInProgress && entity.Status != ProjectManagementDomainRules.TaskInProgress;
+        await using var wipLease = entersInProgress
+            ? await WipCoordinator.EnterAsync(RequireTenantId(), RequireAppCode(), entity.ProjectId, cancellationToken)
+            : null;
         if (state.Status == ProjectManagementDomainRules.TaskDone && entity.Status != ProjectManagementDomainRules.TaskDone)
             await AccessPolicy.EnsureCanCompleteTasksAsync(entity.ProjectId, [entity.Id], new HashSet<string>([entity.Id], StringComparer.Ordinal), request.ForceComplete, request.ForceCompleteReason, cancellationToken);
         var depth = placement.RootDepth;
@@ -321,12 +334,14 @@ public sealed class ProjectManagementTaskService(
         entity.UpdatedTime = DateTime.UtcNow;
         await ProjectManagementMutationTransaction.RunAsync(db, async () =>
         {
+            var wipOverride = await EnsureWipAsync(db, entity.ProjectId, entersInProgress, request.OverrideWip, request.OverrideWipReason, cancellationToken, entity.Id);
             await TaskHierarchy.UpdateDescendantDepthsAsync(
                 db, placement, entity.UpdatedTime ?? DateTime.UtcNow, entity.UpdatedBy ?? RequireUserId(), cancellationToken);
             await UpdateTaskWithExpectedVersionAsync(db, entity, expectedVersion, cancellationToken);
             if (dependencyService is not null) await dependencyService.RefreshBlockedStatesAsync(entity.ProjectId, cancellationToken);
             await RefreshProgressProjectionsAsync(entity.ProjectId, cancellationToken);
             await WriteActivityAsync(entity, "updated", $"更新任务 {entity.Title}", cancellationToken);
+            await WriteWipOverrideActivityAsync(entity, wipOverride, cancellationToken);
             await WriteSyncJournalAsync(entity, "updated", cancellationToken);
         });
         if (imConversationService is not null)
@@ -530,6 +545,20 @@ public sealed class ProjectManagementTaskService(
         await activityWriter.AppendAsync(new ProjectManagementActivityEvent(RequireTenantId(), RequireAppCode(), "Task", entity.Id, activityType, summary, Activity.Current?.Id ?? Guid.NewGuid().ToString("N"), RequireUserId(), entity.ProjectId), cancellationToken);
     }
 
+    private async Task WriteWipOverrideActivityAsync(ProjectManagementTaskEntity entity, ProjectManagementWipOverrideDecision? decision, CancellationToken cancellationToken)
+    {
+        if (decision is null || activityWriter is null) return;
+        await activityWriter.AppendAsync(new ProjectManagementActivityEvent(
+            RequireTenantId(), RequireAppCode(), "Task", entity.Id, "task.wip-overridden",
+            $"强制超过 WIP 上限开始任务：{decision.Reason}", Activity.Current?.Id ?? Guid.NewGuid().ToString("N"), RequireUserId(), entity.ProjectId,
+            Source: "Governance", FieldChanges:
+            [
+                new ProjectManagementActivityFieldChange("WipLimit", "WIP 上限", decision.Limit.ToString(), decision.Limit.ToString()),
+                new ProjectManagementActivityFieldChange("InProgressCount", "开始前进行中任务数", decision.InProgressCount.ToString(), (decision.InProgressCount + 1).ToString()),
+                new ProjectManagementActivityFieldChange("OverrideReason", "强制原因", null, decision.Reason)
+            ]), cancellationToken);
+    }
+
     private Task RecordReversibleAsync(string commandType, string projectId, string aggregateType, string aggregateId, string forwardJson, string inverseJson, string summary, CancellationToken cancellationToken)
     {
         if (reversibleCommandWriter is null || ProjectManagementReversibleCommandReplayScope.IsActive) return Task.CompletedTask;
@@ -548,6 +577,7 @@ public sealed class ProjectManagementTaskService(
     }
 
     private ProjectManagementAccessPolicy AccessPolicy => accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser);
+    private ProjectManagementWipCoordinator WipCoordinator => wipCoordinator ?? new ProjectManagementWipCoordinator();
     private ProjectManagementTaskHierarchy TaskHierarchy => taskHierarchy ?? new ProjectManagementTaskHierarchy();
     private ProjectManagementTaskStateMachine StateMachine => taskStateMachine ?? new ProjectManagementTaskStateMachine();
 
@@ -785,7 +815,6 @@ public sealed class ProjectManagementTaskService(
         await EnsureAssigneeAsync(projectId, request.AssigneeUserId, cancellationToken);
         await EnsureMilestoneAsync(projectId, request.MilestoneId, cancellationToken);
         var state = StateMachine.Resolve(string.Empty, request.Status, request.ProgressPercent, null, null, DateTime.UtcNow, isNew: true);
-        await EnsureWipAsync(projectId, state.Status, request.OverrideWip, cancellationToken);
         return new ProjectManagementTaskEntity
         {
             TenantId = RequireTenantId(), AppCode = RequireAppCode(), ProjectId = projectId, MilestoneId = NormalizeOptional(request.MilestoneId), ParentTaskId = parent?.Id,
@@ -796,14 +825,18 @@ public sealed class ProjectManagementTaskService(
         };
     }
 
-    private async Task EnsureWipAsync(string projectId, string status, bool overrideWip, CancellationToken cancellationToken, string? currentTaskId = null)
+    private async Task<ProjectManagementWipOverrideDecision?> EnsureWipAsync(ISqlSugarClient db, string projectId, bool entersInProgress, bool overrideWip, string? overrideReason, CancellationToken cancellationToken, string? currentTaskId = null)
     {
-        if (!string.Equals(status, "InProgress", StringComparison.Ordinal)) return;
-        var project = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementProjectEntity>().Where(item => item.Id == projectId && !item.IsDeleted).Take(1).ToListAsync(cancellationToken);
+        if (!entersInProgress) return null;
+        var project = await db.Queryable<ProjectManagementProjectEntity>().Where(item => item.Id == projectId && !item.IsDeleted).Take(1).ToListAsync(cancellationToken);
         var limit = project.FirstOrDefault()?.WipLimit;
-        if (!limit.HasValue || overrideWip && currentUser.HasAsterErpPermission(PermissionCodes.ProjectManagementTaskOverrideWip)) return;
-        var count = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskEntity>().CountAsync(item => item.ProjectId == projectId && item.Status == "InProgress" && !item.IsDeleted && item.Id != (currentTaskId ?? string.Empty), cancellationToken);
-        if (count >= limit.Value) throw new ValidationException("项目 WIP 上限已达到，需要 WIP 强制绕过权限");
+        if (!limit.HasValue) return null;
+        var count = await db.Queryable<ProjectManagementTaskEntity>().CountAsync(item => item.ProjectId == projectId && item.Status == ProjectManagementDomainRules.TaskInProgress && !item.IsDeleted && item.Id != (currentTaskId ?? string.Empty), cancellationToken);
+        if (count < limit.Value) return null;
+        if (!overrideWip) throw new ValidationException("项目 WIP 上限已达到，需要 WIP 强制绕过权限");
+        if (!currentUser.HasAsterErpPermission(PermissionCodes.ProjectManagementTaskOverrideWip))
+            throw new ValidationException("没有 WIP 强制绕过权限", ErrorCodes.PermissionDenied);
+        return new ProjectManagementWipOverrideDecision(limit.Value, count, NormalizeWipOverrideReason(overrideReason));
     }
 
     private static void Validate(ProjectManagementTaskUpsertRequest request)
@@ -832,6 +865,12 @@ public sealed class ProjectManagementTaskService(
     private string RequireUserId() => currentUser.GetAsterErpUserId()?.Trim() ?? throw new ValidationException("当前会话缺少用户");
     private static string NormalizeRequired(string value, string message) => string.IsNullOrWhiteSpace(value) ? throw new ValidationException(message) : value.Trim();
     private static string? NormalizeOptional(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    private static string NormalizeWipOverrideReason(string? value)
+    {
+        var reason = value?.Trim() ?? string.Empty;
+        if (reason.Length is < 1 or > 500) throw new ValidationException("WIP 强制绕过原因必须在 1 到 500 个字符之间");
+        return reason;
+    }
     private static string? ResolveMarkdown(ProjectManagementTaskUpsertRequest request)
     {
         var legacyDescription = NormalizeOptional(request.Description);
@@ -841,6 +880,7 @@ public sealed class ProjectManagementTaskService(
         return markdown ?? legacyDescription;
     }
     private static void EnsureVersion(long current, long requested) { if (requested <= 0 || current != requested) throw new ValidationException("任务已被其他用户修改，请刷新后重试", ErrorCodes.ApplicationDevelopmentPageRevisionConflict); }
+    private sealed record ProjectManagementWipOverrideDecision(int Limit, int InProgressCount, string Reason);
     private static void EnsureViewProtocol(ProjectManagementTaskQuery query)
     {
         if (!new[] { "tree", "list", "card", "board", "gantt", "calendar" }.Contains(query.ViewKey, StringComparer.OrdinalIgnoreCase)) throw new ValidationException("任务视图类型不受支持");

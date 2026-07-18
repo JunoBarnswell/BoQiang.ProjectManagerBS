@@ -438,6 +438,7 @@ export interface ProjectManagementTaskUpsertRequest {
   estimateMinutes?: number;
   versionNo?: number;
   overrideWip?: boolean;
+  overrideWipReason?: string;
 }
 
 export interface ProjectManagementTaskBatchUpdateRequest {
@@ -447,6 +448,7 @@ export interface ProjectManagementTaskBatchUpdateRequest {
   priority?: string;
   assigneeUserId?: string;
   overrideWip?: boolean;
+  overrideWipReason?: string;
   milestoneId?: string;
   updateMilestone?: boolean;
   startDate?: string;

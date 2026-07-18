@@ -146,6 +146,50 @@ public sealed class ProjectManagementTaskServiceTests
     }
 
     [Fact]
+    public async Task Task_wip_override_requires_dedicated_permission_and_nonempty_reason()
+    {
+        using var db = CreateDb("task-wip-override-reason");
+        await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
+        await db.Insertable(new ProjectManagementProjectEntity
+        {
+            Id = "project-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "A", ProjectName = "A", OwnerUserId = "operator", WipLimit = 0
+        }).ExecuteCommandAsync();
+
+        var denied = new ProjectManagementTaskService(new TestWorkspaceDatabaseAccessor(db), CreateUser());
+        await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() => denied.CreateAsync("project-a",
+            new ProjectManagementTaskUpsertRequest("T-1", "Denied", Status: "InProgress", OverrideWip: true, OverrideWipReason: "紧急")));
+
+        var privileged = new ProjectManagementTaskService(new TestWorkspaceDatabaseAccessor(db), CreateUser("operator", PermissionCodes.ProjectManagementTaskOverrideWip));
+        await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() => privileged.CreateAsync("project-a",
+            new ProjectManagementTaskUpsertRequest("T-2", "Missing reason", Status: "InProgress", OverrideWip: true)));
+        var created = await privileged.CreateAsync("project-a",
+            new ProjectManagementTaskUpsertRequest("T-3", "Forced", Status: "InProgress", OverrideWip: true, OverrideWipReason: "客户生产事故"));
+        Assert.Equal(ProjectManagementDomainRules.TaskInProgress, created.Status);
+    }
+
+    [Fact]
+    public async Task Concurrent_task_starts_are_serialized_before_wip_capacity_is_checked()
+    {
+        using var db = CreateDb("task-wip-concurrent-start");
+        await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
+        await db.Insertable(new ProjectManagementProjectEntity
+        {
+            Id = "project-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "A", ProjectName = "A", OwnerUserId = "operator", WipLimit = 1
+        }).ExecuteCommandAsync();
+        var accessor = new TestWorkspaceDatabaseAccessor(db);
+        var user = CreateUser();
+        var first = new ProjectManagementTaskService(accessor, user);
+        var second = new ProjectManagementTaskService(accessor, user);
+
+        var outcomes = await Task.WhenAll(
+            CaptureAsync(() => first.CreateAsync("project-a", new ProjectManagementTaskUpsertRequest("T-1", "First", Status: "InProgress"))),
+            CaptureAsync(() => second.CreateAsync("project-a", new ProjectManagementTaskUpsertRequest("T-2", "Second", Status: "InProgress"))));
+
+        Assert.Equal(1, outcomes.Count(success => success));
+        Assert.Equal(1, await db.Queryable<ProjectManagementTaskEntity>().Where(item => item.ProjectId == "project-a" && item.Status == ProjectManagementDomainRules.TaskInProgress && !item.IsDeleted).CountAsync());
+    }
+
+    [Fact]
     public async Task Task_state_machine_normalizes_progress_dates_parent_completion_and_overdue_projection()
     {
         using var db = CreateDb("task-state-machine");
@@ -278,14 +322,20 @@ public sealed class ProjectManagementTaskServiceTests
         IsAutoCloseConnection = false
     });
 
-    private static FixedAsterErpCurrentUser CreateUser(string userId = "operator") => new(new ClaimsPrincipal(new ClaimsIdentity(new[]
-    {
+    private static FixedAsterErpCurrentUser CreateUser(string userId = "operator", params string[] permissions) => new(new ClaimsPrincipal(new ClaimsIdentity([
         new Claim(AsterErpClaimTypes.UserId, userId),
         new Claim(AsterErpClaimTypes.TenantId, "tenant-a"),
         new Claim(AsterErpClaimTypes.AppCode, "SYSTEM"),
         new Claim(AsterErpClaimTypes.DataScope, "SELF"),
-        new Claim(AsterErpClaimTypes.PermissionCode, PermissionCodes.ProjectManagementProjectView)
-    }, "test")));
+        new Claim(AsterErpClaimTypes.PermissionCode, PermissionCodes.ProjectManagementProjectView),
+        .. permissions.Select(permission => new Claim(AsterErpClaimTypes.PermissionCode, permission))
+    ], "test")));
+
+    private static async Task<bool> CaptureAsync(Func<Task<ProjectManagementTaskDetailResponse>> action)
+    {
+        try { await action(); return true; }
+        catch (AsterERP.Shared.Exceptions.ValidationException) { return false; }
+    }
 
     private sealed class TestWorkspaceDatabaseAccessor(ISqlSugarClient db) : IWorkspaceDatabaseAccessor
     {

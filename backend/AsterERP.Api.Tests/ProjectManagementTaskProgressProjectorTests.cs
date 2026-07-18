@@ -53,6 +53,10 @@ public sealed class ProjectManagementTaskProgressProjectorTests
         Assert.Equal(1, item.BlockedTaskCount);
         Assert.Equal(1, item.OverdueTaskCount);
         Assert.Equal(54.75m, item.TaskProgressPercent);
+        Assert.Equal(1, item.RiskSummary.OverdueTaskCount);
+        Assert.Equal(1, item.RiskSummary.BlockedTaskCount);
+        Assert.True(item.RiskSummary.HasScheduleRisk);
+        Assert.False(item.RiskSummary.IsWipExceeded);
         var alice = Assert.Single(item.People, person => person.UserId == "alice");
         Assert.Equal(1, alice.CompletedTaskCount);
         Assert.Equal(0, alice.OverdueTaskCount);
