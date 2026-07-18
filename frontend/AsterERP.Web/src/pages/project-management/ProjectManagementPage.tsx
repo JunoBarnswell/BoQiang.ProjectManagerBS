@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 import {
+  archiveProjectManagementProject,
   createProjectManagementProject,
   deleteProjectManagementProject,
   getProjectManagementProjects,
@@ -117,6 +118,15 @@ export function ProjectManagementPage() {
     }
   });
 
+  const archiveMutation = useApiMutation({
+    mutationFn: (project: ProjectManagementProject) => archiveProjectManagementProject(project.id, project.versionNo),
+    onError: (error) => message.error(getErrorMessage(error, '项目归档失败')),
+    onSuccess: async () => {
+      message.success('项目已归档并设为只读');
+      await refresh();
+    }
+  });
+
   const columns: DataTableColumn<ProjectManagementProject>[] = useMemo(() => [
     { key: 'projectCode', title: '项目编码', width: '140px', responsivePriority: 100 },
     { key: 'projectName', title: '项目名称', responsivePriority: 100, render: (row) => <strong>{row.projectName}</strong> },
@@ -189,7 +199,7 @@ export function ProjectManagementPage() {
         columns={columns}
         emptyText="暂无符合筛选条件的项目"
         loading={projectsQuery.isFetching}
-        rowActions={(row) => <div className="pm-project-actions"><button type="button" onClick={() => navigate(toProjectManagementPlatformRoute(`projects/${encodeURIComponent(row.id)}/overview`))}>进入项目</button><PermissionButton code="project-management:project:edit" onClick={() => { setEditingId(row.id); setForm({ projectCode: row.projectCode, projectName: row.projectName, description: row.description, status: row.status, priority: row.priority, ownerUserId: row.ownerUserId, startDate: row.startDate, dueDate: row.dueDate, progressPercent: row.progressPercent, versionNo: row.versionNo }); setFormDirty(false); setEditorOpen(true); }}>编辑</PermissionButton><PermissionButton code="project-management:project:delete" disabled={deleteMutation.isPending} onClick={() => confirm({ title: '移入项目回收站', content: `项目“${row.projectName}”将被移入回收站，关联对象的恢复规则由服务端校验。`, confirmText: '移入回收站', onConfirm: () => deleteMutation.mutate(row) })}>删除</PermissionButton></div>}
+        rowActions={(row) => <div className="pm-project-actions"><button type="button" onClick={() => navigate(toProjectManagementPlatformRoute(`projects/${encodeURIComponent(row.id)}/overview`))}>进入项目</button><PermissionButton code="project-management:project:edit" disabled={row.status === 'Archived'} onClick={() => { setEditingId(row.id); setForm({ projectCode: row.projectCode, projectName: row.projectName, description: row.description, status: row.status, priority: row.priority, ownerUserId: row.ownerUserId, startDate: row.startDate, dueDate: row.dueDate, progressPercent: row.progressPercent, versionNo: row.versionNo }); setFormDirty(false); setEditorOpen(true); }}>编辑</PermissionButton><PermissionButton code="project-management:project:archive" disabled={row.status === 'Archived' || archiveMutation.isPending} onClick={() => confirm({ title: '归档项目', content: `项目“${row.projectName}”归档后将只读，后续修改需先由治理人员处理。`, confirmText: '归档', onConfirm: () => archiveMutation.mutate(row) })}>归档</PermissionButton><PermissionButton code="project-management:project:delete" disabled={deleteMutation.isPending} onClick={() => confirm({ title: '移入项目回收站', content: `项目“${row.projectName}”将被移入回收站，关联对象的恢复规则由服务端校验。`, confirmText: '移入回收站', onConfirm: () => deleteMutation.mutate(row) })}>删除</PermissionButton></div>}
         rowKey={(row) => row.id}
         rows={rows}
         showColumnSettings

@@ -18,6 +18,11 @@ public interface IProjectManagementProjectService
         ProjectManagementProjectUpsertRequest request,
         CancellationToken cancellationToken = default);
 
+    Task<ProjectManagementProjectResponse> ArchiveAsync(
+        string id,
+        ProjectManagementProjectArchiveRequest request,
+        CancellationToken cancellationToken = default);
+
     Task<ProjectManagementProjectResponse> RestoreAsync(
         string id,
         long versionNo,
