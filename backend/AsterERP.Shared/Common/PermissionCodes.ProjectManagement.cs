@@ -45,6 +45,8 @@ public static partial class PermissionCodes
     public const string ProjectManagementAuditExport = "project-management:audit:export";
     public const string ProjectManagementOperationView = "project-management:operation:view";
     public const string ProjectManagementOperationManage = "project-management:operation:manage";
+    public const string ProjectManagementReversibleCommandView = "project-management:reversible-command:view";
+    public const string ProjectManagementReversibleCommandManage = "project-management:reversible-command:manage";
 
     public static readonly IReadOnlyList<string> ProjectManagementPermissionCodes =
     [
@@ -87,6 +89,8 @@ public static partial class PermissionCodes
         ProjectManagementAuditView,
         ProjectManagementAuditExport,
         ProjectManagementOperationView,
-        ProjectManagementOperationManage
+        ProjectManagementOperationManage,
+        ProjectManagementReversibleCommandView,
+        ProjectManagementReversibleCommandManage
     ];
 }

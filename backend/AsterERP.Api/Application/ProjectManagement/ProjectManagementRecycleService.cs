@@ -26,7 +26,8 @@ public sealed class ProjectManagementRecycleService(
     IProjectManagementMaintenanceLock? maintenanceLock = null,
     IProjectManagementOperationWriter? operationWriter = null,
     IProjectManagementTaskDependencyService? dependencyService = null,
-    IProjectManagementFileStore? fileStore = null) : IProjectManagementRecycleService, ITransientDependency
+    IProjectManagementFileStore? fileStore = null,
+    IProjectManagementReversibleCommandWriter? reversibleCommandWriter = null) : IProjectManagementRecycleService, ITransientDependency
 {
     public async Task<ProjectManagementRecycleResponse> QueryAsync(ProjectManagementRecycleQuery query, CancellationToken cancellationToken = default)
     {
@@ -93,6 +94,10 @@ public sealed class ProjectManagementRecycleService(
             await imConversationService.ReactivateProjectLinksAsync(entity.Id, cancellationToken);
         }
         await PublishInvalidationAsync("Project", entity.Id, entity.Id, "project.restored", entity.VersionNo, cancellationToken);
+        await RecordReversibleAsync(ProjectManagementReversibleCommandTypes.ProjectRestored, entity.Id, "Project", entity.Id,
+            ProjectManagementReversibleCommandHandler.Serialize(new ProjectManagementProjectRestoreCommand(entity.Id, request.VersionNo)),
+            ProjectManagementReversibleCommandHandler.Serialize(new ProjectManagementProjectDeleteCommand(entity.Id, entity.VersionNo)),
+            $"恢复项目 {entity.ProjectName}", cancellationToken);
     }
 
     public async Task RestoreTaskAsync(string id, ProjectManagementRecycleRestoreRequest request, CancellationToken cancellationToken = default)
@@ -152,6 +157,10 @@ public sealed class ProjectManagementRecycleService(
             await imConversationService.ReactivateTaskLinksAsync(targetIds, cancellationToken);
         }
         await PublishInvalidationAsync("Task", entity.Id, entity.ProjectId, targets.Count == 1 ? "task.restored" : "task.subtree-restored", entity.VersionNo, cancellationToken);
+        await RecordReversibleAsync(ProjectManagementReversibleCommandTypes.TaskRestored, entity.ProjectId, "Task", entity.Id,
+            ProjectManagementReversibleCommandHandler.Serialize(new ProjectManagementTaskRestoreCommand(entity.Id, request.RestoreDescendants, request.VersionNo)),
+            ProjectManagementReversibleCommandHandler.Serialize(new ProjectManagementTaskDeleteCommand(entity.Id, ProjectManagementTaskDeleteModes.Cascade, entity.VersionNo)),
+            targets.Count == 1 ? $"恢复任务 {entity.Title}" : $"恢复任务树 {entity.Title}", cancellationToken);
     }
 
     public async Task<ProjectManagementRecycleTaskPurgePreviewResponse> PreviewPurgeTaskAsync(string id, long versionNo, bool purgeDescendants = false, CancellationToken cancellationToken = default)
@@ -526,6 +535,14 @@ public sealed class ProjectManagementRecycleService(
             RequireTenantId(), RequireAppCode(), aggregateType, aggregateId, activityType, summary,
             Activity.Current?.Id ?? Guid.NewGuid().ToString("N"), RequireUserId(), projectId,
             Source: "User", FieldChanges: changes, Batch: batch, OccurredAt: occurredAt), cancellationToken);
+    }
+
+    private Task RecordReversibleAsync(string commandType, string projectId, string aggregateType, string aggregateId, string forwardJson, string inverseJson, string summary, CancellationToken cancellationToken)
+    {
+        if (reversibleCommandWriter is null || ProjectManagementReversibleCommandReplayScope.IsActive) return Task.CompletedTask;
+        var traceId = Activity.Current?.Id ?? Guid.NewGuid().ToString("N");
+        return reversibleCommandWriter.TryRecordCommittedAsync(ProjectManagementReversibleCommandCapability.Instance,
+            new ProjectManagementReversibleCommandRecordRequest(traceId, commandType, projectId, aggregateType, aggregateId, forwardJson, inverseJson, traceId, summary), cancellationToken);
     }
 
     private async Task WriteSyncJournalAsync(string aggregateType, string aggregateId, string projectId, string operation, long versionNo, object snapshot, CancellationToken cancellationToken)

@@ -49,7 +49,9 @@ public static class ProjectManagementPlatformPermissionCatalog
         new(PermissionCodes.ProjectManagementAuditView, "项目审计查看"),
         new(PermissionCodes.ProjectManagementAuditExport, "项目审计导出"),
         new(PermissionCodes.ProjectManagementOperationView, "项目长任务查看"),
-        new(PermissionCodes.ProjectManagementOperationManage, "项目长任务维护")
+        new(PermissionCodes.ProjectManagementOperationManage, "项目长任务维护"),
+        new(PermissionCodes.ProjectManagementReversibleCommandView, "项目撤销重做查看"),
+        new(PermissionCodes.ProjectManagementReversibleCommandManage, "项目撤销重做执行")
     ];
 }
 

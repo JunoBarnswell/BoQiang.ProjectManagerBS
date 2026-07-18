@@ -352,6 +352,17 @@ CREATE TABLE IF NOT EXISTS pm_operation_events (
     CreatedBy TEXT NULL, CreatedTime TEXT NOT NULL, UpdatedBy TEXT NULL, UpdatedTime TEXT NULL,
     DeletedBy TEXT NULL, DeletedTime TEXT NULL, IsDeleted INTEGER NOT NULL DEFAULT 0, Remark TEXT NULL
 );
+CREATE TABLE IF NOT EXISTS pm_reversible_commands (
+    Id TEXT NOT NULL PRIMARY KEY, TenantId TEXT NOT NULL, AppCode TEXT NOT NULL, ActorUserId TEXT NOT NULL,
+    OriginRequestId TEXT NOT NULL, SequenceNo INTEGER NOT NULL, CommandType TEXT NOT NULL,
+    ProjectId TEXT NOT NULL, AggregateType TEXT NOT NULL, AggregateId TEXT NOT NULL, State TEXT NOT NULL,
+    ForwardCommandJson TEXT NOT NULL, InverseCommandJson TEXT NOT NULL, TraceId TEXT NOT NULL, Summary TEXT NULL,
+    VersionNo INTEGER NOT NULL DEFAULT 1,
+    ActiveReplayDirection TEXT NULL, ActiveReplayRequestId TEXT NULL, ActiveReplayExecutionId TEXT NULL, ActiveReplayLeaseExpiresAt TEXT NULL,
+    LastUndoRequestId TEXT NULL, LastRedoRequestId TEXT NULL, LastReplayedTime TEXT NULL,
+    CreatedBy TEXT NULL, CreatedTime TEXT NOT NULL, UpdatedBy TEXT NULL, UpdatedTime TEXT NULL,
+    DeletedBy TEXT NULL, DeletedTime TEXT NULL, IsDeleted INTEGER NOT NULL DEFAULT 0, Remark TEXT NULL
+);
 """);
         schema.EnsureColumn("pm_operations", "Phase", "TEXT NOT NULL DEFAULT 'Pending'");
         schema.EnsureColumn("pm_operations", "ProgressPercent", "INTEGER NOT NULL DEFAULT 0");
@@ -359,6 +370,13 @@ CREATE TABLE IF NOT EXISTS pm_operation_events (
         schema.EnsureColumn("pm_operations", "IsCancellationRequested", "INTEGER NOT NULL DEFAULT 0");
         schema.EnsureColumn("pm_operations", "CancellationRequestedTime", "TEXT NULL");
         schema.EnsureColumn("pm_operations", "CancellationRequestedBy", "TEXT NULL");
+        schema.EnsureColumn("pm_reversible_commands", "ActiveReplayDirection", "TEXT NULL");
+        schema.EnsureColumn("pm_reversible_commands", "ActiveReplayRequestId", "TEXT NULL");
+        schema.EnsureColumn("pm_reversible_commands", "ActiveReplayExecutionId", "TEXT NULL");
+        schema.EnsureColumn("pm_reversible_commands", "ActiveReplayLeaseExpiresAt", "TEXT NULL");
+        schema.EnsureColumn("pm_reversible_commands", "LastUndoRequestId", "TEXT NULL");
+        schema.EnsureColumn("pm_reversible_commands", "LastRedoRequestId", "TEXT NULL");
+        schema.EnsureColumn("pm_reversible_commands", "LastReplayedTime", "TEXT NULL");
         schema.EnsureColumn("pm_notifications", "ProjectId", "TEXT NULL");
         schema.EnsureColumn("pm_notifications", "TaskId", "TEXT NULL");
         schema.EnsureColumn("pm_task_comments", "MentionUserIdsJson", "TEXT NULL");
@@ -411,6 +429,9 @@ CREATE TABLE IF NOT EXISTS pm_operation_events (
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_backups_created ON pm_backups(TenantId, AppCode, CreatedTime, IsDeleted);");
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_operations_status_time ON pm_operations(TenantId, AppCode, Status, StartedTime, IsDeleted);");
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_operation_events_operation_time ON pm_operation_events(TenantId, AppCode, OperationId, CreatedTime, IsDeleted);");
+        schema.Execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_pm_reversible_commands_origin ON pm_reversible_commands(TenantId, AppCode, ActorUserId, OriginRequestId) WHERE IsDeleted = 0;");
+        schema.Execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_pm_reversible_commands_sequence ON pm_reversible_commands(TenantId, AppCode, ActorUserId, SequenceNo) WHERE IsDeleted = 0;");
+        schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_reversible_commands_stack ON pm_reversible_commands(TenantId, AppCode, ActorUserId, State, SequenceNo, IsDeleted);");
     }
 
     private static void NormalizeTaskSiblingOrdering(SqliteSchemaExecutor schema)

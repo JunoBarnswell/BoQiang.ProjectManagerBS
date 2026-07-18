@@ -35,6 +35,10 @@ public sealed class AsterErpProjectManagementModule : AbpModule
         context.Services.AddScoped<IProjectManagementOperationProgressPublisher, ProjectManagementOperationProgressPublisher>();
         context.Services.AddScoped<IProjectManagementOperationWriter, ProjectManagementOperationWriter>();
         context.Services.AddScoped<IProjectManagementOperationService, ProjectManagementOperationService>();
+        context.Services.AddScoped<ProjectManagementReversibleCommandService>();
+        context.Services.AddScoped<IProjectManagementReversibleCommandService>(provider => provider.GetRequiredService<ProjectManagementReversibleCommandService>());
+        context.Services.AddScoped<IProjectManagementReversibleCommandWriter>(provider => provider.GetRequiredService<ProjectManagementReversibleCommandService>());
+        context.Services.AddScoped<IProjectManagementReversibleCommandHandler, ProjectManagementReversibleCommandHandler>();
         context.Services.AddScoped<ProjectManagementWorkspaceValidationExecutor>();
         context.Services.AddScoped<ProjectManagementReportSnapshotExecutor>();
         context.Services.AddTransient<ProjectManagementOperationRunner>();
@@ -109,6 +113,7 @@ public sealed class AsterErpProjectManagementModule : AbpModule
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementMaintenanceLockEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementBackupEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementOperationEntity));
+        registry.RegisterProjectManagementFilter(typeof(ProjectManagementReversibleCommandEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementImConversationLinkEntity));
     }
 }

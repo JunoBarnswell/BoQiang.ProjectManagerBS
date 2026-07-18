@@ -206,6 +206,12 @@ public static class ProjectManagementDataPermissionFilterRegistrar
             return true;
         }
 
+        if (entityType == typeof(ProjectManagementReversibleCommandEntity))
+        {
+            db.QueryFilter.AddTableFilter<ProjectManagementReversibleCommandEntity>(command => command.TenantId == tenantId && command.AppCode == appCode);
+            return true;
+        }
+
         return false;
     }
 }

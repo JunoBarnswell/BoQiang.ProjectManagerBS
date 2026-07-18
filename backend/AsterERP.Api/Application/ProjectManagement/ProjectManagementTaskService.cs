@@ -25,7 +25,8 @@ public sealed class ProjectManagementTaskService(
     IProjectManagementImConversationService? imConversationService = null,
     ProjectManagementTaskLabelMutation? labelMutation = null,
     IProjectManagementTaskTemplateDependencyCommandService? templateDependencyCommand = null,
-    ProjectManagementTaskStateMachine? taskStateMachine = null) : IProjectManagementTaskService, IProjectManagementTaskOccurrenceCommandService, IProjectManagementTaskTemplateCommandService
+    ProjectManagementTaskStateMachine? taskStateMachine = null,
+    IProjectManagementReversibleCommandWriter? reversibleCommandWriter = null) : IProjectManagementTaskService, IProjectManagementTaskOccurrenceCommandService, IProjectManagementTaskTemplateCommandService
 {
     private static readonly string[] Priorities = ["Low", "Medium", "High", "Urgent"];
 
@@ -278,6 +279,7 @@ public sealed class ProjectManagementTaskService(
     public async Task<ProjectManagementTaskDetailResponse> UpdateAsync(string id, ProjectManagementTaskUpsertRequest request, CancellationToken cancellationToken = default)
     {
         var entity = await GetRequiredAsync(id, cancellationToken);
+        var before = ProjectManagementReversibleCommandHandler.ToUpsert(await MapDetailAsync(entity, cancellationToken));
         Validate(request);
         EnsureVersion(entity.VersionNo, request.VersionNo);
         var state = StateMachine.Resolve(entity.Status, request.Status, request.ProgressPercent, entity.ActualStartAt, entity.ActualEndAt, DateTime.UtcNow);
@@ -332,7 +334,17 @@ public sealed class ProjectManagementTaskService(
             await imConversationService.SynchronizeTaskLinksAsync(entity.Id, cancellationToken);
         }
         await PublishInvalidationAsync(entity, "task.updated", cancellationToken);
-        return await MapDetailAsync(entity, cancellationToken);
+        var result = await MapDetailAsync(entity, cancellationToken);
+        var commandType = request.AssigneeUserId != before.AssigneeUserId
+            ? ProjectManagementReversibleCommandTypes.TaskAssigneeChanged
+            : request.Status != before.Status || request.ProgressPercent != before.ProgressPercent
+                ? ProjectManagementReversibleCommandTypes.TaskStatusProgressChanged
+                : ProjectManagementReversibleCommandTypes.TaskUpdated;
+        await RecordReversibleAsync(commandType, entity.ProjectId, "Task", entity.Id,
+            ProjectManagementReversibleCommandHandler.Serialize(new ProjectManagementTaskUpdateCommand(entity.Id, request)),
+            ProjectManagementReversibleCommandHandler.Serialize(new ProjectManagementTaskUpdateCommand(entity.Id, before with { VersionNo = result.VersionNo })),
+            $"更新任务 {entity.Title}", cancellationToken);
+        return result;
     }
 
     public async Task<ProjectManagementTaskDependencyForceStartResponse> ForceStartAsync(string id, ProjectManagementTaskDependencyForceStartRequest request, CancellationToken cancellationToken = default)
@@ -458,6 +470,10 @@ public sealed class ProjectManagementTaskService(
         await PublishInvalidationAsync(entity, deleteMode == ProjectManagementTaskHierarchy.PromoteChildrenDeleteMode
             ? "task.deleted-children-promoted"
             : deleteTargets.Count == 1 ? "task.deleted" : "task.subtree-deleted", cancellationToken);
+        await RecordReversibleAsync(ProjectManagementReversibleCommandTypes.TaskSoftDeleted, entity.ProjectId, "Task", entity.Id,
+            ProjectManagementReversibleCommandHandler.Serialize(new ProjectManagementTaskDeleteCommand(entity.Id, request.Mode, request.VersionNo)),
+            ProjectManagementReversibleCommandHandler.Serialize(new ProjectManagementTaskRestoreCommand(entity.Id, deleteMode == ProjectManagementTaskHierarchy.CascadeDeleteMode, entity.VersionNo)),
+            $"删除任务 {entity.Title}", cancellationToken);
     }
 
     public async Task<ProjectManagementTaskDetailResponse> RestoreAsync(string id, long versionNo, CancellationToken cancellationToken = default)
@@ -494,7 +510,12 @@ public sealed class ProjectManagementTaskService(
             await imConversationService.ReactivateTaskLinksAsync([entity.Id], cancellationToken);
         }
         await PublishInvalidationAsync(entity, "task.restored", cancellationToken);
-        return await MapDetailAsync(entity, cancellationToken);
+        var result = await MapDetailAsync(entity, cancellationToken);
+        await RecordReversibleAsync(ProjectManagementReversibleCommandTypes.TaskRestored, entity.ProjectId, "Task", entity.Id,
+            ProjectManagementReversibleCommandHandler.Serialize(new ProjectManagementTaskRestoreCommand(entity.Id, false, versionNo)),
+            ProjectManagementReversibleCommandHandler.Serialize(new ProjectManagementTaskDeleteCommand(entity.Id, ProjectManagementTaskDeleteModes.Cascade, result.VersionNo)),
+            $"恢复任务 {entity.Title}", cancellationToken);
+        return result;
     }
 
     private async Task PublishInvalidationAsync(ProjectManagementTaskEntity entity, string eventType, CancellationToken cancellationToken)
@@ -507,6 +528,15 @@ public sealed class ProjectManagementTaskService(
     {
         if (activityWriter is null) return;
         await activityWriter.AppendAsync(new ProjectManagementActivityEvent(RequireTenantId(), RequireAppCode(), "Task", entity.Id, activityType, summary, Activity.Current?.Id ?? Guid.NewGuid().ToString("N"), RequireUserId(), entity.ProjectId), cancellationToken);
+    }
+
+    private Task RecordReversibleAsync(string commandType, string projectId, string aggregateType, string aggregateId, string forwardJson, string inverseJson, string summary, CancellationToken cancellationToken)
+    {
+        if (reversibleCommandWriter is null || ProjectManagementReversibleCommandReplayScope.IsActive) return Task.CompletedTask;
+        return reversibleCommandWriter.TryRecordCommittedAsync(ProjectManagementReversibleCommandCapability.Instance,
+            new ProjectManagementReversibleCommandRecordRequest(
+                Activity.Current?.Id ?? Guid.NewGuid().ToString("N"), commandType, projectId, aggregateType, aggregateId,
+                forwardJson, inverseJson, Activity.Current?.Id ?? Guid.NewGuid().ToString("N"), summary), cancellationToken);
     }
 
     private async Task WriteSyncJournalAsync(ProjectManagementTaskEntity entity, string operation, CancellationToken cancellationToken)

@@ -14,7 +14,8 @@ public sealed class ProjectManagementLabelService(
     IWorkspaceDatabaseAccessor databaseAccessor,
     ICurrentUser currentUser,
     ProjectManagementTaskLabelMutation? labelMutation = null,
-    IProjectManagementActivityWriter? activityWriter = null) : IProjectManagementLabelService
+    IProjectManagementActivityWriter? activityWriter = null,
+    IProjectManagementReversibleCommandWriter? reversibleCommandWriter = null) : IProjectManagementLabelService
 {
     public async Task<IReadOnlyList<ProjectManagementLabelResponse>> QueryAsync(string projectId, CancellationToken cancellationToken = default)
     {
@@ -85,6 +86,7 @@ public sealed class ProjectManagementLabelService(
     {
         var task = await EnsureTaskAsync(taskId, cancellationToken);
         EnsureVersion(task.VersionNo, request.VersionNo);
+        var beforeLabelIds = (await QueryTaskLabelsAsync(taskId, cancellationToken)).Select(item => item.LabelId).ToList();
         var db = databaseAccessor.GetCurrentDb();
         var now = DateTime.UtcNow;
         var actorUserId = User();
@@ -100,6 +102,10 @@ public sealed class ProjectManagementLabelService(
                 .ExecuteCommandAsync(cancellationToken);
             await WriteActivityAsync(task.ProjectId, task.Id, "task.labels.replaced", $"更新任务标签（{request.LabelIds.Count} 项）", cancellationToken);
         });
+        await RecordReversibleAsync(task.ProjectId, task.Id,
+            ProjectManagementReversibleCommandHandler.Serialize(new ProjectManagementTaskLabelsCommand(task.Id, request.LabelIds, request.VersionNo)),
+            ProjectManagementReversibleCommandHandler.Serialize(new ProjectManagementTaskLabelsCommand(task.Id, beforeLabelIds, task.VersionNo)),
+            $"更新任务标签（{request.LabelIds.Count} 项）", cancellationToken);
     }
 
     private async Task<ProjectManagementLabelResponse> CreateScopedAsync(string? projectId, ProjectManagementLabelUpsertRequest request, CancellationToken cancellationToken)
@@ -231,6 +237,14 @@ public sealed class ProjectManagementLabelService(
         // 活动流强制绑定项目；公共标签没有项目归属，因此不写入项目活动流。
         if (activityWriter is null || string.IsNullOrWhiteSpace(projectId)) return;
         await activityWriter.AppendAsync(new ProjectManagementActivityEvent(Tenant(), App(), "Label", aggregateId, activityType, summary, Activity.Current?.Id ?? Guid.NewGuid().ToString("N"), User(), projectId), cancellationToken);
+    }
+
+    private Task RecordReversibleAsync(string projectId, string taskId, string forwardJson, string inverseJson, string summary, CancellationToken cancellationToken)
+    {
+        if (reversibleCommandWriter is null || ProjectManagementReversibleCommandReplayScope.IsActive) return Task.CompletedTask;
+        var traceId = Activity.Current?.Id ?? Guid.NewGuid().ToString("N");
+        return reversibleCommandWriter.TryRecordCommittedAsync(ProjectManagementReversibleCommandCapability.Instance,
+            new ProjectManagementReversibleCommandRecordRequest(traceId, ProjectManagementReversibleCommandTypes.TaskLabelsChanged, projectId, "Task", taskId, forwardJson, inverseJson, traceId, summary), cancellationToken);
     }
 
     private async Task WriteDeletionActivitiesAsync(

@@ -17,7 +17,8 @@ public sealed class ProjectManagementTaskParticipantService(
     ProjectManagementAccessPolicy? accessPolicy = null,
     IProjectManagementActivityWriter? activityWriter = null,
     IProjectManagementNotificationPublisher? notificationPublisher = null,
-    ProjectManagementTaskParticipantProjection? projection = null) : IProjectManagementTaskParticipantService
+    ProjectManagementTaskParticipantProjection? projection = null,
+    IProjectManagementReversibleCommandWriter? reversibleCommandWriter = null) : IProjectManagementTaskParticipantService
 {
     public async Task<IReadOnlyList<ProjectManagementTaskParticipantResponse>> QueryAsync(string taskId, CancellationToken cancellationToken = default)
     {
@@ -247,7 +248,12 @@ public sealed class ProjectManagementTaskParticipantService(
             await imConversationService.SynchronizeTaskLinksAsync(task.Id, cancellationToken);
         }
         await PublishNotificationAsync(task, userId, "task.participant.added", "你已被加入任务参与人", $"你已被加入任务 {task.Title} 的参与人", traceId, cancellationToken);
-        return (await Projection.LoadByTaskIdsAsync([task.Id], includeHistorical: false, cancellationToken)).GetValueOrDefault(task.Id, []).Single(item => item.Id == entity.Id);
+        var result = (await Projection.LoadByTaskIdsAsync([task.Id], includeHistorical: false, cancellationToken)).GetValueOrDefault(task.Id, []).Single(item => item.Id == entity.Id);
+        await RecordReversibleAsync(task.ProjectId, task.Id,
+            ProjectManagementReversibleCommandHandler.Serialize(new ProjectManagementTaskParticipantCommand(task.Id, ProjectManagementTaskParticipantOperations.Add, request, null, request.VersionNo)),
+            ProjectManagementReversibleCommandHandler.Serialize(new ProjectManagementTaskParticipantCommand(task.Id, ProjectManagementTaskParticipantOperations.Remove, null, result.Id, task.VersionNo)),
+            $"添加任务参与人 {result.UserId}", cancellationToken);
+        return result;
     }
 
     public async Task RemoveAsync(string taskId, string id, long versionNo, CancellationToken cancellationToken = default)
@@ -277,9 +283,20 @@ public sealed class ProjectManagementTaskParticipantService(
             await imConversationService.RevokeTaskParticipantAsync(task.Id, entity.UserId, cancellationToken);
         }
         await PublishNotificationAsync(task, entity.UserId, "task.participant.removed", "你已被移出任务参与人", $"你已被移出任务 {task.Title} 的参与人", traceId, cancellationToken);
+        await RecordReversibleAsync(task.ProjectId, task.Id,
+            ProjectManagementReversibleCommandHandler.Serialize(new ProjectManagementTaskParticipantCommand(task.Id, ProjectManagementTaskParticipantOperations.Remove, null, entity.Id, versionNo)),
+            ProjectManagementReversibleCommandHandler.Serialize(new ProjectManagementTaskParticipantCommand(task.Id, ProjectManagementTaskParticipantOperations.Add, new ProjectManagementTaskParticipantUpsertRequest(entity.UserId, entity.EmploymentId, entity.RoleCode, task.VersionNo), null, task.VersionNo)),
+            $"移除任务参与人 {entity.UserId}", cancellationToken);
     }
 
     private ProjectManagementTaskParticipantProjection Projection => projection ?? new ProjectManagementTaskParticipantProjection(databaseAccessor, currentUser);
+    private Task RecordReversibleAsync(string projectId, string taskId, string forwardJson, string inverseJson, string summary, CancellationToken cancellationToken)
+    {
+        if (reversibleCommandWriter is null || ProjectManagementReversibleCommandReplayScope.IsActive) return Task.CompletedTask;
+        var traceId = Guid.NewGuid().ToString("N");
+        return reversibleCommandWriter.TryRecordCommittedAsync(ProjectManagementReversibleCommandCapability.Instance,
+            new ProjectManagementReversibleCommandRecordRequest(traceId, ProjectManagementReversibleCommandTypes.TaskParticipantChanged, projectId, "Task", taskId, forwardJson, inverseJson, traceId, summary), cancellationToken);
+    }
     private async Task<ProjectManagementTaskEntity> EnsureTaskAsync(string id, CancellationToken cancellationToken) => (await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskEntity>().Where(item => item.Id == id && item.TenantId == Tenant() && item.AppCode == App() && !item.IsDeleted).Take(1).ToListAsync(cancellationToken)).FirstOrDefault() ?? throw new NotFoundException("任务不存在", ErrorCodes.PlatformResourceNotFound);
     private async Task EnsureMemberScopeAsync(ProjectManagementTaskEntity task, ProjectManagementProjectMemberEntity member, CancellationToken cancellationToken)
     {

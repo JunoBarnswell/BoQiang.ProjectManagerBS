@@ -17,7 +17,8 @@ public sealed class ProjectManagementProjectService(
     ProjectManagementAccessPolicy? accessPolicy = null,
     IProjectManagementActivityWriter? activityWriter = null,
     IProjectManagementSyncJournalWriter? syncJournalWriter = null,
-    IProjectManagementImConversationService? imConversationService = null) : IProjectManagementProjectService
+    IProjectManagementImConversationService? imConversationService = null,
+    IProjectManagementReversibleCommandWriter? reversibleCommandWriter = null) : IProjectManagementProjectService
 {
     public async Task<GridPageResult<ProjectManagementProjectResponse>> QueryAsync(
         ProjectManagementProjectQuery query,
@@ -133,6 +134,7 @@ public sealed class ProjectManagementProjectService(
     {
         RequirePlatformScope();
         var entity = await GetRequiredAsync(id, cancellationToken);
+        var beforeResponse = Map(entity);
         if (entity.Status == ProjectManagementDomainRules.ProjectArchived)
             throw new ValidationException("项目已归档，只读不可编辑");
         await (accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser)).EnsureCanManageProjectAsync(id, cancellationToken);
@@ -175,7 +177,12 @@ public sealed class ProjectManagementProjectService(
         {
             await imConversationService.SynchronizeProjectLinksAsync(entity.Id, cancellationToken);
         }
-        return Map(entity);
+        var result = Map(entity);
+        await RecordReversibleAsync(ProjectManagementReversibleCommandTypes.ProjectUpdated, entity.Id, "Project", entity.Id,
+            ProjectManagementReversibleCommandHandler.Serialize(new ProjectManagementProjectUpdateCommand(entity.Id, request)),
+            ProjectManagementReversibleCommandHandler.Serialize(new ProjectManagementProjectUpdateCommand(entity.Id, ProjectManagementReversibleCommandHandler.ToUpsert(beforeResponse) with { VersionNo = result.VersionNo })),
+            $"更新项目 {entity.ProjectName}", cancellationToken);
+        return result;
     }
 
     public async Task<ProjectManagementProjectResponse> ArchiveAsync(
@@ -235,7 +242,12 @@ public sealed class ProjectManagementProjectService(
         {
             await imConversationService.ReactivateProjectLinksAsync(entity.Id, cancellationToken);
         }
-        return Map(entity);
+        var result = Map(entity);
+        await RecordReversibleAsync(ProjectManagementReversibleCommandTypes.ProjectRestored, entity.Id, "Project", entity.Id,
+            ProjectManagementReversibleCommandHandler.Serialize(new ProjectManagementProjectRestoreCommand(entity.Id, versionNo)),
+            ProjectManagementReversibleCommandHandler.Serialize(new ProjectManagementProjectDeleteCommand(entity.Id, result.VersionNo)),
+            $"恢复项目 {entity.ProjectName}", cancellationToken);
+        return result;
     }
 
     public async Task DeleteAsync(string id, long versionNo, CancellationToken cancellationToken = default)
@@ -264,6 +276,10 @@ public sealed class ProjectManagementProjectService(
             await WriteActivityAsync(entity, "deleted", $"删除项目 {entity.ProjectName}", CreateChanges(before, entity), entity.UpdatedTime ?? DateTime.UtcNow, cancellationToken);
             await WriteSyncJournalAsync(entity, "deleted", cancellationToken);
         });
+        await RecordReversibleAsync(ProjectManagementReversibleCommandTypes.ProjectSoftDeleted, entity.Id, "Project", entity.Id,
+            ProjectManagementReversibleCommandHandler.Serialize(new ProjectManagementProjectDeleteCommand(entity.Id, versionNo)),
+            ProjectManagementReversibleCommandHandler.Serialize(new ProjectManagementProjectRestoreCommand(entity.Id, entity.VersionNo)),
+            $"删除项目 {entity.ProjectName}", cancellationToken);
     }
 
     private async Task<ProjectManagementProjectEntity> GetRequiredAsync(string id, CancellationToken cancellationToken, bool includeDeleted = false)
@@ -295,6 +311,14 @@ public sealed class ProjectManagementProjectService(
             RequireTenantId(), ProjectManagementPlatformScope.AppCode, "Project", entity.Id, activityType, summary,
             Activity.Current?.Id ?? Guid.NewGuid().ToString("N"), RequireUserId(), entity.Id,
             Source: "User", FieldChanges: changes, OccurredAt: occurredAt), cancellationToken);
+    }
+
+    private Task RecordReversibleAsync(string commandType, string projectId, string aggregateType, string aggregateId, string forwardJson, string inverseJson, string summary, CancellationToken cancellationToken)
+    {
+        if (reversibleCommandWriter is null || ProjectManagementReversibleCommandReplayScope.IsActive) return Task.CompletedTask;
+        var traceId = Activity.Current?.Id ?? Guid.NewGuid().ToString("N");
+        return reversibleCommandWriter.TryRecordCommittedAsync(ProjectManagementReversibleCommandCapability.Instance,
+            new ProjectManagementReversibleCommandRecordRequest(traceId, commandType, projectId, aggregateType, aggregateId, forwardJson, inverseJson, traceId, summary), cancellationToken);
     }
 
     private async Task WriteSyncJournalAsync(ProjectManagementProjectEntity entity, string operation, CancellationToken cancellationToken)
