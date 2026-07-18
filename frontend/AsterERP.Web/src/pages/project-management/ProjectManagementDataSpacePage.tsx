@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 
 import {
   createProjectManagementBackup,
@@ -103,7 +104,7 @@ export function ProjectManagementDataSpacePage() {
       title="项目数据空间"
       eyebrow="ProjectManagement / Data Space"
       description="查看当前授权项目域数据摘要，并通过统一 bqsync 协议进行预览和导出。"
-      toolbar={<span className="text-sm text-gray-500">{summary.tenantId} / {summary.appCode} · {summary.databaseStatus}</span>}
+      toolbar={<div className="flex flex-wrap items-center gap-3 text-sm"><span className="text-gray-500">{summary.tenantId} / {summary.appCode} · {summary.databaseStatus}</span><PermissionGuard code="project-management:sync:export" fallback={null}><Link to="/project-sync">查看同步水位</Link></PermissionGuard><Link to="/project-search">项目搜索</Link></div>}
     >
       <div className="grid gap-3 md:grid-cols-5">
         {[

@@ -469,6 +469,56 @@ export interface ProjectManagementDataSpaceSummary {
   lastActivityTime?: string | null;
 }
 
+export type ProjectManagementSearchScope = 'all' | 'projects' | 'tasks' | 'comments';
+
+export interface ProjectManagementSearchQuery {
+  keyword: string;
+  scope?: ProjectManagementSearchScope;
+  limit?: number;
+}
+
+export interface ProjectManagementSearchItem {
+  resultType: 'project' | 'task' | 'comment';
+  id: string;
+  projectId: string;
+  title: string;
+  summary?: string;
+  targetRoute: string;
+  updatedTime?: string;
+}
+
+export interface ProjectManagementSearchResponse {
+  projects: ProjectManagementSearchItem[];
+  tasks: ProjectManagementSearchItem[];
+  comments: ProjectManagementSearchItem[];
+}
+
+export interface ProjectManagementReportQuery {
+  pageIndex?: number;
+  pageSize?: number;
+  keyword?: string;
+  status?: string;
+}
+
+export interface ProjectManagementSyncWatermark {
+  deviceId: string;
+  currentSequenceNo: number;
+  acknowledgedSequenceNo: number;
+  lastSeenAt?: string;
+}
+
+export interface ProjectManagementSyncJournalItem {
+  sequenceNo: number;
+  aggregateType: string;
+  aggregateId: string;
+  projectId?: string;
+  operation: string;
+  versionNo: number;
+  payloadJson: string;
+  traceId: string;
+  createdTime: string;
+}
+
 export interface ProjectManagementSyncPreviewResponse {
   packageId: string;
   schemaVersion: string;
