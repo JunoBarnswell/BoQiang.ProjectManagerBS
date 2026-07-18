@@ -20,7 +20,7 @@ export function useTaskWorkspaceUrlState(viewKey: ProjectManagementTaskView) {
       milestoneId: searchParams.get('milestoneId') ?? undefined,
       pageIndex: parseInteger(searchParams.get('page')),
       pageSize: parseInteger(searchParams.get('pageSize')),
-      selectedTaskId: searchParams.get('taskId') ?? undefined,
+      selectedTaskId: searchParams.get('taskId') ?? searchParams.get('selectedTaskId') ?? undefined,
       sortBy: searchParams.get('sortBy') as TaskWorkspaceState['sortBy'],
       sortDirection: searchParams.get('sortDirection') as TaskWorkspaceState['sortDirection'],
       status: searchParams.get('status') ?? undefined,

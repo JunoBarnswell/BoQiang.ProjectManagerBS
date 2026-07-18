@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 import {
   createProjectManagementProject,
@@ -12,13 +12,14 @@ import type {
   ProjectManagementProject,
   ProjectManagementProjectUpsertRequest
 } from '../../api/project-management/projectManagement.types';
+import { usePermission } from '../../core/auth/usePermission';
 import { isHttpError } from '../../core/http/httpError';
 import { queryKeys } from '../../core/query/queryKeys';
 import { useApiMutation } from '../../core/query/useApiMutation';
 import '../../features/project-management/projectManagement.css';
 import { ProjectManagementPageStateView } from '../../features/project-management/components/ProjectManagementPageState';
-import { useProjectManagementWorkspaceScope } from '../../features/project-management/state/projectManagementWorkspaceScope';
 import { toProjectManagementPlatformRoute } from '../../features/project-management/state/projectManagementPlatformRoutes';
+import { useProjectManagementWorkspaceScope } from '../../features/project-management/state/projectManagementWorkspaceScope';
 import { PermissionButton } from '../../shared/auth/PermissionButton';
 import { PermissionGuard } from '../../shared/auth/PermissionGuard';
 import { useConfirm } from '../../shared/feedback/useConfirm';
@@ -54,6 +55,10 @@ const projectFormFields: FormFieldConfig<ProjectManagementProjectUpsertRequest>[
 
 export function ProjectManagementPage() {
   const scope = useProjectManagementWorkspaceScope();
+  const { hasPermission: canViewProjectManagement } = usePermission('project-management:project:view');
+  const { hasPermission: canExportSync } = usePermission('project-management:sync:export');
+  const { hasPermission: canImportSync } = usePermission('project-management:sync:import');
+  const { hasPermission: canViewAudit } = usePermission('project-management:audit:view');
   const confirm = useConfirm();
   const message = useMessage();
   const navigate = useNavigate();
@@ -146,6 +151,28 @@ export function ProjectManagementPage() {
         </div>
       }
     >
+      {canViewProjectManagement || canExportSync || canImportSync || canViewAudit ? (
+        <section aria-labelledby="project-management-workbench-title" className="mb-4 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 id="project-management-workbench-title" className="text-base font-semibold text-gray-900">项目管理工作台</h2>
+              <p className="mt-1 text-sm text-gray-600">从当前账号可访问的项目管理能力快速进入对应页面。</p>
+            </div>
+            <span className="rounded-full bg-gray-100 px-2 py-1 text-xs text-gray-600">当前工作区</span>
+          </div>
+          <nav aria-label="项目管理工作台快捷入口" className="mt-3 flex flex-wrap gap-2">
+            {canViewProjectManagement ? <>
+              <Link className="rounded border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" to={toProjectManagementPlatformRoute('project-search')}>项目搜索</Link>
+              <Link className="rounded border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" to={toProjectManagementPlatformRoute('my-work')}>我的工作</Link>
+              <Link className="rounded border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" to={toProjectManagementPlatformRoute('project-recycle-bin')}>回收站</Link>
+              <Link className="rounded border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" to={toProjectManagementPlatformRoute('project-data-space')}>数据空间</Link>
+            </> : null}
+            {canExportSync || canImportSync ? <Link className="rounded border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" to={toProjectManagementPlatformRoute('project-sync')}>同步</Link> : null}
+            {canViewAudit ? <Link className="rounded border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" to={toProjectManagementPlatformRoute('project-audit-center')}>审计中心</Link> : null}
+          </nav>
+          <p className="mt-3 text-xs text-gray-500">说明：SYSTEM 工作台暂不提供物理数据库备份或恢复入口。</p>
+        </section>
+      ) : null}
       {rows.length === 0 ? <ProjectManagementPageStateView state="empty" /> : <DataTable
         columnSettingsKey="project-management-projects"
         columns={columns}
