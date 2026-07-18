@@ -807,13 +807,24 @@ export interface ProjectManagementActivity {
   traceId: string;
   actorUserId: string;
   createdTime: string;
+  batch?: {
+    operationId: string;
+    totalCount: number;
+    successCount: number;
+    failureCount: number;
+    details?: Array<{ aggregateType: string; aggregateId: string; summary?: string }>;
+  };
+  targetRoute?: string;
+  isTargetDeleted?: boolean;
 }
 
 export interface ProjectManagementActivityQuery {
   pageIndex?: number;
   pageSize?: number;
   aggregateType?: string;
+  aggregateId?: string;
   activityType?: string;
+  actorUserId?: string;
   from?: string;
   to?: string;
 }

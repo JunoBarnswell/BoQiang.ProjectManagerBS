@@ -107,19 +107,69 @@ public sealed class ProjectManagementActivityServiceTests
         Assert.Empty((await service.QueryAsync("project-b", new ProjectManagementActivityQuery())).Items);
     }
 
-    private static ProjectManagementActivityEntity Activity(string id, string aggregateId, DateTime createdTime, bool isDeleted = false, string projectId = "project-a") => new()
+    [Fact]
+    public async Task Task_timeline_aggregates_related_events_filters_actor_and_keeps_deleted_targets_as_placeholders()
+    {
+        using var db = await CreateDbAsync("activity-task");
+        await db.Insertable(new ProjectManagementTaskEntity
+        {
+            Id = "task-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a",
+            TaskCode = "T-1", Title = "Task A", CreatedBy = "operator", CreatedTime = DateTime.UtcNow
+        }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementTaskCommentEntity
+        {
+            Id = "comment-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", TaskId = "task-a",
+            Markdown = "deleted comment", AuthorUserId = "alice", IsDeleted = true
+        }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementTaskAttachmentEntity
+        {
+            Id = "attachment-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", TaskId = "task-a",
+            FileId = "file-a", FileName = "deleted.txt", UploadedByUserId = "alice", IsDeleted = true
+        }).ExecuteCommandAsync();
+        await db.Insertable(new[]
+        {
+            Activity("task-activity", "task-a", DateTime.UtcNow, actorUserId: "alice"),
+            Activity("comment-activity", "comment-a", DateTime.UtcNow.AddMinutes(-1), aggregateType: "TaskComment", activityType: "task.comment.deleted", actorUserId: "alice"),
+            Activity("attachment-activity", "attachment-a", DateTime.UtcNow.AddMinutes(-2), aggregateType: "TaskAttachment", activityType: "task.attachment.deleted", actorUserId: "alice"),
+            Activity("other-actor", "task-a", DateTime.UtcNow.AddMinutes(-3), actorUserId: "bob")
+        }).ExecuteCommandAsync();
+
+        var service = new ProjectManagementActivityService(new TestWorkspaceDatabaseAccessor(db), CreateUser());
+        var page = await service.QueryTaskAsync("task-a", new ProjectManagementActivityQuery(PageSize: 10, ActorUserId: "alice"));
+
+        Assert.Equal(3, page.Total);
+        Assert.Equal(["task-activity", "comment-activity", "attachment-activity"], page.Items.Select(item => item.Id));
+        Assert.Contains("selectedTaskId=task-a", page.Items.Single(item => item.Id == "task-activity").TargetRoute);
+        Assert.True(page.Items.Single(item => item.Id == "comment-activity").IsTargetDeleted);
+        Assert.Null(page.Items.Single(item => item.Id == "comment-activity").TargetRoute);
+        Assert.True(page.Items.Single(item => item.Id == "attachment-activity").IsTargetDeleted);
+
+        var filtered = await service.QueryTaskAsync("task-a", new ProjectManagementActivityQuery(ActivityType: "task.updated", ActorUserId: "alice"));
+        Assert.Single(filtered.Items);
+        Assert.Equal("task-activity", filtered.Items[0].Id);
+    }
+
+    private static ProjectManagementActivityEntity Activity(
+        string id,
+        string aggregateId,
+        DateTime createdTime,
+        bool isDeleted = false,
+        string projectId = "project-a",
+        string aggregateType = "Task",
+        string activityType = "task.updated",
+        string actorUserId = "operator") => new()
     {
         Id = id,
         TenantId = "tenant-a",
         AppCode = "SYSTEM",
         ProjectId = projectId,
-        AggregateType = "Task",
+        AggregateType = aggregateType,
         AggregateId = aggregateId,
-        ActivityType = "task.updated",
+        ActivityType = activityType,
         Summary = "更新任务",
         TraceId = $"trace-{id}",
-        ActorUserId = "operator",
-        CreatedBy = "operator",
+        ActorUserId = actorUserId,
+        CreatedBy = actorUserId,
         CreatedTime = createdTime,
         IsDeleted = isDeleted
     };

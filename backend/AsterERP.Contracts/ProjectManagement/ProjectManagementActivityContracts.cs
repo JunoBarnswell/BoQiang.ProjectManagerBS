@@ -15,13 +15,17 @@ public sealed record ProjectManagementActivityResponse(
     DateTime CreatedTime,
     string Source = "Business",
     IReadOnlyList<ProjectManagementActivityFieldChange>? FieldChanges = null,
-    ProjectManagementActivityBatch? Batch = null);
+    ProjectManagementActivityBatch? Batch = null,
+    string? TargetRoute = null,
+    bool IsTargetDeleted = false);
 
 public sealed record ProjectManagementActivityQuery(
     int PageIndex = 1,
     int PageSize = 50,
     string? AggregateType = null,
+    string? AggregateId = null,
     string? ActivityType = null,
+    string? ActorUserId = null,
     DateTime? From = null,
     DateTime? To = null);
 

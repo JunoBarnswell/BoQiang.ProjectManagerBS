@@ -33,6 +33,7 @@ import {
 import type {
   ProjectManagementTaskComment,
   ProjectManagementTaskCommentUpsertRequest,
+  ProjectManagementActivityQuery,
   ProjectManagementTaskBatchUpdateRequest,
   ProjectManagementTaskLabelFilter,
   ProjectManagementTaskReminder,
@@ -41,6 +42,7 @@ import type {
   ProjectManagementTaskView,
 } from '../../api/project-management/projectManagement.types';
 import { isHttpError } from '../../core/http/httpError';
+import { usePermission } from '../../core/auth/usePermission';
 import { queryKeys } from '../../core/query/queryKeys';
 import { useApiMutation } from '../../core/query/useApiMutation';
 import { useOpenImConversation } from '../../features/im/hooks/useOpenImConversation';
@@ -57,6 +59,8 @@ import { TaskWorkspaceLabelManager } from '../../features/project-management/tas
 import { TaskWorkspaceProjection } from '../../features/project-management/task-workspace/TaskWorkspaceProjection';
 import { TaskWorkspaceSelectionPanel } from '../../features/project-management/task-workspace/TaskWorkspaceSelectionPanel';
 import { TaskWorkspaceToolbar } from '../../features/project-management/task-workspace/TaskWorkspaceToolbar';
+import { getProjectManagementTaskActivities } from '../../features/project-management/task-workspace/taskActivity.api';
+import { TaskActivityTimeline } from '../../features/project-management/task-workspace/TaskActivityTimeline';
 import { useConfirm } from '../../shared/feedback/useConfirm';
 import { useMessage } from '../../shared/feedback/useMessage';
 import { ResponsivePage } from '../../shared/responsive/ResponsivePage';
@@ -101,6 +105,7 @@ export function ProjectManagementTaskWorkspacePage() {
   const message = useMessage();
   const confirm = useConfirm();
   const queryClient = useQueryClient();
+  const { hasPermission: canViewTaskActivities } = usePermission('project-management:audit:view');
   const openImConversation = useOpenImConversation();
   const [creating, setCreating] = useState(false);
   const [batchOpen, setBatchOpen] = useState(false);
@@ -109,6 +114,7 @@ export function ProjectManagementTaskWorkspacePage() {
   const [form, setForm] = useState<ProjectManagementTaskUpsertRequest>(emptyForm);
   const [commentForm, setCommentForm] = useState<ProjectManagementTaskCommentUpsertRequest>({ markdown: '' });
   const [commentPageIndex, setCommentPageIndex] = useState(1);
+  const [taskActivityQuery, setTaskActivityQuery] = useState<ProjectManagementActivityQuery>({ pageIndex: 1, pageSize: 20 });
   const [editingComment, setEditingComment] = useState<ProjectManagementTaskComment | null>(null);
   const [commentEditForm, setCommentEditForm] = useState<ProjectManagementTaskCommentUpsertRequest>({ markdown: '' });
   const [labelFilter, setLabelFilter] = useState<ProjectManagementTaskLabelFilter>({ labelIds: [], matchMode: 'Any' });
@@ -131,6 +137,11 @@ export function ProjectManagementTaskWorkspacePage() {
     queryFn: ({ signal }) => getProjectManagementTask(selectedTaskId, signal),
     queryKey: queryKeys.projectManagement.task(scope, projectId, selectedTaskId),
   });
+  const taskActivitiesQuery = useQuery({
+    enabled: scope.isAvailable && canViewTaskActivities && Boolean(projectId && selectedTaskId),
+    queryFn: ({ signal }) => getProjectManagementTaskActivities(selectedTaskId, taskActivityQuery, signal),
+    queryKey: ['project-management-task-activities', scope.tenantId, scope.appCode, selectedTaskId, taskActivityQuery],
+  });
   const projectConversationQuery = useQuery({
     enabled: scope.isAvailable && Boolean(projectId),
     queryFn: ({ signal }) => getProjectManagementImConversation(projectId, undefined, signal),
@@ -148,6 +159,7 @@ export function ProjectManagementTaskWorkspacePage() {
   });
   useEffect(() => {
     setCommentPageIndex(1);
+    setTaskActivityQuery({ pageIndex: 1, pageSize: 20 });
     setEditingComment(null);
     setCommentEditForm({ markdown: '' });
   }, [selectedTaskId]);
@@ -480,6 +492,14 @@ export function ProjectManagementTaskWorkspacePage() {
           saving={saveMutation.isPending}
           selectedTask={selectedTask}
         />
+        {selectedTask && !creating ? <TaskActivityTimeline
+          canView={canViewTaskActivities}
+          isError={taskActivitiesQuery.isError}
+          isLoading={taskActivitiesQuery.isLoading}
+          onQueryChange={setTaskActivityQuery}
+          page={taskActivitiesQuery.data?.data}
+          query={taskActivityQuery}
+        /> : null}
       </section>
       {selectedTask && !creating ? (
         <TaskWorkspaceImConversationPanel

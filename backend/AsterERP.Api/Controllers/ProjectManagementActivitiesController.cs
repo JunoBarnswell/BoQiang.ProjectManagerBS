@@ -16,4 +16,11 @@ public sealed class ProjectManagementActivitiesController(IProjectManagementActi
         [FromQuery] ProjectManagementActivityQuery query,
         CancellationToken cancellationToken = default)
         => ApiOk(await service.QueryAsync(projectId, query, cancellationToken));
+
+    [HttpGet("~/api/project-management/tasks/{taskId}/activities")]
+    public async Task<IActionResult> QueryTaskAsync(
+        string taskId,
+        [FromQuery] ProjectManagementActivityQuery query,
+        CancellationToken cancellationToken = default)
+        => ApiOk(await service.QueryTaskAsync(taskId, query, cancellationToken));
 }
