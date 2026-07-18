@@ -22,7 +22,9 @@ public sealed class ProjectManagementTaskService(
     IProjectManagementTaskProgressProjector? progressProjector = null,
     ProjectManagementTaskHierarchy? taskHierarchy = null,
     IProjectManagementReminderScheduler? reminderScheduler = null,
-    IProjectManagementImConversationService? imConversationService = null) : IProjectManagementTaskService, IProjectManagementTaskOccurrenceCommandService
+    IProjectManagementImConversationService? imConversationService = null,
+    ProjectManagementTaskLabelMutation? labelMutation = null,
+    IProjectManagementTaskTemplateDependencyCommandService? templateDependencyCommand = null) : IProjectManagementTaskService, IProjectManagementTaskOccurrenceCommandService, IProjectManagementTaskTemplateCommandService
 {
     private static readonly string[] Priorities = ["Low", "Medium", "High", "Urgent"];
 
@@ -190,6 +192,43 @@ public sealed class ProjectManagementTaskService(
             if (concurrent is not null) return concurrent;
             throw;
         }
+    }
+
+    public async Task<ProjectManagementTaskTemplateCreationResult> CreateTemplateAsync(ProjectManagementTaskTemplateCapability capability, string projectId, IReadOnlyList<ProjectManagementTaskTemplateNodeCreateCommand> nodes, IReadOnlyList<ProjectManagementTaskTemplateDependencyCreateCommand> dependencies, CancellationToken cancellationToken = default)
+    {
+        if (!ReferenceEquals(capability, ProjectManagementTaskTemplateCapability.Instance)) throw new InvalidOperationException("任务模板命令缺少内部 capability");
+        if (nodes.Count is < 1 or > 1000 || nodes.Select(item => item.NodeKey).Distinct(StringComparer.Ordinal).Count() != nodes.Count) throw new ValidationException("模板任务节点无效");
+        await EnsureProjectAsync(projectId, cancellationToken);
+        await EnsureTaskWriteAccessAsync(projectId, null, null, null, cancellationToken);
+        var db = databaseAccessor.GetCurrentDb();
+        var created = new Dictionary<string, ProjectManagementTaskEntity>(StringComparer.Ordinal);
+        await ProjectManagementMutationTransaction.RunAsync(db, async () =>
+        {
+            foreach (var node in nodes)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var parentId = string.IsNullOrWhiteSpace(node.Task.ParentTaskId) ? null : created.GetValueOrDefault(node.Task.ParentTaskId!)?.Id
+                    ?? throw new ValidationException("模板父任务节点不存在或排序无效");
+                var task = node.Task with { ParentTaskId = parentId };
+                var entity = await PrepareTemplateTaskAsync(projectId, task, cancellationToken);
+                await db.Insertable(entity).ExecuteCommandAsync(cancellationToken);
+                if (node.LabelIds.Count > 0) await (labelMutation ?? new ProjectManagementTaskLabelMutation()).ReplaceAsync(db, entity, node.LabelIds, RequireTenantId(), RequireAppCode(), RequireUserId(), DateTime.UtcNow, cancellationToken);
+                await WriteActivityAsync(entity, "created", $"从模板创建任务 {entity.Title}", cancellationToken);
+                await WriteSyncJournalAsync(entity, "created", cancellationToken);
+                created.Add(node.NodeKey, entity);
+            }
+            if (dependencies.Count > 0)
+            {
+                var mapped = dependencies.Select(item => new ProjectManagementTaskDependencyUpsertRequest(
+                    created.GetValueOrDefault(item.PredecessorNodeKey)?.Id ?? throw new ValidationException("模板前置任务不存在"),
+                    created.GetValueOrDefault(item.SuccessorNodeKey)?.Id ?? throw new ValidationException("模板后置任务不存在"), item.DependencyType, item.LagMinutes)).ToList();
+                var command = templateDependencyCommand ?? throw new InvalidOperationException("任务模板依赖命令尚未注册");
+                await command.CreateBatchInTransactionAsync(ProjectManagementTaskTemplateDependencyCapability.Instance, projectId, new ProjectManagementTaskDependencyBatchCreateRequest(mapped), cancellationToken);
+            }
+            await RefreshProgressProjectionsAsync(projectId, cancellationToken);
+        });
+        foreach (var task in created.Values) await PublishInvalidationAsync(task, "task.created-from-template", cancellationToken);
+        return new ProjectManagementTaskTemplateCreationResult(created.ToDictionary(pair => pair.Key, pair => ToTemplateResponse(pair.Value), StringComparer.Ordinal));
     }
 
     public async Task UpdateFutureAsync(
@@ -695,7 +734,30 @@ public sealed class ProjectManagementTaskService(
 
     private static bool IsRecurrenceKeyConflict(Exception exception) =>
         exception.ToString().Contains("ux_pm_task_recurrence_occurrences_key", StringComparison.OrdinalIgnoreCase) ||
-        exception.ToString().Contains("pm_task_recurrence_occurrences.RecurrenceId", StringComparison.OrdinalIgnoreCase);
+            exception.ToString().Contains("pm_task_recurrence_occurrences.RecurrenceId", StringComparison.OrdinalIgnoreCase);
+
+    private async Task<ProjectManagementTaskEntity> PrepareTemplateTaskAsync(string projectId, ProjectManagementTaskUpsertRequest request, CancellationToken cancellationToken)
+    {
+        Validate(request);
+        var db = databaseAccessor.GetCurrentDb();
+        var taskCode = NormalizeRequired(request.TaskCode, "任务编码不能为空");
+        if (await db.Queryable<ProjectManagementTaskEntity>().AnyAsync(item => item.ProjectId == projectId && item.TaskCode == taskCode && !item.IsDeleted, cancellationToken)) throw new ValidationException("项目内任务编码已存在");
+        var placement = await TaskHierarchy.ResolvePlacementAsync(db, projectId, request.ParentTaskId, null, cancellationToken);
+        var parent = placement.Parent;
+        await EnsureTaskWriteAccessAsync(projectId, null, parent?.Id, request.AssigneeUserId, cancellationToken);
+        await EnsureAssigneeAsync(projectId, request.AssigneeUserId, cancellationToken);
+        await EnsureMilestoneAsync(projectId, request.MilestoneId, cancellationToken);
+        var status = ProjectManagementDomainRules.RequireTaskStatus(request.Status);
+        await EnsureWipAsync(projectId, status, request.OverrideWip, cancellationToken);
+        return new ProjectManagementTaskEntity
+        {
+            TenantId = RequireTenantId(), AppCode = RequireAppCode(), ProjectId = projectId, MilestoneId = NormalizeOptional(request.MilestoneId), ParentTaskId = parent?.Id,
+            TaskCode = taskCode, Title = NormalizeRequired(request.Title, "任务标题不能为空"), Description = NormalizeOptional(request.Description), Status = status,
+            BlockedReason = status == ProjectManagementDomainRules.TaskBlocked ? "手工阻塞" : null, Priority = NormalizePriority(request.Priority), AssigneeUserId = NormalizeOptional(request.AssigneeUserId), AssigneeEmploymentId = NormalizeOptional(request.AssigneeEmploymentId),
+            StartDate = request.StartDate, DueDate = request.DueDate, ProgressPercent = request.ProgressPercent, Weight = ResolveProgressWeight(request.Weight, request.EstimateMinutes), EstimateMinutes = request.EstimateMinutes,
+            SortOrder = await GetNextSiblingSortOrderAsync(projectId, parent?.Id, cancellationToken), Depth = placement.RootDepth, VersionNo = 1, CreatedBy = RequireUserId(), CreatedTime = DateTime.UtcNow
+        };
+    }
 
     private async Task EnsureWipAsync(string projectId, string status, bool overrideWip, CancellationToken cancellationToken, string? currentTaskId = null)
     {
@@ -758,4 +820,5 @@ public sealed class ProjectManagementTaskService(
     private static ProjectManagementTaskListItemResponse MapList(ProjectManagementTaskEntity entity, int blockedByCount, bool canStart, string? blockedReason) => new(entity.Id, entity.ProjectId, entity.MilestoneId, entity.ParentTaskId, entity.TaskCode, entity.Title, entity.Status, entity.Priority, entity.AssigneeUserId, entity.StartDate, entity.DueDate, entity.ProgressPercent, entity.SortOrder, entity.Depth, entity.VersionNo, blockedByCount, canStart, blockedReason);
 
     private static ProjectManagementTaskDetailResponse MapDetail(ProjectManagementTaskEntity entity, int blockedByCount, bool canStart, string? blockedReason) => new(entity.Id, entity.ProjectId, entity.MilestoneId, entity.ParentTaskId, entity.TaskCode, entity.Title, entity.Description, entity.Status, entity.Priority, entity.AssigneeUserId, entity.AssigneeEmploymentId, entity.StartDate, entity.DueDate, entity.ProgressPercent, entity.Weight, entity.EstimateMinutes, entity.ActualMinutes, entity.SortOrder, entity.Depth, entity.VersionNo, entity.CreatedTime, entity.UpdatedTime, blockedByCount, canStart, blockedReason);
+    private static ProjectManagementTaskResponse ToTemplateResponse(ProjectManagementTaskEntity entity) => new(entity.Id, entity.ProjectId, entity.MilestoneId, entity.ParentTaskId, entity.TaskCode, entity.Title, entity.Description, entity.Status, entity.Priority, entity.AssigneeUserId, entity.AssigneeEmploymentId, entity.StartDate, entity.DueDate, entity.ProgressPercent, entity.Weight, entity.EstimateMinutes, entity.ActualMinutes, entity.SortOrder, entity.Depth, entity.VersionNo, entity.CreatedTime, entity.UpdatedTime);
 }

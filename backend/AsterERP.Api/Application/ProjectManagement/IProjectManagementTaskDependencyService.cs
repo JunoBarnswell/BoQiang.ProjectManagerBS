@@ -13,3 +13,15 @@ public interface IProjectManagementTaskDependencyService
     Task<int> PurgeForTasksAsync(string projectId, IReadOnlyCollection<string> taskIds, CancellationToken cancellationToken = default);
     Task<int> PurgeDeletedTasksAsync(string projectId, IReadOnlyCollection<string> taskIds, CancellationToken cancellationToken = default);
 }
+
+public sealed class ProjectManagementTaskTemplateDependencyCapability
+{
+    internal static readonly ProjectManagementTaskTemplateDependencyCapability Instance = new();
+    internal ProjectManagementTaskTemplateDependencyCapability() { }
+}
+
+/// <summary>仅供任务模板命令在自己已开启的事务中复用依赖图校验。</summary>
+public interface IProjectManagementTaskTemplateDependencyCommandService
+{
+    Task<IReadOnlyList<ProjectManagementTaskDependencyResponse>> CreateBatchInTransactionAsync(ProjectManagementTaskTemplateDependencyCapability capability, string projectId, ProjectManagementTaskDependencyBatchCreateRequest request, CancellationToken cancellationToken = default);
+}

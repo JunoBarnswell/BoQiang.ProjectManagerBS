@@ -65,16 +65,19 @@ public sealed class AsterErpProjectManagementModule : AbpModule
         context.Services.AddScoped<IProjectManagementMemberService, ProjectManagementMemberService>();
         context.Services.AddScoped<IProjectManagementMilestoneService, ProjectManagementMilestoneService>();
         context.Services.AddScoped<IProjectManagementTaskService, ProjectManagementTaskService>();
+        context.Services.AddScoped<IProjectManagementTaskTemplateCommandService>(provider => (ProjectManagementTaskService)provider.GetRequiredService<IProjectManagementTaskService>());
         context.Services.AddScoped<IProjectManagementTaskOccurrenceCommandService>(provider => (ProjectManagementTaskService)provider.GetRequiredService<IProjectManagementTaskService>());
         context.Services.AddScoped<IProjectManagementTaskRecurrenceScheduler, HangfireProjectManagementTaskRecurrenceScheduler>();
         context.Services.AddScoped<IProjectManagementTaskRecurrenceService, ProjectManagementTaskRecurrenceService>();
         context.Services.AddTransient<ProjectManagementTaskRecurrenceGenerationRunner>();
         context.Services.AddTransient<ProjectManagementTaskRecurrenceGenerationJob>();
         context.Services.AddScoped<IProjectManagementTaskDependencyService, ProjectManagementTaskDependencyService>();
+        context.Services.AddScoped<IProjectManagementTaskTemplateDependencyCommandService>(provider => (ProjectManagementTaskDependencyService)provider.GetRequiredService<IProjectManagementTaskDependencyService>());
         context.Services.AddScoped<IProjectManagementLabelService, ProjectManagementLabelService>();
         context.Services.AddScoped<IProjectManagementTaskParticipantService, ProjectManagementTaskParticipantService>();
         context.Services.AddScoped<IProjectManagementTaskTimeLogService, ProjectManagementTaskTimeLogService>();
         context.Services.AddScoped<IProjectManagementTaskTemplateService, ProjectManagementTaskTemplateService>();
+        context.Services.AddScoped<IProjectManagementTaskTemplateInstantiationService, ProjectManagementTaskTemplateInstantiationService>();
         context.Services.AddScoped<IProjectManagementRecycleService, ProjectManagementRecycleService>();
         context.Services.AddScoped<IProjectManagementImConversationService, ProjectManagementImConversationService>();
     }
