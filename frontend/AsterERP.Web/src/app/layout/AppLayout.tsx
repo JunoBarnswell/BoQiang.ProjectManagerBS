@@ -10,6 +10,8 @@ import { useAuthStore, useMenuStore, useTabStore, useThemeStore, useWorkspaceSto
 import { ImConversationDrawer } from '../../features/im/components/ImConversationDrawer';
 import { ImProvider } from '../../features/im/components/ImProvider';
 import { ImUnreadEntry } from '../../features/im/components/ImUnreadEntry';
+import { ProjectManagementImConversationTargetLink } from '../../features/project-management/im/ProjectManagementImConversationTargetLink';
+import { ProjectManagementNotificationEntry } from '../../features/project-management/notifications/ProjectManagementNotificationEntry';
 import { resolveMenuLabel } from '../navigation/menuLabels';
 
 import { BasicLayout } from './BasicLayout';
@@ -138,6 +140,7 @@ export function AppLayout() {
       contentKey={`${locationKey}:${activeTab?.refreshToken ?? 0}`}
       currentUserName={user?.displayName ?? user?.userName}
       headerExtra={<ImUnreadEntry />}
+      notificationEntry={<ProjectManagementNotificationEntry />}
       locale={locale}
       onCloseCurrent={() => {
         if (locationKey === workspaceHomePath) {
@@ -207,7 +210,11 @@ export function AppLayout() {
     >
       <Outlet />
       </BasicLayout>
-      <ImConversationDrawer />
+      <ImConversationDrawer
+        renderConversationContext={(conversation) => conversation.conversationType === 'Group' && conversation.conversationKey.startsWith('pm:')
+          ? <ProjectManagementImConversationTargetLink conversationId={conversation.id} />
+          : null}
+      />
     </ImProvider>
   );
 }

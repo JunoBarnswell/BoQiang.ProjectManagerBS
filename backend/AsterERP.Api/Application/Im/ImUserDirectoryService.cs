@@ -225,7 +225,7 @@ public sealed class ImUserDirectoryService(
 
         var conversationIds = participants.Select(item => item.ConversationId).ToList();
         var conversations = await db.Queryable<ImConversationEntity>()
-            .Where(item => !item.IsDeleted && item.TenantId == tenantId && conversationIds.Contains(item.Id))
+            .Where(item => !item.IsDeleted && item.TenantId == tenantId && item.ConversationType == "Direct" && conversationIds.Contains(item.Id))
             .ToListAsync(cancellationToken);
         var participantMap = participants.ToDictionary(item => item.ConversationId, StringComparer.OrdinalIgnoreCase);
         return conversations.ToDictionary(

@@ -22,6 +22,7 @@ const rawWorkspaceQueryRoots = new Set([
 ]);
 const asterWorkspaceQueryScopes = new Set([
   'application-console',
+  'project-management',
   'runtime',
   'page'
 ]);

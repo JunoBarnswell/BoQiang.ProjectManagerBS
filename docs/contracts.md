@@ -176,7 +176,47 @@ src/app
 - 平台管理员开户闭环必须覆盖：创建租户、创建应用、安装租户应用、创建或选择用户、创建目标租户应用菜单、创建目标租户应用角色、给角色分配该工作区菜单权限、给用户配置租户成员关系与应用角色。
 - 角色授权必须限定在角色所属 `TenantId + AppCode` 的菜单权限树内，不能把其他租户应用菜单权限授给当前角色。
 
-## 7.1 动态菜单、轻量设计器与运行时页面契约
+## 7.1 ProjectManagement 模块契约
+
+产品与领域架构的唯一语义基线见 `docs/project-management-product-architecture.md`；本节负责其仓库级依赖、工作区和权限落地，后续实现不得重新定义聚合状态或视图查询协议。
+
+ProjectManagement 是 AsterERP 内的原生 ABP 业务模块，不新增独立 Web 宿主或旁路权限系统。
+
+- 模块键为 `project-management`，权限前缀为 `project-management:`。
+- 模块由 `AsterErpProjectManagementModule` 声明，并由 `AsterErpAbpHostModule` 统一装配。
+- 发布裁剪边界必须登记在 `backend/module-file-map.json`，未登记的项目管理源码不得进入发布包。
+- 业务对象必须按 `TenantId + AppCode` 隔离；项目级对象再使用 `ProjectId` 作为业务边界。
+- 项目管理权限码统一维护在 `PermissionCodes.ProjectManagement.cs`，前端菜单和按钮不得自行拼接权限码。
+- 后续实体、应用服务、Controller、页面和测试必须分别落入 `Modules/ProjectManagement`、`Application/ProjectManagement`、`Controllers/ProjectManagement*`、`features/project-management` 或 `pages/project-management`。
+- 业务接口必须返回 `ApiResult<T>`、携带 TraceId，并复用现有 ORM Data Filter、UnitOfWork、审计、文件和通知能力。
+- 每个 Linear Case 必须完成测试证据后才能进入 `Done`；M0-M7 全部 Case 完成后还必须执行统一全量回归。
+- `ProjectManagementTaskQuery.ViewKey` 统一支持 `tree/list/card/board/gantt/calendar`；视图只能改变投影，不得新增平行任务接口。
+- 同步协议使用 `POST /api/project-management/sync/export`、`POST /api/project-management/sync/preview`、`POST /api/project-management/sync/apply`；导出包必须是带 `manifest.json/data.json` 和数据 SHA-256 的 `.bqsync`，导入必须携带当前密码、风险确认和 `Skip/Overwrite/Reject` 策略。
+- `pm_sync_journal.SequenceNo` 是工作区内增量同步的服务端水位，任务创建、编辑、移动、删除均必须写入日志；日志必须经过同样的租户、应用和项目成员 ORM 数据过滤。
+- 数据空间摘要 `GET /api/project-management/data-space/summary` 只读取当前 session 工作区并返回数据库状态与项目、任务、成员、里程碑、附件计数；前端导出/预览入口必须受 ProjectManagement 权限守卫保护。
+- 高风险同步导入必须先获取 `pm_maintenance_locks` 工作区维护锁；锁按 `TenantId + AppCode + LockKey` 唯一、可过期回收，导入成功或失败均必须释放，不能由前端绕过。
+- 备份接口为 `GET/POST /api/project-management/backups`、`POST /api/project-management/backups/{id}/restore`，必须密码确认和风险确认；SQLite 使用在线物理备份、SHA-256 校验、安全备份和恢复后完整性检查，非 SQLite 明确返回不支持。
+- 高风险操作记录通过 `pm_operations` 持久化，审计查询为 `GET /api/project-management/audit/operations`，支持按操作类型和 `Running/Succeeded/Failed` 状态分页查询；同步导入、备份创建和备份恢复必须记录影响摘要、TraceId、操作者、失败原因及完成时间。
+- 项目关联 IM 接口固定为 `GET/POST /api/project-management/projects/{projectId}/im-conversation` 与 `GET /api/project-management/im-conversations/{conversationId}/target`。查看需要 `project-management:im-conversation:view` 和项目对象查看权；创建需要 `project-management:im-conversation:manage` 及 Owner/Manager 项目角色。反向目标解析只接受会话标识，服务端通过 ORM 数据过滤和对象授权重新解析关联，客户端不得传入或信任项目标识。项目域仅返回受控链接和目标路由，IM 会话、消息、未读和历史始终由 IM 模块提供。
+- 关联记录以 `TenantId + AppCode + ProjectId + TaskId?` 唯一，跨应用库与 IM 主库采用可恢复的 `Provisioning -> Active/ProvisioningFailed -> Archived` 状态机；项目或任务删除后归档会话，恢复必须重新校验当前成员再激活。项目成员、任务负责人和任务参与人变化后，服务端统一同步群成员，前端不得提交成员集合或据此判定权限。
+
+成员候选接口：
+
+- `GET /api/project-management/member-candidates` 使用当前会话的 `TenantId`、`AppCode` 解析主数据范围，忽略客户端伪造的租户或应用参数。
+- `pageIndex`、`pageSize`、`keyword`、`deptId`、`positionId` 仅作为当前范围内的数据库查询条件；候选只返回启用用户和启用任职。
+- `SYSTEM` 工作区读取租户成员关系，应用工作区读取应用数据库中的任职关系；两者都复用 `system_users`、`system_departments` 和 `system_positions`，不建立 Persons 表。
+- 停用用户不进入新选择候选，但历史业务关系应保留其用户标识，由后续项目域 DTO 显示停用状态。
+
+平台能力适配契约：
+
+- `IProjectManagementFileReferenceService` 只校验和关联现有 `FileId`/`BlobId`，不创建项目域文件存储。
+- `IProjectManagementNotificationPublisher` 负责项目通知类型、收件人、跳转路由和 `TraceId`，实际发送复用现有通知中心。
+- `IProjectManagementRealtimePublisher` 只发布带 `TenantId + AppCode + AggregateId + Version` 的失效事件，SignalR Hub 仍由平台负责。
+- `IProjectManagementJobScheduler` 的请求必须包含稳定 `IdempotencyKey`、受控 `JobType`、最大重试次数和 `TraceId`；Payload 不得携带密码、Token 或其他敏感凭据。
+- `IProjectManagementActivityWriter` 记录项目活动；平台 `IOperationLogWriter` 继续负责请求级审计，两者不得互相替代。
+- 所有契约均为可替换接口，调用方必须传递 `CancellationToken`；失败由调用方按平台约定处理，不能在项目域内新建调度、通知或文件引擎。
+
+## 7.2 动态菜单、轻量设计器与运行时页面契约
 
 当前运行时闭环以应用库 `system_menus` 为单一菜单来源：预览菜单和正式运行菜单都写入应用库 `system_menus`，前端均通过 `/admin/pages/:pageCode` 进入 `RuntimePage`。预览入口携带 `previewPageId` 做开发者预览权限和页面归属校验，并从对应 `app_dev_pages.LayoutDraftJson` 编译运行时 artifact；正式入口无 `previewPageId`，只读取已发布 `system_page_schemas.SchemaJson`。
 

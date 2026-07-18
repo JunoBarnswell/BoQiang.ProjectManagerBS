@@ -12,7 +12,7 @@ public sealed class ApplicationDatabaseBaselineSeeder(
     ApplicationWorkflowAcceptanceBaselineSeeder workflowAcceptanceBaselineSeeder,
     ApplicationShellCapabilityResolver shellCapabilityResolver)
 {
-    public const string BaselineVersion = "2026.07.16.1";
+    public const string BaselineVersion = "2026.07.18.1";
     public const string BaselineParameterKey = "app.shell.baselineVersion";
     public const string CapabilitySignatureParameterKey = "app.shell.capabilitySignature";
     private const string RetiredAdminCenterMenuCode = "admin-center";

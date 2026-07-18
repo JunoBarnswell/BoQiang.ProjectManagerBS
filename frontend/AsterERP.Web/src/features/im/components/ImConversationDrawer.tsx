@@ -1,10 +1,17 @@
+import type { ReactNode } from 'react';
+
 import { AppIcon } from '@/shared/icons/AppIcon';
 
 import { useImStore } from '../state/imStore';
+import type { ImConversation } from '../types/imTypes';
 
 import { ImWorkspace } from './ImWorkspace';
 
-export function ImConversationDrawer() {
+interface ImConversationDrawerProps {
+  renderConversationContext?: (conversation: ImConversation) => ReactNode;
+}
+
+export function ImConversationDrawer({ renderConversationContext }: ImConversationDrawerProps) {
   const drawerOpen = useImStore((state) => state.drawerOpen);
   const closeDrawer = useImStore((state) => state.closeDrawer);
 
@@ -21,7 +28,7 @@ export function ImConversationDrawer() {
             <AppIcon name="x" />
           </button>
         </div>
-        <ImWorkspace mode="drawer" />
+        <ImWorkspace mode="drawer" renderConversationContext={renderConversationContext} />
       </div>
     </div>
   );

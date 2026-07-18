@@ -47,6 +47,17 @@ public sealed class SqliteSchemaExecutor(ISqlSugarClient db)
                count > 0;
     }
 
+    public bool HasIndex(string indexName)
+    {
+        var safeIndexName = indexName.Replace("'", "''", StringComparison.Ordinal);
+        var result = db.Ado.GetDataTable(
+            $"SELECT COUNT(1) AS IndexCount FROM sqlite_master WHERE type = 'index' AND name = '{safeIndexName}'");
+
+        return result.Rows.Count > 0 &&
+               int.TryParse(result.Rows[0]["IndexCount"]?.ToString(), out var count) &&
+               count > 0;
+    }
+
     public async Task<bool> HasColumnAsync(string tableName, string columnName, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();

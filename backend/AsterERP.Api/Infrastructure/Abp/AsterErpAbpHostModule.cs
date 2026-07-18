@@ -18,6 +18,7 @@ using AsterERP.Api.Infrastructure.Abp.SystemAdministration;
 using AsterERP.Api.Infrastructure.Abp.WorkflowApproval;
 using AsterERP.Api.Infrastructure.Abp.AiCenter;
 using AsterERP.Api.Infrastructure.Abp.Im;
+using AsterERP.Api.Infrastructure.Abp.ProjectManagement;
 using AsterERP.Api.Infrastructure.Database;
 using AsterERP.Workflow.Approval.Core;
 using AsterERP.Workflow.Forms.Core;
@@ -47,6 +48,7 @@ namespace AsterERP.Api.Infrastructure.Abp;
     typeof(AsterErpWorkflowApprovalModule),
     typeof(AsterErpAiCenterModule),
     typeof(AsterErpImModule),
+    typeof(AsterErpProjectManagementModule),
     typeof(AsterErpWorkflowApprovalCoreModule),
     typeof(AsterErpWorkflowFormsCoreModule),
     typeof(AsterErpWorkflowCoreModule),

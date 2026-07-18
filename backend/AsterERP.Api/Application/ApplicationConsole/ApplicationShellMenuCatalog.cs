@@ -14,7 +14,8 @@ public static class ApplicationShellMenuCatalog
         new("app-console", "应用控制台", null, "/console", "ApplicationConsolePage", PermissionCodes.AppConsoleView, "PanelsTopLeft", 2),
         new("workbench", "工作台", null, "/workbench", "ApplicationConsolePage", PermissionCodes.AppWorkbenchView, "ChartColumn", 3),
         new("dev-center", "开发中心", null, "/development-center", "ApplicationConsolePage", PermissionCodes.AppDevelopmentCenterView, "Code2", 5),
-        new("data-center", "数据中心", null, "/data-center", "ApplicationConsolePage", PermissionCodes.AppDataCenterView, "DatabaseZap", 6)
+        new("data-center", "数据中心", null, "/data-center", "ApplicationConsolePage", PermissionCodes.AppDataCenterView, "DatabaseZap", 6),
+        new("project-management", "项目管理", null, "/project-management", "ProjectManagementPage", PermissionCodes.ProjectManagementProjectView, "KanbanSquare", 7)
     ];
 
     public static readonly IReadOnlyList<ApplicationShellMenuDefinition> AsterSceneItems =

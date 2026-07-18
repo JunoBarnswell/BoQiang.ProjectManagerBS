@@ -39,27 +39,44 @@ public sealed class ImConversationService(
             .OrderBy(item => item.LastMessageAt, OrderByType.Desc)
             .OrderBy(item => item.CreatedTime, OrderByType.Desc)
             .ToListAsync(cancellationToken);
-        var peerIds = conversations.Select(item => GetPeerUserId(item, userId)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var peerIds = conversations
+            .Where(item => IsDirectConversation(item))
+            .Select(item => GetPeerUserId(item, userId))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
         var userMap = await ResolveUserNamesAsync(peerIds, cancellationToken);
         var participantMap = participants.ToDictionary(item => item.ConversationId, StringComparer.OrdinalIgnoreCase);
+        var counts = conversations.Count == 0
+            ? new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+            : (await db.Queryable<ImConversationParticipantEntity>()
+                .Where(item => !item.IsDeleted && item.TenantId == tenantId && conversations.Select(conversation => conversation.Id).Contains(item.ConversationId))
+                .GroupBy(item => item.ConversationId)
+                .Select(item => new { ConversationId = item.ConversationId, Count = SqlFunc.AggregateCount(item.Id) })
+                .ToListAsync(cancellationToken))
+                .ToDictionary(item => item.ConversationId, item => item.Count, StringComparer.OrdinalIgnoreCase);
 
         return conversations
             .Select(item =>
             {
-                var peerUserId = GetPeerUserId(item, userId);
-                var peerName = userMap.TryGetValue(peerUserId, out var peerNameValue)
-                    ? peerNameValue
-                    : peerUserId;
+                var isDirect = IsDirectConversation(item);
+                var peerUserId = isDirect ? GetPeerUserId(item, userId) : string.Empty;
+                var peerName = isDirect
+                    ? userMap.TryGetValue(peerUserId, out var peerNameValue) ? peerNameValue : peerUserId
+                    : string.IsNullOrWhiteSpace(item.Title) ? "群聊" : item.Title;
                 return new ImConversationResponse(
                     item.Id,
                     item.TenantId,
                     item.ConversationKey,
+                    NormalizeConversationType(item.ConversationType),
+                    item.Title,
+                    NormalizeConversationStatus(item.Status),
                     peerUserId,
                     peerName,
                     item.LastMessageId,
                     item.LastMessagePreview,
                     item.LastMessageAt,
                     participantMap.TryGetValue(item.Id, out var participant) ? participant.UnreadCount : 0,
+                    counts.TryGetValue(item.Id, out var count) ? count : 0,
                     item.CreatedTime);
             })
             .ToList();
@@ -130,6 +147,193 @@ public sealed class ImConversationService(
         return conversations.First(item => item.Id == conversation.Id);
     }
 
+    public async Task<ImConversationResponse> EnsureGroupConversationAsync(ImGroupConversationRequest request, CancellationToken cancellationToken = default)
+    {
+        var tenantId = RequireTenantId();
+        var currentUserId = RequireUserId();
+        var key = NormalizeRequired(request.ConversationKey, "会话业务键不能为空");
+        var title = NormalizeRequired(request.Title, "群会话名称不能为空");
+        var participantUserIds = NormalizeParticipantUserIds(request.ParticipantUserIds);
+        if (!participantUserIds.Contains(currentUserId, StringComparer.OrdinalIgnoreCase))
+        {
+            throw new ValidationException("创建关联会话的用户必须属于会话成员", ErrorCodes.PermissionDenied);
+        }
+
+        foreach (var participantUserId in participantUserIds)
+        {
+            await accountBindingService.EnsureForUserAsync(tenantId, participantUserId, cancellationToken);
+        }
+
+        var db = databaseAccessor.MainDb;
+        var conversation = await db.Queryable<ImConversationEntity>()
+            .FirstAsync(item => !item.IsDeleted && item.TenantId == tenantId && item.ConversationKey == key, cancellationToken);
+        if (conversation is null)
+        {
+            conversation = new ImConversationEntity
+            {
+                TenantId = tenantId,
+                ConversationKey = key,
+                ConversationType = "Group",
+                Title = title,
+                Status = "Active",
+                CreatedBy = currentUserId
+            };
+            db.Ado.BeginTran();
+            try
+            {
+                await db.Insertable(conversation).ExecuteCommandAsync(cancellationToken);
+                await db.Insertable(participantUserIds.Select(userId => CreateParticipant(tenantId, conversation.Id, userId)).ToList())
+                    .ExecuteCommandAsync(cancellationToken);
+                db.Ado.CommitTran();
+            }
+            catch
+            {
+                db.Ado.RollbackTran();
+                conversation = await db.Queryable<ImConversationEntity>()
+                    .FirstAsync(item => !item.IsDeleted && item.TenantId == tenantId && item.ConversationKey == key, cancellationToken);
+                if (conversation is null)
+                {
+                    throw;
+                }
+            }
+        }
+
+        if (!string.Equals(NormalizeConversationType(conversation.ConversationType), "Group", StringComparison.Ordinal))
+        {
+            throw new ValidationException("会话业务键已被私聊会话占用", ErrorCodes.ParameterInvalid);
+        }
+
+        if (!string.Equals(NormalizeConversationStatus(conversation.Status), "Active", StringComparison.Ordinal))
+        {
+            throw new ValidationException("关联会话已归档，不能重新同步成员", ErrorCodes.ParameterInvalid);
+        }
+
+        if (!string.Equals(conversation.Title, title, StringComparison.Ordinal))
+        {
+            conversation.Title = title;
+            conversation.UpdatedBy = currentUserId;
+            conversation.UpdatedTime = clock.Now;
+            await db.Updateable(conversation).UpdateColumns(item => new { item.Title, item.UpdatedBy, item.UpdatedTime }).ExecuteCommandAsync(cancellationToken);
+        }
+
+        await SynchronizeGroupParticipantsAsync(conversation.Id, participantUserIds, cancellationToken);
+        return (await GetConversationsAsync(cancellationToken)).First(item => item.Id == conversation.Id);
+    }
+
+    public async Task SynchronizeGroupParticipantsAsync(string conversationId, IReadOnlyCollection<string> participantUserIds, CancellationToken cancellationToken = default)
+    {
+        var tenantId = RequireTenantId();
+        var currentUserId = RequireUserId();
+        var normalizedConversationId = NormalizeRequired(conversationId, "会话不能为空");
+        var desiredUserIds = NormalizeParticipantUserIds(participantUserIds);
+
+        foreach (var userId in desiredUserIds)
+        {
+            await accountBindingService.EnsureForUserAsync(tenantId, userId, cancellationToken);
+        }
+
+        var db = databaseAccessor.MainDb;
+        var conversation = await RequireConversationAsync(db, tenantId, normalizedConversationId, cancellationToken);
+        if (!string.Equals(NormalizeConversationType(conversation.ConversationType), "Group", StringComparison.Ordinal))
+        {
+            throw new ValidationException("仅群会话支持成员同步", ErrorCodes.ParameterInvalid);
+        }
+
+        if (!string.Equals(NormalizeConversationStatus(conversation.Status), "Active", StringComparison.Ordinal))
+        {
+            throw new ValidationException("已归档会话不能变更成员", ErrorCodes.ParameterInvalid);
+        }
+
+        var activeParticipants = await db.Queryable<ImConversationParticipantEntity>()
+            .Where(item => !item.IsDeleted && item.TenantId == tenantId && item.ConversationId == normalizedConversationId)
+            .ToListAsync(cancellationToken);
+        var activeUserIds = activeParticipants.Select(item => item.UserId).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var now = clock.Now;
+        var toRemove = activeParticipants.Where(item => !desiredUserIds.Contains(item.UserId, StringComparer.OrdinalIgnoreCase)).ToList();
+        var toAdd = desiredUserIds.Where(userId => !activeUserIds.Contains(userId)).Select(userId => CreateParticipant(tenantId, normalizedConversationId, userId)).ToList();
+        if (toRemove.Count == 0 && toAdd.Count == 0)
+        {
+            return;
+        }
+
+        db.Ado.BeginTran();
+        try
+        {
+            foreach (var participant in toRemove)
+            {
+                participant.IsDeleted = true;
+                participant.DeletedBy = currentUserId;
+                participant.DeletedTime = now;
+                participant.UpdatedBy = currentUserId;
+                participant.UpdatedTime = now;
+            }
+            if (toRemove.Count > 0)
+            {
+                await db.Updateable(toRemove)
+                    .UpdateColumns(item => new { item.IsDeleted, item.DeletedBy, item.DeletedTime, item.UpdatedBy, item.UpdatedTime })
+                    .ExecuteCommandAsync(cancellationToken);
+            }
+            if (toAdd.Count > 0)
+            {
+                await db.Insertable(toAdd).ExecuteCommandAsync(cancellationToken);
+            }
+            db.Ado.CommitTran();
+        }
+        catch
+        {
+            db.Ado.RollbackTran();
+            throw;
+        }
+    }
+
+    public async Task ArchiveGroupConversationAsync(string conversationId, CancellationToken cancellationToken = default)
+    {
+        var tenantId = RequireTenantId();
+        var currentUserId = RequireUserId();
+        var db = databaseAccessor.MainDb;
+        var conversation = await RequireConversationAsync(db, tenantId, NormalizeRequired(conversationId, "会话不能为空"), cancellationToken);
+        if (!string.Equals(NormalizeConversationType(conversation.ConversationType), "Group", StringComparison.Ordinal))
+        {
+            throw new ValidationException("仅群会话支持归档", ErrorCodes.ParameterInvalid);
+        }
+
+        if (string.Equals(NormalizeConversationStatus(conversation.Status), "Archived", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        conversation.Status = "Archived";
+        conversation.UpdatedBy = currentUserId;
+        conversation.UpdatedTime = clock.Now;
+        await db.Updateable(conversation)
+            .UpdateColumns(item => new { item.Status, item.UpdatedBy, item.UpdatedTime })
+            .ExecuteCommandAsync(cancellationToken);
+    }
+
+    public async Task ActivateGroupConversationAsync(string conversationId, CancellationToken cancellationToken = default)
+    {
+        var tenantId = RequireTenantId();
+        var currentUserId = RequireUserId();
+        var db = databaseAccessor.MainDb;
+        var conversation = await RequireConversationAsync(db, tenantId, NormalizeRequired(conversationId, "会话不能为空"), cancellationToken);
+        if (!string.Equals(NormalizeConversationType(conversation.ConversationType), "Group", StringComparison.Ordinal))
+        {
+            throw new ValidationException("仅群会话支持恢复", ErrorCodes.ParameterInvalid);
+        }
+
+        if (string.Equals(NormalizeConversationStatus(conversation.Status), "Active", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        conversation.Status = "Active";
+        conversation.UpdatedBy = currentUserId;
+        conversation.UpdatedTime = clock.Now;
+        await db.Updateable(conversation)
+            .UpdateColumns(item => new { item.Status, item.UpdatedBy, item.UpdatedTime })
+            .ExecuteCommandAsync(cancellationToken);
+    }
+
     public async Task<ImMessagePageResponse> GetMessagesAsync(string conversationId, string? cursor, int take, CancellationToken cancellationToken = default)
     {
         var tenantId = RequireTenantId();
@@ -166,7 +370,20 @@ public sealed class ImConversationService(
         var db = databaseAccessor.MainDb;
         var conversation = await RequireConversationAsync(db, tenantId, normalizedConversationId, cancellationToken);
         await RequireParticipantAsync(db, tenantId, normalizedConversationId, userId, cancellationToken);
-        var receiverUserId = GetPeerUserId(conversation, userId);
+        if (!string.Equals(NormalizeConversationStatus(conversation.Status), "Active", StringComparison.Ordinal))
+        {
+            throw new ValidationException("会话已归档，不能发送消息", ErrorCodes.ParameterInvalid);
+        }
+
+        List<string> receiverUserIds = IsDirectConversation(conversation)
+            ? [GetPeerUserId(conversation, userId)]
+            : (await db.Queryable<ImConversationParticipantEntity>()
+                .Where(item => !item.IsDeleted && item.TenantId == tenantId && item.ConversationId == normalizedConversationId && item.UserId != userId)
+                .Select(item => item.UserId)
+                .ToListAsync(cancellationToken))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        var receiverUserId = IsDirectConversation(conversation) ? receiverUserIds[0] : string.Empty;
 
         if (!string.IsNullOrWhiteSpace(request.ClientMessageId))
         {
@@ -211,7 +428,7 @@ public sealed class ImConversationService(
             await db.Updateable<ImConversationParticipantEntity>()
                 .SetColumns(item => item.UnreadCount == item.UnreadCount + 1)
                 .SetColumns(item => item.UpdatedTime == clock.Now)
-                .Where(item => !item.IsDeleted && item.TenantId == tenantId && item.ConversationId == normalizedConversationId && item.UserId == receiverUserId)
+                .Where(item => !item.IsDeleted && item.TenantId == tenantId && item.ConversationId == normalizedConversationId && receiverUserIds.Contains(item.UserId))
                 .ExecuteCommandAsync(cancellationToken);
             db.Ado.CommitTran();
         }
@@ -237,8 +454,11 @@ public sealed class ImConversationService(
         }
 
         var response = MapMessage(message);
-        await realtimePushService.PushMessageAsync(tenantId, receiverUserId, response, cancellationToken);
-        await realtimePushService.PushUnreadChangedAsync(tenantId, receiverUserId, await GetUnreadSummaryForUserAsync(tenantId, receiverUserId, cancellationToken), cancellationToken);
+        foreach (var recipientUserId in receiverUserIds)
+        {
+            await realtimePushService.PushMessageAsync(tenantId, recipientUserId, response, cancellationToken);
+            await realtimePushService.PushUnreadChangedAsync(tenantId, recipientUserId, await GetUnreadSummaryForUserAsync(tenantId, recipientUserId, cancellationToken), cancellationToken);
+        }
         return response;
     }
 
@@ -315,6 +535,8 @@ public sealed class ImConversationService(
         {
             TenantId = tenantId,
             ConversationKey = key,
+            ConversationType = "Direct",
+            Status = "Active",
             ParticipantAUserId = ordered[0],
             ParticipantBUserId = ordered[1],
             CreatedBy = userId
@@ -334,6 +556,30 @@ public sealed class ImConversationService(
         string.Equals(conversation.ParticipantAUserId, userId, StringComparison.OrdinalIgnoreCase)
             ? conversation.ParticipantBUserId
             : conversation.ParticipantAUserId;
+
+    private static bool IsDirectConversation(ImConversationEntity conversation) =>
+        string.Equals(NormalizeConversationType(conversation.ConversationType), "Direct", StringComparison.Ordinal);
+
+    private static string NormalizeConversationType(string? value) =>
+        string.Equals(value?.Trim(), "Group", StringComparison.OrdinalIgnoreCase) ? "Group" : "Direct";
+
+    private static string NormalizeConversationStatus(string? value) =>
+        string.Equals(value?.Trim(), "Archived", StringComparison.OrdinalIgnoreCase) ? "Archived" : "Active";
+
+    private static List<string> NormalizeParticipantUserIds(IEnumerable<string>? userIds)
+    {
+        var values = userIds?
+            .Where(item => !string.IsNullOrWhiteSpace(item))
+            .Select(item => item.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList() ?? [];
+        if (values.Count == 0)
+        {
+            throw new ValidationException("群会话至少需要一名成员", ErrorCodes.ParameterInvalid);
+        }
+
+        return values;
+    }
 
     private static ImMessageResponse MapMessage(ImMessageEntity entity) =>
         new(

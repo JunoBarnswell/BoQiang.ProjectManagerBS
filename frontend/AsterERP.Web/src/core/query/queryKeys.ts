@@ -1,3 +1,5 @@
+import { projectManagementQueryKeys } from './projectManagementQueryKeys';
+
 const queryKeyRoot = ['astererp'] as const;
 
 export const queryKeys = {
@@ -77,6 +79,7 @@ export const queryKeys = {
     workspaceSwitcher: (tenantId = '', appCode = '') =>
       [...queryKeyRoot, 'application-data-center', 'workspace-switcher', tenantId, appCode, 'data-sources'] as const
   },
+  projectManagement: projectManagementQueryKeys,
   runtime: {
     expressionFunctions: (scope = 'all') => [...queryKeyRoot, 'runtime', 'expression-functions', scope] as const,
     gridView: (pageCode: string, previewPageId = '') => [...queryKeyRoot, 'runtime', 'grid-view', pageCode, previewPageId] as const,

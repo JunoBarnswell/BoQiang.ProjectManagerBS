@@ -12,7 +12,8 @@
 - `AsterERP.Api.Tests`: xUnit 测试工程，引用 Api + Shared + Contracts + Domain。
 - `Application`: 应用服务编排，例如健康检查、回声示例，后续承载系统管理用例。
 - `Infrastructure`: 数据库、仓储、事务、日志、安全、字典、编码规则等技术底座。
-- `Modules`: 按业务域存放实体和模块内规则，目前已有 `System` 子域。
+- `Modules`: 按业务域存放实体和模块内规则，目前已有 `System` 子域，并新增 `ProjectManagement` 原生 ABP 业务域。
+- `ProjectManagement`: 项目管理的实体、领域规则、应用服务、权限和前端功能必须保持独立边界，依赖现有工作区、权限、数据过滤、文件、通知和审计能力，不复制基础设施。
 - `AsterERP.Workflow.Approval.Core` / `AsterERP.Workflow.Forms.Core` / `AsterERP.Workflow.Core` / `AsterERP.Workflow.Persistence` / `AsterERP.Workflow.DependencyInjection`: Workflow 审批子系统的独立程序集，统一接入 ABP `Core` / `Timing` / `Guids` / `Uow` 等基础能力，同时保留原生工作流业务主链路。
 - `Endpoints`: Minimal API 路由入口，只做 HTTP 适配。
 
@@ -83,3 +84,4 @@ app -> pages -> shared -> core
 - 前端应用壳已拆分为独立布局单元，符合低耦合原则。
 - 现有前后端目录与职责边界对齐。
 - 后续 P0 功能必须优先复用这些边界。
+- ProjectManagement M0 骨架必须先通过模块注册、发布裁剪映射、权限前缀和架构守卫测试，才能进入项目/任务业务实现。

@@ -15,7 +15,9 @@ using AsterERP.Api.Infrastructure.Abp.ApplicationDevelopmentCenter;
 using AsterERP.Api.Infrastructure.Abp.AsterScene;
 using AsterERP.Api.Infrastructure.Abp.RuntimeCore;
 using AsterERP.Api.Infrastructure.Abp.Im;
+using AsterERP.Api.Infrastructure.Abp.ProjectManagement;
 using AsterERP.Api.Modules.Im;
+using AsterERP.Api.Modules.ProjectManagement;
 using SqlSugar;
 
 namespace AsterERP.Api.Infrastructure.Security.DataPermissions;
@@ -157,7 +159,8 @@ public sealed class DataPermissionFilterRegistrar(
             requestClassifier.IsRuntimeWorkspaceApi(path) ||
             requestClassifier.IsAiWorkspaceApi(path) ||
             requestClassifier.IsWorkflowWorkspaceApi(path) ||
-            requestClassifier.IsAsterSceneApi(path);
+            requestClassifier.IsAsterSceneApi(path) ||
+            requestClassifier.IsProjectManagementApi(path);
     }
 
     private DataPermissionFilterRegistry BuildRegistry()
@@ -167,6 +170,7 @@ public sealed class DataPermissionFilterRegistrar(
         AsterErpAiCenterModule.RegisterDataFilters(registry);
         AsterErpApplicationDevelopmentCenterModule.RegisterDataFilters(registry);
         AsterErpImModule.RegisterDataFilters(registry);
+        AsterErpProjectManagementModule.RegisterDataFilters(registry);
         registry.RegisterWorkspaceFilter(typeof(ApplicationDataCenterPublishedSnapshot));
 
         return registry;
@@ -177,7 +181,8 @@ public sealed class DataPermissionFilterRegistrar(
         var path = httpContextAccessor.HttpContext?.Request.Path.Value ?? string.Empty;
         if ((!requestClassifier.IsApplicationDevelopmentCenterApi(path) &&
             !requestClassifier.IsRuntimeWorkspaceApi(path) &&
-            !requestClassifier.IsApplicationDataCenterApi(path)) ||
+            !requestClassifier.IsApplicationDataCenterApi(path) &&
+            !requestClassifier.IsProjectManagementApi(path)) ||
             !currentUser.IsAsterErpAuthenticated())
         {
             return;
@@ -200,7 +205,10 @@ public sealed class DataPermissionFilterRegistrar(
                 continue;
             }
 
-            RegisterWorkspaceFilter(entityType, tenantId, appCode);
+            if (!ProjectManagementDataPermissionFilterRegistrar.TryRegister(Db, entityType, currentUser, tenantId, appCode))
+            {
+                RegisterWorkspaceFilter(entityType, tenantId, appCode);
+            }
         }
     }
 

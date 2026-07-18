@@ -9,6 +9,7 @@ import { DisplayPreferenceControl } from './DisplayPreferenceControl';
 interface HeaderBarProps {
   currentUserName?: string;
   headerExtra?: ReactNode;
+  notificationEntry?: ReactNode;
   locale: AppLocale;
   onLocaleChange: (nextLocale: AppLocale) => void;
   onThemeChange: (nextTheme: ThemeMode) => void;
@@ -26,6 +27,7 @@ interface HeaderBarProps {
 export function HeaderBar({
   currentUserName,
   headerExtra,
+  notificationEntry,
   locale,
   onLocaleChange,
   onLogout,
@@ -71,12 +73,7 @@ export function HeaderBar({
           >
             <AppIcon className="text-lg" name="translate" />
           </button>
-          <button className="hidden hover:text-white transition-colors cursor-pointer sm:block" title={translate('layout.notifications')}>
-            <div className="relative">
-              <AppIcon className="text-lg" name="bell" />
-              <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full border border-primary-700"></span>
-            </div>
-          </button>
+          {notificationEntry}
           {headerExtra}
           <button className="hidden hover:text-white transition-colors cursor-pointer sm:block" title={translate('layout.settings')}>
             <AppIcon className="text-lg" name="gear" />

@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import { useImConversations } from '../hooks/useImConversations';
 import { useImDirectory } from '../hooks/useImDirectory';
 import { useImStore } from '../state/imStore';
-import type { ImDirectoryUser } from '../types/imTypes';
+import type { ImConversation, ImDirectoryUser } from '../types/imTypes';
 
 import { ImChatPanel } from './ImChatPanel';
 import { ImConnectionStatus } from './ImConnectionStatus';
@@ -14,10 +14,11 @@ interface ImWorkspaceProps {
   defaultConversationId?: string;
   defaultTargetUserId?: string;
   mode?: 'full' | 'drawer';
+  renderConversationContext?: (conversation: ImConversation) => ReactNode;
   sourceAppCode?: string;
 }
 
-export function ImWorkspace({ defaultConversationId, defaultTargetUserId, mode = 'full', sourceAppCode }: ImWorkspaceProps) {
+export function ImWorkspace({ defaultConversationId, defaultTargetUserId, mode = 'full', renderConversationContext, sourceAppCode }: ImWorkspaceProps) {
   const { adapter, permissions } = useImContext();
   const [keyword, setKeyword] = useState('');
   const [refreshing, setRefreshing] = useState(false);
@@ -64,7 +65,7 @@ export function ImWorkspace({ defaultConversationId, defaultTargetUserId, mode =
       return;
     }
 
-    const existing = conversations.find((conversation) => conversation.peerUserId === user.userId);
+    const existing = conversations.find((conversation) => conversation.conversationType !== 'Group' && conversation.peerUserId === user.userId);
     if (existing) {
       setActiveConversationId(existing.id);
       return;
@@ -99,7 +100,7 @@ export function ImWorkspace({ defaultConversationId, defaultTargetUserId, mode =
           onRefresh={() => void handleRefresh()}
         />
       </aside>
-      <ImChatPanel conversation={activeConversation} sourceAppCode={sourceAppCode} />
+      <ImChatPanel conversation={activeConversation} conversationContext={activeConversation ? renderConversationContext?.(activeConversation) : undefined} sourceAppCode={sourceAppCode} />
     </div>
   );
 }

@@ -24,6 +24,9 @@ public sealed class DataPermissionRequestClassifier
     public bool IsSystemAdministrationApi(string? path) =>
         StartsWith(path, "/api/system/");
 
+    public bool IsProjectManagementApi(string? path) =>
+        StartsWith(path, "/api/project-management/");
+
     public bool IsAsterSceneApi(string? path) =>
         StartsWith(path, "/api/asterscene/") ||
         StartsWith(path, "/api/creator/") ||

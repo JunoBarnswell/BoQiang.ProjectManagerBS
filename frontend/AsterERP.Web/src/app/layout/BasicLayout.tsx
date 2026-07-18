@@ -16,6 +16,7 @@ interface BasicLayoutProps {
   contentKey?: string;
   currentUserName?: string;
   headerExtra?: ReactNode;
+  notificationEntry?: ReactNode;
   homePath?: string;
   locale: AppLocale;
   onCloseCurrent?: () => void;
@@ -49,6 +50,7 @@ export function BasicLayout({
   contentKey,
   currentUserName,
   headerExtra,
+  notificationEntry,
   homePath,
   locale,
   onCloseCurrent,
@@ -79,6 +81,7 @@ export function BasicLayout({
       <HeaderBar
         currentUserName={currentUserName}
         headerExtra={headerExtra}
+        notificationEntry={notificationEntry}
         locale={locale}
         onLocaleChange={onLocaleChange}
         onThemeChange={onThemeChange}

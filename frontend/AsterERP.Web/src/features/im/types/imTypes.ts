@@ -23,12 +23,16 @@ export interface ImConversation {
   id: string;
   tenantId: string;
   conversationKey: string;
+  conversationType?: 'Direct' | 'Group' | string;
+  title?: string | null;
+  status?: 'Active' | 'Archived' | string;
   peerUserId: string;
   peerDisplayName: string;
   lastMessageId?: string | null;
   lastMessagePreview?: string | null;
   lastMessageAt?: string | null;
   unreadCount: number;
+  participantCount?: number;
   createdTime: string;
 }
 

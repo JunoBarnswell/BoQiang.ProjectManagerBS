@@ -406,6 +406,23 @@
         "backend/AsterERP.Contracts/AsterScene/**",
         "frontend/AsterERP.Web/src/features/aster-scene/**"
       ]
+    },
+    {
+      "moduleKey": "project-management",
+      "permissionPrefixes": [ "project-management:" ],
+      "providerKeys": [],
+      "dependsOn": [ "core.shell" ],
+      "fileGlobs": [
+        "backend/AsterERP.Api/Controllers/ProjectManagement*.cs",
+        "backend/AsterERP.Api/Application/ProjectManagement/**",
+        "backend/AsterERP.Api/Infrastructure/Abp/ProjectManagement/**",
+        "backend/AsterERP.Api/Modules/ProjectManagement/**",
+        "backend/AsterERP.Contracts/ProjectManagement/**",
+        "backend/AsterERP.Shared/Common/PermissionCodes.ProjectManagement.cs",
+        "frontend/AsterERP.Web/src/api/project-management/**",
+        "frontend/AsterERP.Web/src/features/project-management/**",
+        "frontend/AsterERP.Web/src/pages/project-management/**"
+      ]
     }
   ]
 }

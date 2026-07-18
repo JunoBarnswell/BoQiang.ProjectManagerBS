@@ -1,0 +1,152 @@
+import { useEffect, useState, type ReactNode } from 'react';
+import { Link, useLocation } from 'react-router-dom';
+
+import type { ProjectManagementSavedView, ProjectManagementTaskView } from '../../../api/project-management/projectManagement.types';
+import { PermissionButton } from '../../../shared/auth/PermissionButton';
+import type { TaskWorkspaceState } from '../state/taskWorkspaceState';
+
+interface TaskWorkspaceToolbarProps {
+  onOpenBatch: () => void;
+  onCreateTask: () => void;
+  onSaveView: (name: string) => void;
+  onSelectSavedView: (view: ProjectManagementSavedView) => void;
+  onStateChange: (next: Partial<TaskWorkspaceState>) => void;
+  projectConversation?: ReactNode;
+  projectId: string;
+  savedViews: ProjectManagementSavedView[];
+  savingView: boolean;
+  selectedCount: number;
+  state: TaskWorkspaceState;
+  total: number;
+}
+
+const viewRoutes: Array<{ key: ProjectManagementTaskView; label: string; path: string }> = [
+  { key: 'tree', label: '树', path: 'tasks' },
+  { key: 'list', label: '列表', path: 'list' },
+  { key: 'card', label: '卡片', path: 'card' },
+  { key: 'board', label: '看板', path: 'board' },
+  { key: 'gantt', label: '甘特', path: 'gantt' },
+  { key: 'calendar', label: '日历', path: 'calendar' },
+];
+
+export function TaskWorkspaceToolbar({
+  onOpenBatch,
+  onCreateTask,
+  onSaveView,
+  onSelectSavedView,
+  onStateChange,
+  projectConversation,
+  projectId,
+  savedViews,
+  savingView,
+  selectedCount,
+  state,
+  total,
+}: TaskWorkspaceToolbarProps) {
+  const location = useLocation();
+  const [keywordDraft, setKeywordDraft] = useState(state.keyword);
+  const [viewName, setViewName] = useState('');
+
+  useEffect(() => setKeywordDraft(state.keyword), [state.keyword]);
+
+  return (
+    <div className="flex flex-col gap-3">
+      <nav aria-label="任务视图" className="flex flex-wrap gap-2">
+        {viewRoutes.map((view) => (
+          <Link
+            className={view.key === state.viewKey ? 'rounded bg-blue-600 px-3 py-1 text-sm text-white' : 'rounded border border-gray-300 px-3 py-1 text-sm'}
+            key={view.key}
+            to={`/projects/${encodeURIComponent(projectId)}/${view.path}${location.search}`}
+          >
+            {view.label}
+          </Link>
+        ))}
+      </nav>
+      <div className="flex flex-wrap items-center gap-2">
+        <form
+          className="flex items-center gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            onStateChange({ keyword: keywordDraft.trim(), pageIndex: 1 });
+          }}
+        >
+          <input
+            aria-label="搜索任务"
+            onChange={(event) => setKeywordDraft(event.target.value)}
+            placeholder="搜索编码、标题或描述"
+            value={keywordDraft}
+          />
+          <button type="submit">搜索</button>
+          {state.keyword ? (
+            <button type="button" onClick={() => { setKeywordDraft(''); onStateChange({ keyword: '', pageIndex: 1 }); }}>
+              清空
+            </button>
+          ) : null}
+        </form>
+        <select
+          aria-label="任务状态筛选"
+          onChange={(event) => onStateChange({ pageIndex: 1, status: event.target.value || undefined })}
+          value={state.status ?? ''}
+        >
+          <option value="">全部状态</option>
+          {['Todo', 'InProgress', 'Blocked', 'Done', 'Cancelled'].map((status) => <option key={status} value={status}>{status}</option>)}
+        </select>
+        <select
+          aria-label="任务分组"
+          onChange={(event) => onStateChange({ groupBy: event.target.value as TaskWorkspaceState['groupBy'] || undefined })}
+          value={state.groupBy ?? ''}
+        >
+          <option value="">不分组</option>
+          <option value="status">状态</option>
+          <option value="priority">优先级</option>
+          <option value="assignee">负责人</option>
+          <option value="milestone">里程碑</option>
+          <option value="parent">父任务</option>
+        </select>
+        <label className="flex items-center gap-1 text-sm">
+          <input
+            checked={state.includeCompleted}
+            onChange={(event) => onStateChange({ includeCompleted: event.target.checked, pageIndex: 1 })}
+            type="checkbox"
+          />
+          包含已完成
+        </label>
+        <span className="text-sm text-gray-500">共 {total} 个任务</span>
+        <PermissionButton code="project-management:task:edit" disabled={selectedCount === 0} onClick={onOpenBatch}>批量更新{selectedCount ? ` (${selectedCount})` : ''}</PermissionButton>
+        <PermissionButton code="project-management:task:add" onClick={onCreateTask}>新建任务</PermissionButton>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          aria-label="保存视图"
+          defaultValue=""
+          onChange={(event) => {
+            const view = savedViews.find((item) => item.id === event.target.value);
+            if (view) onSelectSavedView(view);
+          }}
+        >
+          <option value="">恢复保存视图</option>
+          {savedViews.filter((item) => item.viewKey === state.viewKey).map((item) => (
+            <option key={item.id} value={item.id}>{item.viewName}{item.isDefault ? ' · 默认' : ''}</option>
+          ))}
+        </select>
+        <input
+          aria-label="视图名称"
+          onChange={(event) => setViewName(event.target.value)}
+          placeholder="视图名称"
+          value={viewName}
+        />
+        <PermissionButton
+          code="project-management:task:edit"
+          disabled={!viewName.trim() || savingView}
+          onClick={() => {
+            onSaveView(viewName.trim());
+            setViewName('');
+          }}
+        >
+          {savingView ? '保存中…' : '保存视图'}
+        </PermissionButton>
+      </div>
+      {projectConversation}
+    </div>
+  );
+}
