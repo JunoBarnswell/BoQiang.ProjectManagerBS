@@ -23,6 +23,8 @@ describe('TaskActivityTimeline', () => {
             items: [
               {
                 activityType: 'task.updated',
+                aggregateType: 'Task',
+                aggregateId: 'task-a',
                 actorUserId: 'operator',
                 createdTime: '2026-07-19T00:00:00.000Z',
                 id: 'activity-1',
@@ -34,6 +36,8 @@ describe('TaskActivityTimeline', () => {
               },
               {
                 activityType: 'task.comment.deleted',
+                aggregateType: 'TaskComment',
+                aggregateId: 'comment-a',
                 actorUserId: 'operator',
                 createdTime: '2026-07-18T00:00:00.000Z',
                 id: 'activity-2',
