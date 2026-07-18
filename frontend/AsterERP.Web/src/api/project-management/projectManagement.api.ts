@@ -57,7 +57,8 @@ import type {
   ProjectManagementTaskLabel,
   ProjectManagementTaskLabelFilter,
   ProjectManagementTaskLabelSetRequest,
-  ProjectManagementActivity,
+  ProjectManagementActivityPage,
+  ProjectManagementActivityQuery,
   ProjectManagementReportQuery,
   ProjectManagementReportSnapshotRequest,
   ProjectManagementReportSnapshotStartResponse,
@@ -378,11 +379,11 @@ export function purgeProjectManagementTask(id: string, request: { versionNo: num
 
 export function getProjectManagementActivities(
   projectId: string,
-  limit = 20,
+  query: ProjectManagementActivityQuery,
   signal?: AbortSignal,
-): Promise<ApiEnvelope<ProjectManagementActivity[]>> {
-  return httpClient.get<ProjectManagementActivity[]>(
-    `/project-management/projects/${projectId}/activities${buildQueryString({ limit })}`,
+): Promise<ApiEnvelope<ProjectManagementActivityPage>> {
+  return httpClient.get<ProjectManagementActivityPage>(
+    `/project-management/projects/${projectId}/activities${buildQueryString(query)}`,
     undefined,
     signal,
   );

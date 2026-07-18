@@ -16,6 +16,10 @@ import { Page403 } from '../../shared/status/Page403';
 import { PageError } from '../../shared/status/PageError';
 import { PageLoading } from '../../shared/status/PageLoading';
 
+import { ProjectManagementActivityTimeline } from './ProjectManagementActivityTimeline';
+
+const activityQuery = { pageIndex: 1, pageSize: 20 };
+
 export function ProjectManagementOverviewPage() {
   const scope = useProjectManagementWorkspaceScope();
   const { hasPermission: canViewActivities } = usePermission('project-management:audit:view');
@@ -33,8 +37,8 @@ export function ProjectManagementOverviewPage() {
   const overview = overviewQuery.data?.data?.items[0];
   const project = overview?.project;
   const activitiesQuery = useQuery({
-    queryKey: projectManagementQueryKeys.activities(scope, projectId, 20),
-    queryFn: ({ signal }) => getProjectManagementActivities(projectId, 20, signal),
+    queryKey: projectManagementQueryKeys.activities(scope, projectId, activityQuery),
+    queryFn: ({ signal }) => getProjectManagementActivities(projectId, activityQuery, signal),
     enabled: scope.isAvailable && Boolean(overview) && canViewActivities
   });
 
@@ -83,18 +87,13 @@ export function ProjectManagementOverviewPage() {
         <div className="pm-panel__heading"><div><h2 id="milestone-health-title">里程碑健康</h2><p className="pm-panel__meta">里程碑进度和健康状态由当前项目数据计算。</p></div><span className="pm-view-note">共 {overview.milestoneCount} 个</span></div>
         {overview.milestones.length === 0 ? <p className="pm-muted">暂无里程碑。创建里程碑后会在此显示健康状态和进度。</p> : <ul className="pm-list">{overview.milestones.map((milestone) => <li key={milestone.id}><div className="pm-milestone-row"><div><div className="pm-milestone-row__name">{milestone.name}</div><div className="pm-milestone-row__meta"><HealthBadge health={milestone.healthStatus} /><span>{milestone.dueDate ? `截止 ${formatDate(milestone.dueDate)}` : '未设置截止日期'}</span></div></div><div className="pm-progress"><progress aria-label={`${milestone.name} 完成进度 ${milestone.progressPercent}%`} max={100} value={milestone.progressPercent} /><span>{milestone.progressPercent}%</span></div></div></li>)}</ul>}
       </section>
-      <section className="pm-panel" aria-labelledby="project-activity-title">
-        <div className="pm-panel__heading"><div><h2 id="project-activity-title">最近活动</h2><p className="pm-panel__meta">仅展示当前项目范围内最近 20 条活动。</p></div></div>
-        {!canViewActivities ? (
-          <p className="pm-muted">当前账号无查看项目活动的权限。</p>
-        ) : activitiesQuery.isError ? (
-          <p className="pm-muted">项目活动暂时无法加载。</p>
-        ) : (activitiesQuery.data?.data ?? []).length === 0 ? (
-          <p className="pm-muted">暂无活动。项目和任务发生可审计变更后会在这里显示。</p>
-        ) : (
-          <ul className="pm-list">{(activitiesQuery.data?.data ?? []).map((item) => <li key={item.id}><div className="pm-activity-row"><div className="pm-activity-row__summary">{item.summary ?? item.activityType}</div><time className="pm-activity-row__meta" dateTime={item.createdTime}>{new Date(item.createdTime).toLocaleString()}</time></div></li>)}</ul>
-        )}
-      </section>
+      <ProjectManagementActivityTimeline
+        canView={canViewActivities}
+        isError={activitiesQuery.isError}
+        isLoading={activitiesQuery.isLoading}
+        page={activitiesQuery.data?.data}
+        pageSize={activityQuery.pageSize}
+      />
     </ResponsivePage>
   );
 }
