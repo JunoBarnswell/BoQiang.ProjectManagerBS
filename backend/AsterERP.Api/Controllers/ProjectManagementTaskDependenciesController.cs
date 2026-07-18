@@ -17,6 +17,10 @@ public sealed class ProjectManagementTaskDependenciesController(IProjectManageme
     [Permission(PermissionCodes.ProjectManagementTaskManageDependency)]
     public async Task<IActionResult> CreateAsync(string projectId, [FromBody] ProjectManagementTaskDependencyUpsertRequest request, CancellationToken cancellationToken) => ApiOk(await service.CreateAsync(projectId, request, cancellationToken));
 
+    [HttpPost("batch")]
+    [Permission(PermissionCodes.ProjectManagementTaskManageDependency)]
+    public async Task<IActionResult> CreateBatchAsync(string projectId, [FromBody] ProjectManagementTaskDependencyBatchCreateRequest request, CancellationToken cancellationToken) => ApiOk(await service.CreateBatchAsync(projectId, request, cancellationToken));
+
     [HttpDelete("{id}")]
     [Permission(PermissionCodes.ProjectManagementTaskManageDependency)]
     public async Task<IActionResult> DeleteAsync(string projectId, string id, [FromQuery] long versionNo, CancellationToken cancellationToken)

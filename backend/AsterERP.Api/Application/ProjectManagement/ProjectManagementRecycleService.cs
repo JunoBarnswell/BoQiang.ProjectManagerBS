@@ -58,7 +58,7 @@ public sealed class ProjectManagementRecycleService(
         var manageableProjectIds = await GetManageableProjectIdsAsync(projectRows, taskRows, impact.ProjectsById.Values.ToList(), cancellationToken);
         return new ProjectManagementRecycleResponse(
             new GridPageResult<ProjectManagementRecycleProjectItem> { Total = projectTotal.Value, Items = projectRows.Select(item => new ProjectManagementRecycleProjectItem(item.Id, item.ProjectCode, item.ProjectName, item.Status, item.VersionNo, item.DeletedTime, item.DeletedBy, impact.TaskCountByProjectId.GetValueOrDefault(item.Id), manageableProjectIds.Contains(item.Id), manageableProjectIds.Contains(item.Id) && currentUser.HasAsterErpPermission(PermissionCodes.ProjectManagementProjectPurge))).ToList() },
-            new GridPageResult<ProjectManagementRecycleTaskItem> { Total = taskTotal.Value, Items = taskRows.Select(item => new ProjectManagementRecycleTaskItem(item.Id, item.ProjectId, item.TaskCode, item.Title, item.Status, item.VersionNo, item.DeletedTime, item.DeletedBy, impact.DescendantCountByTaskId.GetValueOrDefault(item.Id), manageableProjectIds.Contains(item.ProjectId), false)).ToList() });
+            new GridPageResult<ProjectManagementRecycleTaskItem> { Total = taskTotal.Value, Items = taskRows.Select(item => new ProjectManagementRecycleTaskItem(item.Id, item.ProjectId, item.TaskCode, item.Title, item.Status, item.VersionNo, item.DeletedTime, item.DeletedBy, impact.DescendantCountByTaskId.GetValueOrDefault(item.Id), manageableProjectIds.Contains(item.ProjectId), manageableProjectIds.Contains(item.ProjectId) && currentUser.HasAsterErpPermission(PermissionCodes.ProjectManagementTaskDelete))).ToList() });
     }
 
     public async Task RestoreProjectAsync(string id, ProjectManagementRecycleRestoreRequest request, CancellationToken cancellationToken = default)
@@ -141,6 +141,57 @@ public sealed class ProjectManagementRecycleService(
         await PublishInvalidationAsync("Task", entity.Id, entity.ProjectId, targets.Count == 1 ? "task.restored" : "task.subtree-restored", entity.VersionNo, cancellationToken);
     }
 
+    public async Task<ProjectManagementRecycleTaskPurgePreviewResponse> PreviewPurgeTaskAsync(string id, long versionNo, bool purgeDescendants = false, CancellationToken cancellationToken = default)
+    {
+        RequirePlatformScope();
+        var entity = await GetDeletedTaskAsync(id, cancellationToken);
+        await EnsureCanManageProjectAsync(entity.ProjectId, cancellationToken);
+        EnsureVersion(entity.VersionNo, versionNo);
+        var targets = await LoadPurgeTaskTargetsAsync(entity, purgeDescendants, cancellationToken);
+        var taskIds = targets.Select(item => item.Id).ToList();
+        var db = databaseAccessor.GetCurrentDb();
+        var dependencyCount = await db.Queryable<ProjectManagementTaskDependencyEntity>()
+            .Where(item => item.ProjectId == entity.ProjectId && (taskIds.Contains(item.PredecessorTaskId) || taskIds.Contains(item.SuccessorTaskId)))
+            .CountAsync(cancellationToken);
+        var blockingReason = await GetTaskPurgeBlockingReasonAsync(entity.ProjectId, taskIds, cancellationToken);
+        return new ProjectManagementRecycleTaskPurgePreviewResponse(entity.Id, entity.ProjectId, entity.TaskCode, entity.Title, entity.VersionNo, taskIds.Count, dependencyCount,
+            blockingReason is null, blockingReason,
+            "任务永久删除不可恢复。任务活动会作为项目级审计保留，直至项目自身永久删除时统一清理；其他任务业务关联必须先单独处理。");
+    }
+
+    public async Task PurgeTaskAsync(string id, ProjectManagementRecycleTaskPurgeRequest request, CancellationToken cancellationToken = default)
+    {
+        RequirePlatformScope();
+        var preview = await PreviewPurgeTaskAsync(id, request.VersionNo, request.PurgeDescendants, cancellationToken);
+        if (!preview.CanExecute) throw new ValidationException(preview.BlockingReason!);
+        if (riskConfirmation is null || maintenanceLock is null) throw new ValidationException("高风险操作服务未配置");
+        await riskConfirmation.EnsureConfirmedAsync(request.CurrentPassword, request.ConfirmRisk, cancellationToken);
+        var operationId = await maintenanceLock.AcquireAsync("project-management-task-purge", TimeSpan.FromMinutes(5), cancellationToken);
+        var started = false;
+        try
+        {
+            var confirmation = await PreviewPurgeTaskAsync(id, request.VersionNo, request.PurgeDescendants, cancellationToken);
+            if (!confirmation.CanExecute) throw new ValidationException(confirmation.BlockingReason!);
+            if (operationWriter is not null)
+            {
+                await operationWriter.StartAsync(operationId, "task.purge", JsonSerializer.Serialize(confirmation), Activity.Current?.Id ?? operationId, cancellationToken);
+                started = true;
+            }
+            var entity = await GetDeletedTaskAsync(id, cancellationToken);
+            var targets = await LoadPurgeTaskTargetsAsync(entity, request.PurgeDescendants, cancellationToken);
+            var affected = await DependencyService.PurgeDeletedTasksAsync(entity.ProjectId, targets.Select(item => item.Id).ToList(), cancellationToken);
+            if (affected != targets.Count) throw new ValidationException("任务永久删除过程中检测到并发变更，请刷新后重试", ErrorCodes.ApplicationDevelopmentPageRevisionConflict);
+            if (operationWriter is not null) await operationWriter.SucceedAsync(operationId, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            if (started && operationWriter is not null) { try { await operationWriter.FailAsync(operationId, exception.Message, CancellationToken.None); } catch { } }
+            throw;
+        }
+        finally { await maintenanceLock.ReleaseAsync(operationId, CancellationToken.None); }
+        await PublishInvalidationAsync("Task", preview.TaskId, preview.ProjectId, "task.purged", preview.VersionNo, cancellationToken);
+    }
+
     public async Task<ProjectManagementRecyclePurgePreviewResponse> PreviewPurgeProjectAsync(string id, long versionNo, CancellationToken cancellationToken = default)
     {
         RequirePlatformScope();
@@ -172,7 +223,13 @@ public sealed class ProjectManagementRecycleService(
                 started = true;
             }
             var db = databaseAccessor.GetCurrentDb();
-            var affected = await DeleteUnreferencedProjectAsync(db, id, request.VersionNo, cancellationToken);
+            var affected = 0;
+            await ProjectManagementMutationTransaction.RunAsync(db, async () =>
+            {
+                // 项目永久删除是审计保留的最终边界：删除全部项目活动，避免 task.purged 审计反向阻塞项目 purge。
+                await db.Deleteable<ProjectManagementActivityEntity>().Where(item => item.ProjectId == id).ExecuteCommandAsync(cancellationToken);
+                affected = await DeleteUnreferencedProjectAsync(db, id, request.VersionNo, cancellationToken);
+            });
             if (affected != 1) throw new ValidationException("对象已被其他用户修改，请刷新后重试", ErrorCodes.ApplicationDevelopmentPageRevisionConflict);
             if (operationWriter is not null) await operationWriter.SucceedAsync(operationId, cancellationToken);
         }
@@ -195,7 +252,6 @@ public sealed class ProjectManagementRecycleService(
         if (members + milestones + tasks > 0) return new ProjectPurgeReferences(members, milestones, tasks, true);
 
         var hasAdditionalReferences =
-            await db.Queryable<ProjectManagementActivityEntity>().AnyAsync(item => item.ProjectId == projectId && item.TenantId == tenantId && item.AppCode == appCode, cancellationToken) ||
             await db.Queryable<ProjectManagementImConversationLinkEntity>().AnyAsync(item => item.ProjectId == projectId && item.TenantId == tenantId && item.AppCode == appCode, cancellationToken) ||
             await db.Queryable<ProjectManagementLabelEntity>().AnyAsync(item => item.ProjectId == projectId && item.TenantId == tenantId && item.AppCode == appCode, cancellationToken) ||
             await db.Queryable<ProjectManagementTaskLabelEntity>().AnyAsync(item => item.ProjectId == projectId && item.TenantId == tenantId && item.AppCode == appCode, cancellationToken) ||
@@ -222,7 +278,6 @@ public sealed class ProjectManagementRecycleService(
             .Where(item => !SqlFunc.Subqueryable<ProjectManagementProjectMemberEntity>().Where(reference => reference.ProjectId == projectId && reference.TenantId == tenantId && reference.AppCode == appCode).Any())
             .Where(item => !SqlFunc.Subqueryable<ProjectManagementMilestoneEntity>().Where(reference => reference.ProjectId == projectId && reference.TenantId == tenantId && reference.AppCode == appCode).Any())
             .Where(item => !SqlFunc.Subqueryable<ProjectManagementTaskEntity>().Where(reference => reference.ProjectId == projectId && reference.TenantId == tenantId && reference.AppCode == appCode).Any())
-            .Where(item => !SqlFunc.Subqueryable<ProjectManagementActivityEntity>().Where(reference => reference.ProjectId == projectId && reference.TenantId == tenantId && reference.AppCode == appCode).Any())
             .Where(item => !SqlFunc.Subqueryable<ProjectManagementImConversationLinkEntity>().Where(reference => reference.ProjectId == projectId && reference.TenantId == tenantId && reference.AppCode == appCode).Any())
             .Where(item => !SqlFunc.Subqueryable<ProjectManagementLabelEntity>().Where(reference => reference.ProjectId == projectId && reference.TenantId == tenantId && reference.AppCode == appCode).Any())
             .Where(item => !SqlFunc.Subqueryable<ProjectManagementTaskLabelEntity>().Where(reference => reference.ProjectId == projectId && reference.TenantId == tenantId && reference.AppCode == appCode).Any())
@@ -243,6 +298,39 @@ public sealed class ProjectManagementRecycleService(
     private sealed record ProjectPurgeReferences(int MemberCount, int MilestoneCount, int TaskCount, bool HasReferences);
 
     private async Task<ProjectManagementProjectEntity> GetDeletedProjectAsync(string id, CancellationToken cancellationToken) => (await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementProjectEntity>().Where(item => item.Id == id && item.IsDeleted && item.TenantId == RequireTenantId() && item.AppCode == RequireAppCode()).Take(1).ToListAsync(cancellationToken)).FirstOrDefault() ?? throw new NotFoundException("已删除项目不存在", ErrorCodes.PlatformResourceNotFound);
+
+    private async Task<ProjectManagementTaskEntity> GetDeletedTaskAsync(string id, CancellationToken cancellationToken) =>
+        (await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskEntity>()
+            .Where(item => item.Id == id && item.IsDeleted && item.TenantId == RequireTenantId() && item.AppCode == RequireAppCode())
+            .Take(1)
+            .ToListAsync(cancellationToken)).FirstOrDefault()
+        ?? throw new NotFoundException("已删除任务不存在", ErrorCodes.PlatformResourceNotFound);
+
+    private async Task<IReadOnlyList<ProjectManagementTaskEntity>> LoadPurgeTaskTargetsAsync(ProjectManagementTaskEntity root, bool purgeDescendants, CancellationToken cancellationToken)
+    {
+        var subtree = await (taskHierarchy ?? new ProjectManagementTaskHierarchy()).LoadSubtreeAsync(databaseAccessor.GetCurrentDb(), root.ProjectId, root.Id, cancellationToken);
+        if (!purgeDescendants && subtree.Any(item => item.Id != root.Id))
+            throw new ValidationException("任务仍包含子任务，必须选择永久删除完整子树");
+        var targets = purgeDescendants ? subtree : [root];
+        if (targets.Any(item => !item.IsDeleted)) throw new ValidationException("任务子树包含未删除任务，不能永久删除");
+        return targets;
+    }
+
+    private async Task<string?> GetTaskPurgeBlockingReasonAsync(string projectId, IReadOnlyCollection<string> taskIds, CancellationToken cancellationToken)
+    {
+        var db = databaseAccessor.GetCurrentDb();
+        // 活动记录刻意不作为任务 purge 的阻塞项：它们是不可变项目审计，会保留到项目永久删除的最终边界。
+        var hasOperationalReferences =
+            await db.Queryable<ProjectManagementTaskParticipantEntity>().AnyAsync(item => item.ProjectId == projectId && taskIds.Contains(item.TaskId), cancellationToken) ||
+            await db.Queryable<ProjectManagementTaskLabelEntity>().AnyAsync(item => item.ProjectId == projectId && taskIds.Contains(item.TaskId), cancellationToken) ||
+            await db.Queryable<ProjectManagementTaskTimeLogEntity>().AnyAsync(item => item.ProjectId == projectId && taskIds.Contains(item.TaskId), cancellationToken) ||
+            await db.Queryable<ProjectManagementTaskCommentEntity>().AnyAsync(item => item.ProjectId == projectId && taskIds.Contains(item.TaskId), cancellationToken) ||
+            await db.Queryable<ProjectManagementTaskAttachmentEntity>().AnyAsync(item => item.ProjectId == projectId && taskIds.Contains(item.TaskId), cancellationToken) ||
+            await db.Queryable<ProjectManagementNotificationEntity>().AnyAsync(item => item.ProjectId == projectId && taskIds.Contains(item.TaskId), cancellationToken) ||
+            await db.Queryable<ProjectManagementTaskReminderEntity>().AnyAsync(item => item.ProjectId == projectId && taskIds.Contains(item.TaskId), cancellationToken) ||
+            await db.Queryable<ProjectManagementTaskOccurrenceEntity>().AnyAsync(item => item.ProjectId == projectId && taskIds.Contains(item.RootTaskId), cancellationToken);
+        return hasOperationalReferences ? "任务仍存在参与人、标签、工时、评论、附件、通知、提醒或排期等业务关联，必须先处理这些关联后才能永久删除" : null;
+    }
 
     private async Task<HashSet<string>> GetManageableProjectIdsAsync(
         IReadOnlyCollection<ProjectManagementProjectEntity> projects,
@@ -278,6 +366,8 @@ public sealed class ProjectManagementRecycleService(
 
     private Task RefreshDependencyStatesAsync(string projectId, CancellationToken cancellationToken) =>
         (dependencyService ?? new ProjectManagementTaskDependencyService(databaseAccessor, currentUser)).RefreshBlockedStatesAsync(projectId, cancellationToken);
+
+    private IProjectManagementTaskDependencyService DependencyService => dependencyService ?? new ProjectManagementTaskDependencyService(databaseAccessor, currentUser, activityWriter: activityWriter);
 
     private async Task EnsureWipCapacityAsync(string projectId, IReadOnlyCollection<ProjectManagementTaskEntity> targets, CancellationToken cancellationToken)
     {
