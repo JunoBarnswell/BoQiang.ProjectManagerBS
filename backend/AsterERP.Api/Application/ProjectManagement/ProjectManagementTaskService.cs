@@ -288,7 +288,7 @@ public sealed class ProjectManagementTaskService(
         await EnsureAssigneeAsync(entity.ProjectId, request.AssigneeUserId, cancellationToken);
         await EnsureWipAsync(entity.ProjectId, state.Status, request.OverrideWip, cancellationToken, entity.Id);
         if (state.Status == ProjectManagementDomainRules.TaskDone && entity.Status != ProjectManagementDomainRules.TaskDone)
-            await EnsureCanCompleteParentAsync(entity, request, cancellationToken);
+            await AccessPolicy.EnsureCanCompleteTasksAsync(entity.ProjectId, [entity.Id], new HashSet<string>([entity.Id], StringComparer.Ordinal), request.ForceComplete, request.ForceCompleteReason, cancellationToken);
         var depth = placement.RootDepth;
         await EnsureMilestoneAsync(entity.ProjectId, request.MilestoneId, cancellationToken);
         var taskCode = NormalizeRequired(request.TaskCode, "任务编码不能为空");
@@ -582,17 +582,6 @@ public sealed class ProjectManagementTaskService(
             .Where(item => item.Id == milestoneId && item.ProjectId == projectId && !item.IsDeleted)
             .AnyAsync(cancellationToken))
             throw new ValidationException("里程碑不存在或不属于当前项目");
-    }
-
-    private async Task EnsureCanCompleteParentAsync(ProjectManagementTaskEntity task, ProjectManagementTaskUpsertRequest request, CancellationToken cancellationToken)
-    {
-        var hasIncompleteChildren = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskEntity>()
-            .AnyAsync(item => item.ProjectId == task.ProjectId && item.ParentTaskId == task.Id && !item.IsDeleted && item.Status != ProjectManagementDomainRules.TaskDone, cancellationToken);
-        if (!hasIncompleteChildren) return;
-        if (!request.ForceComplete) throw new ValidationException("存在未完成子任务，不能完成父任务");
-        if (string.IsNullOrWhiteSpace(request.ForceCompleteReason)) throw new ValidationException("强制完成父任务必须填写原因");
-        if (!currentUser.HasAsterErpPermission(PermissionCodes.ProjectManagementTaskOverrideWip)) throw new ValidationException("没有强制完成父任务权限", ErrorCodes.PermissionDenied);
-        await AccessPolicy.EnsureCanManageProjectAsync(task.ProjectId, cancellationToken);
     }
 
     private async Task RefreshProgressProjectionsAsync(string projectId, CancellationToken cancellationToken)
