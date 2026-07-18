@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ProjectManagementSyncPage } from "./ProjectManagementSyncPage";
 
 const queryCalls = vi.hoisted(() => [] as Array<{ enabled?: boolean }>);
-const permissionState = vi.hoisted(() => ({ canExport: false }));
+const permissionState = vi.hoisted(() => ({ canExport: false, canImport: false }));
 
 vi.mock("@tanstack/react-query", () => ({
   useQuery: (options: { enabled?: boolean }) => {
@@ -27,7 +27,9 @@ vi.mock("../../api/project-management/projectManagement.api", () => ({
 }));
 
 vi.mock("../../core/auth/usePermission", () => ({
-  usePermission: () => ({ hasPermission: permissionState.canExport }),
+  usePermission: (code: string) => ({
+    hasPermission: code === "project-management:sync:export" ? permissionState.canExport : permissionState.canImport,
+  }),
 }));
 
 vi.mock("../../core/query/useApiMutation", () => ({
@@ -35,7 +37,7 @@ vi.mock("../../core/query/useApiMutation", () => ({
 }));
 
 vi.mock("../../features/project-management/state/projectManagementWorkspaceScope", () => ({
-  useProjectManagementWorkspaceScope: () => ({ isAvailable: true, tenantId: "tenant-a", appCode: "MES" }),
+  useProjectManagementWorkspaceScope: () => ({ isAvailable: true, tenantId: "tenant-a", appCode: "SYSTEM" }),
 }));
 
 vi.mock("../../shared/auth/PermissionButton", () => ({
@@ -78,14 +80,41 @@ describe("ProjectManagementSyncPage", () => {
   beforeEach(() => {
     queryCalls.length = 0;
     permissionState.canExport = false;
+    permissionState.canImport = false;
   });
 
   it("does not enable export-only queries for an import-only session", () => {
+    permissionState.canImport = true;
     render(<ProjectManagementSyncPage />);
 
     expect(screen.getByText("当前账号可导入同步包，但没有查看同步水位和变更记录的权限。")).toBeTruthy();
     expect(screen.getByText("同步包导入控件")).toBeTruthy();
     expect(queryCalls).toHaveLength(2);
     expect(queryCalls.every((call) => call.enabled === false)).toBe(true);
+  });
+
+  it("enables export queries but hides import confirmations for export-only access", () => {
+    permissionState.canExport = true;
+    render(<ProjectManagementSyncPage />);
+
+    expect(queryCalls).toHaveLength(2);
+    expect(queryCalls.every((call) => call.enabled)).toBe(true);
+    expect(screen.queryByText("确认当前水位")).toBeNull();
+  });
+
+  it("shows confirmations when both sync permissions are granted", () => {
+    permissionState.canExport = true;
+    permissionState.canImport = true;
+    render(<ProjectManagementSyncPage />);
+
+    expect(queryCalls.every((call) => call.enabled)).toBe(true);
+    expect(screen.getByText("确认当前水位")).toBeTruthy();
+  });
+
+  it("defensively renders 403 without either sync permission", () => {
+    render(<ProjectManagementSyncPage />);
+
+    expect(queryCalls.every((call) => call.enabled === false)).toBe(true);
+    expect(screen.getByText("403")).toBeTruthy();
   });
 });

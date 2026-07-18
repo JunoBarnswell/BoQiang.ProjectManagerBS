@@ -28,11 +28,16 @@ public sealed class ProjectManagementSyncServiceTests
         await db.Insertable(new SystemUserEntity { Id = "operator", UserName = "operator", PasswordHash = "secret", Status = "Enabled" }).ExecuteCommandAsync();
         await db.Insertable(new ProjectManagementProjectEntity
         {
-            Id = "project-sync", TenantId = "tenant-a", AppCode = "MES", ProjectCode = "SYNC", ProjectName = "Sync", OwnerUserId = "operator"
+            Id = "project-sync", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "SYNC", ProjectName = "Sync", OwnerUserId = "operator"
         }).ExecuteCommandAsync();
         await db.Insertable(new ProjectManagementTaskEntity
         {
-            Id = "task-sync", TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-sync", TaskCode = "T-1", Title = "Task", CreatedBy = "operator", CreatedTime = DateTime.UtcNow
+            Id = "task-sync", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-sync", TaskCode = "T-1", Title = "Task", CreatedBy = "operator", CreatedTime = DateTime.UtcNow
+        }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementTaskAttachmentEntity
+        {
+            Id = "attachment-sync", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-sync", TaskId = "task-sync",
+            FileId = "attachment-file", FileName = "omitted.txt", FileSize = 1, UploadedByUserId = "operator", CreatedBy = "operator", CreatedTime = DateTime.UtcNow
         }).ExecuteCommandAsync();
 
         var accessor = new TestWorkspaceDatabaseAccessor(db);
@@ -45,13 +50,14 @@ public sealed class ProjectManagementSyncServiceTests
         var preview = await service.PreviewAsync(package);
         Assert.True(preview.IsCompatible);
         Assert.Equal("tenant-a", preview.TenantId);
+        Assert.Equal("SYSTEM", preview.AppCode);
         Assert.Equal(1, preview.ProjectCount);
         Assert.Equal(1, preview.TaskCount);
         Assert.Contains(preview.Conflicts, item => item.StartsWith("Project:project-sync:", StringComparison.Ordinal));
 
         var journalWriter = new ProjectManagementSyncJournalWriter(accessor);
         await journalWriter.AppendAsync(new ProjectManagementSyncJournalEvent(
-            "tenant-a", "MES", "Task", "task-sync", "project-sync", "updated", 2,
+            "tenant-a", "SYSTEM", "Task", "task-sync", "project-sync", "updated", 2,
             "{\"id\":\"task-sync\",\"versionNo\":2}", "operator", "device-a", "trace-sync"));
         var changes = await service.GetChangesAsync("project-sync", 0, 20);
         Assert.Single(changes);
@@ -66,9 +72,14 @@ public sealed class ProjectManagementSyncServiceTests
             new ProjectManagementSyncImportRequest("secret", ConfirmRisk: true, ConflictStrategy: "Skip"));
         Assert.Equal(0, imported.Inserted);
         Assert.True(imported.Skipped >= 2);
+        Assert.Contains(imported.Warnings, item => item.Contains("附件记录已跳过", StringComparison.Ordinal));
+        var projectCountBeforeReject = await db.Queryable<ProjectManagementProjectEntity>().CountAsync(item => !item.IsDeleted);
+        var taskCountBeforeReject = await db.Queryable<ProjectManagementTaskEntity>().CountAsync(item => !item.IsDeleted);
         await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() => service.ImportAsync(
             new MemoryStream(exported.Content),
             new ProjectManagementSyncImportRequest("secret", ConfirmRisk: true, ConflictStrategy: "Reject")));
+        Assert.Equal(projectCountBeforeReject, await db.Queryable<ProjectManagementProjectEntity>().CountAsync(item => !item.IsDeleted));
+        Assert.Equal(taskCountBeforeReject, await db.Queryable<ProjectManagementTaskEntity>().CountAsync(item => !item.IsDeleted));
 
         var tampered = exported.Content.ToArray();
         tampered[^1] ^= 0xFF;
@@ -88,10 +99,10 @@ public sealed class ProjectManagementSyncServiceTests
 
         var writer = new ProjectManagementSyncJournalWriter(new TestWorkspaceDatabaseAccessor(db));
         await writer.AppendAsync(new ProjectManagementSyncJournalEvent(
-            "tenant-a", "MES", "Task", "task-1", "project-1", "created", 1,
+            "tenant-a", "SYSTEM", "Task", "task-1", "project-1", "created", 1,
             "{\"id\":\"task-1\"}", "operator", "device-a", "trace-1"));
         await writer.AppendAsync(new ProjectManagementSyncJournalEvent(
-            "tenant-a", "MES", "Task", "task-1", "project-1", "updated", 2,
+            "tenant-a", "SYSTEM", "Task", "task-1", "project-1", "updated", 2,
             "{\"id\":\"task-1\",\"version\":2}", "operator", "device-a", "trace-2"));
 
         var rows = await db.Queryable<ProjectManagementSyncJournalEntity>()
@@ -114,11 +125,11 @@ public sealed class ProjectManagementSyncServiceTests
         await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
         await db.Insertable(new ProjectManagementProjectEntity
         {
-            Id = "watermark-project", TenantId = "tenant-a", AppCode = "MES", ProjectCode = "WATERMARK", ProjectName = "Watermark", OwnerUserId = "operator"
+            Id = "watermark-project", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "WATERMARK", ProjectName = "Watermark", OwnerUserId = "operator"
         }).ExecuteCommandAsync();
         await db.Insertable(new ProjectManagementProjectMemberEntity
         {
-            Id = "watermark-member", TenantId = "tenant-a", AppCode = "MES", ProjectId = "watermark-project", UserId = "operator", RoleCode = "Owner", IsActive = true
+            Id = "watermark-member", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "watermark-project", UserId = "operator", RoleCode = "Owner", IsActive = true
         }).ExecuteCommandAsync();
         var accessor = new TestWorkspaceDatabaseAccessor(db);
         var user = CreateUser();
@@ -158,15 +169,17 @@ public sealed class ProjectManagementSyncServiceTests
     {
         new Claim(AsterErpClaimTypes.UserId, "operator"),
         new Claim(AsterErpClaimTypes.TenantId, "tenant-a"),
-        new Claim(AsterErpClaimTypes.AppCode, "MES")
+        new Claim(AsterErpClaimTypes.AppCode, "SYSTEM")
     }, "test")));
 
     private sealed class TestWorkspaceDatabaseAccessor(ISqlSugarClient db) : IWorkspaceDatabaseAccessor
     {
         public ISqlSugarClient MainDb => db;
         public ISqlSugarClient GetCurrentDb() => db;
+        public ISqlSugarClient GetProjectManagementDb() => db;
         public ISqlSugarClient RequireApplicationDb() => db;
         public Task<ISqlSugarClient> GetCurrentDbAsync(CancellationToken cancellationToken = default) => Task.FromResult(db);
+        public Task<ISqlSugarClient> GetProjectManagementDbAsync(CancellationToken cancellationToken = default) => Task.FromResult(db);
         public Task<ISqlSugarClient> RequireApplicationDbAsync(CancellationToken cancellationToken = default) => Task.FromResult(db);
     }
 

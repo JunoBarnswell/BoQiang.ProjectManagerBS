@@ -23,6 +23,7 @@ export function ProjectManagementSyncPage() {
   const queryClient = useQueryClient();
   const message = useMessage();
   const { hasPermission: canExport } = usePermission('project-management:sync:export');
+  const { hasPermission: canImport } = usePermission('project-management:sync:import');
   const [deviceId, setDeviceId] = useState('browser');
   const [submittedDeviceId, setSubmittedDeviceId] = useState('browser');
   const [sinceSequenceNo, setSinceSequenceNo] = useState(0);
@@ -47,6 +48,7 @@ export function ProjectManagementSyncPage() {
   const newestSequenceNo = useMemo(() => Math.max(0, ...(changesQuery.data?.data ?? []).map((item) => item.sequenceNo)), [changesQuery.data?.data]);
 
   if (!scope.isAvailable) return <PageError description="当前会话没有可用的租户和应用工作区" />;
+  if (!canExport && !canImport) return <Page403 />;
   if (canExport && (watermarkQuery.isLoading || changesQuery.isLoading)) return <PageLoading />;
   if (canExport && (watermarkQuery.isError || changesQuery.isError)) {
     const error = watermarkQuery.error ?? changesQuery.error;
@@ -59,7 +61,7 @@ export function ProjectManagementSyncPage() {
     title="项目同步"
     eyebrow="ProjectManagement / Sync"
     description={canExport ? '查看当前工作区的同步水位和变更 journal，并导入同步包；所有确认操作由服务端校验序号。' : '当前账号可导入同步包，但没有查看同步水位和变更记录的权限。'}
-    toolbar={canExport ? <Link to={toProjectManagementPlatformRoute('project-data-space')}>前往数据空间导入或导出同步包</Link> : null}
+    toolbar={<Link to={toProjectManagementPlatformRoute('project-data-space')}>前往数据空间导入或导出同步包</Link>}
   >
     {canExport ? <>
     <section className="rounded-lg border border-gray-200 p-4">
@@ -69,13 +71,13 @@ export function ProjectManagementSyncPage() {
         <button disabled={!deviceId.trim()} type="submit">刷新同步状态</button>
       </form>
       {watermark ? <dl className="mt-4 grid gap-3 sm:grid-cols-3"><div><dt className="text-sm text-gray-500">当前水位</dt><dd className="text-xl font-semibold">{watermark.currentSequenceNo}</dd></div><div><dt className="text-sm text-gray-500">已确认水位</dt><dd className="text-xl font-semibold">{watermark.acknowledgedSequenceNo}</dd></div><div><dt className="text-sm text-gray-500">最近活动</dt><dd>{watermark.lastSeenAt ? new Date(watermark.lastSeenAt).toLocaleString() : '尚未记录'}</dd></div></dl> : <p className="mt-3 text-sm text-gray-500">未返回设备水位。</p>}
-      <div className="mt-4 flex flex-wrap gap-2"><PermissionButton code="project-management:sync:import" disabled={!watermark || acknowledgeMutation.isPending} onClick={() => acknowledgeMutation.mutate(watermark?.currentSequenceNo ?? 0)}>确认当前水位</PermissionButton>{newestSequenceNo > 0 ? <PermissionButton code="project-management:sync:import" disabled={acknowledgeMutation.isPending} onClick={() => acknowledgeMutation.mutate(newestSequenceNo)}>确认已加载变更（{newestSequenceNo}）</PermissionButton> : null}</div>
+      {canImport ? <div className="mt-4 flex flex-wrap gap-2"><PermissionButton code="project-management:sync:import" disabled={!watermark || acknowledgeMutation.isPending} onClick={() => acknowledgeMutation.mutate(watermark?.currentSequenceNo ?? 0)}>确认当前水位</PermissionButton>{newestSequenceNo > 0 ? <PermissionButton code="project-management:sync:import" disabled={acknowledgeMutation.isPending} onClick={() => acknowledgeMutation.mutate(newestSequenceNo)}>确认已加载变更（{newestSequenceNo}）</PermissionButton> : null}</div> : null}
     </section>
     <section className="mt-5">
       <div className="mb-2 flex items-center justify-between gap-2"><h2 className="font-semibold">变更记录</h2><span className="text-sm text-gray-500">{changes.length} 条（最多 200 条）</span></div>
       {changes.length === 0 ? <div className="rounded-lg border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500">该水位之后暂无可见变更。</div> : <div className="overflow-x-auto rounded-lg border border-gray-200"><table className="min-w-full text-left text-sm"><thead className="bg-gray-50"><tr><th className="px-3 py-2">序号</th><th className="px-3 py-2">对象</th><th className="px-3 py-2">操作</th><th className="px-3 py-2">版本</th><th className="px-3 py-2">时间</th><th className="px-3 py-2">TraceId</th></tr></thead><tbody>{changes.map((item) => <tr className="border-t border-gray-100" key={item.sequenceNo}><td className="px-3 py-2">{item.sequenceNo}</td><td className="px-3 py-2">{item.aggregateType} / {item.aggregateId}</td><td className="px-3 py-2">{item.operation}</td><td className="px-3 py-2">{item.versionNo}</td><td className="whitespace-nowrap px-3 py-2">{new Date(item.createdTime).toLocaleString()}</td><td className="px-3 py-2 font-mono text-xs">{item.traceId}</td></tr>)}</tbody></table></div>}
     </section>
-    </> : null}
+    </> : <section className="rounded-lg border border-gray-200 p-4 text-sm text-gray-600">你拥有同步导入权限，但没有同步导出权限；请前往数据空间选择并预览同步包。</section>}
     <section className={canExport ? 'mt-5 rounded-lg border border-gray-200 p-4' : 'rounded-lg border border-gray-200 p-4'}>
       <h2 className="font-semibold">导入同步包</h2>
       <p className="mt-1 text-sm text-gray-500">导入前会校验同步包、展示冲突预览，并要求当前密码和高风险确认。</p>

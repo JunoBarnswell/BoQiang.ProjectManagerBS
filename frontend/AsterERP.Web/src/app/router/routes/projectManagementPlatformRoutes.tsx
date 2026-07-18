@@ -29,7 +29,7 @@ function platformProjectManagementRoute(path: string, page: ReactNode): RouteObj
   const permissionCode = path === 'project-audit-center'
     ? 'project-management:audit:view'
     : path === 'project-sync'
-      ? 'project-management:sync:export'
+      ? ['project-management:sync:export', 'project-management:sync:import']
       : path === 'projects/:projectId/reports'
         ? 'project-management:report:export'
         : path === 'projects/:projectId/overview'
