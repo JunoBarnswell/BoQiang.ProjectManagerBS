@@ -42,6 +42,14 @@ public sealed class ProjectManagementTasksController(IProjectManagementTaskServi
         return ApiOk(new { id });
     }
 
+    [HttpPost("{id}/delete")]
+    [Permission(PermissionCodes.ProjectManagementTaskDelete)]
+    public async Task<IActionResult> DeleteWithPolicyAsync(string id, [FromBody] ProjectManagementTaskDeleteRequest request, CancellationToken cancellationToken)
+    {
+        await service.DeleteAsync(id, request, cancellationToken);
+        return ApiOk(new { id, request.Mode });
+    }
+
     [HttpPost("{id}/restore")]
     [Permission(PermissionCodes.ProjectManagementTaskRestore)]
     public async Task<IActionResult> RestoreAsync(string id, [FromQuery] long versionNo, CancellationToken cancellationToken)
