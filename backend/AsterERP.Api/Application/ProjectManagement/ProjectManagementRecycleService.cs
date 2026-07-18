@@ -21,7 +21,10 @@ public sealed class ProjectManagementRecycleService(
     IProjectManagementSyncJournalWriter? syncJournalWriter = null,
     IProjectManagementRealtimePublisher? realtimePublisher = null,
     ProjectManagementTaskHierarchy? taskHierarchy = null,
-    IProjectManagementImConversationService? imConversationService = null) : IProjectManagementRecycleService, ITransientDependency
+    IProjectManagementImConversationService? imConversationService = null,
+    IProjectManagementRiskConfirmationService? riskConfirmation = null,
+    IProjectManagementMaintenanceLock? maintenanceLock = null,
+    IProjectManagementOperationWriter? operationWriter = null) : IProjectManagementRecycleService, ITransientDependency
 {
     public async Task<ProjectManagementRecycleResponse> QueryAsync(ProjectManagementRecycleQuery query, CancellationToken cancellationToken = default)
     {
@@ -127,18 +130,49 @@ public sealed class ProjectManagementRecycleService(
         await PublishInvalidationAsync("Task", entity.Id, entity.ProjectId, targets.Count == 1 ? "task.restored" : "task.subtree-restored", entity.VersionNo, cancellationToken);
     }
 
-    public async Task PurgeProjectAsync(string id, long versionNo, CancellationToken cancellationToken = default)
+    public async Task<ProjectManagementRecyclePurgePreviewResponse> PreviewPurgeProjectAsync(string id, long versionNo, CancellationToken cancellationToken = default)
     {
         var entity = await GetDeletedProjectAsync(id, cancellationToken);
         await EnsureCanManageProjectAsync(entity.Id, cancellationToken);
         EnsureVersion(entity.VersionNo, versionNo);
         var db = databaseAccessor.GetCurrentDb();
-        if (await db.Queryable<ProjectManagementProjectMemberEntity>().AnyAsync(item => item.ProjectId == id, cancellationToken) ||
-            await db.Queryable<ProjectManagementMilestoneEntity>().AnyAsync(item => item.ProjectId == id, cancellationToken) ||
-            await db.Queryable<ProjectManagementTaskEntity>().AnyAsync(item => item.ProjectId == id, cancellationToken))
-            throw new ValidationException("项目仍被成员、里程碑或任务引用，不能永久删除");
-        await db.Deleteable<ProjectManagementProjectEntity>().Where(item => item.Id == id && item.IsDeleted && item.TenantId == RequireTenantId() && item.AppCode == RequireAppCode()).ExecuteCommandAsync(cancellationToken);
-        await PublishInvalidationAsync("Project", entity.Id, entity.Id, "project.purged", entity.VersionNo, cancellationToken);
+        var members = await db.Queryable<ProjectManagementProjectMemberEntity>().Where(item => item.ProjectId == id).CountAsync(cancellationToken);
+        var milestones = await db.Queryable<ProjectManagementMilestoneEntity>().Where(item => item.ProjectId == id).CountAsync(cancellationToken);
+        var tasks = await db.Queryable<ProjectManagementTaskEntity>().Where(item => item.ProjectId == id).CountAsync(cancellationToken);
+        var blockingReason = members + milestones + tasks == 0 ? null : "项目仍被成员、里程碑或任务引用，不能永久删除";
+        return new ProjectManagementRecyclePurgePreviewResponse(entity.Id, entity.ProjectCode, entity.ProjectName, entity.VersionNo, members, milestones, tasks,
+            blockingReason is null, blockingReason, "永久删除不提供单项目回滚；仅可由具备备份恢复权限的人员恢复整个数据空间备份。");
+    }
+
+    public async Task PurgeProjectAsync(string id, ProjectManagementRecyclePurgeRequest request, CancellationToken cancellationToken = default)
+    {
+        var preview = await PreviewPurgeProjectAsync(id, request.VersionNo, cancellationToken);
+        if (!preview.CanExecute) throw new ValidationException(preview.BlockingReason!);
+        if (riskConfirmation is null || maintenanceLock is null) throw new ValidationException("高风险操作服务未配置");
+        await riskConfirmation.EnsureConfirmedAsync(request.CurrentPassword, request.ConfirmRisk, cancellationToken);
+        var operationId = await maintenanceLock.AcquireAsync("project-management-purge", TimeSpan.FromMinutes(5), cancellationToken);
+        var started = false;
+        try
+        {
+            var confirmation = await PreviewPurgeProjectAsync(id, request.VersionNo, cancellationToken);
+            if (!confirmation.CanExecute) throw new ValidationException(confirmation.BlockingReason!);
+            if (operationWriter is not null)
+            {
+                await operationWriter.StartAsync(operationId, "project.purge", JsonSerializer.Serialize(confirmation), Activity.Current?.Id ?? operationId, cancellationToken);
+                started = true;
+            }
+            var db = databaseAccessor.GetCurrentDb();
+            var affected = await db.Deleteable<ProjectManagementProjectEntity>().Where(item => item.Id == id && item.IsDeleted && item.VersionNo == request.VersionNo && item.TenantId == RequireTenantId() && item.AppCode == RequireAppCode()).ExecuteCommandAsync(cancellationToken);
+            if (affected != 1) throw new ValidationException("对象已被其他用户修改，请刷新后重试", ErrorCodes.ApplicationDevelopmentPageRevisionConflict);
+            if (operationWriter is not null) await operationWriter.SucceedAsync(operationId, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            if (started && operationWriter is not null) { try { await operationWriter.FailAsync(operationId, exception.Message, CancellationToken.None); } catch { } }
+            throw;
+        }
+        finally { await maintenanceLock.ReleaseAsync(operationId, CancellationToken.None); }
+        await PublishInvalidationAsync("Project", preview.ProjectId, preview.ProjectId, "project.purged", preview.VersionNo, cancellationToken);
     }
     private async Task<ProjectManagementProjectEntity> GetDeletedProjectAsync(string id, CancellationToken cancellationToken) => (await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementProjectEntity>().Where(item => item.Id == id && item.IsDeleted && item.TenantId == RequireTenantId() && item.AppCode == RequireAppCode()).Take(1).ToListAsync(cancellationToken)).FirstOrDefault() ?? throw new NotFoundException("已删除项目不存在", ErrorCodes.PlatformResourceNotFound);
 

@@ -22,6 +22,8 @@ import type {
   ProjectManagementOperationPage,
   ProjectManagementOperationQuery,
   ProjectManagementBackup,
+  ProjectManagementBackupRestorePreview,
+  ProjectManagementRecyclePurgePreview,
   ProjectManagementTaskUpsertRequest,
   ProjectManagementTaskComment,
   ProjectManagementTaskCommentUpsertRequest,
@@ -290,10 +292,12 @@ export function restoreProjectManagementTask(
   );
 }
 
-export function purgeProjectManagementProject(id: string, versionNo: number): Promise<ApiEnvelope<{ id: string }>> {
-  return httpClient.delete<{ id: string }>(
-    `/project-management/recycle/projects/${id}/purge${buildQueryString({ versionNo })}`,
-  );
+export function previewProjectManagementProjectPurge(id: string, versionNo: number): Promise<ApiEnvelope<ProjectManagementRecyclePurgePreview>> {
+  return httpClient.get<ProjectManagementRecyclePurgePreview>(`/project-management/recycle/projects/${id}/purge-preview${buildQueryString({ versionNo })}`);
+}
+
+export function purgeProjectManagementProject(id: string, request: { versionNo: number; currentPassword: string; confirmRisk: boolean }): Promise<ApiEnvelope<{ id: string }>> {
+  return httpClient.post<{ id: string }, typeof request>(`/project-management/recycle/projects/${id}/purge`, request);
 }
 
 export function getProjectManagementActivities(
@@ -601,6 +605,10 @@ export function restoreProjectManagementBackup(
   request: { currentPassword: string; confirmRisk: boolean },
 ): Promise<ApiEnvelope<ProjectManagementBackup>> {
   return httpClient.post<ProjectManagementBackup, typeof request>(`/project-management/backups/${id}/restore`, request);
+}
+
+export function previewProjectManagementBackupRestore(id: string): Promise<ApiEnvelope<ProjectManagementBackupRestorePreview>> {
+  return httpClient.get<ProjectManagementBackupRestorePreview>(`/project-management/backups/${id}/restore-preview`);
 }
 
 export function getProjectManagementSavedViews(

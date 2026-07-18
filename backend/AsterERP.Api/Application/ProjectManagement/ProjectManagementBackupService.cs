@@ -15,14 +15,14 @@ namespace AsterERP.Api.Application.ProjectManagement;
 public sealed class ProjectManagementBackupService(
     IWorkspaceDatabaseAccessor databaseAccessor,
     ICurrentUser currentUser,
-    IPasswordHashService passwordHashService,
+    IProjectManagementRiskConfirmationService riskConfirmation,
     IProjectManagementMaintenanceLock maintenanceLock,
     IHostEnvironment environment,
     IProjectManagementOperationWriter? operationWriter = null) : IProjectManagementBackupService
 {
     public async Task<ProjectManagementBackupResponse> CreateAsync(ProjectManagementBackupRequest request, CancellationToken cancellationToken = default)
     {
-        await EnsureRiskConfirmedAsync(request.CurrentPassword, request.ConfirmRisk, cancellationToken);
+        await riskConfirmation.EnsureConfirmedAsync(request.CurrentPassword, request.ConfirmRisk, cancellationToken);
         var operationId = await maintenanceLock.AcquireAsync("project-management-backup", TimeSpan.FromMinutes(15), cancellationToken);
         var operationStarted = false;
         try
@@ -62,12 +62,28 @@ public sealed class ProjectManagementBackupService(
         return rows.Select(Map).ToList();
     }
 
+    public async Task<ProjectManagementBackupRestorePreviewResponse> PreviewRestoreAsync(string id, CancellationToken cancellationToken = default)
+    {
+        RequireWorkspace();
+        var target = await GetReadyBackupAsync(id, cancellationToken);
+        var backupPath = GetAbsoluteBackupPath(target.RelativePath);
+        await VerifyFileAsync(backupPath, target.Sha256, target.FileSize, cancellationToken);
+        await using var backup = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = backupPath, Mode = SqliteOpenMode.ReadOnly }.ToString());
+        await backup.OpenAsync(cancellationToken);
+        return new ProjectManagementBackupRestorePreviewResponse(
+            Map(target),
+            await ReadCurrentImpactAsync(cancellationToken),
+            await ReadImpactAsync(backup, cancellationToken),
+            $"将覆盖当前租户 {Tenant()}、应用 {App()} 的整个 SQLite 数据空间，而不只是项目管理记录。",
+            "恢复失败时服务端会尝试恢复操作前的临时安全快照，并再次执行数据库完整性检查。",
+            "恢复成功后不会保留单击撤销点；如需恢复，只能选择其他完整数据空间备份。" );
+    }
+
     public async Task<ProjectManagementBackupResponse> RestoreAsync(string id, ProjectManagementRestoreRequest request, CancellationToken cancellationToken = default)
     {
-        await EnsureRiskConfirmedAsync(request.CurrentPassword, request.ConfirmRisk, cancellationToken);
+        await riskConfirmation.EnsureConfirmedAsync(request.CurrentPassword, request.ConfirmRisk, cancellationToken);
         var db = databaseAccessor.GetCurrentDb();
-        var target = (await db.Queryable<ProjectManagementBackupEntity>().Where(item => item.Id == id && !item.IsDeleted && item.Status == "Ready").Take(1).ToListAsync(cancellationToken)).FirstOrDefault()
-            ?? throw new ValidationException("备份不存在或不可恢复");
+        var target = await GetReadyBackupAsync(id, cancellationToken);
         var backupPath = GetAbsoluteBackupPath(target.RelativePath);
         await VerifyFileAsync(backupPath, target.Sha256, target.FileSize, cancellationToken);
         var operationId = await maintenanceLock.AcquireAsync("project-management-restore", TimeSpan.FromMinutes(30), cancellationToken);
@@ -181,13 +197,31 @@ public sealed class ProjectManagementBackupService(
         else await db.Updateable(backup).ExecuteCommandAsync(cancellationToken);
     }
 
-    private async Task EnsureRiskConfirmedAsync(string password, bool confirmed, CancellationToken cancellationToken)
+    private async Task<ProjectManagementBackupEntity> GetReadyBackupAsync(string id, CancellationToken cancellationToken) =>
+        (await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementBackupEntity>().Where(item => item.Id == id && !item.IsDeleted && item.Status == "Ready").Take(1).ToListAsync(cancellationToken)).FirstOrDefault()
+        ?? throw new ValidationException("备份不存在或不可恢复");
+
+    private async Task<ProjectManagementDataSpaceImpact> ReadCurrentImpactAsync(CancellationToken cancellationToken)
     {
-        if (!confirmed) throw new ValidationException("必须确认高风险数据库操作");
-        RequireWorkspace();
-        var users = await databaseAccessor.GetCurrentDb().Queryable<SystemUserEntity>().Where(item => item.Id == UserId() && !item.IsDeleted).Take(1).ToListAsync(cancellationToken);
-        var user = users.FirstOrDefault() ?? throw new ValidationException("当前用户不存在");
-        if (!passwordHashService.Verify(user.PasswordHash, password).Success) throw new ValidationException("当前密码不正确");
+        var db = databaseAccessor.GetCurrentDb();
+        return new ProjectManagementDataSpaceImpact(Tenant(), App(),
+            await db.Queryable<ProjectManagementProjectEntity>().CountAsync(cancellationToken),
+            await db.Queryable<ProjectManagementTaskEntity>().CountAsync(cancellationToken),
+            await db.Queryable<ProjectManagementProjectMemberEntity>().CountAsync(cancellationToken),
+            await db.Queryable<ProjectManagementMilestoneEntity>().CountAsync(cancellationToken),
+            await db.Queryable<ProjectManagementTaskAttachmentEntity>().CountAsync(cancellationToken));
+    }
+
+    private async Task<ProjectManagementDataSpaceImpact> ReadImpactAsync(SqliteConnection connection, CancellationToken cancellationToken) => new(Tenant(), App(),
+        await CountAsync(connection, "pm_projects", cancellationToken), await CountAsync(connection, "pm_tasks", cancellationToken),
+        await CountAsync(connection, "pm_project_members", cancellationToken), await CountAsync(connection, "pm_milestones", cancellationToken), await CountAsync(connection, "pm_task_attachments", cancellationToken));
+
+    private static async Task<int> CountAsync(SqliteConnection connection, string table, CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"SELECT COUNT(1) FROM {table};";
+        try { return Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken)); }
+        catch (SqliteException) { return 0; }
     }
 
     private SqliteConnection RequireSqliteConnection()
