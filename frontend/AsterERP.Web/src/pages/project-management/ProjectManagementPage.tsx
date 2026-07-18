@@ -15,11 +15,15 @@ import type {
 import { isHttpError } from '../../core/http/httpError';
 import { queryKeys } from '../../core/query/queryKeys';
 import { useApiMutation } from '../../core/query/useApiMutation';
+import '../../features/project-management/projectManagement.css';
 import { ProjectManagementPageStateView } from '../../features/project-management/components/ProjectManagementPageState';
 import { useProjectManagementWorkspaceScope } from '../../features/project-management/state/projectManagementWorkspaceScope';
 import { PermissionButton } from '../../shared/auth/PermissionButton';
 import { PermissionGuard } from '../../shared/auth/PermissionGuard';
+import { useConfirm } from '../../shared/feedback/useConfirm';
 import { useMessage } from '../../shared/feedback/useMessage';
+import { ModalForm } from '../../shared/forms/ModalForm';
+import type { FormFieldConfig } from '../../shared/forms/formTypes';
 import { ResponsivePage } from '../../shared/responsive/ResponsivePage';
 import { Page403 } from '../../shared/status/Page403';
 import { PageError } from '../../shared/status/PageError';
@@ -37,8 +41,19 @@ const emptyForm: ProjectManagementProjectUpsertRequest = {
   versionNo: 0
 };
 
+const projectFormFields: FormFieldConfig<ProjectManagementProjectUpsertRequest>[] = [
+  { label: '项目编码', name: 'projectCode', placeholder: '例如 PM-2026-001', required: true, type: 'text' },
+  { label: '项目名称', name: 'projectName', placeholder: '输入项目名称', required: true, type: 'text' },
+  { label: '项目状态', name: 'status', options: ['Planning', 'Active', 'Paused', 'Completed', 'Canceled', 'Archived'].map((value) => ({ label: projectStatusLabel(value), value })), type: 'select' },
+  { label: '优先级', name: 'priority', options: ['Low', 'Medium', 'High', 'Urgent'].map((value) => ({ label: priorityLabel(value), value })), type: 'select' },
+  { label: '开始日期', name: 'startDate', type: 'date' },
+  { label: '截止日期', name: 'dueDate', type: 'date' },
+  { label: '项目说明', name: 'description', placeholder: '说明目标、范围或当前约束', rows: 4, span: 2, type: 'textarea' }
+];
+
 export function ProjectManagementPage() {
   const scope = useProjectManagementWorkspaceScope();
+  const confirm = useConfirm();
   const message = useMessage();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -46,6 +61,7 @@ export function ProjectManagementPage() {
   const [submittedKeyword, setSubmittedKeyword] = useState('');
   const [form, setForm] = useState<ProjectManagementProjectUpsertRequest>(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [editorOpen, setEditorOpen] = useState(false);
   const [formDirty, setFormDirty] = useState(false);
   const projectsQuery = useQuery({
     enabled: scope.isAvailable,
@@ -67,14 +83,19 @@ export function ProjectManagementPage() {
     await queryClient.invalidateQueries({ queryKey: queryKeys.projectManagement.projects(scope, { pageIndex: 1, pageSize: 100, keyword: submittedKeyword || undefined }) });
   };
 
+  const closeEditor = () => {
+    setEditorOpen(false);
+    setEditingId(null);
+    setForm(emptyForm);
+    setFormDirty(false);
+  };
+
   const saveMutation = useApiMutation({
     mutationFn: () => editingId ? updateProjectManagementProject(editingId, form) : createProjectManagementProject(form),
     onError: (error) => message.error(getErrorMessage(error, editingId ? '项目保存失败' : '项目创建失败')),
     onSuccess: async () => {
       message.success(editingId ? '项目已更新' : '项目已创建');
-      setForm(emptyForm);
-      setEditingId(null);
-      setFormDirty(false);
+      closeEditor();
       await refresh();
     }
   });
@@ -83,73 +104,94 @@ export function ProjectManagementPage() {
     mutationFn: (project: ProjectManagementProject) => deleteProjectManagementProject(project.id, project.versionNo),
     onError: (error) => message.error(getErrorMessage(error, '项目删除失败')),
     onSuccess: async () => {
-      message.success('项目已删除');
+      message.success('项目已移入回收站');
       await refresh();
     }
   });
 
   const columns: DataTableColumn<ProjectManagementProject>[] = useMemo(() => [
     { key: 'projectCode', title: '项目编码', width: '140px', responsivePriority: 100 },
-    { key: 'projectName', title: '项目名称', responsivePriority: 100 },
-    { key: 'status', title: '状态', width: '110px' },
-    { key: 'priority', title: '优先级', width: '100px' },
-    { key: 'progressPercent', title: '进度', width: '90px', render: (row) => `${row.progressPercent}%` },
-    { key: 'ownerUserId', title: '负责人', width: '140px' }
+    { key: 'projectName', title: '项目名称', responsivePriority: 100, render: (row) => <strong>{row.projectName}</strong> },
+    { key: 'status', title: '状态', width: '118px', render: (row) => <ProjectStatus status={row.status} /> },
+    { key: 'priority', title: '优先级', width: '106px', render: (row) => <PriorityBadge priority={row.priority} /> },
+    { key: 'progressPercent', title: '进度', width: '142px', render: (row) => <Progress value={row.progressPercent} /> },
+    { key: 'ownerUserId', title: '负责人', width: '140px', render: (row) => row.ownerUserId || '未分配' }
   ], []);
 
   if (projectsQuery.isLoading) return <PageLoading />;
   if (projectsQuery.isError) {
     if (isHttpError(projectsQuery.error) && projectsQuery.error.status === 403) return <Page403 />;
-    return <PageError action={<button type="button" onClick={() => void projectsQuery.refetch()}>重试</button>} description="项目列表加载失败" />;
+    return <PageError action={<button type="button" onClick={() => void projectsQuery.refetch()}>重试</button>} description="项目列表加载失败，请检查当前工作区后重试。" />;
   }
 
   const rows = projectsQuery.data?.data?.items ?? [];
+  const editorPermission = editingId ? 'project-management:project:edit' : 'project-management:project:add';
 
   return (
     <ResponsivePage
-      title="项目管理"
+      actions={<PermissionButton code="project-management:project:add" onClick={() => { setEditingId(null); setForm(emptyForm); setFormDirty(false); setEditorOpen(true); }}>新建项目</PermissionButton>}
+      className="pm-page"
       description="按项目、里程碑和任务层级组织团队执行计划。"
       eyebrow="ProjectManagement"
+      title="项目管理"
       toolbar={
-        <div className="flex flex-wrap items-center gap-2">
-          <form className="flex items-center gap-2" onSubmit={(event) => { event.preventDefault(); setSubmittedKeyword(keyword.trim()); }}>
+        <div className="pm-toolbar-summary">
+          <form className="flex flex-wrap items-center gap-2" onSubmit={(event) => { event.preventDefault(); setSubmittedKeyword(keyword.trim()); }}>
             <input aria-label="搜索项目" value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜索编码或名称" />
             <button type="submit">搜索</button>
             {submittedKeyword ? <button type="button" onClick={() => { setKeyword(''); setSubmittedKeyword(''); }}>清空</button> : null}
           </form>
-          <span className="text-sm text-gray-500">共 {projectsQuery.data?.data?.total ?? 0} 个项目</span>
+          <span>当前工作区共 <strong>{projectsQuery.data?.data?.total ?? 0}</strong> 个项目</span>
         </div>
       }
     >
-      <PermissionGuard code={editingId ? 'project-management:project:edit' : 'project-management:project:add'} fallback={null}>
-      <div className="mb-4 rounded-lg border border-gray-200 p-4">
-        <div className="mb-3 text-sm font-semibold">{editingId ? '编辑项目' : '新建项目'}</div>
-        <div className="grid gap-2 md:grid-cols-4">
-          <input aria-label="项目编码" value={form.projectCode} onChange={(event) => { setForm({ ...form, projectCode: event.target.value }); setFormDirty(true); }} placeholder="项目编码" />
-          <input aria-label="项目名称" value={form.projectName} onChange={(event) => { setForm({ ...form, projectName: event.target.value }); setFormDirty(true); }} placeholder="项目名称" />
-          <select aria-label="项目状态" value={form.status} onChange={(event) => { setForm({ ...form, status: event.target.value }); setFormDirty(true); }}>
-            {['Planning', 'Active', 'Paused', 'Completed', 'Canceled', 'Archived'].map((status) => <option key={status}>{status}</option>)}
-          </select>
-          <select aria-label="优先级" value={form.priority} onChange={(event) => { setForm({ ...form, priority: event.target.value }); setFormDirty(true); }}>
-            {['Low', 'Medium', 'High', 'Urgent'].map((priority) => <option key={priority}>{priority}</option>)}
-          </select>
-        </div>
-        <div className="mt-3 flex gap-2">
-          <PermissionButton type="submit" code={editingId ? 'project-management:project:edit' : 'project-management:project:add'} disabled={saveMutation.isPending} onClick={() => saveMutation.mutate()}>{saveMutation.isPending ? '保存中…' : editingId ? '保存修改' : '创建项目'}</PermissionButton>
-          {editingId ? <button type="button" onClick={() => { setEditingId(null); setForm(emptyForm); setFormDirty(false); }}>取消编辑</button> : null}
-        </div>
-      </div>
-      </PermissionGuard>
       {rows.length === 0 ? <ProjectManagementPageStateView state="empty" /> : <DataTable
         columnSettingsKey="project-management-projects"
         columns={columns}
-        emptyText="暂无项目"
+        emptyText="暂无符合筛选条件的项目"
         loading={projectsQuery.isFetching}
-         rowActions={(row) => <div className="flex gap-2"><button type="button" onClick={() => navigate(`/projects/${encodeURIComponent(row.id)}/overview`)}>进入项目</button><PermissionButton code="project-management:project:edit" onClick={() => { setEditingId(row.id); setForm({ projectCode: row.projectCode, projectName: row.projectName, description: row.description, status: row.status, priority: row.priority, ownerUserId: row.ownerUserId, progressPercent: row.progressPercent, versionNo: row.versionNo }); setFormDirty(false); }}>编辑</PermissionButton><PermissionButton code="project-management:project:delete" disabled={deleteMutation.isPending} onClick={() => deleteMutation.mutate(row)}>删除</PermissionButton></div>}
+        rowActions={(row) => <div className="pm-project-actions"><button type="button" onClick={() => navigate(`/projects/${encodeURIComponent(row.id)}/overview`)}>进入项目</button><PermissionButton code="project-management:project:edit" onClick={() => { setEditingId(row.id); setForm({ projectCode: row.projectCode, projectName: row.projectName, description: row.description, status: row.status, priority: row.priority, ownerUserId: row.ownerUserId, startDate: row.startDate, dueDate: row.dueDate, progressPercent: row.progressPercent, versionNo: row.versionNo }); setFormDirty(false); setEditorOpen(true); }}>编辑</PermissionButton><PermissionButton code="project-management:project:delete" disabled={deleteMutation.isPending} onClick={() => confirm({ title: '移入项目回收站', content: `项目“${row.projectName}”将被移入回收站，关联对象的恢复规则由服务端校验。`, confirmText: '移入回收站', onConfirm: () => deleteMutation.mutate(row) })}>删除</PermissionButton></div>}
         rowKey={(row) => row.id}
         rows={rows}
         showColumnSettings
       />}
+      <PermissionGuard code={editorPermission} fallback={null}>
+        <ModalForm
+          actions={[
+            { label: '取消', onClick: closeEditor, variant: 'ghost' },
+            { label: editingId ? '保存修改' : '创建项目', loading: saveMutation.isPending, onClick: () => saveMutation.mutate(), variant: 'primary' }
+          ]}
+          fields={projectFormFields}
+          open={editorOpen}
+          onClose={closeEditor}
+          onValueChange={(name, value) => { setForm((current) => ({ ...current, [name]: value })); setFormDirty(true); }}
+          title={editingId ? '编辑项目' : '新建项目'}
+          value={form}
+        >
+          项目状态和优先级是可见的业务语义；保存时由服务端执行版本和权限校验。
+        </ModalForm>
+      </PermissionGuard>
     </ResponsivePage>
   );
+}
+
+function ProjectStatus({ status }: { status: string }) {
+  const tone = status === 'Active' ? 'in-progress' : status === 'Completed' ? 'done' : status === 'Paused' ? 'blocked' : status === 'Canceled' || status === 'Archived' ? 'cancelled' : 'todo';
+  return <span className={`pm-status-badge pm-status-badge--${tone}`}>{projectStatusLabel(status)}</span>;
+}
+
+function PriorityBadge({ priority }: { priority: string }) {
+  return <span className={`pm-priority-badge pm-priority-badge--${priority.toLowerCase()}`}>{priorityLabel(priority)}</span>;
+}
+
+function Progress({ value }: { value: number }) {
+  return <div className="pm-progress"><progress aria-label={`项目进度 ${value}%`} max={100} value={value} /><span>{value}%</span></div>;
+}
+
+function projectStatusLabel(status: string) {
+  return ({ Planning: '规划中', Active: '进行中', Paused: '已暂停', Completed: '已完成', Canceled: '已取消', Archived: '已归档' } as Record<string, string>)[status] ?? status;
+}
+
+function priorityLabel(priority: string) {
+  return ({ Low: '低', Medium: '中', High: '高', Urgent: '紧急' } as Record<string, string>)[priority] ?? priority;
 }
