@@ -4,6 +4,7 @@ interface ApiMutationOptions<TData, TError, TVariables> {
   mutationFn: (variables: TVariables) => Promise<TData>;
   onError?: UseMutationOptions<TData, TError, TVariables>['onError'];
   onSuccess?: UseMutationOptions<TData, TError, TVariables>['onSuccess'];
+  onSettled?: UseMutationOptions<TData, TError, TVariables>['onSettled'];
 }
 
 export function useApiMutation<TData, TError = Error, TVariables = void>(
@@ -12,6 +13,7 @@ export function useApiMutation<TData, TError = Error, TVariables = void>(
   return useMutation<TData, TError, TVariables>({
     mutationFn: options.mutationFn,
     onError: options.onError,
-    onSuccess: options.onSuccess
+    onSuccess: options.onSuccess,
+    onSettled: options.onSettled
   });
 }
