@@ -406,6 +406,10 @@ export interface ProjectManagementTaskListItem {
   blockedByCount: number;
   canStart: boolean;
   blockedReason?: string;
+  summary?: string;
+  hasChildren?: boolean;
+  labels?: ProjectManagementTaskLabel[];
+  participantUserIds?: string[];
 }
 
 export interface ProjectManagementTaskDetail extends ProjectManagementTaskListItem {

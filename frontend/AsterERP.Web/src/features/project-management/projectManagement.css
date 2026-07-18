@@ -305,6 +305,94 @@
   gap: 8px;
 }
 
+.pm-card-virtual-list {
+  max-height: min(72vh, 820px);
+  min-height: 280px;
+  overflow: auto;
+  padding: 2px;
+}
+
+.pm-task-card-group-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 42px;
+  padding: 8px 4px;
+  color: var(--pm-text);
+  font-size: var(--app-text-sm);
+}
+
+.pm-task-grid--virtual {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  padding-bottom: 10px;
+}
+
+.pm-task-card--risk-overdue,
+.pm-task-card--risk-urgent,
+.pm-task-card--risk-blocked,
+.pm-task-card--risk-done {
+  border-left: 4px solid var(--pm-border);
+}
+
+.pm-task-card--risk-overdue { border-left-color: #dc2626; }
+.pm-task-card--risk-urgent { border-left-color: #d97706; }
+.pm-task-card--risk-blocked { border-left-color: #7c3aed; }
+.pm-task-card--risk-done { border-left-color: #16a34a; }
+
+.pm-task-card__risk-list,
+.pm-task-card__labels,
+.pm-task-card__actions,
+.pm-task-card__details {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.pm-task-card__risk-list { margin-left: auto; }
+.pm-task-card__summary,
+.pm-task-card__blocked {
+  margin: 0;
+  color: var(--pm-muted);
+  font-size: var(--app-text-xs);
+}
+
+.pm-task-card__summary {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.pm-task-card__details {
+  color: var(--pm-muted);
+  font-size: var(--app-text-xs);
+}
+
+.pm-task-card__labels > span {
+  padding: 2px 6px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: var(--app-text-xs);
+}
+
+.pm-task-card__actions button {
+  min-height: 28px;
+  padding: 3px 7px;
+  font-size: var(--app-text-xs);
+}
+
+.pm-risk-chip {
+  padding: 2px 5px;
+  border-radius: 999px;
+  font-size: var(--app-text-xs);
+}
+
+.pm-risk-chip--overdue { background: color-mix(in srgb, #dc2626 14%, transparent); color: #b91c1c; }
+.pm-risk-chip--urgent { background: color-mix(in srgb, #d97706 14%, transparent); color: #b45309; }
+.pm-risk-chip--blocked { background: color-mix(in srgb, #7c3aed 14%, transparent); color: #6d28d9; }
+.pm-risk-chip--done { background: color-mix(in srgb, #16a34a 14%, transparent); color: #15803d; }
+
 .pm-task-card__meta {
   justify-content: space-between;
 }

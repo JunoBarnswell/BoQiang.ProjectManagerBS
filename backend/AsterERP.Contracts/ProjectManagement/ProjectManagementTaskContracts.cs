@@ -95,7 +95,9 @@ public sealed record ProjectManagementTaskListItemResponse(
     DateTime? ActualStartAt = null,
     DateTime? ActualEndAt = null,
     string? Summary = null,
-    bool HasChildren = false);
+    bool HasChildren = false,
+    IReadOnlyList<ProjectManagementTaskLabelResponse>? Labels = null,
+    IReadOnlyList<string>? ParticipantUserIds = null);
 
 /// <summary>
 /// 单任务详情，用于编辑和任务侧栏；列表加载不返回这些扩展字段。

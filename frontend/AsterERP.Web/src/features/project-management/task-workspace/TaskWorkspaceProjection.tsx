@@ -22,9 +22,16 @@ import {
 } from '../state/taskTreeState';
 
 import type { TaskMoveDropTarget } from './taskMoveIntent';
+import { TaskCard, TaskCardProjection, type TaskCardDragHandlers } from './TaskCardProjection';
 
 interface TaskWorkspaceProjectionProps {
   labelFilter?: ProjectManagementTaskLabelFilter;
+  milestoneLabels?: Readonly<Record<string, string>>;
+  onAddChildTask?: (task: ProjectManagementTaskListItem) => void;
+  onCompleteTask?: (task: ProjectManagementTaskListItem) => void;
+  onDeleteTask?: (task: ProjectManagementTaskListItem) => void;
+  participantLabels?: Readonly<Record<string, string>>;
+  pendingTaskId?: string;
   projectId: string;
   onSelectTask: (taskId: string) => void;
   onMoveTask: (task: ProjectManagementTaskListItem, target: TaskMoveDropTarget) => void;
@@ -34,7 +41,7 @@ interface TaskWorkspaceProjectionProps {
   state: TaskWorkspaceState;
 }
 
-export function TaskWorkspaceProjection({ labelFilter, onMoveTask, onSelectTask, onToggleTaskSelection, projectId, rows, selectedTaskIds, state }: TaskWorkspaceProjectionProps) {
+export function TaskWorkspaceProjection({ labelFilter, milestoneLabels, onAddChildTask, onCompleteTask, onDeleteTask, onMoveTask, onSelectTask, onToggleTaskSelection, participantLabels, pendingTaskId, projectId, rows, selectedTaskIds, state }: TaskWorkspaceProjectionProps) {
   const scope = useProjectManagementWorkspaceScope();
   const userId = useAuthStore((current) => current.user?.userId ?? '');
   const expansionKey = useMemo(
@@ -135,19 +142,13 @@ export function TaskWorkspaceProjection({ labelFilter, onMoveTask, onSelectTask,
   const rootDropZone = <div aria-label="拖到此处成为顶级任务" className="pm-root-drop-zone" onDragOver={drag.onDragOver} onDrop={(event) => drag.onDrop(event, { kind: 'root' })}>拖到此处成为顶级任务</div>;
 
   if (state.viewKey === 'board') return <>{rootDropZone}<TaskBoardProjection drag={drag} rows={rows} onSelectTask={onSelectTask} onToggleTaskSelection={onToggleTaskSelection} selectedTaskIds={selectedTaskIds} /></>;
-  if (state.viewKey === 'card') return <>{rootDropZone}<TaskCardProjection drag={drag} rows={rows} onSelectTask={onSelectTask} onToggleTaskSelection={onToggleTaskSelection} selectedTaskIds={selectedTaskIds} /></>;
+  if (state.viewKey === 'card') return <>{rootDropZone}<TaskCardProjection drag={drag} groupBy={state.groupBy} milestoneLabels={milestoneLabels} onAddChildTask={onAddChildTask} onCompleteTask={onCompleteTask} onDeleteTask={onDeleteTask} onSelectTask={onSelectTask} onToggleTaskSelection={onToggleTaskSelection} participantLabels={participantLabels} pendingTaskId={pendingTaskId} rows={rows} selectedTaskIds={selectedTaskIds} /></>;
   if (state.viewKey === 'gantt') return <TaskGanttProjection rows={rows} onSelectTask={onSelectTask} onToggleTaskSelection={onToggleTaskSelection} selectedTaskIds={selectedTaskIds} />;
   if (state.viewKey === 'calendar') return <TaskCalendarProjection rows={rows} onSelectTask={onSelectTask} onToggleTaskSelection={onToggleTaskSelection} selectedTaskIds={selectedTaskIds} />;
   return <>{rootDropZone}<TaskTableProjection childStateByParent={loadedChildren} expandedTaskIds={new Set(expandedTaskIds)} onLoadMoreChildren={loadMoreChildren} onToggleTaskExpansion={toggleExpansion} drag={drag} rows={visibleRows} onSelectTask={onSelectTask} onToggleTaskSelection={onToggleTaskSelection} selectedTaskIds={selectedTaskIds} state={state} /></>;
 }
 
-interface TaskDragHandlers {
-  draggedTaskId?: string;
-  onDragEnd: () => void;
-  onDragOver: (event: DragEvent<HTMLElement>) => void;
-  onDragStart: (event: DragEvent<HTMLElement>, task: ProjectManagementTaskListItem) => void;
-  onDrop: (event: DragEvent<HTMLElement>, target: TaskMoveDropTarget) => void;
-}
+type TaskDragHandlers = TaskCardDragHandlers;
 
 function TaskTableProjection({ childStateByParent, expandedTaskIds, onLoadMoreChildren, onToggleTaskExpansion, drag, onSelectTask, onToggleTaskSelection, rows, selectedTaskIds, state }: Pick<TaskWorkspaceProjectionProps, 'onSelectTask' | 'onToggleTaskSelection' | 'rows' | 'selectedTaskIds' | 'state'> & { childStateByParent: Map<string, { items: TaskTreeRow[]; total: number }>; expandedTaskIds: ReadonlySet<string>; onLoadMoreChildren: (taskId: string) => void; onToggleTaskExpansion: (taskId: string) => void; drag: TaskDragHandlers }) {
   const columns = useMemo<DataTableColumn<TaskTreeRow>[]>(() => [
@@ -201,10 +202,6 @@ function TaskTableProjection({ childStateByParent, expandedTaskIds, onLoadMoreCh
   return <DataTable columnSettingsKey={`project-management-tasks-${state.viewKey}`} columns={columns} emptyText="暂无任务" rowActions={(row) => <button type="button" onClick={() => onSelectTask(row.id)}>查看</button>} rowKey={(row) => row.id} rowVirtualize={state.viewKey === 'tree' || state.viewKey === 'list'} rowVirtualization={{ overscan: 8, rowHeight: 56 }} rows={rows} showColumnSettings />;
 }
 
-function TaskCardProjection({ drag, onSelectTask, onToggleTaskSelection, rows, selectedTaskIds }: Pick<TaskWorkspaceProjectionProps, 'onSelectTask' | 'onToggleTaskSelection' | 'rows' | 'selectedTaskIds'> & { drag: TaskDragHandlers }) {
-  return <div className="pm-task-grid">{rows.map((task) => <TaskCard drag={drag} key={task.id} selected={selectedTaskIds.has(task.id)} task={task} onSelectTask={onSelectTask} onToggleTaskSelection={onToggleTaskSelection} />)}</div>;
-}
-
 function TaskBoardProjection({ drag, onSelectTask, onToggleTaskSelection, rows, selectedTaskIds }: Pick<TaskWorkspaceProjectionProps, 'onSelectTask' | 'onToggleTaskSelection' | 'rows' | 'selectedTaskIds'> & { drag: TaskDragHandlers }) {
   const groups = ['Todo', 'InProgress', 'Blocked', 'Done', 'Cancelled'].map((status) => ({ status, rows: rows.filter((task) => task.status === status) }));
   return <div className="pm-board">{groups.map((group) => <section className="pm-board-column" key={group.status}><header><StatusBadge status={group.status} /><span>{group.rows.length}</span></header><div className="pm-board-column__body">{group.rows.length ? group.rows.map((task) => <TaskCard drag={drag} key={task.id} selected={selectedTaskIds.has(task.id)} task={task} onSelectTask={onSelectTask} onToggleTaskSelection={onToggleTaskSelection} />) : <p>暂无任务</p>}</div></section>)}</div>;
@@ -252,10 +249,6 @@ function TaskCalendarProjection({ onSelectTask, onToggleTaskSelection, rows, sel
     </div>
     <div className="grid grid-cols-7 overflow-hidden rounded border border-gray-200"><div className="col-span-7 grid grid-cols-7 border-b border-gray-200 bg-gray-50 text-center text-xs text-gray-500">{['日', '一', '二', '三', '四', '五', '六'].map((day) => <div className="p-2" key={day}>周{day}</div>)}</div>{calendar.days.map((day) => { const key = toDateKey(day); const isCurrentPeriod = mode === 'week' || day.getMonth() === anchorDate.getMonth(); const tasks = groups[key] ?? []; return <section className={`min-h-28 border-b border-r border-gray-100 p-2 ${isCurrentPeriod ? 'bg-white' : 'bg-gray-50 text-gray-400'}`} key={key}><div className="mb-1 flex items-center justify-between text-xs"><span>{day.getDate()}</span>{tasks.length ? <span>{tasks.length} 项</span> : null}</div><div className="space-y-1">{tasks.map((task) => <div className="flex items-center gap-1" key={task.id}><input aria-label={`选择任务 ${task.title}`} checked={selectedTaskIds.has(task.id)} type="checkbox" onChange={() => onToggleTaskSelection(task.id)} /><button className="truncate rounded bg-blue-50 px-1 py-0.5 text-left text-xs text-blue-800 hover:bg-blue-100" onClick={() => onSelectTask(task.id)} title={task.title} type="button">{task.title}</button></div>)}</div></section>; })}</div>
   </div>;
-}
-
-function TaskCard({ drag, onSelectTask, onToggleTaskSelection, selected, task }: { drag?: TaskDragHandlers; onSelectTask: (taskId: string) => void; onToggleTaskSelection: (taskId: string) => void; selected: boolean; task: ProjectManagementTaskListItem }) {
-  return <article className={`pm-task-card${selected ? ' is-selected' : ''}${drag?.draggedTaskId === task.id ? ' is-dragging' : ''}`} draggable={drag ? true : undefined} onDragEnd={drag?.onDragEnd} onDragOver={drag?.onDragOver} onDragStart={drag ? (event) => drag.onDragStart(event, task) : undefined} onDrop={drag ? (event) => drag.onDrop(event, { kind: 'before', task }) : undefined}><input aria-label={`选择任务 ${task.title}`} checked={selected} type="checkbox" onChange={() => onToggleTaskSelection(task.id)} /><div className="pm-task-card__content"><div className="pm-task-card__meta"><code>{task.taskCode}</code><StatusBadge status={task.status} /></div><button className="pm-task-card__open" type="button" onClick={() => onSelectTask(task.id)}>{task.title}</button><div className="pm-task-card__signals"><PriorityBadge priority={task.priority} /><span>{task.canStart ? '可开始' : task.blockedReason ?? '受阻塞'}</span></div><Progress value={task.progressPercent} /><footer><span>截止：{formatDate(task.dueDate)}</span>{task.blockedByCount ? <span>{task.blockedByCount} 项前置</span> : null}</footer></div>{drag ? <span className="pm-child-drop-zone" onDragOver={drag.onDragOver} onDrop={(event) => drag.onDrop(event, { kind: 'child', task })}>作为子任务</span> : null}</article>;
 }
 
 function StatusBadge({ label, status }: { label?: string; status: string }) {
