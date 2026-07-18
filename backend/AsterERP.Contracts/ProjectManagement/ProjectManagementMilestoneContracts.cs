@@ -12,6 +12,8 @@ public sealed record ProjectManagementMilestoneResponse(
     DateTime? DueDate,
     DateTime? CompletedAt,
     decimal ProgressPercent,
+    int LeafTaskCount,
+    int CompletedLeafTaskCount,
     int SortOrder,
     long VersionNo);
 

@@ -60,6 +60,44 @@ public sealed class ProjectManagementMemberMilestoneServiceTests
     }
 
     [Fact]
+    public async Task Milestones_return_leaf_task_summary_without_changing_task_dates()
+    {
+        using var db = CreateDb("milestone-summary");
+        await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
+        await db.Insertable(new ProjectManagementProjectEntity { Id = "project-a", TenantId = "tenant-a", AppCode = "MES", ProjectCode = "A", ProjectName = "A", OwnerUserId = "operator" }).ExecuteCommandAsync();
+        var service = new ProjectManagementMilestoneService(new TestWorkspaceDatabaseAccessor(db), CreateUser());
+        var milestone = await service.CreateAsync("project-a", new ProjectManagementMilestoneUpsertRequest("M1", DueDate: DateTime.UtcNow.Date.AddDays(3)));
+        var taskDueDate = DateTime.UtcNow.Date.AddDays(30);
+        await db.Insertable(new[]
+        {
+            new ProjectManagementTaskEntity { Id = "parent", TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-a", MilestoneId = milestone.Id, TaskCode = "PARENT", Title = "Parent", Status = "InProgress", ProgressPercent = 10, Weight = 1, CreatedTime = DateTime.UtcNow },
+            new ProjectManagementTaskEntity { Id = "leaf", TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-a", MilestoneId = milestone.Id, ParentTaskId = "parent", TaskCode = "LEAF", Title = "Leaf", Status = "Done", ProgressPercent = 100, Weight = 2, DueDate = taskDueDate, CreatedTime = DateTime.UtcNow }
+        }).ExecuteCommandAsync();
+
+        var summary = Assert.Single((await service.QueryAsync("project-a")).Items);
+        Assert.Equal(1, summary.LeafTaskCount);
+        Assert.Equal(1, summary.CompletedLeafTaskCount);
+        Assert.Equal(100, summary.ProgressPercent);
+        Assert.Equal("Done", summary.HealthStatus);
+
+        await service.UpdateAsync("project-a", milestone.Id, new ProjectManagementMilestoneUpsertRequest("M1", DueDate: DateTime.UtcNow.Date.AddDays(5), VersionNo: milestone.VersionNo));
+        var task = Assert.Single(await db.Queryable<ProjectManagementTaskEntity>().Where(item => item.Id == "leaf").ToListAsync());
+        Assert.Equal(taskDueDate, task.DueDate);
+    }
+
+    [Fact]
+    public async Task Milestone_writes_require_project_owner_or_manager()
+    {
+        using var db = CreateDb("milestone-access");
+        await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
+        await db.Insertable(new ProjectManagementProjectEntity { Id = "project-a", TenantId = "tenant-a", AppCode = "MES", ProjectCode = "A", ProjectName = "A", OwnerUserId = "owner" }).ExecuteCommandAsync();
+        var service = new ProjectManagementMilestoneService(new TestWorkspaceDatabaseAccessor(db), CreateUser("viewer"));
+
+        var exception = await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() => service.CreateAsync("project-a", new ProjectManagementMilestoneUpsertRequest("M1")));
+        Assert.Equal(ErrorCodes.PermissionDenied, exception.Code);
+    }
+
+    [Fact]
     public void Member_and_milestone_controllers_require_view_and_manage_permissions()
     {
         Assert.Contains(typeof(ProjectManagementMembersController).GetCustomAttributes(typeof(PermissionAttribute), true), attribute => ((PermissionAttribute)attribute).Code == PermissionCodes.ProjectManagementMemberView);
@@ -75,9 +113,9 @@ public sealed class ProjectManagementMemberMilestoneServiceTests
         IsAutoCloseConnection = false
     });
 
-    private static FixedAsterErpCurrentUser CreateUser() => new(new ClaimsPrincipal(new ClaimsIdentity(new[]
+    private static FixedAsterErpCurrentUser CreateUser(string userId = "operator") => new(new ClaimsPrincipal(new ClaimsIdentity(new[]
     {
-        new Claim(AsterErpClaimTypes.UserId, "operator"),
+        new Claim(AsterErpClaimTypes.UserId, userId),
         new Claim(AsterErpClaimTypes.TenantId, "tenant-a"),
         new Claim(AsterErpClaimTypes.AppCode, "MES"),
         new Claim(AsterErpClaimTypes.DataScope, "SELF"),
