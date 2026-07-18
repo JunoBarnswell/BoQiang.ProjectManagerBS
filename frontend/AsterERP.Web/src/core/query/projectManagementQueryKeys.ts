@@ -110,6 +110,7 @@ export const projectManagementQueryKeys = {
     query.projectId ?? '',
     query.keyword ?? '',
   ] as const,
+  reversibleCommands: (scope: ProjectManagementWorkspaceScope) => [...root(scope), 'reversible-commands'] as const,
   savedViews: (scope: ProjectManagementWorkspaceScope, projectId: string) => [...root(scope), 'saved-views', projectId] as const,
   taskAttachments: (scope: ProjectManagementWorkspaceScope, projectId: string, taskId: string) => [
     ...projectManagementQueryKeys.taskAttachmentsProject(scope, projectId),
