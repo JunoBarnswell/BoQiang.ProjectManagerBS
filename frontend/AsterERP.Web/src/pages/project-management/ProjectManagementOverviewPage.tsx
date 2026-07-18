@@ -5,6 +5,7 @@ import {
   getProjectManagementActivities,
   getProjectManagementOverview,
 } from "../../api/project-management/projectManagement.api";
+import { usePermission } from "../../core/auth/usePermission";
 import { isHttpError } from "../../core/http/httpError";
 import { projectManagementQueryKeys } from "../../core/query/projectManagementQueryKeys";
 import { useProjectManagementWorkspaceScope } from "../../features/project-management/state/projectManagementWorkspaceScope";
@@ -15,6 +16,7 @@ import { PageLoading } from "../../shared/status/PageLoading";
 
 export function ProjectManagementOverviewPage() {
   const scope = useProjectManagementWorkspaceScope();
+  const { hasPermission: canViewActivities } = usePermission("project-management:audit:view");
   const { projectId = "" } = useParams<{ projectId: string }>();
   const overviewQuery = useQuery({
     queryKey: projectManagementQueryKeys.overview(scope, { projectId, pageIndex: 1, pageSize: 1 }),
@@ -26,13 +28,12 @@ export function ProjectManagementOverviewPage() {
   const activitiesQuery = useQuery({
     queryKey: projectManagementQueryKeys.activities(scope, projectId, 20),
     queryFn: ({ signal }) => getProjectManagementActivities(projectId, 20, signal),
-    enabled: scope.isAvailable && Boolean(overview),
+    enabled: scope.isAvailable && Boolean(overview) && canViewActivities,
   });
 
   if (overviewQuery.isLoading) return <PageLoading />;
-  if (overviewQuery.isError || activitiesQuery.isError) {
-    const error = overviewQuery.error ?? activitiesQuery.error;
-    if (isHttpError(error) && error.status === 403) return <Page403 />;
+  if (overviewQuery.isError) {
+    if (isHttpError(overviewQuery.error) && overviewQuery.error.status === 403) return <Page403 />;
     return (
       <PageError
         description="项目概览加载失败"
@@ -81,7 +82,11 @@ export function ProjectManagementOverviewPage() {
       </section>
       <section className="mt-4 rounded-lg border border-gray-200 p-4">
         <h2 className="font-semibold">最近活动</h2>
-        {(activitiesQuery.data?.data ?? []).length === 0 ? (
+        {!canViewActivities ? (
+          <p className="mt-2 text-sm text-gray-500">当前账号无查看项目活动的权限</p>
+        ) : activitiesQuery.isError ? (
+          <p className="mt-2 text-sm text-gray-500">项目活动暂时无法加载</p>
+        ) : (activitiesQuery.data?.data ?? []).length === 0 ? (
           <p className="mt-2 text-sm text-gray-500">暂无活动</p>
         ) : (
           <ul className="mt-2 space-y-2 text-sm">
