@@ -5,6 +5,7 @@ import {
   getProjectManagementActivities,
   getProjectManagementOverview
 } from '../../api/project-management/projectManagement.api';
+import { usePermission } from '../../core/auth/usePermission';
 import { isHttpError } from '../../core/http/httpError';
 import { projectManagementQueryKeys } from '../../core/query/projectManagementQueryKeys';
 import '../../features/project-management/projectManagement.css';
@@ -16,6 +17,7 @@ import { PageLoading } from '../../shared/status/PageLoading';
 
 export function ProjectManagementOverviewPage() {
   const scope = useProjectManagementWorkspaceScope();
+  const { hasPermission: canViewActivities } = usePermission('project-management:audit:view');
   const { projectId = '' } = useParams<{ projectId: string }>();
   const overviewQuery = useQuery({
     queryKey: projectManagementQueryKeys.overview(scope, { projectId, pageIndex: 1, pageSize: 1 }),
@@ -27,14 +29,13 @@ export function ProjectManagementOverviewPage() {
   const activitiesQuery = useQuery({
     queryKey: projectManagementQueryKeys.activities(scope, projectId, 20),
     queryFn: ({ signal }) => getProjectManagementActivities(projectId, 20, signal),
-    enabled: scope.isAvailable && Boolean(overview)
+    enabled: scope.isAvailable && Boolean(overview) && canViewActivities
   });
 
   if (overviewQuery.isLoading) return <PageLoading />;
-  if (overviewQuery.isError || activitiesQuery.isError) {
-    const error = overviewQuery.error ?? activitiesQuery.error;
-    if (isHttpError(error) && error.status === 403) return <Page403 />;
-    return <PageError description="项目概览加载失败，请检查网络或权限后重试。" action={<button type="button" onClick={() => { void overviewQuery.refetch(); void activitiesQuery.refetch(); }}>重试</button>} />;
+  if (overviewQuery.isError) {
+    if (isHttpError(overviewQuery.error) && overviewQuery.error.status === 403) return <Page403 />;
+    return <PageError description="项目概览加载失败，请检查网络或权限后重试。" action={<button type="button" onClick={() => void overviewQuery.refetch()}>重试</button>} />;
   }
   if (!overview || !project) return <PageError description="项目不存在或当前账号无权访问。" />;
 
@@ -63,7 +64,15 @@ export function ProjectManagementOverviewPage() {
       </section>
       <section className="pm-panel" aria-labelledby="project-activity-title">
         <div className="pm-panel__heading"><div><h2 id="project-activity-title">最近活动</h2><p className="pm-panel__meta">仅展示当前项目范围内最近 20 条活动。</p></div></div>
-        {(activitiesQuery.data?.data ?? []).length === 0 ? <p className="pm-muted">暂无活动。项目和任务发生可审计变更后会在这里显示。</p> : <ul className="pm-list">{(activitiesQuery.data?.data ?? []).map((item) => <li key={item.id}><div className="pm-activity-row"><div className="pm-activity-row__summary">{item.summary ?? item.activityType}</div><time className="pm-activity-row__meta" dateTime={item.createdTime}>{new Date(item.createdTime).toLocaleString()}</time></div></li>)}</ul>}
+        {!canViewActivities ? (
+          <p className="pm-muted">当前账号无查看项目活动的权限。</p>
+        ) : activitiesQuery.isError ? (
+          <p className="pm-muted">项目活动暂时无法加载。</p>
+        ) : (activitiesQuery.data?.data ?? []).length === 0 ? (
+          <p className="pm-muted">暂无活动。项目和任务发生可审计变更后会在这里显示。</p>
+        ) : (
+          <ul className="pm-list">{(activitiesQuery.data?.data ?? []).map((item) => <li key={item.id}><div className="pm-activity-row"><div className="pm-activity-row__summary">{item.summary ?? item.activityType}</div><time className="pm-activity-row__meta" dateTime={item.createdTime}>{new Date(item.createdTime).toLocaleString()}</time></div></li>)}</ul>
+        )}
       </section>
     </ResponsivePage>
   );

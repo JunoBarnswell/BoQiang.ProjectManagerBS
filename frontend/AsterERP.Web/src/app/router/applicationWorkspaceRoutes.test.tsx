@@ -4,7 +4,7 @@ import type { RouteObject } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
 
 import { buildRuntimePageViewPermission } from './RuntimePagePermissionRoute';
-import { applicationWorkspaceRoutes } from './workspaceRoutes';
+import { applicationWorkspaceRoutes, workspaceRoutes } from './workspaceRoutes';
 
 describe('applicationWorkspaceRoutes', () => {
   it('keeps low-code runtime pages available through the application admin dynamic route', () => {
@@ -38,6 +38,14 @@ describe('applicationWorkspaceRoutes', () => {
     expect(buildRuntimePageViewPermission('Inventory_Page')).toBe('app:runtime-page:inventory-page:view');
     expect(buildRuntimePageViewPermission('  inventory-page  ')).toBe('app:runtime-page:inventory-page:view');
     expect(buildRuntimePageViewPermission(undefined)).toBe('app:runtime-page:unknown:view');
+  });
+
+  it('keeps the project overview route behind project:view instead of task:view', () => {
+    const overviewRoute = flattenRoutes(workspaceRoutes).find((item) => item.path === 'projects/:projectId/overview');
+    const permissionCode = (overviewRoute?.element as { props?: { permissionCode?: string } } | undefined)?.props?.permissionCode;
+
+    expect(overviewRoute).toBeDefined();
+    expect(permissionCode).toBe('project-management:project:view');
   });
 
   it('keeps the latest Page Studio entry actions behind designer permissions', () => {
