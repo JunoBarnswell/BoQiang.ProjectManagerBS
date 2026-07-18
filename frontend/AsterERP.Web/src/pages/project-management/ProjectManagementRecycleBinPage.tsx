@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
+import { Link } from "react-router-dom";
 
 import {
   getProjectManagementRecycle,
@@ -28,7 +29,10 @@ export function ProjectManagementRecycleBinPage() {
   const message = useMessage();
   const confirm = useConfirm();
   const [keyword, setKeyword] = useState("");
-  const query = { pageIndex: 1, pageSize: 100, keyword: keyword.trim() || undefined };
+  const [submittedKeyword, setSubmittedKeyword] = useState("");
+  const [pageIndex, setPageIndex] = useState(1);
+  const pageSize = 100;
+  const query = { pageIndex, pageSize, keyword: submittedKeyword || undefined };
   const recycleQuery = useQuery({
     queryKey: projectManagementQueryKeys.recycle(scope, query),
     queryFn: ({ signal }) => getProjectManagementRecycle(query, signal),
@@ -69,11 +73,14 @@ export function ProjectManagementRecycleBinPage() {
         title="项目回收站"
         description="按当前工作区和项目成员范围查看已删除对象；恢复和永久删除会再次由服务端校验对象权限与版本。"
         eyebrow="ProjectManagement / Recycle Bin"
+        toolbar={<div className="flex flex-wrap gap-3 text-sm"><Link to="/project-search">项目搜索</Link><PermissionGuard code="project-management:audit:view" fallback={null}><Link to="/project-audit-center">审计中心</Link></PermissionGuard></div>}
       >
-        <div className="mb-4 flex flex-wrap gap-2">
+        <form className="mb-4 flex flex-wrap gap-2" onSubmit={(event) => { event.preventDefault(); setPageIndex(1); setSubmittedKeyword(keyword.trim()); }}>
           <input aria-label="搜索已删除对象" className="min-w-56 rounded border border-gray-300 px-3 py-2" value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="按项目编码、项目名或任务搜索" />
+          <button disabled={!keyword.trim() && !submittedKeyword} type="submit">搜索</button>
+          {submittedKeyword ? <button type="button" onClick={() => { setKeyword(""); setSubmittedKeyword(""); setPageIndex(1); }}>清空</button> : null}
           <button type="button" onClick={() => void recycleQuery.refetch()}>刷新</button>
-        </div>
+        </form>
         <section className="mb-6">
           <h2 className="mb-3 font-semibold">已删除项目（{recycle?.projects.total ?? 0}）</h2>
           <RecycleTable emptyText="暂无已删除项目" headers={["项目", "状态", "删除时间", "删除人", "操作"]}>
@@ -86,9 +93,14 @@ export function ProjectManagementRecycleBinPage() {
             {tasks.map((item) => <tr className="border-t border-gray-100" key={item.id}><td className="px-3 py-2"><div className="font-medium">{item.title}</div><div className="text-xs text-gray-500">{item.taskCode}</div></td><td className="px-3 py-2 font-mono text-xs">{item.projectId}</td><td className="px-3 py-2">{item.status}</td><td className="px-3 py-2">{formatDate(item.deletedTime)}</td><td className="px-3 py-2">{item.deletedBy ?? "-"}</td><td className="px-3 py-2"><div className="flex gap-2"><PermissionButton code="project-management:task:restore" disabled={!item.canRestore || restoreTaskMutation.isPending} onClick={() => confirm({ title: "恢复任务", content: `恢复“${item.title}”。若所属项目、父任务或里程碑未恢复，服务端会明确拒绝。`, confirmText: "仅恢复任务", onConfirm: () => restoreTaskMutation.mutate({ item, restoreDescendants: false }) })}>仅恢复</PermissionButton><PermissionButton code="project-management:task:restore" disabled={!item.canRestore || restoreTaskMutation.isPending} onClick={() => confirm({ title: "恢复任务及子树", content: `恢复“${item.title}”及其所有已删除后代；任一任务的父任务、里程碑或编码冲突都会使整个操作失败。`, confirmText: "恢复子树", onConfirm: () => restoreTaskMutation.mutate({ item, restoreDescendants: true }) })}>恢复子树</PermissionButton></div></td></tr>)}
           </RecycleTable>
         </section>
+        <RecyclePager current={pageIndex} hasNext={Math.max(recycle?.projects.total ?? 0, recycle?.tasks.total ?? 0) > pageIndex * pageSize} onChange={setPageIndex} />
       </ResponsivePage>
     </PermissionGuard>
   );
+}
+
+function RecyclePager({ current, hasNext, onChange }: { current: number; hasNext: boolean; onChange: (page: number) => void }) {
+  return <nav aria-label="回收站分页" className="mt-4 flex items-center gap-2 text-sm"><button disabled={current === 1} type="button" onClick={() => onChange(current - 1)}>上一页</button><span>第 {current} 页</span><button disabled={!hasNext} type="button" onClick={() => onChange(current + 1)}>下一页</button></nav>;
 }
 
 function RecycleTable({ children, emptyText, headers }: { children: ReactNode; emptyText: string; headers: string[] }) {

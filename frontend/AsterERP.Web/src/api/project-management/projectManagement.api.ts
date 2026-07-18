@@ -48,6 +48,11 @@ import type {
   ProjectManagementMilestoneUpsertRequest,
   ProjectManagementLabel,
   ProjectManagementActivity,
+  ProjectManagementReportQuery,
+  ProjectManagementSearchQuery,
+  ProjectManagementSearchResponse,
+  ProjectManagementSyncJournalItem,
+  ProjectManagementSyncWatermark,
 } from "./projectManagement.types";
 
 export function getProjectManagementProjects(
@@ -481,6 +486,35 @@ export function getProjectManagementDataSpaceSummary(
   return httpClient.get<ProjectManagementDataSpaceSummary>("/project-management/data-space/summary", undefined, signal);
 }
 
+export function searchProjectManagement(
+  query: ProjectManagementSearchQuery,
+  signal?: AbortSignal,
+): Promise<ApiEnvelope<ProjectManagementSearchResponse>> {
+  return httpClient.get<ProjectManagementSearchResponse>(
+    `/project-management/search${buildQueryString(query)}`,
+    undefined,
+    signal,
+  );
+}
+
+export function exportProjectManagementReportCsv(
+  query: ProjectManagementReportQuery,
+): Promise<{ blob: Blob; fileName: string }> {
+  return httpClient.downloadBlob(
+    `/project-management/reports/projects.csv${buildQueryString(query)}`,
+    { timeoutMs: 120_000 },
+  );
+}
+
+export function exportProjectManagementReportExcel(
+  query: ProjectManagementReportQuery,
+): Promise<{ blob: Blob; fileName: string }> {
+  return httpClient.downloadBlob(
+    `/project-management/reports/projects.xlsx${buildQueryString(query)}`,
+    { timeoutMs: 120_000 },
+  );
+}
+
 export function exportProjectManagementSync(request: {
   projectId?: string;
   includeAttachments?: boolean;
@@ -511,23 +545,23 @@ export function applyProjectManagementSync(
   });
 }
 
-export function getProjectManagementSyncWatermark(deviceId: string): Promise<ApiEnvelope<unknown>> {
-  return httpClient.get<unknown>(`/project-management/sync/watermark${buildQueryString({ deviceId })}`);
+export function getProjectManagementSyncWatermark(deviceId: string): Promise<ApiEnvelope<ProjectManagementSyncWatermark>> {
+  return httpClient.get<ProjectManagementSyncWatermark>(`/project-management/sync/watermark${buildQueryString({ deviceId })}`);
 }
 
 export function getProjectManagementSyncChanges(params: {
   projectId?: string;
   sinceSequenceNo?: number;
   limit?: number;
-}): Promise<ApiEnvelope<unknown>> {
-  return httpClient.get<unknown>(`/project-management/sync/changes${buildQueryString(params)}`);
+}): Promise<ApiEnvelope<ProjectManagementSyncJournalItem[]>> {
+  return httpClient.get<ProjectManagementSyncJournalItem[]>(`/project-management/sync/changes${buildQueryString(params)}`);
 }
 
 export function acknowledgeProjectManagementSync(request: {
   deviceId: string;
   sequenceNo: number;
-}): Promise<ApiEnvelope<unknown>> {
-  return httpClient.post<unknown, typeof request>("/project-management/sync/acknowledge", request);
+}): Promise<ApiEnvelope<ProjectManagementSyncWatermark>> {
+  return httpClient.post<ProjectManagementSyncWatermark, typeof request>("/project-management/sync/acknowledge", request);
 }
 
 export function getProjectManagementAudit(

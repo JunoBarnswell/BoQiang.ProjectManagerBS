@@ -329,6 +329,7 @@ CREATE TABLE IF NOT EXISTS pm_operations (
 """);
         schema.EnsureColumn("pm_notifications", "ProjectId", "TEXT NULL");
         schema.EnsureColumn("pm_notifications", "TaskId", "TEXT NULL");
+        schema.EnsureColumn("pm_task_comments", "MentionUserIdsJson", "TEXT NULL");
     }
 
     private static void CreateIndexes(SqliteSchemaExecutor schema)
