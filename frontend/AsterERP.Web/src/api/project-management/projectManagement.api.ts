@@ -465,8 +465,8 @@ export function getProjectManagementTaskComments(
   signal?: AbortSignal,
 ): Promise<ApiEnvelope<ProjectManagementTaskCommentPage>> {
   return httpClient.get<ProjectManagementTaskCommentPage>(
-    `/project-management/tasks/${taskId}/comments`,
-    query,
+    `/project-management/tasks/${taskId}/comments${buildQueryString(query)}`,
+    undefined,
     signal,
   );
 }
