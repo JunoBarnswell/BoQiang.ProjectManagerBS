@@ -25,7 +25,8 @@ public sealed class ProjectManagementRecycleService(
     IProjectManagementRiskConfirmationService? riskConfirmation = null,
     IProjectManagementMaintenanceLock? maintenanceLock = null,
     IProjectManagementOperationWriter? operationWriter = null,
-    IProjectManagementTaskDependencyService? dependencyService = null) : IProjectManagementRecycleService, ITransientDependency
+    IProjectManagementTaskDependencyService? dependencyService = null,
+    IProjectManagementFileStore? fileStore = null) : IProjectManagementRecycleService, ITransientDependency
 {
     public async Task<ProjectManagementRecycleResponse> QueryAsync(ProjectManagementRecycleQuery query, CancellationToken cancellationToken = default)
     {
@@ -56,9 +57,14 @@ public sealed class ProjectManagementRecycleService(
         var taskRows = await tasks.OrderBy(item => item.DeletedTime, OrderByType.Desc).ToPageListAsync(pageIndex, pageSize, taskTotal, cancellationToken);
         var impact = await GetImpactAsync(projectRows, taskRows, cancellationToken);
         var manageableProjectIds = await GetManageableProjectIdsAsync(projectRows, taskRows, impact.ProjectsById.Values.ToList(), cancellationToken);
+        var userId = RequireUserId();
+        var isAdministrator = currentUser.IsAsterErpPlatformAdmin() || currentUser.HasAsterErpPermission("*");
+        var canPurgeProject = (ProjectManagementProjectEntity item) => (isAdministrator || string.Equals(item.OwnerUserId, userId, StringComparison.OrdinalIgnoreCase)) && currentUser.HasAsterErpPermission(PermissionCodes.ProjectManagementProjectPurge);
+        var canPurgeTask = (ProjectManagementTaskEntity item) => impact.ProjectsById.TryGetValue(item.ProjectId, out var project) &&
+            (isAdministrator || string.Equals(project.OwnerUserId, userId, StringComparison.OrdinalIgnoreCase)) && currentUser.HasAsterErpPermission(PermissionCodes.ProjectManagementTaskPurge);
         return new ProjectManagementRecycleResponse(
-            new GridPageResult<ProjectManagementRecycleProjectItem> { Total = projectTotal.Value, Items = projectRows.Select(item => new ProjectManagementRecycleProjectItem(item.Id, item.ProjectCode, item.ProjectName, item.Status, item.VersionNo, item.DeletedTime, item.DeletedBy, impact.TaskCountByProjectId.GetValueOrDefault(item.Id), manageableProjectIds.Contains(item.Id), manageableProjectIds.Contains(item.Id) && currentUser.HasAsterErpPermission(PermissionCodes.ProjectManagementProjectPurge))).ToList() },
-            new GridPageResult<ProjectManagementRecycleTaskItem> { Total = taskTotal.Value, Items = taskRows.Select(item => new ProjectManagementRecycleTaskItem(item.Id, item.ProjectId, item.TaskCode, item.Title, item.Status, item.VersionNo, item.DeletedTime, item.DeletedBy, impact.DescendantCountByTaskId.GetValueOrDefault(item.Id), manageableProjectIds.Contains(item.ProjectId), manageableProjectIds.Contains(item.ProjectId) && currentUser.HasAsterErpPermission(PermissionCodes.ProjectManagementTaskDelete))).ToList() });
+            new GridPageResult<ProjectManagementRecycleProjectItem> { Total = projectTotal.Value, Items = projectRows.Select(item => new ProjectManagementRecycleProjectItem(item.Id, item.ProjectCode, item.ProjectName, item.Status, item.VersionNo, item.DeletedTime, item.DeletedBy, impact.TaskCountByProjectId.GetValueOrDefault(item.Id), manageableProjectIds.Contains(item.Id), canPurgeProject(item))).ToList() },
+            new GridPageResult<ProjectManagementRecycleTaskItem> { Total = taskTotal.Value, Items = taskRows.Select(item => new ProjectManagementRecycleTaskItem(item.Id, item.ProjectId, item.TaskCode, item.Title, item.Status, item.VersionNo, item.DeletedTime, item.DeletedBy, impact.DescendantCountByTaskId.GetValueOrDefault(item.Id), manageableProjectIds.Contains(item.ProjectId), canPurgeTask(item))).ToList() });
     }
 
     public async Task RestoreProjectAsync(string id, ProjectManagementRecycleRestoreRequest request, CancellationToken cancellationToken = default)
@@ -152,18 +158,16 @@ public sealed class ProjectManagementRecycleService(
     {
         RequirePlatformScope();
         var entity = await GetDeletedTaskAsync(id, cancellationToken);
-        await EnsureCanManageProjectAsync(entity.ProjectId, cancellationToken);
+        await EnsureCanPurgeProjectAsync(entity.ProjectId, PermissionCodes.ProjectManagementTaskPurge, cancellationToken);
         EnsureVersion(entity.VersionNo, versionNo);
         var targets = await LoadPurgeTaskTargetsAsync(entity, purgeDescendants, cancellationToken);
         var taskIds = targets.Select(item => item.Id).ToList();
         var db = databaseAccessor.GetCurrentDb();
-        var dependencyCount = await db.Queryable<ProjectManagementTaskDependencyEntity>()
-            .Where(item => item.ProjectId == entity.ProjectId && (taskIds.Contains(item.PredecessorTaskId) || taskIds.Contains(item.SuccessorTaskId)))
-            .CountAsync(cancellationToken);
-        var blockingReason = await GetTaskPurgeBlockingReasonAsync(entity.ProjectId, taskIds, cancellationToken);
-        return new ProjectManagementRecycleTaskPurgePreviewResponse(entity.Id, entity.ProjectId, entity.TaskCode, entity.Title, entity.VersionNo, taskIds.Count, dependencyCount,
+        var impact = await GetPurgeImpactAsync(entity.ProjectId, taskIds, cancellationToken);
+        var blockingReason = impact.AttachmentCount > 0 && fileStore is null ? "附件文件生命周期服务未配置，不能安全永久删除" : null;
+        return new ProjectManagementRecycleTaskPurgePreviewResponse(entity.Id, entity.ProjectId, entity.TaskCode, entity.Title, entity.VersionNo, taskIds.Count, impact.DependencyCount, impact,
             blockingReason is null, blockingReason,
-            "任务永久删除不可恢复。任务活动会作为项目级审计保留，直至项目自身永久删除时统一清理；其他任务业务关联必须先单独处理。");
+            "任务及子树的关系、评论、附件、提醒和同步记录将一并永久清理；操作不可撤销，结果会保留在不可变操作审计中。");
     }
 
     public async Task PurgeTaskAsync(string id, ProjectManagementRecycleTaskPurgeRequest request, CancellationToken cancellationToken = default)
@@ -186,9 +190,17 @@ public sealed class ProjectManagementRecycleService(
             }
             var entity = await GetDeletedTaskAsync(id, cancellationToken);
             var targets = await LoadPurgeTaskTargetsAsync(entity, request.PurgeDescendants, cancellationToken);
-            var affected = await DependencyService.PurgeDeletedTasksAsync(entity.ProjectId, targets.Select(item => item.Id).ToList(), cancellationToken);
+            var taskIds = targets.Select(item => item.Id).ToList();
+            var attachments = await LoadAttachmentsAsync(entity.ProjectId, taskIds, cancellationToken);
+            await DeleteAttachmentFilesAsync(attachments, cancellationToken);
+            var db = databaseAccessor.GetCurrentDb();
+            var affected = 0;
+            await ProjectManagementMutationTransaction.RunAsync(db, async () =>
+            {
+                affected = await DeleteTaskTreeAsync(db, entity.ProjectId, taskIds, cancellationToken);
+            });
             if (affected != targets.Count) throw new ValidationException("任务永久删除过程中检测到并发变更，请刷新后重试", ErrorCodes.ApplicationDevelopmentPageRevisionConflict);
-            if (operationWriter is not null) await operationWriter.SucceedAsync(operationId, cancellationToken);
+            if (operationWriter is not null) await operationWriter.CompleteWithImpactAsync(operationId, JsonSerializer.Serialize(confirmation), cancellationToken);
         }
         catch (Exception exception)
         {
@@ -203,12 +215,12 @@ public sealed class ProjectManagementRecycleService(
     {
         RequirePlatformScope();
         var entity = await GetDeletedProjectAsync(id, cancellationToken);
-        await EnsureCanManageProjectAsync(entity.Id, cancellationToken);
+        await EnsureCanPurgeProjectAsync(entity.Id, PermissionCodes.ProjectManagementProjectPurge, cancellationToken);
         EnsureVersion(entity.VersionNo, versionNo);
-        var references = await GetPurgeReferencesAsync(id, cancellationToken);
-        var blockingReason = references.HasReferences ? "项目仍存在关联记录，不能永久删除" : null;
-        return new ProjectManagementRecyclePurgePreviewResponse(entity.Id, entity.ProjectCode, entity.ProjectName, entity.VersionNo, references.MemberCount, references.MilestoneCount, references.TaskCount,
-            blockingReason is null, blockingReason, "永久删除不提供单项目回滚；仅可由具备备份恢复权限的人员恢复整个数据空间备份。");
+        var impact = await GetPurgeImpactAsync(id, null, cancellationToken);
+        var blockingReason = impact.AttachmentCount > 0 && fileStore is null ? "附件文件生命周期服务未配置，不能安全永久删除" : null;
+        return new ProjectManagementRecyclePurgePreviewResponse(entity.Id, entity.ProjectCode, entity.ProjectName, entity.VersionNo, impact.MemberCount, impact.MilestoneCount, impact.TaskCount, impact,
+            blockingReason is null, blockingReason, "项目、任务树及全部关联数据都会永久清理且不可撤销；操作结果将作为不可变审计保留。");
     }
 
     public async Task PurgeProjectAsync(string id, ProjectManagementRecyclePurgeRequest request, CancellationToken cancellationToken = default)
@@ -229,16 +241,16 @@ public sealed class ProjectManagementRecycleService(
                 await operationWriter.StartAsync(operationId, "project.purge", JsonSerializer.Serialize(confirmation), Activity.Current?.Id ?? operationId, cancellationToken);
                 started = true;
             }
+            var attachments = await LoadAttachmentsAsync(id, null, cancellationToken);
+            await DeleteAttachmentFilesAsync(attachments, cancellationToken);
             var db = databaseAccessor.GetCurrentDb();
             var affected = 0;
             await ProjectManagementMutationTransaction.RunAsync(db, async () =>
             {
-                // 项目永久删除是审计保留的最终边界：删除全部项目活动，避免 task.purged 审计反向阻塞项目 purge。
-                await db.Deleteable<ProjectManagementActivityEntity>().Where(item => item.ProjectId == id).ExecuteCommandAsync(cancellationToken);
-                affected = await DeleteUnreferencedProjectAsync(db, id, request.VersionNo, cancellationToken);
+                affected = await DeleteProjectGraphAsync(db, id, request.VersionNo, cancellationToken);
             });
             if (affected != 1) throw new ValidationException("对象已被其他用户修改，请刷新后重试", ErrorCodes.ApplicationDevelopmentPageRevisionConflict);
-            if (operationWriter is not null) await operationWriter.SucceedAsync(operationId, cancellationToken);
+            if (operationWriter is not null) await operationWriter.CompleteWithImpactAsync(operationId, JsonSerializer.Serialize(confirmation), cancellationToken);
         }
         catch (Exception exception)
         {
@@ -248,61 +260,112 @@ public sealed class ProjectManagementRecycleService(
         finally { await maintenanceLock.ReleaseAsync(operationId, CancellationToken.None); }
         await PublishInvalidationAsync("Project", preview.ProjectId, preview.ProjectId, "project.purged", preview.VersionNo, cancellationToken);
     }
-    private async Task<ProjectPurgeReferences> GetPurgeReferencesAsync(string projectId, CancellationToken cancellationToken)
+    private async Task<ProjectManagementRecyclePurgeImpact> GetPurgeImpactAsync(string projectId, IReadOnlyCollection<string>? taskIds, CancellationToken cancellationToken)
     {
         var db = databaseAccessor.GetCurrentDb();
-        var tenantId = RequireTenantId();
-        var appCode = RequireAppCode();
-        var members = await db.Queryable<ProjectManagementProjectMemberEntity>().Where(item => item.ProjectId == projectId && item.TenantId == tenantId && item.AppCode == appCode).CountAsync(cancellationToken);
-        var milestones = await db.Queryable<ProjectManagementMilestoneEntity>().Where(item => item.ProjectId == projectId && item.TenantId == tenantId && item.AppCode == appCode).CountAsync(cancellationToken);
-        var tasks = await db.Queryable<ProjectManagementTaskEntity>().Where(item => item.ProjectId == projectId && item.TenantId == tenantId && item.AppCode == appCode).CountAsync(cancellationToken);
-        if (members + milestones + tasks > 0) return new ProjectPurgeReferences(members, milestones, tasks, true);
-
-        var hasAdditionalReferences =
-            await db.Queryable<ProjectManagementImConversationLinkEntity>().AnyAsync(item => item.ProjectId == projectId && item.TenantId == tenantId && item.AppCode == appCode, cancellationToken) ||
-            await db.Queryable<ProjectManagementLabelEntity>().AnyAsync(item => item.ProjectId == projectId && item.TenantId == tenantId && item.AppCode == appCode, cancellationToken) ||
-            await db.Queryable<ProjectManagementTaskLabelEntity>().AnyAsync(item => item.ProjectId == projectId && item.TenantId == tenantId && item.AppCode == appCode, cancellationToken) ||
-            await db.Queryable<ProjectManagementTaskTimeLogEntity>().AnyAsync(item => item.ProjectId == projectId && item.TenantId == tenantId && item.AppCode == appCode, cancellationToken) ||
-            await db.Queryable<ProjectManagementTaskTemplateEntity>().AnyAsync(item => item.ProjectId == projectId && item.TenantId == tenantId && item.AppCode == appCode, cancellationToken) ||
-            await db.Queryable<ProjectManagementTaskOccurrenceEntity>().AnyAsync(item => item.ProjectId == projectId && item.TenantId == tenantId && item.AppCode == appCode, cancellationToken) ||
-            await db.Queryable<ProjectManagementTaskCommentEntity>().AnyAsync(item => item.ProjectId == projectId && item.TenantId == tenantId && item.AppCode == appCode, cancellationToken) ||
-            await db.Queryable<ProjectManagementNotificationEntity>().AnyAsync(item => item.ProjectId == projectId && item.TenantId == tenantId && item.AppCode == appCode, cancellationToken) ||
-            await db.Queryable<ProjectManagementTaskReminderEntity>().AnyAsync(item => item.ProjectId == projectId && item.TenantId == tenantId && item.AppCode == appCode, cancellationToken) ||
-            await db.Queryable<ProjectManagementSavedViewEntity>().AnyAsync(item => item.ProjectId == projectId && item.TenantId == tenantId && item.AppCode == appCode, cancellationToken) ||
-            await db.Queryable<ProjectManagementTaskAttachmentEntity>().AnyAsync(item => item.ProjectId == projectId && item.TenantId == tenantId && item.AppCode == appCode, cancellationToken) ||
-            await db.Queryable<ProjectManagementTaskDependencyEntity>().AnyAsync(item => item.ProjectId == projectId && item.TenantId == tenantId && item.AppCode == appCode, cancellationToken) ||
-            await db.Queryable<ProjectManagementTaskParticipantEntity>().AnyAsync(item => item.ProjectId == projectId && item.TenantId == tenantId && item.AppCode == appCode, cancellationToken) ||
-            await db.Queryable<ProjectManagementSyncJournalEntity>().AnyAsync(item => item.ProjectId == projectId && item.TenantId == tenantId && item.AppCode == appCode, cancellationToken);
-        return new ProjectPurgeReferences(members, milestones, tasks, hasAdditionalReferences);
+        var allProjectData = taskIds is null;
+        var ids = taskIds?.Where(item => !string.IsNullOrWhiteSpace(item)).Distinct(StringComparer.Ordinal).ToList() ?? [];
+        var taskCount = allProjectData
+            ? await db.Queryable<ProjectManagementTaskEntity>().Where(item => item.ProjectId == projectId).CountAsync(cancellationToken)
+            : ids.Count;
+        var taskScoped = ids.Count > 0;
+        var memberCount = allProjectData ? await db.Queryable<ProjectManagementProjectMemberEntity>().Where(item => item.ProjectId == projectId).CountAsync(cancellationToken) : 0;
+        var milestoneCount = allProjectData ? await db.Queryable<ProjectManagementMilestoneEntity>().Where(item => item.ProjectId == projectId).CountAsync(cancellationToken) : 0;
+        var dependencyCount = allProjectData
+            ? await db.Queryable<ProjectManagementTaskDependencyEntity>().Where(item => item.ProjectId == projectId).CountAsync(cancellationToken)
+            : await db.Queryable<ProjectManagementTaskDependencyEntity>().Where(item => item.ProjectId == projectId && (ids.Contains(item.PredecessorTaskId) || ids.Contains(item.SuccessorTaskId))).CountAsync(cancellationToken);
+        var participantCount = taskScoped ? await db.Queryable<ProjectManagementTaskParticipantEntity>().Where(item => item.ProjectId == projectId && ids.Contains(item.TaskId)).CountAsync(cancellationToken) : 0;
+        var labelRelationCount = taskScoped ? await db.Queryable<ProjectManagementTaskLabelEntity>().Where(item => item.ProjectId == projectId && ids.Contains(item.TaskId)).CountAsync(cancellationToken) : 0;
+        var timeLogCount = taskScoped ? await db.Queryable<ProjectManagementTaskTimeLogEntity>().Where(item => item.ProjectId == projectId && ids.Contains(item.TaskId)).CountAsync(cancellationToken) : 0;
+        var commentCount = taskScoped ? await db.Queryable<ProjectManagementTaskCommentEntity>().Where(item => item.ProjectId == projectId && ids.Contains(item.TaskId)).CountAsync(cancellationToken) : 0;
+        var attachmentCount = taskScoped ? await db.Queryable<ProjectManagementTaskAttachmentEntity>().Where(item => item.ProjectId == projectId && ids.Contains(item.TaskId)).CountAsync(cancellationToken) : 0;
+        var reminderCount = taskScoped ? await db.Queryable<ProjectManagementTaskReminderEntity>().Where(item => item.ProjectId == projectId && ids.Contains(item.TaskId)).CountAsync(cancellationToken) : 0;
+        var notificationCount = taskScoped ? await db.Queryable<ProjectManagementNotificationEntity>().Where(item => item.ProjectId == projectId && ids.Contains(item.TaskId!)).CountAsync(cancellationToken) : 0;
+        var recurrenceCount = taskScoped ? await db.Queryable<ProjectManagementTaskRecurrenceEntity>().Where(item => item.ProjectId == projectId && ids.Contains(item.SourceTaskId)).CountAsync(cancellationToken) : 0;
+        var occurrenceCount = taskScoped
+            ? await db.Queryable<ProjectManagementTaskRecurrenceOccurrenceEntity>().Where(item => item.ProjectId == projectId && ids.Contains(item.TaskId)).CountAsync(cancellationToken) + await db.Queryable<ProjectManagementTaskOccurrenceEntity>().Where(item => item.ProjectId == projectId && ids.Contains(item.RootTaskId)).CountAsync(cancellationToken)
+            : 0;
+        var conversationLinkCount = taskScoped ? await db.Queryable<ProjectManagementImConversationLinkEntity>().Where(item => item.ProjectId == projectId && ids.Contains(item.TaskId!)).CountAsync(cancellationToken) : 0;
+        var savedViewCount = allProjectData ? await db.Queryable<ProjectManagementSavedViewEntity>().Where(item => item.ProjectId == projectId).CountAsync(cancellationToken) : 0;
+        var syncJournalCount = allProjectData ? await db.Queryable<ProjectManagementSyncJournalEntity>().Where(item => item.ProjectId == projectId).CountAsync(cancellationToken) : await db.Queryable<ProjectManagementSyncJournalEntity>().Where(item => item.ProjectId == projectId && ids.Contains(item.AggregateId)).CountAsync(cancellationToken);
+        if (allProjectData)
+        {
+            participantCount = await db.Queryable<ProjectManagementTaskParticipantEntity>().Where(item => item.ProjectId == projectId).CountAsync(cancellationToken);
+            labelRelationCount = await db.Queryable<ProjectManagementTaskLabelEntity>().Where(item => item.ProjectId == projectId).CountAsync(cancellationToken);
+            timeLogCount = await db.Queryable<ProjectManagementTaskTimeLogEntity>().Where(item => item.ProjectId == projectId).CountAsync(cancellationToken);
+            commentCount = await db.Queryable<ProjectManagementTaskCommentEntity>().Where(item => item.ProjectId == projectId).CountAsync(cancellationToken);
+            attachmentCount = await db.Queryable<ProjectManagementTaskAttachmentEntity>().Where(item => item.ProjectId == projectId).CountAsync(cancellationToken);
+            reminderCount = await db.Queryable<ProjectManagementTaskReminderEntity>().Where(item => item.ProjectId == projectId).CountAsync(cancellationToken);
+            notificationCount = await db.Queryable<ProjectManagementNotificationEntity>().Where(item => item.ProjectId == projectId).CountAsync(cancellationToken);
+            recurrenceCount = await db.Queryable<ProjectManagementTaskRecurrenceEntity>().Where(item => item.ProjectId == projectId).CountAsync(cancellationToken);
+            occurrenceCount = await db.Queryable<ProjectManagementTaskRecurrenceOccurrenceEntity>().Where(item => item.ProjectId == projectId).CountAsync(cancellationToken) + await db.Queryable<ProjectManagementTaskOccurrenceEntity>().Where(item => item.ProjectId == projectId).CountAsync(cancellationToken);
+            conversationLinkCount = await db.Queryable<ProjectManagementImConversationLinkEntity>().Where(item => item.ProjectId == projectId).CountAsync(cancellationToken);
+        }
+        return new ProjectManagementRecyclePurgeImpact(allProjectData ? 1 : 0, taskCount, Math.Max(0, taskCount - 1), memberCount, milestoneCount, dependencyCount, participantCount, labelRelationCount, timeLogCount, commentCount, attachmentCount, reminderCount, notificationCount, recurrenceCount, occurrenceCount, conversationLinkCount, savedViewCount, syncJournalCount);
     }
 
-    private Task<int> DeleteUnreferencedProjectAsync(ISqlSugarClient db, string projectId, long versionNo, CancellationToken cancellationToken)
+    private async Task<List<ProjectManagementTaskAttachmentEntity>> LoadAttachmentsAsync(string projectId, IReadOnlyCollection<string>? taskIds, CancellationToken cancellationToken)
     {
-        var tenantId = RequireTenantId();
-        var appCode = RequireAppCode();
-        return db.Deleteable<ProjectManagementProjectEntity>()
-            .Where(item => item.Id == projectId && item.IsDeleted && item.VersionNo == versionNo && item.TenantId == tenantId && item.AppCode == appCode)
-            .Where(item => !SqlFunc.Subqueryable<ProjectManagementProjectMemberEntity>().Where(reference => reference.ProjectId == projectId && reference.TenantId == tenantId && reference.AppCode == appCode).Any())
-            .Where(item => !SqlFunc.Subqueryable<ProjectManagementMilestoneEntity>().Where(reference => reference.ProjectId == projectId && reference.TenantId == tenantId && reference.AppCode == appCode).Any())
-            .Where(item => !SqlFunc.Subqueryable<ProjectManagementTaskEntity>().Where(reference => reference.ProjectId == projectId && reference.TenantId == tenantId && reference.AppCode == appCode).Any())
-            .Where(item => !SqlFunc.Subqueryable<ProjectManagementImConversationLinkEntity>().Where(reference => reference.ProjectId == projectId && reference.TenantId == tenantId && reference.AppCode == appCode).Any())
-            .Where(item => !SqlFunc.Subqueryable<ProjectManagementLabelEntity>().Where(reference => reference.ProjectId == projectId && reference.TenantId == tenantId && reference.AppCode == appCode).Any())
-            .Where(item => !SqlFunc.Subqueryable<ProjectManagementTaskLabelEntity>().Where(reference => reference.ProjectId == projectId && reference.TenantId == tenantId && reference.AppCode == appCode).Any())
-            .Where(item => !SqlFunc.Subqueryable<ProjectManagementTaskTimeLogEntity>().Where(reference => reference.ProjectId == projectId && reference.TenantId == tenantId && reference.AppCode == appCode).Any())
-            .Where(item => !SqlFunc.Subqueryable<ProjectManagementTaskTemplateEntity>().Where(reference => reference.ProjectId == projectId && reference.TenantId == tenantId && reference.AppCode == appCode).Any())
-            .Where(item => !SqlFunc.Subqueryable<ProjectManagementTaskOccurrenceEntity>().Where(reference => reference.ProjectId == projectId && reference.TenantId == tenantId && reference.AppCode == appCode).Any())
-            .Where(item => !SqlFunc.Subqueryable<ProjectManagementTaskCommentEntity>().Where(reference => reference.ProjectId == projectId && reference.TenantId == tenantId && reference.AppCode == appCode).Any())
-            .Where(item => !SqlFunc.Subqueryable<ProjectManagementNotificationEntity>().Where(reference => reference.ProjectId == projectId && reference.TenantId == tenantId && reference.AppCode == appCode).Any())
-            .Where(item => !SqlFunc.Subqueryable<ProjectManagementTaskReminderEntity>().Where(reference => reference.ProjectId == projectId && reference.TenantId == tenantId && reference.AppCode == appCode).Any())
-            .Where(item => !SqlFunc.Subqueryable<ProjectManagementSavedViewEntity>().Where(reference => reference.ProjectId == projectId && reference.TenantId == tenantId && reference.AppCode == appCode).Any())
-            .Where(item => !SqlFunc.Subqueryable<ProjectManagementTaskAttachmentEntity>().Where(reference => reference.ProjectId == projectId && reference.TenantId == tenantId && reference.AppCode == appCode).Any())
-            .Where(item => !SqlFunc.Subqueryable<ProjectManagementTaskDependencyEntity>().Where(reference => reference.ProjectId == projectId && reference.TenantId == tenantId && reference.AppCode == appCode).Any())
-            .Where(item => !SqlFunc.Subqueryable<ProjectManagementTaskParticipantEntity>().Where(reference => reference.ProjectId == projectId && reference.TenantId == tenantId && reference.AppCode == appCode).Any())
-            .Where(item => !SqlFunc.Subqueryable<ProjectManagementSyncJournalEntity>().Where(reference => reference.ProjectId == projectId && reference.TenantId == tenantId && reference.AppCode == appCode).Any())
-            .ExecuteCommandAsync(cancellationToken);
+        var query = databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskAttachmentEntity>().Where(item => item.ProjectId == projectId);
+        if (taskIds is not null) query = query.Where(item => taskIds.Contains(item.TaskId));
+        return await query.ToListAsync(cancellationToken);
     }
 
-    private sealed record ProjectPurgeReferences(int MemberCount, int MilestoneCount, int TaskCount, bool HasReferences);
+    private async Task DeleteAttachmentFilesAsync(IReadOnlyCollection<ProjectManagementTaskAttachmentEntity> attachments, CancellationToken cancellationToken)
+    {
+        if (attachments.Count == 0) return;
+        if (fileStore is null) throw new ValidationException("附件文件生命周期服务未配置，不能安全永久删除");
+        foreach (var fileId in attachments.Select(item => item.FileId).Where(item => !string.IsNullOrWhiteSpace(item)).Distinct(StringComparer.Ordinal))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            await fileStore.DeleteAsync(fileId, cancellationToken);
+        }
+    }
+
+    private async Task<int> DeleteTaskTreeAsync(ISqlSugarClient db, string projectId, IReadOnlyCollection<string> taskIds, CancellationToken cancellationToken)
+    {
+        var ids = taskIds.Distinct(StringComparer.Ordinal).ToList();
+        await db.Deleteable<ProjectManagementTaskCommentEntity>().Where(item => item.ProjectId == projectId && ids.Contains(item.TaskId)).ExecuteCommandAsync(cancellationToken);
+        await db.Deleteable<ProjectManagementTaskAttachmentEntity>().Where(item => item.ProjectId == projectId && ids.Contains(item.TaskId)).ExecuteCommandAsync(cancellationToken);
+        await db.Deleteable<ProjectManagementTaskParticipantEntity>().Where(item => item.ProjectId == projectId && ids.Contains(item.TaskId)).ExecuteCommandAsync(cancellationToken);
+        await db.Deleteable<ProjectManagementTaskLabelEntity>().Where(item => item.ProjectId == projectId && ids.Contains(item.TaskId)).ExecuteCommandAsync(cancellationToken);
+        await db.Deleteable<ProjectManagementTaskTimeLogEntity>().Where(item => item.ProjectId == projectId && ids.Contains(item.TaskId)).ExecuteCommandAsync(cancellationToken);
+        await db.Deleteable<ProjectManagementTaskReminderEntity>().Where(item => item.ProjectId == projectId && ids.Contains(item.TaskId)).ExecuteCommandAsync(cancellationToken);
+        await db.Deleteable<ProjectManagementNotificationEntity>().Where(item => item.ProjectId == projectId && ids.Contains(item.TaskId!)).ExecuteCommandAsync(cancellationToken);
+        await db.Deleteable<ProjectManagementTaskRecurrenceOccurrenceEntity>().Where(item => item.ProjectId == projectId && ids.Contains(item.TaskId)).ExecuteCommandAsync(cancellationToken);
+        await db.Deleteable<ProjectManagementTaskRecurrenceEntity>().Where(item => item.ProjectId == projectId && ids.Contains(item.SourceTaskId)).ExecuteCommandAsync(cancellationToken);
+        await db.Deleteable<ProjectManagementTaskOccurrenceEntity>().Where(item => item.ProjectId == projectId && ids.Contains(item.RootTaskId)).ExecuteCommandAsync(cancellationToken);
+        await db.Deleteable<ProjectManagementTaskDependencyEntity>().Where(item => item.ProjectId == projectId && (ids.Contains(item.PredecessorTaskId) || ids.Contains(item.SuccessorTaskId))).ExecuteCommandAsync(cancellationToken);
+        await db.Deleteable<ProjectManagementImConversationLinkEntity>().Where(item => item.ProjectId == projectId && ids.Contains(item.TaskId!)).ExecuteCommandAsync(cancellationToken);
+        await db.Deleteable<ProjectManagementSyncJournalEntity>().Where(item => item.ProjectId == projectId && ids.Contains(item.AggregateId)).ExecuteCommandAsync(cancellationToken);
+        return await db.Deleteable<ProjectManagementTaskEntity>().Where(item => item.ProjectId == projectId && item.IsDeleted && ids.Contains(item.Id)).ExecuteCommandAsync(cancellationToken);
+    }
+
+    private async Task<int> DeleteProjectGraphAsync(ISqlSugarClient db, string projectId, long versionNo, CancellationToken cancellationToken)
+    {
+        var taskIds = await db.Queryable<ProjectManagementTaskEntity>().Where(item => item.ProjectId == projectId).Select(item => item.Id).ToListAsync(cancellationToken);
+        if (taskIds.Count > 0) await DeleteTaskTreeAsync(db, projectId, taskIds, cancellationToken);
+        await db.Deleteable<ProjectManagementTaskRecurrenceOccurrenceEntity>().Where(item => item.ProjectId == projectId).ExecuteCommandAsync(cancellationToken);
+        await db.Deleteable<ProjectManagementTaskRecurrenceEntity>().Where(item => item.ProjectId == projectId).ExecuteCommandAsync(cancellationToken);
+        await db.Deleteable<ProjectManagementTaskOccurrenceEntity>().Where(item => item.ProjectId == projectId).ExecuteCommandAsync(cancellationToken);
+        await db.Deleteable<ProjectManagementTaskTemplateEntity>().Where(item => item.ProjectId == projectId).ExecuteCommandAsync(cancellationToken);
+        await db.Deleteable<ProjectManagementProjectMemberEntity>().Where(item => item.ProjectId == projectId).ExecuteCommandAsync(cancellationToken);
+        await db.Deleteable<ProjectManagementMilestoneEntity>().Where(item => item.ProjectId == projectId).ExecuteCommandAsync(cancellationToken);
+        await db.Deleteable<ProjectManagementTaskLabelEntity>().Where(item => item.ProjectId == projectId).ExecuteCommandAsync(cancellationToken);
+        await db.Deleteable<ProjectManagementLabelEntity>().Where(item => item.ProjectId == projectId).ExecuteCommandAsync(cancellationToken);
+        await db.Deleteable<ProjectManagementNotificationEntity>().Where(item => item.ProjectId == projectId).ExecuteCommandAsync(cancellationToken);
+        await db.Deleteable<ProjectManagementTaskReminderEntity>().Where(item => item.ProjectId == projectId).ExecuteCommandAsync(cancellationToken);
+        await db.Deleteable<ProjectManagementTaskParticipantEntity>().Where(item => item.ProjectId == projectId).ExecuteCommandAsync(cancellationToken);
+        await db.Deleteable<ProjectManagementTaskTimeLogEntity>().Where(item => item.ProjectId == projectId).ExecuteCommandAsync(cancellationToken);
+        await db.Deleteable<ProjectManagementTaskCommentEntity>().Where(item => item.ProjectId == projectId).ExecuteCommandAsync(cancellationToken);
+        await db.Deleteable<ProjectManagementTaskAttachmentEntity>().Where(item => item.ProjectId == projectId).ExecuteCommandAsync(cancellationToken);
+        await db.Deleteable<ProjectManagementTaskDependencyEntity>().Where(item => item.ProjectId == projectId).ExecuteCommandAsync(cancellationToken);
+        await db.Deleteable<ProjectManagementImConversationLinkEntity>().Where(item => item.ProjectId == projectId).ExecuteCommandAsync(cancellationToken);
+        await db.Deleteable<ProjectManagementSavedViewEntity>().Where(item => item.ProjectId == projectId).ExecuteCommandAsync(cancellationToken);
+        await db.Deleteable<ProjectManagementSyncJournalEntity>().Where(item => item.ProjectId == projectId).ExecuteCommandAsync(cancellationToken);
+        await db.Deleteable<ProjectManagementActivityEntity>().Where(item => item.ProjectId == projectId).ExecuteCommandAsync(cancellationToken);
+        return await db.Deleteable<ProjectManagementProjectEntity>().Where(item => item.Id == projectId && item.IsDeleted && item.VersionNo == versionNo && item.TenantId == RequireTenantId() && item.AppCode == RequireAppCode()).ExecuteCommandAsync(cancellationToken);
+    }
 
     private async Task<ProjectManagementProjectEntity> GetDeletedProjectAsync(string id, CancellationToken cancellationToken) => (await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementProjectEntity>().Where(item => item.Id == id && item.IsDeleted && item.TenantId == RequireTenantId() && item.AppCode == RequireAppCode()).Take(1).ToListAsync(cancellationToken)).FirstOrDefault() ?? throw new NotFoundException("已删除项目不存在", ErrorCodes.PlatformResourceNotFound);
 
@@ -367,6 +430,21 @@ public sealed class ProjectManagementRecycleService(
     }
     private Task EnsureCanManageProjectAsync(string projectId, CancellationToken cancellationToken) =>
         (accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser)).EnsureCanManageDeletedProjectAsync(projectId, cancellationToken);
+
+    private async Task EnsureCanPurgeProjectAsync(string projectId, string permissionCode, CancellationToken cancellationToken)
+    {
+        RequirePlatformScope();
+        if (!currentUser.HasAsterErpPermission(permissionCode))
+            throw new ValidationException("当前用户缺少永久删除权限", ErrorCodes.PermissionDenied);
+        if (currentUser.IsAsterErpPlatformAdmin() || currentUser.HasAsterErpPermission("*")) return;
+        var project = (await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementProjectEntity>()
+            .Where(item => item.Id == projectId && item.TenantId == RequireTenantId() && item.AppCode == RequireAppCode())
+            .Take(1)
+            .ToListAsync(cancellationToken))
+            .FirstOrDefault() ?? throw new NotFoundException("所属项目不存在", ErrorCodes.PlatformResourceNotFound);
+        if (!string.Equals(project.OwnerUserId, RequireUserId(), StringComparison.OrdinalIgnoreCase))
+            throw new ValidationException("永久删除仅允许平台管理员或项目 Owner 执行", ErrorCodes.PermissionDenied);
+    }
 
     private Task RefreshProgressAsync(string projectId, CancellationToken cancellationToken) =>
         (progressProjector ?? new ProjectManagementTaskProgressProjector(databaseAccessor)).RefreshAsync(projectId, cancellationToken);

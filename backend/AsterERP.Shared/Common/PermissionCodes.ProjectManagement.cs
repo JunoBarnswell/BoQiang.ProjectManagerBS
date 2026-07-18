@@ -19,6 +19,7 @@ public static partial class PermissionCodes
     public const string ProjectManagementTaskAdd = "project-management:task:add";
     public const string ProjectManagementTaskEdit = "project-management:task:edit";
     public const string ProjectManagementTaskDelete = "project-management:task:delete";
+    public const string ProjectManagementTaskPurge = "project-management:task:purge";
     public const string ProjectManagementTaskRestore = "project-management:task:restore";
     public const string ProjectManagementTaskMove = "project-management:task:move";
     public const string ProjectManagementTaskAssign = "project-management:task:assign";
@@ -62,6 +63,7 @@ public static partial class PermissionCodes
         ProjectManagementTaskAdd,
         ProjectManagementTaskEdit,
         ProjectManagementTaskDelete,
+        ProjectManagementTaskPurge,
         ProjectManagementTaskRestore,
         ProjectManagementTaskMove,
         ProjectManagementTaskAssign,

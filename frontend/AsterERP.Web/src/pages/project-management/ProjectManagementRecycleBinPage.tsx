@@ -5,16 +5,18 @@ import { Link } from "react-router-dom";
 import {
   getProjectManagementRecycle,
   previewProjectManagementProjectPurge,
+  previewProjectManagementTaskPurge,
   purgeProjectManagementProject,
+  purgeProjectManagementTask,
   restoreProjectManagementProject,
   restoreProjectManagementTask,
 } from "../../api/project-management/projectManagement.api";
-import type { ProjectManagementRecycleProjectItem, ProjectManagementRecyclePurgePreview, ProjectManagementRecycleTaskItem } from "../../api/project-management/projectManagement.types";
+import type { ProjectManagementRecycleProjectItem, ProjectManagementRecyclePurgeImpact, ProjectManagementRecyclePurgePreview, ProjectManagementRecycleTaskItem, ProjectManagementRecycleTaskPurgePreview } from "../../api/project-management/projectManagement.types";
 import { isHttpError } from "../../core/http/httpError";
 import { projectManagementQueryKeys } from "../../core/query/projectManagementQueryKeys";
 import { useApiMutation } from "../../core/query/useApiMutation";
-import { useProjectManagementWorkspaceScope } from "../../features/project-management/state/projectManagementWorkspaceScope";
 import { toProjectManagementPlatformRoute } from "../../features/project-management/state/projectManagementPlatformRoutes";
+import { useProjectManagementWorkspaceScope } from "../../features/project-management/state/projectManagementWorkspaceScope";
 import { PermissionButton } from "../../shared/auth/PermissionButton";
 import { PermissionGuard } from "../../shared/auth/PermissionGuard";
 import { useConfirm } from "../../shared/feedback/useConfirm";
@@ -34,6 +36,7 @@ export function ProjectManagementRecycleBinPage() {
   const [submittedKeyword, setSubmittedKeyword] = useState("");
   const [pageIndex, setPageIndex] = useState(1);
   const [purgePreview, setPurgePreview] = useState<{ item: ProjectManagementRecycleProjectItem; preview: ProjectManagementRecyclePurgePreview } | null>(null);
+  const [taskPurgePreview, setTaskPurgePreview] = useState<{ item: ProjectManagementRecycleTaskItem; preview: ProjectManagementRecycleTaskPurgePreview; purgeDescendants: boolean } | null>(null);
   const [purgePassword, setPurgePassword] = useState("");
   const [purgeConfirmed, setPurgeConfirmed] = useState(false);
   const pageSize = 100;
@@ -67,6 +70,16 @@ export function ProjectManagementRecycleBinPage() {
     onError: (error) => message.error(getErrorMessage(error, "永久删除预览失败")),
     onSuccess: (result, item) => { if (result.data) setPurgePreview({ item, preview: result.data }); },
   });
+  const purgeTaskMutation = useApiMutation({
+    mutationFn: (value: { item: ProjectManagementRecycleTaskItem; purgeDescendants: boolean }) => purgeProjectManagementTask(value.item.id, { versionNo: value.item.versionNo, currentPassword: purgePassword, confirmRisk: purgeConfirmed, purgeDescendants: value.purgeDescendants }),
+    onError: (error) => message.error(getErrorMessage(error, "任务永久删除失败")),
+    onSuccess: async () => { message.success("任务已永久删除"); setTaskPurgePreview(null); setPurgePassword(""); setPurgeConfirmed(false); await refresh(); },
+  });
+  const purgeTaskPreviewMutation = useApiMutation({
+    mutationFn: (value: { item: ProjectManagementRecycleTaskItem; purgeDescendants: boolean }) => previewProjectManagementTaskPurge(value.item.id, value.item.versionNo, value.purgeDescendants),
+    onError: (error) => message.error(getErrorMessage(error, "任务永久删除预览失败")),
+    onSuccess: (result, value) => { if (result.data) setTaskPurgePreview({ ...value, preview: result.data }); },
+  });
 
   if (recycleQuery.isLoading) return <PageLoading />;
   if (recycleQuery.isError) {
@@ -91,7 +104,8 @@ export function ProjectManagementRecycleBinPage() {
           {submittedKeyword ? <button type="button" onClick={() => { setKeyword(""); setSubmittedKeyword(""); setPageIndex(1); }}>清空</button> : null}
           <button type="button" onClick={() => void recycleQuery.refetch()}>刷新</button>
         </form>
-        {purgePreview ? <section className="mb-4 rounded-lg border border-red-300 bg-red-50 p-4 text-sm" aria-live="polite"><h2 className="font-semibold">永久删除确认 · {purgePreview.preview.projectName}</h2><p className="mt-2">影响范围：项目本体将从当前数据空间永久移除；成员 {purgePreview.preview.memberReferenceCount}、里程碑 {purgePreview.preview.milestoneReferenceCount}、任务 {purgePreview.preview.taskReferenceCount}。</p><p className="mt-1 text-red-800">{purgePreview.preview.rollbackHint}</p>{!purgePreview.preview.canExecute ? <p className="mt-2 font-medium text-red-800">{purgePreview.preview.blockingReason}</p> : <div className="mt-3 flex flex-wrap items-center gap-2"><input aria-label="永久删除当前密码" className="rounded border border-gray-300 px-3 py-2" type="password" placeholder="输入当前密码" value={purgePassword} onChange={(event) => setPurgePassword(event.target.value)} /><label className="flex items-center gap-2"><input type="checkbox" checked={purgeConfirmed} onChange={(event) => setPurgeConfirmed(event.target.checked)} />我确认永久删除且不可撤销</label><PermissionButton code="project-management:project:purge" disabled={!purgePassword || !purgeConfirmed || purgeProjectMutation.isPending} onClick={() => purgeProjectMutation.mutate(purgePreview.item)}>{purgeProjectMutation.isPending ? '删除中…' : '确认永久删除'}</PermissionButton></div>}<button type="button" className="mt-3 underline" onClick={() => { setPurgePreview(null); setPurgePassword(""); setPurgeConfirmed(false); }}>取消</button></section> : null}
+        {purgePreview ? <section className="mb-4 rounded-lg border border-red-300 bg-red-50 p-4 text-sm" aria-live="polite"><h2 className="font-semibold">永久删除确认 · {purgePreview.preview.projectName}</h2><PurgeImpactSummary impact={purgePreview.preview.impact} /><p className="mt-1 text-red-800">{purgePreview.preview.rollbackHint}</p>{!purgePreview.preview.canExecute ? <p className="mt-2 font-medium text-red-800">{purgePreview.preview.blockingReason}</p> : <div className="mt-3 flex flex-wrap items-center gap-2"><input aria-label="永久删除当前密码" className="rounded border border-gray-300 px-3 py-2" type="password" placeholder="输入当前密码" value={purgePassword} onChange={(event) => setPurgePassword(event.target.value)} /><label className="flex items-center gap-2"><input type="checkbox" checked={purgeConfirmed} onChange={(event) => setPurgeConfirmed(event.target.checked)} />我确认永久删除、关联清理且不可撤销</label><PermissionButton code="project-management:project:purge" disabled={!purgePassword || !purgeConfirmed || purgeProjectMutation.isPending} onClick={() => purgeProjectMutation.mutate(purgePreview.item)}>{purgeProjectMutation.isPending ? '删除中…' : '确认永久删除'}</PermissionButton></div>}<button type="button" className="mt-3 underline" onClick={() => { setPurgePreview(null); setPurgePassword(""); setPurgeConfirmed(false); }}>取消</button></section> : null}
+        {taskPurgePreview ? <section className="mb-4 rounded-lg border border-red-300 bg-red-50 p-4 text-sm" aria-live="polite"><h2 className="font-semibold">永久删除确认 · {taskPurgePreview.preview.title}</h2><PurgeImpactSummary impact={taskPurgePreview.preview.impact} /><p className="mt-1 text-red-800">{taskPurgePreview.preview.rollbackHint}</p>{!taskPurgePreview.preview.canExecute ? <p className="mt-2 font-medium text-red-800">{taskPurgePreview.preview.blockingReason}</p> : <div className="mt-3 flex flex-wrap items-center gap-2"><input aria-label="任务永久删除当前密码" className="rounded border border-gray-300 px-3 py-2" type="password" placeholder="输入当前密码" value={purgePassword} onChange={(event) => setPurgePassword(event.target.value)} /><label className="flex items-center gap-2"><input type="checkbox" checked={purgeConfirmed} onChange={(event) => setPurgeConfirmed(event.target.checked)} />我确认永久删除任务{taskPurgePreview.purgeDescendants ? '及子树' : ''}、关联清理且不可撤销</label><PermissionButton code="project-management:task:purge" disabled={!purgePassword || !purgeConfirmed || purgeTaskMutation.isPending} onClick={() => purgeTaskMutation.mutate(taskPurgePreview)}>{purgeTaskMutation.isPending ? '删除中…' : '确认永久删除'}</PermissionButton></div>}<button type="button" className="mt-3 underline" onClick={() => { setTaskPurgePreview(null); setPurgePassword(""); setPurgeConfirmed(false); }}>取消</button></section> : null}
         <section className="mb-6">
           <h2 className="mb-3 font-semibold">已删除项目（{recycle?.projects.total ?? 0}）</h2>
           <RecycleTable emptyText="暂无已删除项目" headers={["项目", "状态", "删除时间", "删除人", "影响任务", "操作"]}>
@@ -101,7 +115,7 @@ export function ProjectManagementRecycleBinPage() {
         <section>
           <h2 className="mb-3 font-semibold">已删除任务（{recycle?.tasks.total ?? 0}）</h2>
           <RecycleTable emptyText="暂无已删除任务" headers={["任务", "项目", "状态", "删除时间", "删除人", "影响后代", "操作"]}>
-            {tasks.map((item) => <tr className="border-t border-gray-100" key={item.id}><td className="px-3 py-2"><div className="font-medium">{item.title}</div><div className="text-xs text-gray-500">{item.taskCode}</div></td><td className="px-3 py-2 font-mono text-xs">{item.projectId}</td><td className="px-3 py-2">{item.status}</td><td className="px-3 py-2">{formatDate(item.deletedTime)}</td><td className="px-3 py-2">{item.deletedBy ?? "-"}</td><td className="px-3 py-2">{item.affectedDescendantCount ?? 0}</td><td className="px-3 py-2"><div className="flex gap-2"><PermissionButton code="project-management:task:restore" disabled={!item.canRestore || restoreTaskMutation.isPending} onClick={() => confirm({ title: "恢复任务", content: `恢复“${item.title}”。若所属项目、父任务或里程碑未恢复，或恢复后超过 WIP 上限，服务端会明确拒绝。`, confirmText: "仅恢复任务", onConfirm: () => restoreTaskMutation.mutate({ item, restoreDescendants: false })})}>仅恢复</PermissionButton><PermissionButton code="project-management:task:restore" disabled={!item.canRestore || restoreTaskMutation.isPending} onClick={() => confirm({ title: "恢复任务及子树", content: `恢复“${item.title}”及其所有已删除后代；任一任务的父任务、里程碑、编码或 WIP 冲突都会使整个操作失败。`, confirmText: "恢复子树", onConfirm: () => restoreTaskMutation.mutate({ item, restoreDescendants: true })})}>恢复子树</PermissionButton></div></td></tr>)}
+            {tasks.map((item) => <tr className="border-t border-gray-100" key={item.id}><td className="px-3 py-2"><div className="font-medium">{item.title}</div><div className="text-xs text-gray-500">{item.taskCode}</div></td><td className="px-3 py-2 font-mono text-xs">{item.projectId}</td><td className="px-3 py-2">{item.status}</td><td className="px-3 py-2">{formatDate(item.deletedTime)}</td><td className="px-3 py-2">{item.deletedBy ?? "-"}</td><td className="px-3 py-2">{item.affectedDescendantCount ?? 0}</td><td className="px-3 py-2"><div className="flex gap-2"><PermissionButton code="project-management:task:restore" disabled={!item.canRestore || restoreTaskMutation.isPending} onClick={() => confirm({ title: "恢复任务", content: `恢复“${item.title}”。若所属项目、父任务或里程碑未恢复，或恢复后超过 WIP 上限，服务端会明确拒绝。`, confirmText: "仅恢复任务", onConfirm: () => restoreTaskMutation.mutate({ item, restoreDescendants: false })})}>仅恢复</PermissionButton><PermissionButton code="project-management:task:restore" disabled={!item.canRestore || restoreTaskMutation.isPending} onClick={() => confirm({ title: "恢复任务及子树", content: `恢复“${item.title}”及其所有已删除后代；任一任务的父任务、里程碑、编码或 WIP 冲突都会使整个操作失败。`, confirmText: "恢复子树", onConfirm: () => restoreTaskMutation.mutate({ item, restoreDescendants: true })})}>恢复子树</PermissionButton><PermissionButton code="project-management:task:purge" disabled={!item.canPurge || purgeTaskPreviewMutation.isPending} onClick={() => purgeTaskPreviewMutation.mutate({ item, purgeDescendants: (item.affectedDescendantCount ?? 0) > 0 })}>{purgeTaskPreviewMutation.isPending ? '预览中…' : (item.affectedDescendantCount ?? 0) > 0 ? '永久删除子树' : '永久删除'}</PermissionButton></div></td></tr>)}
           </RecycleTable>
         </section>
         <RecyclePager current={pageIndex} hasNext={Math.max(recycle?.projects.total ?? 0, recycle?.tasks.total ?? 0) > pageIndex * pageSize} onChange={setPageIndex} />
@@ -121,4 +135,8 @@ function RecycleTable({ children, emptyText, headers }: { children: ReactNode; e
 
 function formatDate(value?: string) {
   return value ? new Date(value).toLocaleString() : "-";
+}
+
+function PurgeImpactSummary({ impact }: { impact: ProjectManagementRecyclePurgeImpact }) {
+  return <p className="mt-2">影响范围：项目 {impact.projectCount}、任务 {impact.taskCount}（后代 {impact.descendantTaskCount}）、成员 {impact.memberCount}、里程碑 {impact.milestoneCount}、依赖 {impact.dependencyCount}、参与人 {impact.participantCount}、标签关系 {impact.labelRelationCount}、工时 {impact.timeLogCount}、评论 {impact.commentCount}、附件 {impact.attachmentCount}、提醒 {impact.reminderCount}、通知 {impact.notificationCount}、排期 {impact.recurrenceCount + impact.occurrenceCount}、会话关系 {impact.conversationLinkCount}、保存视图 {impact.savedViewCount}、同步记录 {impact.syncJournalCount}。附件会经文件存储生命周期删除。</p>;
 }
