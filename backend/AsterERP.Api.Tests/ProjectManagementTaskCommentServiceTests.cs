@@ -5,6 +5,7 @@ using AsterERP.Api.Infrastructure.Abp.ProjectManagement;
 using AsterERP.Api.Infrastructure.Database;
 using AsterERP.Api.Infrastructure.Security;
 using AsterERP.Api.Modules.ProjectManagement;
+using AsterERP.Api.Modules.System.Users;
 using AsterERP.Contracts.ProjectManagement;
 using AsterERP.Shared;
 using SqlSugar;
@@ -19,6 +20,8 @@ public sealed class ProjectManagementTaskCommentServiceTests
     {
         using var db = new SqlSugarClient(new ConnectionConfig { ConnectionString = $"Data Source=file:project-management-comments-{Guid.NewGuid():N};Mode=Memory;Cache=Shared", DbType = DbType.Sqlite, IsAutoCloseConnection = false });
         await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
+        db.CodeFirst.InitTables<SystemUserEntity>();
+        await db.Insertable(new SystemUserEntity { Id = "user-a", UserName = "alice", DisplayName = "Alice", Status = "Enabled" }).ExecuteCommandAsync();
         await db.Insertable(new ProjectManagementProjectEntity { Id = "project-a", TenantId = "tenant-a", AppCode = "MES", ProjectCode = "A", ProjectName = "A", OwnerUserId = "operator" }).ExecuteCommandAsync();
         await db.Insertable(new ProjectManagementProjectMemberEntity { TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-a", UserId = "user-a", RoleCode = "Member", IsActive = true }).ExecuteCommandAsync();
         await db.Insertable(new ProjectManagementTaskEntity { Id = "task-a", TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-a", TaskCode = "T-1", Title = "Task", CreatedBy = "operator", CreatedTime = DateTime.UtcNow }).ExecuteCommandAsync();
@@ -33,6 +36,9 @@ public sealed class ProjectManagementTaskCommentServiceTests
         await service.DeleteAsync("task-a", reply.Id, reply.VersionNo);
         Assert.Single(await service.QueryAsync("task-a"));
         Assert.Equal("edited", edited.Markdown);
+        var mention = Assert.Single(root.Mentions);
+        Assert.Equal("user-a", mention.UserId);
+        Assert.Equal("Alice", mention.DisplayName);
         Assert.Equal(["comment.created", "comment.created", "comment.updated", "comment.deleted"], realtime.Events);
     }
 
@@ -50,6 +56,46 @@ public sealed class ProjectManagementTaskCommentServiceTests
         var owner = new ProjectManagementTaskCommentService(new TestWorkspaceDatabaseAccessor(db), CreateUser("owner"), activityWriter: new ThrowingActivityWriter());
         await Assert.ThrowsAsync<InvalidOperationException>(() => owner.CreateAsync("task-a", new ProjectManagementTaskCommentUpsertRequest("rollback")));
         Assert.False(await db.Queryable<ProjectManagementTaskCommentEntity>().AnyAsync(item => item.TaskId == "task-a"));
+    }
+
+    [Fact]
+    public async Task Mention_candidates_are_project_member_scoped_enabled_and_paged()
+    {
+        using var db = new SqlSugarClient(new ConnectionConfig { ConnectionString = $"Data Source=file:project-management-comment-mentions-{Guid.NewGuid():N};Mode=Memory;Cache=Shared", DbType = DbType.Sqlite, IsAutoCloseConnection = false });
+        await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
+        db.CodeFirst.InitTables<SystemUserEntity>();
+        await db.Insertable(new ProjectManagementProjectEntity { Id = "project-a", TenantId = "tenant-a", AppCode = "MES", ProjectCode = "A", ProjectName = "A", OwnerUserId = "operator" }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementTaskEntity { Id = "task-a", TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-a", TaskCode = "T-1", Title = "Task", CreatedBy = "operator", CreatedTime = DateTime.UtcNow }).ExecuteCommandAsync();
+        await db.Insertable(new[]
+        {
+            new SystemUserEntity { Id = "user-a", UserName = "alice", DisplayName = "Alice 项目成员", Status = "Enabled" },
+            new SystemUserEntity { Id = "user-b", UserName = "bob", DisplayName = "Bob 已停用", Status = "Disabled" },
+            new SystemUserEntity { Id = "user-c", UserName = "carol", DisplayName = "Carol 非成员", Status = "Enabled" },
+            new SystemUserEntity { Id = "user-d", UserName = "david", DisplayName = "David 其他工作区", Status = "Enabled" },
+            new SystemUserEntity { Id = "user-e", UserName = "aaron", DisplayName = "Aaron 项目成员", Status = "Enabled" }
+        }).ExecuteCommandAsync();
+        await db.Insertable(new[]
+        {
+            new ProjectManagementProjectMemberEntity { Id = "member-a", TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-a", UserId = "user-a", IsActive = true },
+            new ProjectManagementProjectMemberEntity { Id = "member-b", TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-a", UserId = "user-b", IsActive = true },
+            new ProjectManagementProjectMemberEntity { Id = "member-d", TenantId = "tenant-b", AppCode = "MES", ProjectId = "project-a", UserId = "user-d", IsActive = true },
+            new ProjectManagementProjectMemberEntity { Id = "member-e", TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-a", UserId = "user-e", IsActive = true }
+        }).ExecuteCommandAsync();
+
+        var service = new ProjectManagementTaskCommentService(new TestWorkspaceDatabaseAccessor(db), CreateUser());
+        var paged = await service.QueryMentionCandidatesAsync("task-a", new ProjectManagementTaskCommentMentionCandidateQuery(PageSize: 1));
+        var result = await service.QueryMentionCandidatesAsync("task-a", new ProjectManagementTaskCommentMentionCandidateQuery("Alice", PageIndex: 0, PageSize: 200));
+
+        Assert.Equal(2, paged.Total);
+        Assert.Single(paged.Items);
+        Assert.Equal("user-e", paged.Items[0].UserId);
+        Assert.Equal(1, result.Total);
+        var candidate = Assert.Single(result.Items);
+        Assert.Equal("user-a", candidate.UserId);
+        Assert.Equal("alice", candidate.UserName);
+        Assert.Equal("Alice 项目成员", candidate.DisplayName);
+        var outsider = new ProjectManagementTaskCommentService(new TestWorkspaceDatabaseAccessor(db), CreateUser("outsider"));
+        await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() => outsider.QueryMentionCandidatesAsync("task-a", new ProjectManagementTaskCommentMentionCandidateQuery()));
     }
 
     [Fact]

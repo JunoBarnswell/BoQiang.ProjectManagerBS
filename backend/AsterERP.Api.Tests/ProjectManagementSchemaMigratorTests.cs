@@ -64,4 +64,35 @@ public sealed class ProjectManagementSchemaMigratorTests
         Assert.Contains(tableInfo, item => string.Equals((string)item.name, "AppCode", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(tableInfo, item => string.Equals((string)item.name, "VersionNo", StringComparison.OrdinalIgnoreCase));
     }
+
+    [Fact]
+    public async Task Comment_mention_column_exists_for_new_and_legacy_schemas()
+    {
+        using var newDatabase = new SqlSugarClient(new ConnectionConfig
+        {
+            ConnectionString = $"Data Source=file:project-management-comment-schema-new-{Guid.NewGuid():N};Mode=Memory;Cache=Shared",
+            DbType = DbType.Sqlite,
+            IsAutoCloseConnection = false
+        });
+        await new ProjectManagementSchemaMigrator().MigrateAsync(newDatabase, CancellationToken.None);
+        Assert.Contains(newDatabase.Ado.SqlQuery<dynamic>("PRAGMA table_info(pm_task_comments)"), item => string.Equals((string)item.name, "MentionUserIdsJson", StringComparison.OrdinalIgnoreCase));
+
+        using var legacyDatabase = new SqlSugarClient(new ConnectionConfig
+        {
+            ConnectionString = $"Data Source=file:project-management-comment-schema-legacy-{Guid.NewGuid():N};Mode=Memory;Cache=Shared",
+            DbType = DbType.Sqlite,
+            IsAutoCloseConnection = false
+        });
+        legacyDatabase.Ado.ExecuteCommand("""
+CREATE TABLE pm_task_comments (
+    Id TEXT NOT NULL PRIMARY KEY, TenantId TEXT NOT NULL, AppCode TEXT NOT NULL, ProjectId TEXT NOT NULL, TaskId TEXT NOT NULL,
+    ParentCommentId TEXT NULL, Markdown TEXT NOT NULL, AuthorUserId TEXT NOT NULL, VersionNo INTEGER NOT NULL DEFAULT 1,
+    EditedTime TEXT NULL, CreatedBy TEXT NULL, CreatedTime TEXT NOT NULL, UpdatedBy TEXT NULL, UpdatedTime TEXT NULL,
+    DeletedBy TEXT NULL, DeletedTime TEXT NULL, IsDeleted INTEGER NOT NULL DEFAULT 0, Remark TEXT NULL
+);
+""");
+
+        await new ProjectManagementSchemaMigrator().MigrateAsync(legacyDatabase, CancellationToken.None);
+        Assert.Contains(legacyDatabase.Ado.SqlQuery<dynamic>("PRAGMA table_info(pm_task_comments)"), item => string.Equals((string)item.name, "MentionUserIdsJson", StringComparison.OrdinalIgnoreCase));
+    }
 }

@@ -1,4 +1,5 @@
 using AsterERP.Contracts.ProjectManagement;
+using AsterERP.Shared;
 
 namespace AsterERP.Api.Application.ProjectManagement;
 

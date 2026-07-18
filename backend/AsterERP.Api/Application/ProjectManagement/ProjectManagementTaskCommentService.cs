@@ -3,6 +3,7 @@ using System.Text.Json;
 using AsterERP.Api.Infrastructure.Database;
 using AsterERP.Api.Infrastructure.Security;
 using AsterERP.Api.Modules.ProjectManagement;
+using AsterERP.Api.Modules.System.Users;
 using AsterERP.Contracts.ProjectManagement;
 using AsterERP.Shared;
 using AsterERP.Shared.Exceptions;
@@ -27,7 +28,59 @@ public sealed class ProjectManagementTaskCommentService(
             .Where(item => item.TenantId == Tenant() && item.AppCode == App() && item.TaskId == task.Id && !item.IsDeleted)
             .OrderBy(item => item.CreatedTime, OrderByType.Asc)
             .ToListAsync(cancellationToken);
-        return rows.Select(Map).ToList();
+        return await MapManyAsync(rows, cancellationToken);
+    }
+
+    public async Task<GridPageResult<ProjectManagementTaskCommentMentionCandidateResponse>> QueryMentionCandidatesAsync(
+        string taskId,
+        ProjectManagementTaskCommentMentionCandidateQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        var task = await GetTaskAsync(taskId, cancellationToken);
+        await Policy(task.ProjectId, task.AssigneeUserId).EnsureCanViewProjectAsync(task.ProjectId, cancellationToken);
+
+        var keyword = Optional(query.Keyword);
+        var tenantId = Tenant();
+        var appCode = App();
+        var db = databaseAccessor.GetCurrentDb();
+        var candidates = db.Queryable<SystemUserEntity>()
+            .Where(user =>
+                !user.IsDeleted &&
+                user.Status == "Enabled" &&
+                SqlFunc.Subqueryable<ProjectManagementProjectMemberEntity>()
+                    .Where(member =>
+                        member.ProjectId == task.ProjectId &&
+                        member.TenantId == tenantId &&
+                        member.AppCode == appCode &&
+                        member.UserId == user.Id &&
+                        member.IsActive &&
+                        !member.IsDeleted)
+                    .Any());
+
+        if (!string.IsNullOrWhiteSpace(keyword))
+        {
+            candidates = candidates.Where(user =>
+                user.UserName.Contains(keyword) ||
+                user.DisplayName.Contains(keyword));
+        }
+
+        var total = new RefAsync<int>();
+        var users = await candidates
+            .OrderBy(user => user.DisplayName, OrderByType.Asc)
+            .OrderBy(user => user.UserName, OrderByType.Asc)
+            .ToPageListAsync(
+                Math.Max(query.PageIndex, 1),
+                Math.Clamp(query.PageSize, 1, 100),
+                total,
+                cancellationToken);
+
+        return new GridPageResult<ProjectManagementTaskCommentMentionCandidateResponse>
+        {
+            Total = total.Value,
+            Items = users
+                .Select(user => new ProjectManagementTaskCommentMentionCandidateResponse(user.Id, user.UserName, user.DisplayName))
+                .ToList()
+        };
     }
 
     public async Task<ProjectManagementTaskCommentResponse> CreateAsync(string taskId, ProjectManagementTaskCommentUpsertRequest request, CancellationToken cancellationToken = default)
@@ -53,7 +106,7 @@ public sealed class ProjectManagementTaskCommentService(
             await WriteActivityAsync(task, entity, "comment.created", "新增任务评论", cancellationToken);
         });
         await PublishInvalidationAsync(task, entity, "comment.created", cancellationToken);
-        return Map(entity);
+        return await MapAsync(entity, cancellationToken);
     }
 
     public async Task<ProjectManagementTaskCommentResponse> UpdateAsync(string taskId, string id, ProjectManagementTaskCommentUpsertRequest request, CancellationToken cancellationToken = default)
@@ -82,7 +135,7 @@ public sealed class ProjectManagementTaskCommentService(
             await WriteActivityAsync(task, entity, "comment.updated", "编辑任务评论", cancellationToken);
         });
         await PublishInvalidationAsync(task, entity, "comment.updated", cancellationToken);
-        return Map(entity);
+        return await MapAsync(entity, cancellationToken);
     }
 
     public async Task DeleteAsync(string taskId, string id, long versionNo, CancellationToken cancellationToken = default)
@@ -174,6 +227,50 @@ public sealed class ProjectManagementTaskCommentService(
     private static IReadOnlyList<string> NormalizeMentions(IReadOnlyList<string>? values) => (values ?? []).Where(value => !string.IsNullOrWhiteSpace(value)).Select(value => value.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).Take(50).ToList();
     private static string? Optional(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     private static void EnsureVersion(long current, long requested) { if (requested <= 0 || current != requested) throw new ValidationException("评论已被其他用户修改，请刷新后重试", ErrorCodes.ApplicationDevelopmentPageRevisionConflict); }
-    private static ProjectManagementTaskCommentResponse Map(ProjectManagementTaskCommentEntity entity) => new(entity.Id, entity.ProjectId, entity.TaskId, entity.ParentCommentId, entity.Markdown, DeserializeMentions(entity.MentionUserIdsJson), entity.AuthorUserId, entity.VersionNo, entity.CreatedTime, entity.EditedTime);
-    private static IReadOnlyList<string> DeserializeMentions(string? json) { try { return string.IsNullOrWhiteSpace(json) ? [] : JsonSerializer.Deserialize<List<string>>(json) ?? []; } catch (JsonException) { return []; } }
+    private async Task<ProjectManagementTaskCommentResponse> MapAsync(ProjectManagementTaskCommentEntity entity, CancellationToken cancellationToken)
+        => (await MapManyAsync([entity], cancellationToken))[0];
+
+    private async Task<IReadOnlyList<ProjectManagementTaskCommentResponse>> MapManyAsync(
+        IReadOnlyList<ProjectManagementTaskCommentEntity> comments,
+        CancellationToken cancellationToken)
+    {
+        var mentionedUserIds = comments
+            .SelectMany(comment => DeserializeMentionUserIds(comment.MentionUserIdsJson))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (mentionedUserIds.Count == 0)
+        {
+            return comments.Select(comment => Map(comment, [])).ToList();
+        }
+
+        var users = await databaseAccessor.GetCurrentDb().Queryable<SystemUserEntity>()
+            .Where(user => mentionedUserIds.Contains(user.Id) && !user.IsDeleted)
+            .ToListAsync(cancellationToken);
+        var displayNames = users.ToDictionary(user => user.Id, user => user.DisplayName, StringComparer.OrdinalIgnoreCase);
+        return comments.Select(comment => Map(
+            comment,
+            DeserializeMentionUserIds(comment.MentionUserIdsJson)
+                .Where(userId => displayNames.ContainsKey(userId))
+                .Select(userId => new ProjectManagementTaskCommentMentionResponse(userId, displayNames[userId]))
+                .ToList())).ToList();
+    }
+
+    private static ProjectManagementTaskCommentResponse Map(
+        ProjectManagementTaskCommentEntity entity,
+        IReadOnlyList<ProjectManagementTaskCommentMentionResponse> mentions)
+        => new(entity.Id, entity.ProjectId, entity.TaskId, entity.ParentCommentId, entity.Markdown, mentions, entity.AuthorUserId, entity.VersionNo, entity.CreatedTime, entity.EditedTime);
+
+    private static IReadOnlyList<string> DeserializeMentionUserIds(string? json)
+    {
+        try
+        {
+            return string.IsNullOrWhiteSpace(json)
+                ? []
+                : JsonSerializer.Deserialize<List<string>>(json) ?? [];
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
+    }
 }
