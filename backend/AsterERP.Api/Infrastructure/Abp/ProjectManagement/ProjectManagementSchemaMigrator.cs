@@ -245,6 +245,21 @@ CREATE TABLE IF NOT EXISTS pm_task_occurrences (
     CreatedBy TEXT NULL, CreatedTime TEXT NOT NULL, UpdatedBy TEXT NULL, UpdatedTime TEXT NULL,
     DeletedBy TEXT NULL, DeletedTime TEXT NULL, IsDeleted INTEGER NOT NULL DEFAULT 0, Remark TEXT NULL
 );
+CREATE TABLE IF NOT EXISTS pm_task_recurrences (
+    Id TEXT NOT NULL PRIMARY KEY, TenantId TEXT NOT NULL, AppCode TEXT NOT NULL, ProjectId TEXT NOT NULL, SourceTaskId TEXT NOT NULL,
+    Frequency TEXT NOT NULL, Interval INTEGER NOT NULL, DaysOfWeekJson TEXT NOT NULL, DayOfMonth INTEGER NULL, CustomUnit TEXT NULL,
+    StartAtLocal TEXT NOT NULL, EndsAtLocal TEXT NULL, TimeZoneId TEXT NOT NULL, GenerationWindowDays INTEGER NOT NULL,
+    TaskSnapshotJson TEXT NOT NULL, SeriesOwnerUserId TEXT NOT NULL, IsActive INTEGER NOT NULL DEFAULT 1, VersionNo INTEGER NOT NULL DEFAULT 1,
+    CreatedBy TEXT NULL, CreatedTime TEXT NOT NULL, UpdatedBy TEXT NULL, UpdatedTime TEXT NULL,
+    DeletedBy TEXT NULL, DeletedTime TEXT NULL, IsDeleted INTEGER NOT NULL DEFAULT 0, Remark TEXT NULL
+);
+CREATE TABLE IF NOT EXISTS pm_task_recurrence_occurrences (
+    Id TEXT NOT NULL PRIMARY KEY, TenantId TEXT NOT NULL, AppCode TEXT NOT NULL, ProjectId TEXT NOT NULL, RecurrenceId TEXT NOT NULL,
+    TaskId TEXT NOT NULL, RecurrenceKey TEXT NOT NULL, ScheduledAtLocal TEXT NOT NULL, ScheduledAtUtc TEXT NOT NULL,
+    State TEXT NOT NULL DEFAULT 'Generated', VersionNo INTEGER NOT NULL DEFAULT 1,
+    CreatedBy TEXT NULL, CreatedTime TEXT NOT NULL, UpdatedBy TEXT NULL, UpdatedTime TEXT NULL,
+    DeletedBy TEXT NULL, DeletedTime TEXT NULL, IsDeleted INTEGER NOT NULL DEFAULT 0, Remark TEXT NULL
+);
 CREATE TABLE IF NOT EXISTS pm_activities (
     Id TEXT NOT NULL PRIMARY KEY, TenantId TEXT NOT NULL, AppCode TEXT NOT NULL, ProjectId TEXT NOT NULL,
     AggregateType TEXT NOT NULL, AggregateId TEXT NOT NULL, ActivityType TEXT NOT NULL, Summary TEXT NULL,
@@ -369,6 +384,9 @@ CREATE TABLE IF NOT EXISTS pm_operation_events (
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_task_time_logs_task ON pm_task_time_logs(TenantId, AppCode, ProjectId, TaskId, StartedAt, IsDeleted);");
         schema.Execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_pm_task_templates_code ON pm_task_templates(TenantId, AppCode, COALESCE(ProjectId, ''), TemplateCode) WHERE IsDeleted = 0;");
         schema.Execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_pm_task_occurrences_key ON pm_task_occurrences(TenantId, AppCode, TemplateId, ProjectId, OccurrenceKey) WHERE IsDeleted = 0;");
+        schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_task_recurrences_project_active ON pm_task_recurrences(TenantId, AppCode, ProjectId, IsActive, IsDeleted);");
+        schema.Execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_pm_task_recurrence_occurrences_key ON pm_task_recurrence_occurrences(TenantId, AppCode, RecurrenceId, RecurrenceKey) WHERE IsDeleted = 0;");
+        schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_task_recurrence_occurrences_schedule ON pm_task_recurrence_occurrences(TenantId, AppCode, RecurrenceId, ScheduledAtUtc, IsDeleted);");
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_activities_project_time ON pm_activities(TenantId, AppCode, ProjectId, CreatedTime, IsDeleted);");
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_task_comments_task_time ON pm_task_comments(TenantId, AppCode, ProjectId, TaskId, CreatedTime, IsDeleted);");
         schema.Execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_pm_notifications_idempotency ON pm_notifications(TenantId, AppCode, IdempotencyKey) WHERE IsDeleted = 0;");
@@ -420,7 +438,7 @@ WHERE Id IN (SELECT Id FROM ordered);
     {
         schema.Execute("""
 INSERT INTO pm_schema_versions (ModuleKey, VersionNo, AppliedAt, AppliedBy)
-VALUES ('project-management', 2, CURRENT_TIMESTAMP, 'schema-migrator')
+VALUES ('project-management', 3, CURRENT_TIMESTAMP, 'schema-migrator')
 ON CONFLICT(ModuleKey) DO UPDATE SET VersionNo = excluded.VersionNo, AppliedAt = excluded.AppliedAt, AppliedBy = excluded.AppliedBy;
 """);
     }

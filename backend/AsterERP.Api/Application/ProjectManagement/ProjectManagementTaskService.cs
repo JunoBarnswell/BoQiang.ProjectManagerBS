@@ -22,7 +22,7 @@ public sealed class ProjectManagementTaskService(
     IProjectManagementTaskProgressProjector? progressProjector = null,
     ProjectManagementTaskHierarchy? taskHierarchy = null,
     IProjectManagementReminderScheduler? reminderScheduler = null,
-    IProjectManagementImConversationService? imConversationService = null) : IProjectManagementTaskService
+    IProjectManagementImConversationService? imConversationService = null) : IProjectManagementTaskService, IProjectManagementTaskOccurrenceCommandService
 {
     private static readonly string[] Priorities = ["Low", "Medium", "High", "Urgent"];
 
@@ -106,7 +106,14 @@ public sealed class ProjectManagementTaskService(
         return await MapDetailAsync(entity, cancellationToken);
     }
 
-    public async Task<ProjectManagementTaskDetailResponse> CreateAsync(string projectId, ProjectManagementTaskUpsertRequest request, CancellationToken cancellationToken = default)
+    public Task<ProjectManagementTaskDetailResponse> CreateAsync(string projectId, ProjectManagementTaskUpsertRequest request, CancellationToken cancellationToken = default) =>
+        CreateCoreAsync(projectId, request, null, cancellationToken);
+
+    private async Task<ProjectManagementTaskDetailResponse> CreateCoreAsync(
+        string projectId,
+        ProjectManagementTaskUpsertRequest request,
+        ProjectManagementTaskRecurrenceOccurrenceEntity? recurrenceOccurrence,
+        CancellationToken cancellationToken)
     {
         await EnsureProjectAsync(projectId, cancellationToken);
         Validate(request);
@@ -136,13 +143,95 @@ public sealed class ProjectManagementTaskService(
         };
         await ProjectManagementMutationTransaction.RunAsync(db, async () =>
         {
+            if (recurrenceOccurrence is not null)
+            {
+                recurrenceOccurrence.State = "Generating";
+                await db.Insertable(recurrenceOccurrence).ExecuteCommandAsync(cancellationToken);
+            }
             await db.Insertable(entity).ExecuteCommandAsync(cancellationToken);
+            if (recurrenceOccurrence is not null)
+            {
+                recurrenceOccurrence.TaskId = entity.Id;
+                recurrenceOccurrence.State = "Generated";
+                recurrenceOccurrence.UpdatedBy = RequireUserId();
+                recurrenceOccurrence.UpdatedTime = DateTime.UtcNow;
+                await db.Updateable(recurrenceOccurrence)
+                    .UpdateColumns(item => new { item.TaskId, item.State, item.UpdatedBy, item.UpdatedTime })
+                    .ExecuteCommandAsync(cancellationToken);
+            }
             await RefreshProgressProjectionsAsync(projectId, cancellationToken);
             await WriteActivityAsync(entity, "created", $"创建任务 {entity.Title}", cancellationToken);
             await WriteSyncJournalAsync(entity, "created", cancellationToken);
         });
         await PublishInvalidationAsync(entity, "task.created", cancellationToken);
         return await MapDetailAsync(entity, cancellationToken);
+    }
+
+    public async Task<ProjectManagementTaskRecurrenceOccurrenceEntity> CreateOccurrenceAsync(
+        ProjectManagementTaskOccurrenceCapability capability,
+        ProjectManagementTaskRecurrenceEntity recurrence,
+        ProjectManagementTaskRecurrenceOccurrenceEntity occurrence,
+        ProjectManagementTaskUpsertRequest task,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureOccurrenceCapability(capability, recurrence);
+        var existing = await FindOccurrenceAsync(recurrence.Id, occurrence.RecurrenceKey, cancellationToken);
+        if (existing is not null) return existing;
+        try
+        {
+            var created = await CreateCoreAsync(recurrence.ProjectId, task, occurrence, cancellationToken);
+            occurrence.TaskId = created.Id;
+            occurrence.State = "Generated";
+            return occurrence;
+        }
+        catch (Exception exception) when (IsRecurrenceKeyConflict(exception))
+        {
+            var concurrent = await FindOccurrenceAsync(recurrence.Id, occurrence.RecurrenceKey, cancellationToken);
+            if (concurrent is not null) return concurrent;
+            throw;
+        }
+    }
+
+    public async Task UpdateFutureAsync(
+        ProjectManagementTaskOccurrenceCapability capability,
+        ProjectManagementTaskRecurrenceEntity recurrence,
+        IReadOnlyList<ProjectManagementTaskRecurrenceOccurrenceEntity> occurrences,
+        ProjectManagementTaskUpsertRequest task,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureOccurrenceCapability(capability, recurrence);
+        foreach (var occurrence in occurrences)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var existing = await GetRequiredAsync(occurrence.TaskId, cancellationToken);
+            if (existing.Status is ProjectManagementDomainRules.TaskDone or ProjectManagementDomainRules.TaskCancelled) continue;
+            var update = task with { TaskCode = existing.TaskCode, VersionNo = existing.VersionNo };
+            await UpdateAsync(existing.Id, update, cancellationToken);
+        }
+    }
+
+    public async Task DeleteFutureAsync(
+        ProjectManagementTaskOccurrenceCapability capability,
+        ProjectManagementTaskRecurrenceEntity recurrence,
+        IReadOnlyList<ProjectManagementTaskRecurrenceOccurrenceEntity> occurrences,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureOccurrenceCapability(capability, recurrence);
+        var db = databaseAccessor.GetCurrentDb();
+        foreach (var occurrence in occurrences)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var existing = await GetRequiredAsync(occurrence.TaskId, cancellationToken);
+            if (existing.Status is ProjectManagementDomainRules.TaskDone or ProjectManagementDomainRules.TaskCancelled) continue;
+            await DeleteAsync(existing.Id, new ProjectManagementTaskDeleteRequest(existing.VersionNo), cancellationToken);
+            occurrence.State = "Deleted";
+            occurrence.VersionNo++;
+            occurrence.UpdatedBy = RequireUserId();
+            occurrence.UpdatedTime = DateTime.UtcNow;
+            await db.Updateable(occurrence)
+                .UpdateColumns(item => new { item.State, item.VersionNo, item.UpdatedBy, item.UpdatedTime })
+                .ExecuteCommandAsync(cancellationToken);
+        }
     }
 
     public async Task<ProjectManagementTaskDetailResponse> UpdateAsync(string id, ProjectManagementTaskUpsertRequest request, CancellationToken cancellationToken = default)
@@ -586,6 +675,27 @@ public sealed class ProjectManagementTaskService(
     private static bool IsSiblingSortConflict(Exception exception) =>
         exception.ToString().Contains("ux_pm_tasks_sibling_sort_v2", StringComparison.OrdinalIgnoreCase) ||
         exception.ToString().Contains("UNIQUE constraint failed", StringComparison.OrdinalIgnoreCase);
+
+    private void EnsureOccurrenceCapability(ProjectManagementTaskOccurrenceCapability capability, ProjectManagementTaskRecurrenceEntity recurrence)
+    {
+        if (!ReferenceEquals(capability, ProjectManagementTaskOccurrenceCapability.Instance))
+            throw new InvalidOperationException("重复任务实例命令缺少内部 capability");
+        if (!string.Equals(recurrence.TenantId, RequireTenantId(), StringComparison.Ordinal) ||
+            !string.Equals(recurrence.AppCode, RequireAppCode(), StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(recurrence.SeriesOwnerUserId, RequireUserId(), StringComparison.Ordinal))
+            throw new InvalidOperationException("重复任务实例命令的系列创建者上下文不匹配");
+    }
+
+    private async Task<ProjectManagementTaskRecurrenceOccurrenceEntity?> FindOccurrenceAsync(string recurrenceId, string recurrenceKey, CancellationToken cancellationToken) =>
+        (await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskRecurrenceOccurrenceEntity>()
+            .Where(item => item.RecurrenceId == recurrenceId && item.RecurrenceKey == recurrenceKey &&
+                item.TenantId == RequireTenantId() && item.AppCode == RequireAppCode() && !item.IsDeleted)
+            .Take(1)
+            .ToListAsync(cancellationToken)).FirstOrDefault();
+
+    private static bool IsRecurrenceKeyConflict(Exception exception) =>
+        exception.ToString().Contains("ux_pm_task_recurrence_occurrences_key", StringComparison.OrdinalIgnoreCase) ||
+        exception.ToString().Contains("pm_task_recurrence_occurrences.RecurrenceId", StringComparison.OrdinalIgnoreCase);
 
     private async Task EnsureWipAsync(string projectId, string status, bool overrideWip, CancellationToken cancellationToken, string? currentTaskId = null)
     {
