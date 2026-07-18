@@ -576,6 +576,8 @@ export function ProjectManagementTaskWorkspacePage() {
       <section className="pm-projection" aria-labelledby="task-projection-title">
         <div className="pm-projection-heading"><div><h2 id="task-projection-title">{activeView.label}</h2><p>当前渲染的是服务端返回的任务数据；选择、批量更新和可用的移动命令均继续使用原有请求链路。</p></div><span className="pm-view-note">{rows.length} 条已加载</span></div>
         <TaskWorkspaceProjection
+          labelFilter={labelFilter.labelIds.length > 0 ? labelFilter : undefined}
+          projectId={projectId}
           onMoveTask={(task, target) => {
             if (moveMutation.isPending) {
               message.error('正在提交上一项任务移动，请稍候');

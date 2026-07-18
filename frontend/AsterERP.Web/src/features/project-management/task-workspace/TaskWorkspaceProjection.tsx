@@ -1,13 +1,31 @@
-import { useMemo, useState, type CSSProperties, type DragEvent } from 'react';
+import { useQueries } from '@tanstack/react-query';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from 'react';
 
-import type { ProjectManagementTaskListItem } from '../../../api/project-management/projectManagement.types';
+import { getProjectManagementTasks } from '../../../api/project-management/projectManagement.api';
+import type { ProjectManagementTaskLabelFilter, ProjectManagementTaskListItem } from '../../../api/project-management/projectManagement.types';
+import { useAuthStore } from '../../../core/state';
+import { queryKeys } from '../../../core/query/queryKeys';
 import { DataTable } from '../../../shared/table/DataTable';
 import type { DataTableColumn } from '../../../shared/table/tableTypes';
+import { useProjectManagementWorkspaceScope } from '../state/projectManagementWorkspaceScope';
 import type { TaskWorkspaceState } from '../state/taskWorkspaceState';
+import { taskWorkspaceStateToQuery } from '../state/taskWorkspaceState';
+import {
+  buildVisibleTaskTreeRows,
+  readTaskTreeExpansionState,
+  taskTreeAriaLevel,
+  taskTreeExpansionPreferenceKey,
+  taskTreeRowHasChildren,
+  toggleTaskTreeExpansion,
+  writeTaskTreeExpansionState,
+  type TaskTreeRow,
+} from '../state/taskTreeState';
 
 import type { TaskMoveDropTarget } from './taskMoveIntent';
 
 interface TaskWorkspaceProjectionProps {
+  labelFilter?: ProjectManagementTaskLabelFilter;
+  projectId: string;
   onSelectTask: (taskId: string) => void;
   onMoveTask: (task: ProjectManagementTaskListItem, target: TaskMoveDropTarget) => void;
   onToggleTaskSelection: (taskId: string) => void;
@@ -16,7 +34,87 @@ interface TaskWorkspaceProjectionProps {
   state: TaskWorkspaceState;
 }
 
-export function TaskWorkspaceProjection({ onMoveTask, onSelectTask, onToggleTaskSelection, rows, selectedTaskIds, state }: TaskWorkspaceProjectionProps) {
+export function TaskWorkspaceProjection({ labelFilter, onMoveTask, onSelectTask, onToggleTaskSelection, projectId, rows, selectedTaskIds, state }: TaskWorkspaceProjectionProps) {
+  const scope = useProjectManagementWorkspaceScope();
+  const userId = useAuthStore((current) => current.user?.userId ?? '');
+  const expansionKey = useMemo(
+    () => userId && scope.tenantId && scope.appCode && projectId
+      ? taskTreeExpansionPreferenceKey(userId, scope.tenantId, scope.appCode, projectId)
+      : '',
+    [projectId, scope.appCode, scope.tenantId, userId],
+  );
+  const [expandedState, setExpandedState] = useState(() => readTaskTreeExpansionState(''));
+  const [childPageByParent, setChildPageByParent] = useState<Record<string, number>>({});
+  const [loadedChildren, setLoadedChildren] = useState<Map<string, { items: TaskTreeRow[]; total: number }>>(() => new Map());
+  const hydratedExpansionKey = useRef('');
+
+  useEffect(() => {
+    setExpandedState(readTaskTreeExpansionState(expansionKey));
+    hydratedExpansionKey.current = expansionKey;
+  }, [expansionKey]);
+
+  useEffect(() => {
+    if (hydratedExpansionKey.current === expansionKey && expansionKey) writeTaskTreeExpansionState(expansionKey, expandedState);
+  }, [expandedState, expansionKey]);
+
+  const knownRows = useMemo(() => {
+    const byId = new Map<string, TaskTreeRow>(rows.map((row) => [row.id, row]));
+    loadedChildren.forEach((value) => value.items.forEach((row) => byId.set(row.id, row)));
+    return [...byId.values()];
+  }, [loadedChildren, rows]);
+  const expandedTaskIds = useMemo(
+    () => expandedState.expandedTaskIds.filter((id) => {
+      const row = knownRows.find((candidate) => candidate.id === id);
+      return row ? taskTreeRowHasChildren(row, knownRows) : false;
+    }),
+    [expandedState.expandedTaskIds, knownRows],
+  );
+  const childQueries = useQueries({
+    queries: expandedTaskIds.map((parentTaskId) => {
+      const pageIndex = childPageByParent[parentTaskId] ?? 1;
+      const query = { ...taskWorkspaceStateToQuery(projectId, { ...state, pageIndex }), labelFilter, parentTaskId };
+      return {
+        enabled: scope.isAvailable && state.viewKey === 'tree' && Boolean(projectId),
+        queryFn: ({ signal }: { signal: AbortSignal }) => getProjectManagementTasks(query, signal),
+        queryKey: [...queryKeys.projectManagement.tasks(scope, query), JSON.stringify(labelFilter ?? null)],
+      };
+    }),
+  });
+
+  const childQueryContext = JSON.stringify({ projectId, keyword: state.keyword, status: state.status, assignee: state.assigneeUserId, milestoneId: state.milestoneId, dueFrom: state.dueFrom, dueTo: state.dueTo, includeCompleted: state.includeCompleted, sortBy: state.sortBy, sortDirection: state.sortDirection, labelFilter });
+  useEffect(() => {
+    setLoadedChildren(new Map());
+    setChildPageByParent({});
+  }, [childQueryContext]);
+
+  useEffect(() => {
+    let changed = false;
+    const next = new Map(loadedChildren);
+    expandedTaskIds.forEach((parentTaskId, index) => {
+      const data = childQueries[index]?.data?.data;
+      if (!data) return;
+      const existing = next.get(parentTaskId);
+      const items = new Map<string, TaskTreeRow>((existing?.items ?? []).map((row) => [row.id, row]));
+      data.items.forEach((row) => items.set(row.id, row as TaskTreeRow));
+      const mergedItems = [...items.values()];
+      if (!existing || existing.total !== data.total || existing.items.length !== mergedItems.length) {
+        next.set(parentTaskId, { items: mergedItems, total: data.total });
+        changed = true;
+      }
+    });
+    if (changed) setLoadedChildren(next);
+  }, [childQueries, expandedTaskIds, loadedChildren]);
+
+  const visibleRows = useMemo(() => state.viewKey === 'tree'
+    ? buildVisibleTaskTreeRows(knownRows, new Set(expandedTaskIds))
+    : rows,
+  [expandedTaskIds, knownRows, rows, state.viewKey]);
+  const toggleExpansion = useCallback((taskId: string) => {
+    setExpandedState((current) => toggleTaskTreeExpansion(current, taskId));
+  }, []);
+  const loadMoreChildren = useCallback((taskId: string) => {
+    setChildPageByParent((current) => ({ ...current, [taskId]: (current[taskId] ?? 1) + 1 }));
+  }, []);
   const [draggedTask, setDraggedTask] = useState<ProjectManagementTaskListItem>();
   const drag = {
     draggedTaskId: draggedTask?.id,
@@ -40,7 +138,7 @@ export function TaskWorkspaceProjection({ onMoveTask, onSelectTask, onToggleTask
   if (state.viewKey === 'card') return <>{rootDropZone}<TaskCardProjection drag={drag} rows={rows} onSelectTask={onSelectTask} onToggleTaskSelection={onToggleTaskSelection} selectedTaskIds={selectedTaskIds} /></>;
   if (state.viewKey === 'gantt') return <TaskGanttProjection rows={rows} onSelectTask={onSelectTask} onToggleTaskSelection={onToggleTaskSelection} selectedTaskIds={selectedTaskIds} />;
   if (state.viewKey === 'calendar') return <TaskCalendarProjection rows={rows} onSelectTask={onSelectTask} onToggleTaskSelection={onToggleTaskSelection} selectedTaskIds={selectedTaskIds} />;
-  return <>{rootDropZone}<TaskTableProjection drag={drag} rows={rows} onSelectTask={onSelectTask} onToggleTaskSelection={onToggleTaskSelection} selectedTaskIds={selectedTaskIds} state={state} /></>;
+  return <>{rootDropZone}<TaskTableProjection childStateByParent={loadedChildren} expandedTaskIds={new Set(expandedTaskIds)} onLoadMoreChildren={loadMoreChildren} onToggleTaskExpansion={toggleExpansion} drag={drag} rows={visibleRows} onSelectTask={onSelectTask} onToggleTaskSelection={onToggleTaskSelection} selectedTaskIds={selectedTaskIds} state={state} /></>;
 }
 
 interface TaskDragHandlers {
@@ -51,34 +149,56 @@ interface TaskDragHandlers {
   onDrop: (event: DragEvent<HTMLElement>, target: TaskMoveDropTarget) => void;
 }
 
-function TaskTableProjection({ drag, onSelectTask, onToggleTaskSelection, rows, selectedTaskIds, state }: Pick<TaskWorkspaceProjectionProps, 'onSelectTask' | 'onToggleTaskSelection' | 'rows' | 'selectedTaskIds' | 'state'> & { drag: TaskDragHandlers }) {
-  const columns = useMemo<DataTableColumn<ProjectManagementTaskListItem>[]>(() => [
+function TaskTableProjection({ childStateByParent, expandedTaskIds, onLoadMoreChildren, onToggleTaskExpansion, drag, onSelectTask, onToggleTaskSelection, rows, selectedTaskIds, state }: Pick<TaskWorkspaceProjectionProps, 'onSelectTask' | 'onToggleTaskSelection' | 'rows' | 'selectedTaskIds' | 'state'> & { childStateByParent: Map<string, { items: TaskTreeRow[]; total: number }>; expandedTaskIds: ReadonlySet<string>; onLoadMoreChildren: (taskId: string) => void; onToggleTaskExpansion: (taskId: string) => void; drag: TaskDragHandlers }) {
+  const columns = useMemo<DataTableColumn<TaskTreeRow>[]>(() => [
     { key: 'select', title: '选择', width: '64px', render: (row) => <input aria-label={`选择任务 ${row.title}`} checked={selectedTaskIds.has(row.id)} type="checkbox" onChange={() => onToggleTaskSelection(row.id)} /> },
     { key: 'taskCode', title: '编码', width: '120px', responsivePriority: 100 },
     {
-      key: 'title', title: '任务', responsivePriority: 100, render: (row) => (
+      key: 'title', title: '任务', responsivePriority: 100, render: (row) => {
+        const hasChildren = taskTreeRowHasChildren(row, rows);
+        const expanded = expandedTaskIds.has(row.id);
+        const childState = childStateByParent.get(row.id);
+        const hasMoreChildren = expanded && childState ? childState.total > childState.items.length : false;
+        return (
         <div
           className={`pm-task-tree-title${drag.draggedTaskId === row.id ? ' is-dragging' : ''}`}
           draggable
+          aria-level={state.viewKey === 'tree' ? taskTreeAriaLevel(row) : undefined}
+          aria-expanded={state.viewKey === 'tree' && hasChildren ? expanded : undefined}
+          role={state.viewKey === 'tree' ? 'treeitem' : undefined}
+          tabIndex={state.viewKey === 'tree' ? 0 : undefined}
+          onKeyDown={(event) => {
+            if (state.viewKey !== 'tree' || !hasChildren) return;
+            if (event.key === 'ArrowRight' && !expanded) {
+              event.preventDefault();
+              onToggleTaskExpansion(row.id);
+            } else if (event.key === 'ArrowLeft' && expanded) {
+              event.preventDefault();
+              onToggleTaskExpansion(row.id);
+            }
+          }}
           onDragEnd={drag.onDragEnd}
           onDragOver={drag.onDragOver}
           onDragStart={(event) => drag.onDragStart(event, row)}
           onDrop={(event) => drag.onDrop(event, { kind: 'before', task: row })}
           style={{ '--pm-task-depth': state.viewKey === 'tree' ? row.depth : 0 } as CSSProperties}
         >
+          {state.viewKey === 'tree' && hasChildren ? <button aria-label={`${expanded ? '折叠' : '展开'}任务 ${row.title}`} onClick={(event) => { event.stopPropagation(); onToggleTaskExpansion(row.id); }} type="button">{expanded ? '▾' : '▸'}</button> : <span aria-hidden="true" className="w-4" />}
           <span>{row.title}</span>
           <span className="pm-child-drop-zone" onDragOver={drag.onDragOver} onDrop={(event) => drag.onDrop(event, { kind: 'child', task: row })}>作为子任务</span>
+          {hasMoreChildren ? <button aria-label={`加载更多 ${row.title} 的子任务`} onClick={(event) => { event.stopPropagation(); onLoadMoreChildren(row.id); }} type="button">加载更多</button> : null}
         </div>
-      )
+        );
+      }
     },
     { key: 'status', title: '状态', width: '110px', render: (row) => <StatusBadge status={row.status} /> },
     { key: 'priority', title: '优先级', width: '96px', render: (row) => <PriorityBadge priority={row.priority} /> },
     { key: 'progressPercent', title: '进度', width: '138px', render: (row) => <Progress value={row.progressPercent} /> },
     { key: 'dueDate', title: '截止日期', width: '120px', render: (row) => formatDate(row.dueDate) },
     { key: 'blockedByCount', title: '阻塞', width: '96px', render: (row) => row.blockedByCount ? <StatusBadge status="Blocked" label={`${row.blockedByCount} 项`} /> : '—' },
-  ], [drag, onToggleTaskSelection, selectedTaskIds, state.viewKey]);
+  ], [childStateByParent, drag, expandedTaskIds, onLoadMoreChildren, onToggleTaskExpansion, onToggleTaskSelection, rows, selectedTaskIds, state.viewKey]);
 
-  return <DataTable columnSettingsKey={`project-management-tasks-${state.viewKey}`} columns={columns} emptyText="暂无任务" rowActions={(row) => <button type="button" onClick={() => onSelectTask(row.id)}>查看</button>} rowKey={(row) => row.id} rows={rows} showColumnSettings />;
+  return <DataTable columnSettingsKey={`project-management-tasks-${state.viewKey}`} columns={columns} emptyText="暂无任务" rowActions={(row) => <button type="button" onClick={() => onSelectTask(row.id)}>查看</button>} rowKey={(row) => row.id} rowVirtualize={state.viewKey === 'tree' || state.viewKey === 'list'} rowVirtualization={{ overscan: 8, rowHeight: 56 }} rows={rows} showColumnSettings />;
 }
 
 function TaskCardProjection({ drag, onSelectTask, onToggleTaskSelection, rows, selectedTaskIds }: Pick<TaskWorkspaceProjectionProps, 'onSelectTask' | 'onToggleTaskSelection' | 'rows' | 'selectedTaskIds'> & { drag: TaskDragHandlers }) {
