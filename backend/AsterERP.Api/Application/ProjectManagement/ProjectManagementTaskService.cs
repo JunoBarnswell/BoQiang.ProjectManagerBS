@@ -24,7 +24,8 @@ public sealed class ProjectManagementTaskService(
     IProjectManagementReminderScheduler? reminderScheduler = null,
     IProjectManagementImConversationService? imConversationService = null,
     ProjectManagementTaskLabelMutation? labelMutation = null,
-    IProjectManagementTaskTemplateDependencyCommandService? templateDependencyCommand = null) : IProjectManagementTaskService, IProjectManagementTaskOccurrenceCommandService, IProjectManagementTaskTemplateCommandService
+    IProjectManagementTaskTemplateDependencyCommandService? templateDependencyCommand = null,
+    ProjectManagementTaskStateMachine? taskStateMachine = null) : IProjectManagementTaskService, IProjectManagementTaskOccurrenceCommandService, IProjectManagementTaskTemplateCommandService
 {
     private static readonly string[] Priorities = ["Low", "Medium", "High", "Urgent"];
 
@@ -128,9 +129,9 @@ public sealed class ProjectManagementTaskService(
         await EnsureTaskWriteAccessAsync(projectId, null, parent?.Id, request.AssigneeUserId, cancellationToken);
         await EnsureAssigneeAsync(projectId, request.AssigneeUserId, cancellationToken);
         var depth = placement.RootDepth;
-        var status = ProjectManagementDomainRules.RequireTaskStatus(request.Status);
+        var state = StateMachine.Resolve(string.Empty, request.Status, request.ProgressPercent, null, null, now: DateTime.UtcNow, isNew: true);
         await EnsureMilestoneAsync(projectId, request.MilestoneId, cancellationToken);
-        await EnsureWipAsync(projectId, status, request.OverrideWip, cancellationToken);
+        await EnsureWipAsync(projectId, state.Status, request.OverrideWip, cancellationToken);
         var now = DateTime.UtcNow;
         var weight = ResolveProgressWeight(request.Weight, request.EstimateMinutes);
         var entity = new ProjectManagementTaskEntity
@@ -138,9 +139,9 @@ public sealed class ProjectManagementTaskService(
             TenantId = RequireTenantId(), AppCode = RequireAppCode(), ProjectId = projectId,
             MilestoneId = NormalizeOptional(request.MilestoneId), ParentTaskId = parent?.Id,
             TaskCode = taskCode, Title = NormalizeRequired(request.Title, "任务标题不能为空"), Description = NormalizeOptional(request.Description),
-            Status = status, BlockedReason = status == ProjectManagementDomainRules.TaskBlocked ? "手工阻塞" : null, Priority = NormalizePriority(request.Priority), AssigneeUserId = NormalizeOptional(request.AssigneeUserId),
+            Status = state.Status, BlockedReason = state.Status == ProjectManagementDomainRules.TaskBlocked ? "手工阻塞" : null, Priority = NormalizePriority(request.Priority), AssigneeUserId = NormalizeOptional(request.AssigneeUserId),
             AssigneeEmploymentId = NormalizeOptional(request.AssigneeEmploymentId), StartDate = request.StartDate, DueDate = request.DueDate,
-            ProgressPercent = request.ProgressPercent, Weight = weight, EstimateMinutes = request.EstimateMinutes,
+            ActualStartAt = state.ActualStartAt, ActualEndAt = state.ActualEndAt, ProgressPercent = state.ProgressPercent, Weight = weight, EstimateMinutes = request.EstimateMinutes,
             SortOrder = await GetNextSiblingSortOrderAsync(projectId, parent?.Id, cancellationToken), Depth = depth, VersionNo = 1, CreatedBy = RequireUserId(), CreatedTime = now
         };
         await ProjectManagementMutationTransaction.RunAsync(db, async () =>
@@ -278,14 +279,15 @@ public sealed class ProjectManagementTaskService(
         var entity = await GetRequiredAsync(id, cancellationToken);
         Validate(request);
         EnsureVersion(entity.VersionNo, request.VersionNo);
-        var status = ProjectManagementDomainRules.RequireTaskStatus(request.Status);
-        ProjectManagementDomainRules.EnsureTaskStatusTransition(entity.Status, status);
+        var state = StateMachine.Resolve(entity.Status, request.Status, request.ProgressPercent, entity.ActualStartAt, entity.ActualEndAt, DateTime.UtcNow);
         var db = databaseAccessor.GetCurrentDb();
         var placement = await TaskHierarchy.ResolvePlacementAsync(db, entity.ProjectId, request.ParentTaskId, entity.Id, cancellationToken);
         var parent = placement.Parent;
         await EnsureTaskWriteAccessAsync(entity.ProjectId, entity.Id, parent?.Id, request.AssigneeUserId, cancellationToken);
         await EnsureAssigneeAsync(entity.ProjectId, request.AssigneeUserId, cancellationToken);
-        await EnsureWipAsync(entity.ProjectId, status, request.OverrideWip, cancellationToken, entity.Id);
+        await EnsureWipAsync(entity.ProjectId, state.Status, request.OverrideWip, cancellationToken, entity.Id);
+        if (state.Status == ProjectManagementDomainRules.TaskDone && entity.Status != ProjectManagementDomainRules.TaskDone)
+            await EnsureCanCompleteParentAsync(entity, request, cancellationToken);
         var depth = placement.RootDepth;
         await EnsureMilestoneAsync(entity.ProjectId, request.MilestoneId, cancellationToken);
         var taskCode = NormalizeRequired(request.TaskCode, "任务编码不能为空");
@@ -297,14 +299,16 @@ public sealed class ProjectManagementTaskService(
         entity.TaskCode = taskCode;
         entity.Title = NormalizeRequired(request.Title, "任务标题不能为空");
         entity.Description = NormalizeOptional(request.Description);
-        entity.Status = status;
-        entity.BlockedReason = status == ProjectManagementDomainRules.TaskBlocked ? entity.BlockedReason ?? "手工阻塞" : null;
+        entity.Status = state.Status;
+        entity.BlockedReason = state.Status == ProjectManagementDomainRules.TaskBlocked ? entity.BlockedReason ?? "手工阻塞" : null;
         entity.Priority = NormalizePriority(request.Priority);
         entity.AssigneeUserId = NormalizeOptional(request.AssigneeUserId);
         entity.AssigneeEmploymentId = NormalizeOptional(request.AssigneeEmploymentId);
         entity.StartDate = request.StartDate;
         entity.DueDate = request.DueDate;
-        entity.ProgressPercent = request.ProgressPercent;
+        entity.ActualStartAt = state.ActualStartAt;
+        entity.ActualEndAt = state.ActualEndAt;
+        entity.ProgressPercent = state.ProgressPercent;
         entity.Weight = ResolveProgressWeight(request.Weight, request.EstimateMinutes);
         entity.EstimateMinutes = request.EstimateMinutes;
         var expectedVersion = entity.VersionNo;
@@ -513,6 +517,7 @@ public sealed class ProjectManagementTaskService(
 
     private ProjectManagementAccessPolicy AccessPolicy => accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser);
     private ProjectManagementTaskHierarchy TaskHierarchy => taskHierarchy ?? new ProjectManagementTaskHierarchy();
+    private ProjectManagementTaskStateMachine StateMachine => taskStateMachine ?? new ProjectManagementTaskStateMachine();
 
     // 保持任务写入授权在单一接缝：ScopeRootTaskId 权限落地后只需在此转发任务与父任务上下文。
     private Task EnsureTaskWriteAccessAsync(string projectId, string? taskId, string? parentTaskId, string? assigneeUserId, CancellationToken cancellationToken)
@@ -575,6 +580,17 @@ public sealed class ProjectManagementTaskService(
             .Where(item => item.Id == milestoneId && item.ProjectId == projectId && !item.IsDeleted)
             .AnyAsync(cancellationToken))
             throw new ValidationException("里程碑不存在或不属于当前项目");
+    }
+
+    private async Task EnsureCanCompleteParentAsync(ProjectManagementTaskEntity task, ProjectManagementTaskUpsertRequest request, CancellationToken cancellationToken)
+    {
+        var hasIncompleteChildren = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskEntity>()
+            .AnyAsync(item => item.ProjectId == task.ProjectId && item.ParentTaskId == task.Id && !item.IsDeleted && item.Status != ProjectManagementDomainRules.TaskDone, cancellationToken);
+        if (!hasIncompleteChildren) return;
+        if (!request.ForceComplete) throw new ValidationException("存在未完成子任务，不能完成父任务");
+        if (string.IsNullOrWhiteSpace(request.ForceCompleteReason)) throw new ValidationException("强制完成父任务必须填写原因");
+        if (!currentUser.HasAsterErpPermission(PermissionCodes.ProjectManagementTaskOverrideWip)) throw new ValidationException("没有强制完成父任务权限", ErrorCodes.PermissionDenied);
+        await AccessPolicy.EnsureCanManageProjectAsync(task.ProjectId, cancellationToken);
     }
 
     private async Task RefreshProgressProjectionsAsync(string projectId, CancellationToken cancellationToken)
@@ -747,14 +763,14 @@ public sealed class ProjectManagementTaskService(
         await EnsureTaskWriteAccessAsync(projectId, null, parent?.Id, request.AssigneeUserId, cancellationToken);
         await EnsureAssigneeAsync(projectId, request.AssigneeUserId, cancellationToken);
         await EnsureMilestoneAsync(projectId, request.MilestoneId, cancellationToken);
-        var status = ProjectManagementDomainRules.RequireTaskStatus(request.Status);
-        await EnsureWipAsync(projectId, status, request.OverrideWip, cancellationToken);
+        var state = StateMachine.Resolve(string.Empty, request.Status, request.ProgressPercent, null, null, DateTime.UtcNow, isNew: true);
+        await EnsureWipAsync(projectId, state.Status, request.OverrideWip, cancellationToken);
         return new ProjectManagementTaskEntity
         {
             TenantId = RequireTenantId(), AppCode = RequireAppCode(), ProjectId = projectId, MilestoneId = NormalizeOptional(request.MilestoneId), ParentTaskId = parent?.Id,
-            TaskCode = taskCode, Title = NormalizeRequired(request.Title, "任务标题不能为空"), Description = NormalizeOptional(request.Description), Status = status,
-            BlockedReason = status == ProjectManagementDomainRules.TaskBlocked ? "手工阻塞" : null, Priority = NormalizePriority(request.Priority), AssigneeUserId = NormalizeOptional(request.AssigneeUserId), AssigneeEmploymentId = NormalizeOptional(request.AssigneeEmploymentId),
-            StartDate = request.StartDate, DueDate = request.DueDate, ProgressPercent = request.ProgressPercent, Weight = ResolveProgressWeight(request.Weight, request.EstimateMinutes), EstimateMinutes = request.EstimateMinutes,
+            TaskCode = taskCode, Title = NormalizeRequired(request.Title, "任务标题不能为空"), Description = NormalizeOptional(request.Description), Status = state.Status,
+            BlockedReason = state.Status == ProjectManagementDomainRules.TaskBlocked ? "手工阻塞" : null, Priority = NormalizePriority(request.Priority), AssigneeUserId = NormalizeOptional(request.AssigneeUserId), AssigneeEmploymentId = NormalizeOptional(request.AssigneeEmploymentId),
+            StartDate = request.StartDate, DueDate = request.DueDate, ActualStartAt = state.ActualStartAt, ActualEndAt = state.ActualEndAt, ProgressPercent = state.ProgressPercent, Weight = ResolveProgressWeight(request.Weight, request.EstimateMinutes), EstimateMinutes = request.EstimateMinutes,
             SortOrder = await GetNextSiblingSortOrderAsync(projectId, parent?.Id, cancellationToken), Depth = placement.RootDepth, VersionNo = 1, CreatedBy = RequireUserId(), CreatedTime = DateTime.UtcNow
         };
     }
@@ -817,8 +833,8 @@ public sealed class ProjectManagementTaskService(
         return MapDetail(entity, blockedByCount, blockedByCount == 0 || forceStarted, blockedByCount == 0 || forceStarted ? entity.BlockedReason : $"存在 {blockedByCount} 个未完成前置任务");
     }
 
-    private static ProjectManagementTaskListItemResponse MapList(ProjectManagementTaskEntity entity, int blockedByCount, bool canStart, string? blockedReason) => new(entity.Id, entity.ProjectId, entity.MilestoneId, entity.ParentTaskId, entity.TaskCode, entity.Title, entity.Status, entity.Priority, entity.AssigneeUserId, entity.StartDate, entity.DueDate, entity.ProgressPercent, entity.SortOrder, entity.Depth, entity.VersionNo, blockedByCount, canStart, blockedReason);
+    private static ProjectManagementTaskListItemResponse MapList(ProjectManagementTaskEntity entity, int blockedByCount, bool canStart, string? blockedReason) => new(entity.Id, entity.ProjectId, entity.MilestoneId, entity.ParentTaskId, entity.TaskCode, entity.Title, entity.Status, entity.Priority, entity.AssigneeUserId, entity.StartDate, entity.DueDate, entity.ProgressPercent, entity.SortOrder, entity.Depth, entity.VersionNo, blockedByCount, canStart, blockedReason, ProjectManagementDomainRules.IsTaskOverdue(entity.Status, entity.DueDate, DateTime.UtcNow));
 
-    private static ProjectManagementTaskDetailResponse MapDetail(ProjectManagementTaskEntity entity, int blockedByCount, bool canStart, string? blockedReason) => new(entity.Id, entity.ProjectId, entity.MilestoneId, entity.ParentTaskId, entity.TaskCode, entity.Title, entity.Description, entity.Status, entity.Priority, entity.AssigneeUserId, entity.AssigneeEmploymentId, entity.StartDate, entity.DueDate, entity.ProgressPercent, entity.Weight, entity.EstimateMinutes, entity.ActualMinutes, entity.SortOrder, entity.Depth, entity.VersionNo, entity.CreatedTime, entity.UpdatedTime, blockedByCount, canStart, blockedReason);
-    private static ProjectManagementTaskResponse ToTemplateResponse(ProjectManagementTaskEntity entity) => new(entity.Id, entity.ProjectId, entity.MilestoneId, entity.ParentTaskId, entity.TaskCode, entity.Title, entity.Description, entity.Status, entity.Priority, entity.AssigneeUserId, entity.AssigneeEmploymentId, entity.StartDate, entity.DueDate, entity.ProgressPercent, entity.Weight, entity.EstimateMinutes, entity.ActualMinutes, entity.SortOrder, entity.Depth, entity.VersionNo, entity.CreatedTime, entity.UpdatedTime);
+    private static ProjectManagementTaskDetailResponse MapDetail(ProjectManagementTaskEntity entity, int blockedByCount, bool canStart, string? blockedReason) => new(entity.Id, entity.ProjectId, entity.MilestoneId, entity.ParentTaskId, entity.TaskCode, entity.Title, entity.Description, entity.Status, entity.Priority, entity.AssigneeUserId, entity.AssigneeEmploymentId, entity.StartDate, entity.DueDate, entity.ProgressPercent, entity.Weight, entity.EstimateMinutes, entity.ActualMinutes, entity.SortOrder, entity.Depth, entity.VersionNo, entity.CreatedTime, entity.UpdatedTime, blockedByCount, canStart, blockedReason, ProjectManagementDomainRules.IsTaskOverdue(entity.Status, entity.DueDate, DateTime.UtcNow), entity.ActualStartAt, entity.ActualEndAt);
+    private static ProjectManagementTaskResponse ToTemplateResponse(ProjectManagementTaskEntity entity) => new(entity.Id, entity.ProjectId, entity.MilestoneId, entity.ParentTaskId, entity.TaskCode, entity.Title, entity.Description, entity.Status, entity.Priority, entity.AssigneeUserId, entity.AssigneeEmploymentId, entity.StartDate, entity.DueDate, entity.ProgressPercent, entity.Weight, entity.EstimateMinutes, entity.ActualMinutes, entity.SortOrder, entity.Depth, entity.VersionNo, entity.CreatedTime, entity.UpdatedTime, IsOverdue: ProjectManagementDomainRules.IsTaskOverdue(entity.Status, entity.DueDate, DateTime.UtcNow));
 }

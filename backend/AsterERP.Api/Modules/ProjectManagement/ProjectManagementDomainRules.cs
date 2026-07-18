@@ -17,6 +17,7 @@ public static class ProjectManagementDomainRules
     public const string ProjectCanceled = "Canceled";
     public const string ProjectArchived = "Archived";
 
+    public const string TaskBacklog = "Backlog";
     public const string TaskTodo = "Todo";
     public const string TaskInProgress = "InProgress";
     public const string TaskBlocked = "Blocked";
@@ -29,7 +30,7 @@ public static class ProjectManagementDomainRules
     public const string MilestoneArchived = "Archived";
 
     public static readonly IReadOnlySet<string> ProjectRoles = new HashSet<string>(["Owner", "Manager", "Lead", "Member", "Viewer"], StringComparer.Ordinal);
-    public static readonly IReadOnlySet<string> TaskStatuses = new HashSet<string>([TaskTodo, TaskInProgress, TaskBlocked, TaskDone, TaskCancelled], StringComparer.Ordinal);
+    public static readonly IReadOnlySet<string> TaskStatuses = new HashSet<string>([TaskBacklog, TaskTodo, TaskInProgress, TaskBlocked, TaskDone, TaskCancelled], StringComparer.Ordinal);
     public static readonly IReadOnlySet<string> DependencyTypes = new HashSet<string>(["FinishToStart", "StartToStart", "FinishToFinish", "StartToFinish"], StringComparer.Ordinal);
 
     public static string RequireProjectStatus(string value) => RequireAllowed(value, [ProjectPlanning, ProjectActive, ProjectPaused, ProjectCompleted, ProjectCanceled, ProjectArchived], "项目状态不受支持");
@@ -58,9 +59,11 @@ public static class ProjectManagementDomainRules
         if (current == next) return;
         var allowed = current switch
         {
-            TaskTodo => new[] { TaskInProgress, TaskCancelled },
-            TaskInProgress => new[] { TaskBlocked, TaskDone, TaskCancelled },
-            TaskBlocked => new[] { TaskTodo, TaskInProgress, TaskCancelled },
+            TaskBacklog => new[] { TaskTodo, TaskInProgress, TaskCancelled },
+            TaskTodo => new[] { TaskBacklog, TaskInProgress, TaskCancelled },
+            TaskInProgress => new[] { TaskBacklog, TaskBlocked, TaskDone, TaskCancelled },
+            TaskBlocked => new[] { TaskBacklog, TaskTodo, TaskInProgress, TaskCancelled },
+            TaskDone => new[] { TaskInProgress },
             _ => Array.Empty<string>()
         };
         if (!allowed.Contains(next, StringComparer.Ordinal)) throw new ValidationException($"任务状态不能从 {current} 变更为 {next}");
@@ -85,6 +88,7 @@ public static class ProjectManagementDomainRules
     }
 
     public static decimal RequireProgress(decimal progress, string subject) => progress is < 0 or > 100 ? throw new ValidationException($"{subject}进度必须在 0 到 100 之间") : progress;
+    public static bool IsTaskOverdue(string status, DateTime? dueDate, DateTime utcNow) => dueDate.HasValue && dueDate.Value.Date < utcNow.Date && status is not (TaskDone or TaskCancelled);
 
     public static void EnsureTaskDepth(int depth)
     {

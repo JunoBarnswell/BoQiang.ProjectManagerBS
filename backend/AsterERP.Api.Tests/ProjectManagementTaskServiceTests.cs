@@ -131,6 +131,25 @@ public sealed class ProjectManagementTaskServiceTests
     }
 
     [Fact]
+    public async Task Task_state_machine_normalizes_progress_dates_parent_completion_and_overdue_projection()
+    {
+        using var db = CreateDb("task-state-machine");
+        await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
+        await db.Insertable(new ProjectManagementProjectEntity { Id = "project-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "A", ProjectName = "A", OwnerUserId = "operator" }).ExecuteCommandAsync();
+        var service = new ProjectManagementTaskService(new TestWorkspaceDatabaseAccessor(db), CreateUser());
+        var parent = await service.CreateAsync("project-a", new ProjectManagementTaskUpsertRequest("P", "Parent", ProgressPercent: 100));
+        Assert.Equal(ProjectManagementDomainRules.TaskDone, parent.Status);
+        Assert.NotNull(parent.ActualStartAt);
+        Assert.NotNull(parent.ActualEndAt);
+        var reopened = await service.UpdateAsync(parent.Id, new ProjectManagementTaskUpsertRequest("P", "Parent", Status: "Done", ProgressPercent: 20, VersionNo: parent.VersionNo));
+        Assert.Equal(ProjectManagementDomainRules.TaskInProgress, reopened.Status);
+        var child = await service.CreateAsync("project-a", new ProjectManagementTaskUpsertRequest("C", "Child", ParentTaskId: parent.Id, DueDate: DateTime.UtcNow.AddDays(-1)));
+        await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() => service.UpdateAsync(parent.Id, new ProjectManagementTaskUpsertRequest("P", "Parent", Status: "Done", ProgressPercent: 100, VersionNo: reopened.VersionNo)));
+        var detail = await service.GetAsync(child.Id);
+        Assert.True(detail.IsOverdue);
+    }
+
+    [Fact]
     public void Task_controller_separates_view_add_edit_move_and_delete_permissions()
     {
         Assert.Contains(typeof(ProjectManagementTasksController).GetCustomAttributes(typeof(PermissionAttribute), true), attribute => ((PermissionAttribute)attribute).Code == PermissionCodes.ProjectManagementTaskView);

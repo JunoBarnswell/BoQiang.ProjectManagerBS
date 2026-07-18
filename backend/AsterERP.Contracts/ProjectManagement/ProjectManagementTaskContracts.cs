@@ -37,7 +37,9 @@ public sealed record ProjectManagementTaskUpsertRequest(
     decimal? Weight = null,
     int? EstimateMinutes = null,
     long VersionNo = 0,
-    bool OverrideWip = false);
+    bool OverrideWip = false,
+    bool ForceComplete = false,
+    string? ForceCompleteReason = null);
 
 /// <summary>
 /// 移动任务树。<paramref name="BeforeTaskId"/> 是稳定排序的首选定位方式；
@@ -85,7 +87,10 @@ public sealed record ProjectManagementTaskListItemResponse(
     long VersionNo,
     int BlockedByCount,
     bool CanStart,
-    string? BlockedReason);
+    string? BlockedReason,
+    bool IsOverdue = false,
+    DateTime? ActualStartAt = null,
+    DateTime? ActualEndAt = null);
 
 /// <summary>
 /// 单任务详情，用于编辑和任务侧栏；列表加载不返回这些扩展字段。
@@ -115,7 +120,10 @@ public sealed record ProjectManagementTaskDetailResponse(
     DateTime? UpdatedTime,
     int BlockedByCount,
     bool CanStart,
-    string? BlockedReason);
+    string? BlockedReason,
+    bool IsOverdue = false,
+    DateTime? ActualStartAt = null,
+    DateTime? ActualEndAt = null);
 
 /// <summary>保留给既有批量、模板和我的任务契约的完整任务载荷。</summary>
 public sealed record ProjectManagementTaskResponse(
@@ -143,4 +151,5 @@ public sealed record ProjectManagementTaskResponse(
     DateTime? UpdatedTime,
     int BlockedByCount = 0,
     bool CanStart = true,
-    string? BlockedReason = null);
+    string? BlockedReason = null,
+    bool IsOverdue = false);
