@@ -22,7 +22,7 @@ public sealed class ProjectManagementMaintenanceLock(
         await Gate.WaitAsync(cancellationToken);
         try
         {
-            var db = databaseAccessor.GetCurrentDb();
+            var db = databaseAccessor.GetProjectManagementDb();
             var now = DateTime.UtcNow;
             var existing = await db.Queryable<ProjectManagementMaintenanceLockEntity>()
                 .Where(item => item.TenantId == tenantId && item.AppCode == appCode && item.LockKey == normalizedKey && !item.IsDeleted && item.ExpiresAt > now)
@@ -57,7 +57,7 @@ public sealed class ProjectManagementMaintenanceLock(
     public async Task ReleaseAsync(string operationId, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(operationId)) return;
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         var rows = await db.Queryable<ProjectManagementMaintenanceLockEntity>()
             .Where(item => item.OperationId == operationId && !item.IsDeleted).Take(1).ToListAsync(cancellationToken);
         var entity = rows.FirstOrDefault();

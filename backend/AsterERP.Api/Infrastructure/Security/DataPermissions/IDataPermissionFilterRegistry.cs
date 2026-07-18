@@ -4,6 +4,8 @@ public interface IDataPermissionFilterRegistry
 {
     void RegisterWorkspaceFilter(Type entityType);
 
+    void RegisterProjectManagementFilter(Type entityType);
+
     void RegisterAiWorkspaceFilter(Type entityType);
 
     void RegisterAiOwnedFilter(Type entityType);

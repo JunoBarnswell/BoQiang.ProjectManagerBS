@@ -22,6 +22,7 @@ public sealed class ProjectManagementBackupService(
 {
     public async Task<ProjectManagementBackupResponse> CreateAsync(ProjectManagementBackupRequest request, CancellationToken cancellationToken = default)
     {
+        EnsurePhysicalBackupSupported();
         await riskConfirmation.EnsureConfirmedAsync(request.CurrentPassword, request.ConfirmRisk, cancellationToken);
         var operationId = await maintenanceLock.AcquireAsync("project-management-backup", TimeSpan.FromMinutes(15), cancellationToken);
         var operationStarted = false;
@@ -54,6 +55,7 @@ public sealed class ProjectManagementBackupService(
 
     public async Task<IReadOnlyList<ProjectManagementBackupResponse>> ListAsync(CancellationToken cancellationToken = default)
     {
+        EnsurePhysicalBackupSupported();
         RequireWorkspace();
         var rows = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementBackupEntity>()
             .Where(item => !item.IsDeleted && item.Status == "Ready")
@@ -64,6 +66,7 @@ public sealed class ProjectManagementBackupService(
 
     public async Task<ProjectManagementBackupRestorePreviewResponse> PreviewRestoreAsync(string id, CancellationToken cancellationToken = default)
     {
+        EnsurePhysicalBackupSupported();
         RequireWorkspace();
         var target = await GetReadyBackupAsync(id, cancellationToken);
         var backupPath = GetAbsoluteBackupPath(target.RelativePath);
@@ -81,6 +84,7 @@ public sealed class ProjectManagementBackupService(
 
     public async Task<ProjectManagementBackupResponse> RestoreAsync(string id, ProjectManagementRestoreRequest request, CancellationToken cancellationToken = default)
     {
+        EnsurePhysicalBackupSupported();
         await riskConfirmation.EnsureConfirmedAsync(request.CurrentPassword, request.ConfirmRisk, cancellationToken);
         var db = databaseAccessor.GetCurrentDb();
         var target = await GetReadyBackupAsync(id, cancellationToken);
@@ -267,6 +271,11 @@ public sealed class ProjectManagementBackupService(
     }
 
     private ProjectManagementBackupResponse Map(ProjectManagementBackupEntity entity) => new(entity.Id, entity.BackupName, entity.Sha256, entity.FileSize, entity.Status, entity.CreatedByUserId, entity.CreatedTime, entity.CompletedAt);
+    private void EnsurePhysicalBackupSupported()
+    {
+        if (string.Equals(App(), "SYSTEM", StringComparison.OrdinalIgnoreCase))
+            throw new ValidationException("平台项目管理暂不支持物理备份或恢复；该操作会影响整个平台数据库");
+    }
     private void RequireWorkspace() { Tenant(); App(); }
     private string Tenant() => currentUser.GetAsterErpTenantId()?.Trim() ?? throw new ValidationException("当前会话缺少租户");
     private string App() => currentUser.GetAsterErpAppCode()?.Trim().ToUpperInvariant() ?? throw new ValidationException("当前会话缺少应用");

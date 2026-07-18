@@ -25,7 +25,7 @@ vi.mock('../../core/auth/usePermission', () => ({
 }));
 
 vi.mock('../../features/project-management/state/projectManagementWorkspaceScope', () => ({
-  useProjectManagementWorkspaceScope: () => ({ isAvailable: true, tenantId: 'tenant-a', appCode: 'MES' })
+  useProjectManagementWorkspaceScope: () => ({ isAvailable: true, tenantId: 'tenant-a', appCode: 'SYSTEM' })
 }));
 
 vi.mock('../../shared/responsive/ResponsivePage', () => ({

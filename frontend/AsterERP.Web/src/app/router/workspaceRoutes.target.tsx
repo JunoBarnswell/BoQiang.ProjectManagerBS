@@ -4,12 +4,18 @@ import { Navigate, type RouteObject } from 'react-router-dom';
 import { Page403 } from '../../shared/status/Page403';
 import { Page404 } from '../../shared/status/Page404';
 import { PageLoading } from '../../shared/status/PageLoading';
+import { projectManagementPlatformRoutePrefix, projectManagementRoutePaths } from '../../features/project-management/state/projectManagementPlatformRoutes';
 import { routeMeta } from '../navigation/routeMeta';
 
 import { RuntimePagePermissionRoute } from './RuntimePagePermissionRoute';
+import { projectManagementPlatformRoutes } from './routes/projectManagementPlatformRoutes';
 
 const DashboardPage = lazy(() => import('@/pages/dashboard/DashboardPage'));
 const RuntimePage = lazy(() => import('../../pages/runtime/RuntimePage').then((module) => ({ default: module.RuntimePage })));
+const legacyProjectManagementRoutes: RouteObject[] = projectManagementRoutePaths.map((path) => ({
+  path,
+  element: <Navigate replace to={projectManagementPlatformRoutePrefix} />,
+}));
 
 function lazyPage(children: ReactNode) {
   return <Suspense fallback={<PageLoading />}>{children}</Suspense>;
@@ -64,6 +70,8 @@ export const workspaceRoutes: RouteObject[] = [
     }),
     element: <RuntimePagePermissionRoute>{lazyPage(<RuntimePage />)}</RuntimePagePermissionRoute>
   },
+  ...projectManagementPlatformRoutes,
+  ...legacyProjectManagementRoutes,
   {
     path: '403',
     element: <Page403 />

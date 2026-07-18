@@ -150,6 +150,76 @@ public sealed class ApplicationDatabaseBaselineSeederTests : IDisposable
     }
 
     [Fact]
+    public async Task SeedAsync_RetiresProjectManagementShellArtifactsAndDoesNotGrantAppAdmin()
+    {
+        using var db = CreateDb();
+        new ApplicationSystemAdministrationSchemaInitializer().Initialize(db);
+        var seeder = CreateSeeder();
+        var currentUser = CreateCurrentUser();
+        var legacyPermission = new SystemPermissionCodeEntity
+        {
+            Id = "legacy-project-management-view",
+            ModuleName = "ProjectManagement",
+            PermissionCode = PermissionCodes.ProjectManagementProjectView,
+            PermissionName = "项目中心访问",
+            IsEnabled = true,
+            CreatedBy = "legacy",
+            CreatedTime = DateTime.UtcNow,
+            IsDeleted = false
+        };
+        var appAdminRole = new SystemRoleEntity
+        {
+            Id = "legacy-app-admin",
+            TenantId = "tenant-a",
+            AppCode = "MES",
+            RoleName = "应用管理员",
+            RoleCode = "app_admin",
+            DataScope = "ALL",
+            IsEnabled = true,
+            CreatedBy = "legacy",
+            CreatedTime = DateTime.UtcNow,
+            IsDeleted = false
+        };
+        await db.Insertable(new[] { legacyPermission }).ExecuteCommandAsync();
+        await db.Insertable(new[] { appAdminRole }).ExecuteCommandAsync();
+        await db.Insertable(new SystemRolePermissionEntity
+        {
+            Id = "legacy-project-management-grant",
+            RoleId = appAdminRole.Id,
+            PermissionCodeId = legacyPermission.Id,
+            CreatedBy = "legacy",
+            CreatedTime = DateTime.UtcNow,
+            IsDeleted = false
+        }).ExecuteCommandAsync();
+        await db.Insertable(CreateLegacyShellMenu(
+            "project-management",
+            "项目管理",
+            null,
+            "/project-management",
+            PermissionCodes.ProjectManagementProjectView,
+            "Menu",
+            7)).ExecuteCommandAsync();
+
+        await seeder.SeedAsync(db, "tenant-a", "MES", currentUser, CancellationToken.None);
+
+        var retiredPermission = await db.Queryable<SystemPermissionCodeEntity>()
+            .FirstAsync(item => item.Id == legacyPermission.Id);
+        var retiredMenu = await db.Queryable<SystemMenuEntity>()
+            .FirstAsync(item => item.TenantId == "tenant-a" && item.AppCode == "MES" && item.MenuCode == "project-management");
+        var activeProjectManagementGrants = await db.Queryable<SystemRolePermissionEntity>()
+            .Where(item => item.RoleId == appAdminRole.Id && !item.IsDeleted)
+            .InnerJoin<SystemPermissionCodeEntity>((grant, permission) => grant.PermissionCodeId == permission.Id && !permission.IsDeleted)
+            .Where((grant, permission) => permission.PermissionCode.StartsWith("project-management:"))
+            .AnyAsync();
+
+        Assert.True(retiredPermission.IsDeleted);
+        Assert.False(retiredPermission.IsEnabled);
+        Assert.True(retiredMenu.IsDeleted);
+        Assert.False(retiredMenu.Visible);
+        Assert.False(activeProjectManagementGrants);
+    }
+
+    [Fact]
     public async Task SeedAsync_RegistersDevelopmentCenterMonitoringPermission()
     {
         using var db = CreateDb();

@@ -1,4 +1,5 @@
 using AsterERP.Shared;
+using AsterERP.Api.Application.ProjectManagement;
 using AsterERP.Api.Modules.AsterScene;
 using AsterERP.Api.Modules.Ai;
 using AsterERP.Api.Modules.Ai.Flowise;
@@ -60,6 +61,12 @@ public sealed class DataPermissionFilterRegistrar(
 
     public async Task<IDataPermissionFilterScope> RegisterAsync(CancellationToken cancellationToken = default)
     {
+        var path = httpContextAccessor.HttpContext?.Request.Path.Value;
+        if (requestClassifier.IsProjectManagementApi(path))
+        {
+            ProjectManagementPlatformScope.RequireSystemWorkspace(currentUser);
+        }
+
         registrationDb = ShouldUseWorkspaceDatabase()
             ? databaseAccessor.GetCurrentDb()
             : databaseAccessor.MainDb;
@@ -70,6 +77,7 @@ public sealed class DataPermissionFilterRegistrar(
             var registry = BuildRegistry();
             await RegisterCoreEntityFiltersAsync(cancellationToken);
             RegisterWorkspaceFilters(registry);
+            RegisterProjectManagementFilters(registry);
             RegisterAiFilters(registry);
             RegisterWorkflowFilters(registry);
             RegisterImFilters(registry);
@@ -159,8 +167,7 @@ public sealed class DataPermissionFilterRegistrar(
             requestClassifier.IsRuntimeWorkspaceApi(path) ||
             requestClassifier.IsAiWorkspaceApi(path) ||
             requestClassifier.IsWorkflowWorkspaceApi(path) ||
-            requestClassifier.IsAsterSceneApi(path) ||
-            requestClassifier.IsProjectManagementApi(path);
+            requestClassifier.IsAsterSceneApi(path);
     }
 
     private DataPermissionFilterRegistry BuildRegistry()
@@ -181,8 +188,7 @@ public sealed class DataPermissionFilterRegistrar(
         var path = httpContextAccessor.HttpContext?.Request.Path.Value ?? string.Empty;
         if ((!requestClassifier.IsApplicationDevelopmentCenterApi(path) &&
             !requestClassifier.IsRuntimeWorkspaceApi(path) &&
-            !requestClassifier.IsApplicationDataCenterApi(path) &&
-            !requestClassifier.IsProjectManagementApi(path)) ||
+            !requestClassifier.IsApplicationDataCenterApi(path)) ||
             !currentUser.IsAsterErpAuthenticated())
         {
             return;
@@ -208,6 +214,35 @@ public sealed class DataPermissionFilterRegistrar(
             if (!ProjectManagementDataPermissionFilterRegistrar.TryRegister(Db, entityType, currentUser, tenantId, appCode))
             {
                 RegisterWorkspaceFilter(entityType, tenantId, appCode);
+            }
+        }
+    }
+
+    private void RegisterProjectManagementFilters(DataPermissionFilterRegistry registry)
+    {
+        var path = httpContextAccessor.HttpContext?.Request.Path.Value ?? string.Empty;
+        if (!requestClassifier.IsProjectManagementApi(path) ||
+            !currentUser.IsAsterErpAuthenticated())
+        {
+            return;
+        }
+
+        var tenantId = currentUser.GetAsterErpTenantId();
+        if (string.IsNullOrWhiteSpace(tenantId))
+        {
+            return;
+        }
+
+        foreach (var entityType in registry.ProjectManagementEntityTypes)
+        {
+            if (!ProjectManagementDataPermissionFilterRegistrar.TryRegister(
+                    Db,
+                    entityType,
+                    currentUser,
+                    tenantId,
+                    ProjectManagementPlatformScope.AppCode))
+            {
+                throw new InvalidOperationException($"Unsupported project-management data filter entity '{entityType.FullName}'.");
             }
         }
     }

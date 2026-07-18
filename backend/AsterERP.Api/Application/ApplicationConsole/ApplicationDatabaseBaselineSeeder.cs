@@ -12,10 +12,11 @@ public sealed class ApplicationDatabaseBaselineSeeder(
     ApplicationWorkflowAcceptanceBaselineSeeder workflowAcceptanceBaselineSeeder,
     ApplicationShellCapabilityResolver shellCapabilityResolver)
 {
-    public const string BaselineVersion = "2026.07.18.1";
+    public const string BaselineVersion = "2026.07.18.2";
     public const string BaselineParameterKey = "app.shell.baselineVersion";
     public const string CapabilitySignatureParameterKey = "app.shell.capabilitySignature";
     private const string RetiredAdminCenterMenuCode = "admin-center";
+    private const string RetiredProjectManagementMenuCode = "project-management";
 
     public async Task<bool> IsCurrentAsync(ISqlSugarClient appDb, CancellationToken cancellationToken = default)
     {
@@ -323,6 +324,7 @@ public sealed class ApplicationDatabaseBaselineSeeder(
         var retiredMenuCodes = ApplicationShellMenuCatalog.OptionalItems
             .Select(item => item.MenuCode)
             .Append(RetiredAdminCenterMenuCode)
+            .Append(RetiredProjectManagementMenuCode)
             .Where(menuCode => !activeMenuCodes.Contains(menuCode))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();

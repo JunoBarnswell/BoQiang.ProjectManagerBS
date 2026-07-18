@@ -18,12 +18,13 @@ import { useApiMutation } from '../../core/query/useApiMutation';
 import '../../features/project-management/projectManagement.css';
 import { ProjectManagementPageStateView } from '../../features/project-management/components/ProjectManagementPageState';
 import { useProjectManagementWorkspaceScope } from '../../features/project-management/state/projectManagementWorkspaceScope';
+import { toProjectManagementPlatformRoute } from '../../features/project-management/state/projectManagementPlatformRoutes';
 import { PermissionButton } from '../../shared/auth/PermissionButton';
 import { PermissionGuard } from '../../shared/auth/PermissionGuard';
 import { useConfirm } from '../../shared/feedback/useConfirm';
 import { useMessage } from '../../shared/feedback/useMessage';
-import { ModalForm } from '../../shared/forms/ModalForm';
 import type { FormFieldConfig } from '../../shared/forms/formTypes';
+import { ModalForm } from '../../shared/forms/ModalForm';
 import { ResponsivePage } from '../../shared/responsive/ResponsivePage';
 import { Page403 } from '../../shared/status/Page403';
 import { PageError } from '../../shared/status/PageError';
@@ -150,7 +151,7 @@ export function ProjectManagementPage() {
         columns={columns}
         emptyText="暂无符合筛选条件的项目"
         loading={projectsQuery.isFetching}
-        rowActions={(row) => <div className="pm-project-actions"><button type="button" onClick={() => navigate(`/projects/${encodeURIComponent(row.id)}/overview`)}>进入项目</button><PermissionButton code="project-management:project:edit" onClick={() => { setEditingId(row.id); setForm({ projectCode: row.projectCode, projectName: row.projectName, description: row.description, status: row.status, priority: row.priority, ownerUserId: row.ownerUserId, startDate: row.startDate, dueDate: row.dueDate, progressPercent: row.progressPercent, versionNo: row.versionNo }); setFormDirty(false); setEditorOpen(true); }}>编辑</PermissionButton><PermissionButton code="project-management:project:delete" disabled={deleteMutation.isPending} onClick={() => confirm({ title: '移入项目回收站', content: `项目“${row.projectName}”将被移入回收站，关联对象的恢复规则由服务端校验。`, confirmText: '移入回收站', onConfirm: () => deleteMutation.mutate(row) })}>删除</PermissionButton></div>}
+        rowActions={(row) => <div className="pm-project-actions"><button type="button" onClick={() => navigate(toProjectManagementPlatformRoute(`projects/${encodeURIComponent(row.id)}/overview`))}>进入项目</button><PermissionButton code="project-management:project:edit" onClick={() => { setEditingId(row.id); setForm({ projectCode: row.projectCode, projectName: row.projectName, description: row.description, status: row.status, priority: row.priority, ownerUserId: row.ownerUserId, startDate: row.startDate, dueDate: row.dueDate, progressPercent: row.progressPercent, versionNo: row.versionNo }); setFormDirty(false); setEditorOpen(true); }}>编辑</PermissionButton><PermissionButton code="project-management:project:delete" disabled={deleteMutation.isPending} onClick={() => confirm({ title: '移入项目回收站', content: `项目“${row.projectName}”将被移入回收站，关联对象的恢复规则由服务端校验。`, confirmText: '移入回收站', onConfirm: () => deleteMutation.mutate(row) })}>删除</PermissionButton></div>}
         rowKey={(row) => row.id}
         rows={rows}
         showColumnSettings

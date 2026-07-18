@@ -100,7 +100,7 @@ public sealed class ProjectManagementOperationWriter(
 
     public async Task RequestCancellationAsync(string operationId, CancellationToken cancellationToken = default)
     {
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         var now = DateTime.UtcNow;
         ProjectManagementOperationEntity? entity = null;
         await ProjectManagementMutationTransaction.RunAsync(db, async () =>
@@ -166,7 +166,7 @@ public sealed class ProjectManagementOperationWriter(
 
     public async Task FailRunningExceptAsync(string operationId, string errorMessage, CancellationToken cancellationToken = default)
     {
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         var rows = await db.Queryable<ProjectManagementOperationEntity>()
             .Where(item => item.Id != operationId && item.TenantId == Tenant() && item.AppCode == App() && (item.Status == "Pending" || item.Status == "Running") && !item.IsDeleted)
             .ToListAsync(cancellationToken);
@@ -197,7 +197,7 @@ public sealed class ProjectManagementOperationWriter(
     private async Task<bool> PersistAsync(ProjectManagementOperationEntity entity, CancellationToken cancellationToken)
     {
         if (transitionObserver is not null) await transitionObserver.BeforePersistAsync(entity, cancellationToken);
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         var expectedVersion = entity.VersionNo;
         entity.VersionNo++;
         try
@@ -225,7 +225,7 @@ public sealed class ProjectManagementOperationWriter(
 
     private async Task CreateAndPublishAsync(ProjectManagementOperationEntity entity, CancellationToken cancellationToken)
     {
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         await ProjectManagementMutationTransaction.RunAsync(db, async () =>
         {
             await db.Insertable(entity).ExecuteCommandAsync(cancellationToken);
@@ -260,7 +260,7 @@ public sealed class ProjectManagementOperationWriter(
         ?? throw new ValidationException("长任务不存在或无权访问");
 
     private async Task<ProjectManagementOperationEntity?> FindOwnedAsync(string operationId, CancellationToken cancellationToken) =>
-        (await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementOperationEntity>()
+        (await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementOperationEntity>()
             .Where(item => item.Id == operationId && item.TenantId == Tenant() && item.AppCode == App() && item.ActorUserId == UserId() && !item.IsDeleted)
             .Take(1).ToListAsync(cancellationToken)).FirstOrDefault();
 

@@ -15,6 +15,7 @@ import { isHttpError } from '../../core/http/httpError';
 import { queryKeys } from '../../core/query/queryKeys';
 import { useApiMutation } from '../../core/query/useApiMutation';
 import { useProjectManagementWorkspaceScope } from '../../features/project-management/state/projectManagementWorkspaceScope';
+import { toProjectManagementPlatformRoute } from '../../features/project-management/state/projectManagementPlatformRoutes';
 import { PermissionButton } from '../../shared/auth/PermissionButton';
 import { PermissionGuard } from '../../shared/auth/PermissionGuard';
 import { useMessage } from '../../shared/feedback/useMessage';
@@ -91,7 +92,7 @@ export function ProjectManagementDataSpacePage() {
       title="项目数据空间"
       eyebrow="ProjectManagement / Data Space"
       description="查看当前授权项目域数据摘要，并通过统一 bqsync 协议进行预览和导出。"
-      toolbar={<div className="flex flex-wrap items-center gap-3 text-sm"><span className="text-gray-500">{summary.tenantId} / {summary.appCode} · {summary.databaseStatus}</span><PermissionGuard code="project-management:sync:export" fallback={null}><Link to="/project-sync">查看同步水位</Link></PermissionGuard><Link to="/project-search">项目搜索</Link></div>}
+      toolbar={<div className="flex flex-wrap items-center gap-3 text-sm"><span className="text-gray-500">{summary.tenantId} / {summary.appCode} · {summary.databaseStatus}</span><PermissionGuard code="project-management:sync:export" fallback={null}><Link to={toProjectManagementPlatformRoute('project-sync')}>查看同步水位</Link></PermissionGuard><Link to={toProjectManagementPlatformRoute('project-search')}>项目搜索</Link></div>}
     >
       <div className="grid gap-3 md:grid-cols-5">
         {[

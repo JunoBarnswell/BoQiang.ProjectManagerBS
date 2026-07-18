@@ -67,29 +67,29 @@ public sealed class AsterErpProjectManagementModule : AbpModule
 
     public static void RegisterDataFilters(IDataPermissionFilterRegistry registry)
     {
-        registry.RegisterWorkspaceFilter(typeof(ProjectManagementProjectEntity));
-        registry.RegisterWorkspaceFilter(typeof(ProjectManagementProjectMemberEntity));
-        registry.RegisterWorkspaceFilter(typeof(ProjectManagementMilestoneEntity));
-        registry.RegisterWorkspaceFilter(typeof(ProjectManagementTaskEntity));
-        registry.RegisterWorkspaceFilter(typeof(ProjectManagementTaskDependencyEntity));
-        registry.RegisterWorkspaceFilter(typeof(ProjectManagementTaskParticipantEntity));
-        registry.RegisterWorkspaceFilter(typeof(ProjectManagementLabelEntity));
-        registry.RegisterWorkspaceFilter(typeof(ProjectManagementTaskLabelEntity));
-        registry.RegisterWorkspaceFilter(typeof(ProjectManagementTaskTimeLogEntity));
-        registry.RegisterWorkspaceFilter(typeof(ProjectManagementTaskTemplateEntity));
-        registry.RegisterWorkspaceFilter(typeof(ProjectManagementTaskOccurrenceEntity));
-        registry.RegisterWorkspaceFilter(typeof(ProjectManagementActivityEntity));
-        registry.RegisterWorkspaceFilter(typeof(ProjectManagementTaskCommentEntity));
-        registry.RegisterWorkspaceFilter(typeof(ProjectManagementTaskCommentMentionEntity));
-        registry.RegisterWorkspaceFilter(typeof(ProjectManagementTaskAttachmentEntity));
-        registry.RegisterWorkspaceFilter(typeof(ProjectManagementNotificationEntity));
-        registry.RegisterWorkspaceFilter(typeof(ProjectManagementTaskReminderEntity));
-        registry.RegisterWorkspaceFilter(typeof(ProjectManagementSavedViewEntity));
-        registry.RegisterWorkspaceFilter(typeof(ProjectManagementSyncJournalEntity));
-        registry.RegisterWorkspaceFilter(typeof(ProjectManagementSyncDeviceEntity));
-        registry.RegisterWorkspaceFilter(typeof(ProjectManagementMaintenanceLockEntity));
-        registry.RegisterWorkspaceFilter(typeof(ProjectManagementBackupEntity));
-        registry.RegisterWorkspaceFilter(typeof(ProjectManagementOperationEntity));
-        registry.RegisterWorkspaceFilter(typeof(ProjectManagementImConversationLinkEntity));
+        registry.RegisterProjectManagementFilter(typeof(ProjectManagementProjectEntity));
+        registry.RegisterProjectManagementFilter(typeof(ProjectManagementProjectMemberEntity));
+        registry.RegisterProjectManagementFilter(typeof(ProjectManagementMilestoneEntity));
+        registry.RegisterProjectManagementFilter(typeof(ProjectManagementTaskEntity));
+        registry.RegisterProjectManagementFilter(typeof(ProjectManagementTaskDependencyEntity));
+        registry.RegisterProjectManagementFilter(typeof(ProjectManagementTaskParticipantEntity));
+        registry.RegisterProjectManagementFilter(typeof(ProjectManagementLabelEntity));
+        registry.RegisterProjectManagementFilter(typeof(ProjectManagementTaskLabelEntity));
+        registry.RegisterProjectManagementFilter(typeof(ProjectManagementTaskTimeLogEntity));
+        registry.RegisterProjectManagementFilter(typeof(ProjectManagementTaskTemplateEntity));
+        registry.RegisterProjectManagementFilter(typeof(ProjectManagementTaskOccurrenceEntity));
+        registry.RegisterProjectManagementFilter(typeof(ProjectManagementActivityEntity));
+        registry.RegisterProjectManagementFilter(typeof(ProjectManagementTaskCommentEntity));
+        registry.RegisterProjectManagementFilter(typeof(ProjectManagementTaskCommentMentionEntity));
+        registry.RegisterProjectManagementFilter(typeof(ProjectManagementTaskAttachmentEntity));
+        registry.RegisterProjectManagementFilter(typeof(ProjectManagementNotificationEntity));
+        registry.RegisterProjectManagementFilter(typeof(ProjectManagementTaskReminderEntity));
+        registry.RegisterProjectManagementFilter(typeof(ProjectManagementSavedViewEntity));
+        registry.RegisterProjectManagementFilter(typeof(ProjectManagementSyncJournalEntity));
+        registry.RegisterProjectManagementFilter(typeof(ProjectManagementSyncDeviceEntity));
+        registry.RegisterProjectManagementFilter(typeof(ProjectManagementMaintenanceLockEntity));
+        registry.RegisterProjectManagementFilter(typeof(ProjectManagementBackupEntity));
+        registry.RegisterProjectManagementFilter(typeof(ProjectManagementOperationEntity));
+        registry.RegisterProjectManagementFilter(typeof(ProjectManagementImConversationLinkEntity));
     }
 }

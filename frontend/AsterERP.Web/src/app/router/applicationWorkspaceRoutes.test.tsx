@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 
-import type { RouteObject } from 'react-router-dom';
+import { matchRoutes, type RouteObject } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
 
 import { buildRuntimePageViewPermission } from './RuntimePagePermissionRoute';
+import { platformRoutes } from './routes/platformRoutes';
 import { applicationWorkspaceRoutes, workspaceRoutes } from './workspaceRoutes';
+import { workspaceRoutes as targetApplicationWorkspaceRoutes } from './workspaceRoutes.target';
 
 describe('applicationWorkspaceRoutes', () => {
   it('keeps low-code runtime pages available through the application admin dynamic route', () => {
@@ -40,12 +42,27 @@ describe('applicationWorkspaceRoutes', () => {
     expect(buildRuntimePageViewPermission(undefined)).toBe('app:runtime-page:unknown:view');
   });
 
-  it('keeps the project overview route behind project:view instead of task:view', () => {
-    const overviewRoute = flattenRoutes(workspaceRoutes).find((item) => item.path === 'projects/:projectId/overview');
-    const permissionCode = (overviewRoute?.element as { props?: { permissionCode?: string } } | undefined)?.props?.permissionCode;
+  it('moves project overview to the platform workspace and safely redirects legacy application paths', () => {
+    const platformOverviewRoute = flattenRoutes(platformRoutes).find((item) => item.path === 'platform/project-management/projects/:projectId/overview');
+    const legacyOverviewRoute = flattenRoutes(workspaceRoutes).find((item) => item.path === 'projects/:projectId/overview');
+    const applicationOverviewRoute = flattenRoutes(applicationWorkspaceRoutes).find((item) => item.path === 'projects/:projectId/overview');
+    const permissionCode = (platformOverviewRoute?.element as { props?: { permissionCode?: string } } | undefined)?.props?.permissionCode;
+    const legacyTarget = (legacyOverviewRoute?.element as { props?: { to?: string } } | undefined)?.props?.to;
+    const applicationTarget = (applicationOverviewRoute?.element as { props?: { to?: string } } | undefined)?.props?.to;
 
-    expect(overviewRoute).toBeDefined();
+    expect(platformOverviewRoute).toBeDefined();
     expect(permissionCode).toBe('project-management:project:view');
+    expect(legacyTarget).toBe('/platform/project-management');
+    expect(applicationTarget).toBe('/platform/project-management');
+  });
+
+  it('keeps the platform PM route registered in an application-target frontend build', () => {
+    const matches = matchRoutes([{ children: targetApplicationWorkspaceRoutes, path: '/' }], '/platform/project-management');
+    const platformRoute = flattenRoutes(targetApplicationWorkspaceRoutes).find((item) => item.path === 'platform/project-management');
+
+    expect(matches?.at(-1)?.route).toBe(platformRoute);
+    expect((platformRoute?.element as { props?: { permissionCode?: string } } | undefined)?.props?.permissionCode)
+      .toBe('project-management:project:view');
   });
 
   it('keeps the latest Page Studio entry actions behind designer permissions', () => {

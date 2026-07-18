@@ -32,10 +32,18 @@ public sealed class WorkspaceDatabaseAccessor(
         return RequireApplicationDb();
     }
 
+    public ISqlSugarClient GetProjectManagementDb() => mainDb;
+
     public Task<ISqlSugarClient> GetCurrentDbAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         return Task.FromResult(GetCurrentDb());
+    }
+
+    public Task<ISqlSugarClient> GetProjectManagementDbAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult(GetProjectManagementDb());
     }
 
     public ISqlSugarClient RequireApplicationDb()

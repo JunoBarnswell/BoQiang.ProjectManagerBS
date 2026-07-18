@@ -7,6 +7,7 @@ import { usePermission } from '../../core/auth/usePermission';
 import { isHttpError } from '../../core/http/httpError';
 import { useApiMutation } from '../../core/query/useApiMutation';
 import { useProjectManagementWorkspaceScope } from '../../features/project-management/state/projectManagementWorkspaceScope';
+import { toProjectManagementPlatformRoute } from '../../features/project-management/state/projectManagementPlatformRoutes';
 import { PermissionButton } from '../../shared/auth/PermissionButton';
 import { useMessage } from '../../shared/feedback/useMessage';
 import { ResponsivePage } from '../../shared/responsive/ResponsivePage';
@@ -58,7 +59,7 @@ export function ProjectManagementSyncPage() {
     title="项目同步"
     eyebrow="ProjectManagement / Sync"
     description={canExport ? '查看当前工作区的同步水位和变更 journal，并导入同步包；所有确认操作由服务端校验序号。' : '当前账号可导入同步包，但没有查看同步水位和变更记录的权限。'}
-    toolbar={canExport ? <Link to="/project-data-space">前往数据空间导入或导出同步包</Link> : null}
+    toolbar={canExport ? <Link to={toProjectManagementPlatformRoute('project-data-space')}>前往数据空间导入或导出同步包</Link> : null}
   >
     {canExport ? <>
     <section className="rounded-lg border border-gray-200 p-4">

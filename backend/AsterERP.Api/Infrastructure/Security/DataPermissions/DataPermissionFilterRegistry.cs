@@ -3,6 +3,7 @@ namespace AsterERP.Api.Infrastructure.Security.DataPermissions;
 public sealed class DataPermissionFilterRegistry : IDataPermissionFilterRegistry
 {
     private readonly HashSet<Type> workspaceEntityTypes = [];
+    private readonly HashSet<Type> projectManagementEntityTypes = [];
     private readonly HashSet<Type> aiWorkspaceEntityTypes = [];
     private readonly HashSet<Type> aiOwnedEntityTypes = [];
     private readonly HashSet<Type> workflowWorkspaceEntityTypes = [];
@@ -11,6 +12,8 @@ public sealed class DataPermissionFilterRegistry : IDataPermissionFilterRegistry
     private readonly HashSet<Type> imTenantEntityTypes = [];
 
     public IReadOnlyCollection<Type> WorkspaceEntityTypes => workspaceEntityTypes;
+
+    public IReadOnlyCollection<Type> ProjectManagementEntityTypes => projectManagementEntityTypes;
 
     public IReadOnlyCollection<Type> AiWorkspaceEntityTypes => aiWorkspaceEntityTypes;
 
@@ -27,6 +30,11 @@ public sealed class DataPermissionFilterRegistry : IDataPermissionFilterRegistry
     public void RegisterWorkspaceFilter(Type entityType)
     {
         workspaceEntityTypes.Add(entityType);
+    }
+
+    public void RegisterProjectManagementFilter(Type entityType)
+    {
+        projectManagementEntityTypes.Add(entityType);
     }
 
     public void RegisterAiWorkspaceFilter(Type entityType)

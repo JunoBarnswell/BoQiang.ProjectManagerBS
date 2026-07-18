@@ -43,7 +43,7 @@ public sealed class ProjectManagementOperationService(
     }
 
     private async Task<ProjectManagementOperationEntity> GetOwnedAsync(string operationId, CancellationToken cancellationToken) =>
-        (await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementOperationEntity>()
+        (await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementOperationEntity>()
             .Where(item => item.Id == Required(operationId) && item.TenantId == Tenant() && item.AppCode == App() && item.ActorUserId == UserId() && !item.IsDeleted)
             .Take(1).ToListAsync(cancellationToken)).FirstOrDefault()
         ?? throw new NotFoundException("长任务不存在或无权访问", ErrorCodes.PlatformResourceNotFound);

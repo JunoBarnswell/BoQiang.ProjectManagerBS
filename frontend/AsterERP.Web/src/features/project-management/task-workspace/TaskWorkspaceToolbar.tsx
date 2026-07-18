@@ -4,6 +4,7 @@ import { Link, useLocation } from 'react-router-dom';
 import type { ProjectManagementSavedView, ProjectManagementTaskView } from '../../../api/project-management/projectManagement.types';
 import { PermissionButton } from '../../../shared/auth/PermissionButton';
 import type { TaskWorkspaceState } from '../state/taskWorkspaceState';
+import { toProjectManagementPlatformRoute } from '../state/projectManagementPlatformRoutes';
 
 interface TaskWorkspaceToolbarProps {
   onOpenBatch: () => void;
@@ -56,7 +57,7 @@ export function TaskWorkspaceToolbar({
           <Link
             className={view.key === state.viewKey ? 'rounded bg-blue-600 px-3 py-1 text-sm text-white' : 'rounded border border-gray-300 px-3 py-1 text-sm'}
             key={view.key}
-            to={`/projects/${encodeURIComponent(projectId)}/${view.path}${location.search}`}
+            to={`${toProjectManagementPlatformRoute(`projects/${encodeURIComponent(projectId)}/${view.path}`)}${location.search}`}
           >
             {view.label}
           </Link>

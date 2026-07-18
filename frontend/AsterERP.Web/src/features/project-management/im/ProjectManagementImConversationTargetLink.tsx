@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { getProjectManagementImConversationTarget } from '../../../api/project-management/projectManagement.api';
+import { normalizeProjectManagementTargetRoute } from '../state/projectManagementPlatformRoutes';
 import { useMessage } from '../../../shared/feedback/useMessage';
 import { getErrorMessage } from '../../../shared/utils/errorMessage';
 
@@ -23,7 +24,7 @@ export function ProjectManagementImConversationTargetLink({ conversationId }: Pr
         message.error('关联项目或任务已不可访问');
         return;
       }
-      navigate(target.targetRoute);
+      navigate(normalizeProjectManagementTargetRoute(target.targetRoute));
     } catch (error) {
       message.error(getErrorMessage(error, '关联目标打开失败'));
     } finally {

@@ -124,6 +124,24 @@ public sealed class ProjectManagementBackupServiceTests
         }
     }
 
+    [Fact]
+    public async Task Platform_workspace_rejects_physical_backup_before_writing_the_main_database()
+    {
+        using var db = new SqlSugarClient(new ConnectionConfig { ConnectionString = $"Data Source=file:project-management-platform-backup-{Guid.NewGuid():N};Mode=Memory;Cache=Shared", DbType = DbType.Sqlite, IsAutoCloseConnection = false });
+        await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
+        var user = new FixedAsterErpCurrentUser(new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(AsterErpClaimTypes.UserId, "operator"), new Claim(AsterErpClaimTypes.TenantId, "tenant-a"), new Claim(AsterErpClaimTypes.AppCode, "SYSTEM")
+        }, "test")));
+        var accessor = new TestWorkspaceDatabaseAccessor(db);
+        var service = new ProjectManagementBackupService(accessor, user,
+            new ProjectManagementRiskConfirmationService(accessor, user, new TestPasswordHashService()),
+            new ProjectManagementMaintenanceLock(accessor, user), new TestHostEnvironment(Path.GetTempPath()));
+
+        await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() => service.CreateAsync(new ProjectManagementBackupRequest("secret", true)));
+        Assert.Equal(0, await db.Queryable<ProjectManagementBackupEntity>().CountAsync());
+    }
+
     private sealed class TestWorkspaceDatabaseAccessor(ISqlSugarClient db) : IWorkspaceDatabaseAccessor
     {
         public ISqlSugarClient MainDb => db;

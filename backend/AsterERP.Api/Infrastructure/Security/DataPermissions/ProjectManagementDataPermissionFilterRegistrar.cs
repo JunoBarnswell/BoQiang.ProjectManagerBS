@@ -1,4 +1,5 @@
 using AsterERP.Api.Infrastructure.Security;
+using AsterERP.Api.Application.ProjectManagement;
 using AsterERP.Api.Modules.ProjectManagement;
 using SqlSugar;
 using Volo.Abp.Users;
@@ -14,6 +15,7 @@ public static class ProjectManagementDataPermissionFilterRegistrar
         string tenantId,
         string appCode)
     {
+        appCode = ProjectManagementPlatformScope.AppCode;
         var userId = currentUser.GetAsterErpUserId();
         var restrictToMembership =
             !currentUser.IsAsterErpPlatformAdmin() &&

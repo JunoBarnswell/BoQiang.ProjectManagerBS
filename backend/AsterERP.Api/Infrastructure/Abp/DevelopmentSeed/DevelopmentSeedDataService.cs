@@ -12,6 +12,7 @@ using AsterERP.Api.Modules.Platform;
 using AsterERP.Api.Modules.Runtime;
 using AsterERP.Api.Infrastructure.Security;
 using AsterERP.Api.Application.ApplicationConsole;
+using AsterERP.Api.Application.ProjectManagement;
 using AsterERP.Shared;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -228,6 +229,7 @@ public sealed class DevelopmentSeedDataService(
         codes = codes
             .Concat(BuildApplicationDataCenterPermissionSeedCodes())
             .Concat(BuildImPermissionSeedCodes())
+            .Concat(BuildProjectManagementPermissionSeedCodes())
             .GroupBy(item => item.PermissionCode, StringComparer.OrdinalIgnoreCase)
             .Select(group => group.First())
             .ToArray();
@@ -284,6 +286,16 @@ public sealed class DevelopmentSeedDataService(
             ModuleName = "IM",
             PermissionCode = code,
             PermissionName = BuildPermissionDisplayName(code)
+        });
+    }
+
+    private static IEnumerable<SystemPermissionCodeEntity> BuildProjectManagementPermissionSeedCodes()
+    {
+        return ProjectManagementPlatformPermissionCatalog.Definitions.Select(definition => new SystemPermissionCodeEntity
+        {
+            ModuleName = "ProjectManagement",
+            PermissionCode = definition.PermissionCode,
+            PermissionName = definition.PermissionName
         });
     }
 
@@ -823,6 +835,7 @@ public sealed class DevelopmentSeedDataService(
         UpsertMenu("platform:tenant-app", "租户应用", "platform", "/platform/tenant-apps", "PlatformTenantAppsPage", "Menu", 3, true, "platform:tenant-app:query", "Boxes");
         UpsertMenu("platform:user-tenant", "用户租户关系", "platform", "/platform/user-tenants", "PlatformUserTenantsPage", "Menu", 4, true, "platform:user-tenant:query", "Users");
         UpsertMenu("platform:user-app-role", "用户应用角色", "platform", "/platform/user-app-roles", "PlatformUserAppRolesPage", "Menu", 5, true, "platform:user-app-role:query", "ShieldCheck");
+        UpsertMenu("project-management", "项目管理", "platform", "/platform/project-management", "ProjectManagementPage", "Menu", 6, true, PermissionCodes.ProjectManagementProjectView, "KanbanSquare");
         UpsertBpmMenuTree("tenant-system", "SYSTEM", 4);
         UpsertMenu("system:user", "用户管理", "system", "/system/users", "UsersPage", "Menu", 1, true, "system:user:query", "UserCog");
         UpsertMenu("system:user:add", "新增用户", "system:user", null, null, "Button", 1, true, "system:user:add", null);

@@ -5,6 +5,7 @@ import { routeMeta } from '../../navigation/routeMeta';
 import { PermissionRoute } from '../PermissionRoute';
 import { TenantAdminRoute } from '../TenantAdminRoute';
 
+import { projectManagementPlatformRoutes } from './projectManagementPlatformRoutes';
 import { lazyPage } from './routeElements';
 
 const PlatformTenantsPage = lazy(() => import('../../../pages/platform/PlatformTenantsPage').then((module) => ({ default: module.PlatformTenantsPage })));
@@ -15,6 +16,7 @@ const PlatformUserAppRolesPage = lazy(() => import('../../../pages/platform/Plat
 const TenantAppsPage = lazy(() => import('../../../pages/tenant/TenantAppsPage').then((module) => ({ default: module.TenantAppsPage })));
 
 export const platformRoutes: RouteObject[] = [
+  ...projectManagementPlatformRoutes,
   {
     path: 'platform/tenants',
     handle: routeMeta({
