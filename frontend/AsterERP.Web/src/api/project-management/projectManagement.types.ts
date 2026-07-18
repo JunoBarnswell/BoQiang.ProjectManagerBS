@@ -83,6 +83,25 @@ export interface ProjectManagementBackup {
   completedAt?: string;
 }
 
+export interface ProjectManagementDataSpaceImpact {
+  tenantId: string;
+  appCode: string;
+  projectCount: number;
+  taskCount: number;
+  memberCount: number;
+  milestoneCount: number;
+  attachmentCount: number;
+}
+
+export interface ProjectManagementBackupRestorePreview {
+  backup: ProjectManagementBackup;
+  currentDataSpace: ProjectManagementDataSpaceImpact;
+  backupDataSpace: ProjectManagementDataSpaceImpact;
+  impactScope: string;
+  failureCompensationHint: string;
+  successfulRestoreRollbackHint: string;
+}
+
 export interface ProjectManagementMemberCandidateQuery {
   pageIndex?: number;
   pageSize?: number;
@@ -129,6 +148,19 @@ export interface ProjectManagementRecycleProjectItem {
   deletedBy?: string;
   canRestore: boolean;
   canPurge: boolean;
+}
+
+export interface ProjectManagementRecyclePurgePreview {
+  projectId: string;
+  projectCode: string;
+  projectName: string;
+  versionNo: number;
+  memberReferenceCount: number;
+  milestoneReferenceCount: number;
+  taskReferenceCount: number;
+  canExecute: boolean;
+  blockingReason?: string;
+  rollbackHint: string;
 }
 
 export interface ProjectManagementRecycleTaskItem {

@@ -21,7 +21,11 @@ public sealed class ProjectManagementRecycleController(IProjectManagementRecycle
     [Permission(PermissionCodes.ProjectManagementTaskRestore)]
     public async Task<IActionResult> RestoreTaskAsync(string id, [FromBody] ProjectManagementRecycleRestoreRequest request, CancellationToken cancellationToken) { await service.RestoreTaskAsync(id, request, cancellationToken); return ApiOk(new { id }); }
 
-    [HttpDelete("projects/{id}/purge")]
+    [HttpGet("projects/{id}/purge-preview")]
     [Permission(PermissionCodes.ProjectManagementProjectPurge)]
-    public async Task<IActionResult> PurgeProjectAsync(string id, [FromQuery] long versionNo, CancellationToken cancellationToken) { await service.PurgeProjectAsync(id, versionNo, cancellationToken); return ApiOk(new { id }); }
+    public async Task<IActionResult> PreviewPurgeProjectAsync(string id, [FromQuery] long versionNo, CancellationToken cancellationToken) => ApiOk(await service.PreviewPurgeProjectAsync(id, versionNo, cancellationToken));
+
+    [HttpPost("projects/{id}/purge")]
+    [Permission(PermissionCodes.ProjectManagementProjectPurge)]
+    public async Task<IActionResult> PurgeProjectAsync(string id, [FromBody] ProjectManagementRecyclePurgeRequest request, CancellationToken cancellationToken) { await service.PurgeProjectAsync(id, request, cancellationToken); return ApiOk(new { id }); }
 }
