@@ -1,4 +1,4 @@
-import { useMemo, useState, type DragEvent } from 'react';
+import { useMemo, useState, type CSSProperties, type DragEvent } from 'react';
 
 import type { ProjectManagementTask } from '../../../api/project-management/projectManagement.types';
 import { DataTable } from '../../../shared/table/DataTable';
@@ -34,7 +34,8 @@ export function TaskWorkspaceProjection({ onMoveTask, onSelectTask, onToggleTask
       setDraggedTask(undefined);
     },
   };
-  const rootDropZone = <div aria-label="拖到此处成为顶级任务" className="mb-3 rounded border border-dashed border-blue-300 bg-blue-50 px-3 py-2 text-sm text-blue-800" onDragOver={drag.onDragOver} onDrop={(event) => drag.onDrop(event, { kind: 'root' })}>拖到此处成为顶级任务</div>;
+  const rootDropZone = <div aria-label="拖到此处成为顶级任务" className="pm-root-drop-zone" onDragOver={drag.onDragOver} onDrop={(event) => drag.onDrop(event, { kind: 'root' })}>拖到此处成为顶级任务</div>;
+
   if (state.viewKey === 'board') return <>{rootDropZone}<TaskBoardProjection drag={drag} rows={rows} onSelectTask={onSelectTask} onToggleTaskSelection={onToggleTaskSelection} selectedTaskIds={selectedTaskIds} /></>;
   if (state.viewKey === 'card') return <>{rootDropZone}<TaskCardProjection drag={drag} rows={rows} onSelectTask={onSelectTask} onToggleTaskSelection={onToggleTaskSelection} selectedTaskIds={selectedTaskIds} /></>;
   if (state.viewKey === 'gantt') return <>{rootDropZone}<TaskGanttProjection drag={drag} rows={rows} onSelectTask={onSelectTask} onToggleTaskSelection={onToggleTaskSelection} selectedTaskIds={selectedTaskIds} /></>;
@@ -54,39 +55,44 @@ function TaskTableProjection({ drag, onSelectTask, onToggleTaskSelection, rows, 
   const columns = useMemo<DataTableColumn<ProjectManagementTask>[]>(() => [
     { key: 'select', title: '选择', width: '64px', render: (row) => <input aria-label={`选择任务 ${row.title}`} checked={selectedTaskIds.has(row.id)} type="checkbox" onChange={() => onToggleTaskSelection(row.id)} /> },
     { key: 'taskCode', title: '编码', width: '120px', responsivePriority: 100 },
-    { key: 'title', title: '任务', responsivePriority: 100, render: (row) => <div draggable className={drag.draggedTaskId === row.id ? 'opacity-50' : undefined} onDragEnd={drag.onDragEnd} onDragOver={drag.onDragOver} onDragStart={(event) => drag.onDragStart(event, row)} onDrop={(event) => drag.onDrop(event, { kind: 'before', task: row })} style={{ paddingLeft: `${state.viewKey === 'tree' ? row.depth * 16 : 0}px` }}><span>{row.title}</span><span className="ml-2 rounded border border-dashed border-gray-300 px-1 text-xs text-gray-500" onDragOver={drag.onDragOver} onDrop={(event) => drag.onDrop(event, { kind: 'child', task: row })}>作为子任务</span></div> },
-    { key: 'status', title: '状态', width: '110px' },
-    { key: 'priority', title: '优先级', width: '90px' },
-    { key: 'progressPercent', title: '进度', width: '80px', render: (row) => `${row.progressPercent}%` },
-    { key: 'dueDate', title: '截止日期', width: '120px', render: (row) => row.dueDate ? new Date(row.dueDate).toLocaleDateString() : '-' },
-    { key: 'blockedByCount', title: '阻塞', width: '80px', render: (row) => row.blockedByCount ? `${row.blockedByCount} 项` : '否' },
+    {
+      key: 'title', title: '任务', responsivePriority: 100, render: (row) => (
+        <div
+          className={`pm-task-tree-title${drag.draggedTaskId === row.id ? ' is-dragging' : ''}`}
+          draggable
+          onDragEnd={drag.onDragEnd}
+          onDragOver={drag.onDragOver}
+          onDragStart={(event) => drag.onDragStart(event, row)}
+          onDrop={(event) => drag.onDrop(event, { kind: 'before', task: row })}
+          style={{ '--pm-task-depth': state.viewKey === 'tree' ? row.depth : 0 } as CSSProperties}
+        >
+          <span>{row.title}</span>
+          <span className="pm-child-drop-zone" onDragOver={drag.onDragOver} onDrop={(event) => drag.onDrop(event, { kind: 'child', task: row })}>作为子任务</span>
+        </div>
+      )
+    },
+    { key: 'status', title: '状态', width: '110px', render: (row) => <StatusBadge status={row.status} /> },
+    { key: 'priority', title: '优先级', width: '96px', render: (row) => <PriorityBadge priority={row.priority} /> },
+    { key: 'progressPercent', title: '进度', width: '138px', render: (row) => <Progress value={row.progressPercent} /> },
+    { key: 'dueDate', title: '截止日期', width: '120px', render: (row) => formatDate(row.dueDate) },
+    { key: 'blockedByCount', title: '阻塞', width: '96px', render: (row) => row.blockedByCount ? <StatusBadge status="Blocked" label={`${row.blockedByCount} 项`} /> : '—' },
   ], [drag, onToggleTaskSelection, selectedTaskIds, state.viewKey]);
 
-  return (
-    <DataTable
-      columnSettingsKey={`project-management-tasks-${state.viewKey}`}
-      columns={columns}
-      emptyText="暂无任务"
-      rowActions={(row) => <button type="button" onClick={() => onSelectTask(row.id)}>查看</button>}
-      rowKey={(row) => row.id}
-      rows={rows}
-      showColumnSettings
-    />
-  );
+  return <DataTable columnSettingsKey={`project-management-tasks-${state.viewKey}`} columns={columns} emptyText="暂无任务" rowActions={(row) => <button type="button" onClick={() => onSelectTask(row.id)}>查看</button>} rowKey={(row) => row.id} rows={rows} showColumnSettings />;
 }
 
 function TaskCardProjection({ drag, onSelectTask, onToggleTaskSelection, rows, selectedTaskIds }: Pick<TaskWorkspaceProjectionProps, 'onSelectTask' | 'onToggleTaskSelection' | 'rows' | 'selectedTaskIds'> & { drag: TaskDragHandlers }) {
-  return <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{rows.map((task) => <TaskCard drag={drag} key={task.id} selected={selectedTaskIds.has(task.id)} task={task} onSelectTask={onSelectTask} onToggleTaskSelection={onToggleTaskSelection} />)}</div>;
+  return <div className="pm-task-grid">{rows.map((task) => <TaskCard drag={drag} key={task.id} selected={selectedTaskIds.has(task.id)} task={task} onSelectTask={onSelectTask} onToggleTaskSelection={onToggleTaskSelection} />)}</div>;
 }
 
 function TaskBoardProjection({ drag, onSelectTask, onToggleTaskSelection, rows, selectedTaskIds }: Pick<TaskWorkspaceProjectionProps, 'onSelectTask' | 'onToggleTaskSelection' | 'rows' | 'selectedTaskIds'> & { drag: TaskDragHandlers }) {
   const groups = ['Todo', 'InProgress', 'Blocked', 'Done', 'Cancelled'].map((status) => ({ status, rows: rows.filter((task) => task.status === status) }));
-  return <div className="grid gap-3 md:grid-cols-5">{groups.map((group) => <section className="rounded-lg border border-gray-200 p-3" key={group.status}><h3 className="mb-2 font-semibold">{group.status} ({group.rows.length})</h3>{group.rows.length ? group.rows.map((task) => <TaskCard drag={drag} key={task.id} selected={selectedTaskIds.has(task.id)} task={task} onSelectTask={onSelectTask} onToggleTaskSelection={onToggleTaskSelection} />) : <p className="text-sm text-gray-500">暂无任务</p>}</section>)}</div>;
+  return <div className="pm-board">{groups.map((group) => <section className="pm-board-column" key={group.status}><header><StatusBadge status={group.status} /><span>{group.rows.length}</span></header><div className="pm-board-column__body">{group.rows.length ? group.rows.map((task) => <TaskCard drag={drag} key={task.id} selected={selectedTaskIds.has(task.id)} task={task} onSelectTask={onSelectTask} onToggleTaskSelection={onToggleTaskSelection} />) : <p>暂无任务</p>}</div></section>)}</div>;
 }
 
 function TaskGanttProjection({ drag, onSelectTask, onToggleTaskSelection, rows, selectedTaskIds }: Pick<TaskWorkspaceProjectionProps, 'onSelectTask' | 'onToggleTaskSelection' | 'rows' | 'selectedTaskIds'> & { drag: TaskDragHandlers }) {
   const datedRows = rows.filter((task) => task.startDate || task.dueDate);
-  return <div className="space-y-2 rounded-lg border border-gray-200 p-3">{datedRows.length ? datedRows.map((task) => <div className={drag.draggedTaskId === task.id ? 'flex gap-2 opacity-50' : 'flex gap-2'} draggable key={task.id} onDragEnd={drag.onDragEnd} onDragOver={drag.onDragOver} onDragStart={(event) => drag.onDragStart(event, task)} onDrop={(event) => drag.onDrop(event, { kind: 'before', task })}><input aria-label={`选择任务 ${task.title}`} checked={selectedTaskIds.has(task.id)} type="checkbox" onChange={() => onToggleTaskSelection(task.id)} /><button className="grid w-full grid-cols-[minmax(12rem,1fr)_2fr] gap-3 rounded border border-gray-100 p-3 text-left" onClick={() => onSelectTask(task.id)} type="button"><span>{task.title}</span><span className="rounded bg-blue-100 px-2 py-1 text-sm text-blue-800">{formatDate(task.startDate)} — {formatDate(task.dueDate)}</span></button><span className="rounded border border-dashed border-gray-300 px-2 py-1 text-xs text-gray-500" onDragOver={drag.onDragOver} onDrop={(event) => drag.onDrop(event, { kind: 'child', task })}>作为子任务</span></div>) : <p className="text-sm text-gray-500">没有包含计划日期的任务</p>}</div>;
+  return <div className="pm-gantt"><p className="pm-prototype-note">当前按真实开始/截止日期呈现计划投影；日期拖动、时间缩放、关键路径和依赖线需要后续排期能力支持。</p>{datedRows.length ? datedRows.map((task) => <div className={`pm-gantt-row${drag.draggedTaskId === task.id ? ' is-dragging' : ''}`} draggable key={task.id} onDragEnd={drag.onDragEnd} onDragOver={drag.onDragOver} onDragStart={(event) => drag.onDragStart(event, task)} onDrop={(event) => drag.onDrop(event, { kind: 'before', task })}><input aria-label={`选择任务 ${task.title}`} checked={selectedTaskIds.has(task.id)} type="checkbox" onChange={() => onToggleTaskSelection(task.id)} /><button type="button" onClick={() => onSelectTask(task.id)}><span>{task.title}</span><span>{formatDate(task.startDate)} — {formatDate(task.dueDate)}</span></button><span className="pm-child-drop-zone" onDragOver={drag.onDragOver} onDrop={(event) => drag.onDrop(event, { kind: 'child', task })}>作为子任务</span></div>) : <p className="pm-projection-empty">没有包含计划日期的任务</p>}</div>;
 }
 
 function TaskCalendarProjection({ drag, onSelectTask, onToggleTaskSelection, rows, selectedTaskIds }: Pick<TaskWorkspaceProjectionProps, 'onSelectTask' | 'onToggleTaskSelection' | 'rows' | 'selectedTaskIds'> & { drag: TaskDragHandlers }) {
@@ -96,13 +102,37 @@ function TaskCalendarProjection({ drag, onSelectTask, onToggleTaskSelection, row
     return result;
   }, {});
   const dates = Object.keys(groups).sort();
-  return <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{dates.length ? dates.map((date) => <section className="rounded-lg border border-gray-200 p-3" key={date}><h3 className="font-semibold">{date}</h3><div className="mt-2 space-y-2">{groups[date].map((task) => <TaskCard drag={drag} key={task.id} selected={selectedTaskIds.has(task.id)} task={task} onSelectTask={onSelectTask} onToggleTaskSelection={onToggleTaskSelection} />)}</div></section>) : <p className="text-sm text-gray-500">没有包含截止日期的任务</p>}</div>;
+  return <div className="pm-calendar"><p className="pm-prototype-note">当前按真实截止日期聚合；月/周网格、日期拖放与快速新建需要后续日历交互能力支持。</p>{dates.length ? dates.map((date) => <section className="pm-calendar-day" key={date}><h3>{date}</h3><div>{groups[date].map((task) => <TaskCard drag={drag} key={task.id} selected={selectedTaskIds.has(task.id)} task={task} onSelectTask={onSelectTask} onToggleTaskSelection={onToggleTaskSelection} />)}</div></section>) : <p className="pm-projection-empty">没有包含截止日期的任务</p>}</div>;
 }
 
 function TaskCard({ drag, onSelectTask, onToggleTaskSelection, selected, task }: { drag: TaskDragHandlers; onSelectTask: (taskId: string) => void; onToggleTaskSelection: (taskId: string) => void; selected: boolean; task: ProjectManagementTask }) {
-  return <article className={drag.draggedTaskId === task.id ? 'mb-2 flex gap-2 rounded border border-gray-200 p-3 opacity-50' : 'mb-2 flex gap-2 rounded border border-gray-200 p-3'} draggable onDragEnd={drag.onDragEnd} onDragOver={drag.onDragOver} onDragStart={(event) => drag.onDragStart(event, task)} onDrop={(event) => drag.onDrop(event, { kind: 'before', task })}><input aria-label={`选择任务 ${task.title}`} checked={selected} type="checkbox" onChange={() => onToggleTaskSelection(task.id)} /><button className="min-w-0 flex-1 text-left" onClick={() => onSelectTask(task.id)} type="button"><div className="text-xs text-gray-500">{task.taskCode}</div><div className="font-medium">{task.title}</div><div className="mt-1 text-xs text-gray-500">{task.progressPercent}% · {task.canStart ? '可开始' : task.blockedReason ?? '阻塞'}</div></button><span className="rounded border border-dashed border-gray-300 px-1 text-xs text-gray-500" onDragOver={drag.onDragOver} onDrop={(event) => drag.onDrop(event, { kind: 'child', task })}>作为子任务</span></article>;
+  return <article className={`pm-task-card${selected ? ' is-selected' : ''}${drag.draggedTaskId === task.id ? ' is-dragging' : ''}`} draggable onDragEnd={drag.onDragEnd} onDragOver={drag.onDragOver} onDragStart={(event) => drag.onDragStart(event, task)} onDrop={(event) => drag.onDrop(event, { kind: 'before', task })}><input aria-label={`选择任务 ${task.title}`} checked={selected} type="checkbox" onChange={() => onToggleTaskSelection(task.id)} /><div className="pm-task-card__content"><div className="pm-task-card__meta"><code>{task.taskCode}</code><StatusBadge status={task.status} /></div><button className="pm-task-card__open" type="button" onClick={() => onSelectTask(task.id)}>{task.title}</button><div className="pm-task-card__signals"><PriorityBadge priority={task.priority} /><span>{task.canStart ? '可开始' : task.blockedReason ?? '受阻塞'}</span></div><Progress value={task.progressPercent} /><footer><span>截止：{formatDate(task.dueDate)}</span>{task.blockedByCount ? <span>{task.blockedByCount} 项前置</span> : null}</footer></div><span className="pm-child-drop-zone" onDragOver={drag.onDragOver} onDrop={(event) => drag.onDrop(event, { kind: 'child', task })}>作为子任务</span></article>;
+}
+
+function StatusBadge({ label, status }: { label?: string; status: string }) {
+  return <span className={`pm-status-badge pm-status-badge--${toKebabCase(status)}`}>{label ?? statusLabel(status)}</span>;
+}
+
+function PriorityBadge({ priority }: { priority: string }) {
+  return <span className={`pm-priority-badge pm-priority-badge--${priority.toLowerCase()}`}>{priorityLabel(priority)}</span>;
+}
+
+function Progress({ value }: { value: number }) {
+  return <div className="pm-progress"><progress max={100} value={value} /><span>{value}%</span></div>;
+}
+
+function statusLabel(status: string): string {
+  return ({ Todo: '待开始', InProgress: '进行中', Blocked: '受阻塞', Done: '已完成', Cancelled: '已取消' } as Record<string, string>)[status] ?? status;
+}
+
+function priorityLabel(priority: string): string {
+  return ({ Low: '低', Medium: '中', High: '高', Urgent: '紧急' } as Record<string, string>)[priority] ?? priority;
 }
 
 function formatDate(value: string | undefined): string {
   return value ? new Date(value).toLocaleDateString() : '未设置';
+}
+
+function toKebabCase(value: string): string {
+  return value.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase();
 }
