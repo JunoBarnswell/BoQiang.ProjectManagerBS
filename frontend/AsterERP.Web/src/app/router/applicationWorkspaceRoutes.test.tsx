@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 
-import type { RouteObject } from 'react-router-dom';
+import { matchRoutes, type RouteObject } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
 
 import { buildRuntimePageViewPermission } from './RuntimePagePermissionRoute';
 import { platformRoutes } from './routes/platformRoutes';
 import { applicationWorkspaceRoutes, workspaceRoutes } from './workspaceRoutes';
+import { workspaceRoutes as targetApplicationWorkspaceRoutes } from './workspaceRoutes.target';
 
 describe('applicationWorkspaceRoutes', () => {
   it('keeps low-code runtime pages available through the application admin dynamic route', () => {
@@ -53,6 +54,15 @@ describe('applicationWorkspaceRoutes', () => {
     expect(permissionCode).toBe('project-management:project:view');
     expect(legacyTarget).toBe('/platform/project-management');
     expect(applicationTarget).toBe('/platform/project-management');
+  });
+
+  it('keeps the platform PM route registered in an application-target frontend build', () => {
+    const matches = matchRoutes([{ children: targetApplicationWorkspaceRoutes, path: '/' }], '/platform/project-management');
+    const platformRoute = flattenRoutes(targetApplicationWorkspaceRoutes).find((item) => item.path === 'platform/project-management');
+
+    expect(matches?.at(-1)?.route).toBe(platformRoute);
+    expect((platformRoute?.element as { props?: { permissionCode?: string } } | undefined)?.props?.permissionCode)
+      .toBe('project-management:project:view');
   });
 
   it('keeps the latest Page Studio entry actions behind designer permissions', () => {
