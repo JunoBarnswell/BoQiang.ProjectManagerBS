@@ -85,7 +85,7 @@ public sealed class ProjectManagementOverviewRecycleTests
     }
 
     [Fact]
-    public async Task Purge_preview_is_blocked_by_project_scoped_history_reference()
+    public async Task Purge_preview_allows_project_scoped_history_which_is_removed_at_final_purge()
     {
         using var db = CreateDb();
         await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
@@ -99,11 +99,11 @@ public sealed class ProjectManagementOverviewRecycleTests
         var service = new ProjectManagementRecycleService(new TestWorkspaceDatabaseAccessor(db), CreateUser("operator"));
         var preview = await service.PreviewPurgeProjectAsync("deleted-project", 1);
 
-        Assert.False(preview.CanExecute);
+        Assert.True(preview.CanExecute);
         Assert.Equal(0, preview.MemberReferenceCount);
         Assert.Equal(0, preview.MilestoneReferenceCount);
         Assert.Equal(0, preview.TaskReferenceCount);
-        Assert.Contains("关联记录", preview.BlockingReason);
+        Assert.Null(preview.BlockingReason);
     }
 
     [Fact]
@@ -214,6 +214,32 @@ public sealed class ProjectManagementOverviewRecycleTests
         Assert.Equal(["project-a"], dependency.RefreshedProjectIds);
     }
 
+    [Fact]
+    public async Task Purge_task_removes_dependency_edges_and_keeps_explicit_project_audit()
+    {
+        using var db = CreateDb();
+        await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
+        await db.Insertable(new ProjectManagementProjectEntity { Id = "project-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "A", ProjectName = "A", OwnerUserId = "operator" }).ExecuteCommandAsync();
+        await db.Insertable(new[]
+        {
+            new ProjectManagementTaskEntity { Id = "predecessor", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", TaskCode = "P", Title = "predecessor", IsDeleted = true },
+            new ProjectManagementTaskEntity { Id = "successor", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", TaskCode = "S", Title = "successor", IsDeleted = true }
+        }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementTaskDependencyEntity { Id = "dep", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", PredecessorTaskId = "predecessor", SuccessorTaskId = "successor", CreatedTime = DateTime.UtcNow }).ExecuteCommandAsync();
+        var accessor = new TestWorkspaceDatabaseAccessor(db);
+        var user = CreateUser("operator");
+        var audit = new RecordingActivityWriter();
+        var dependency = new ProjectManagementTaskDependencyService(accessor, user, activityWriter: audit);
+        var service = new ProjectManagementRecycleService(accessor, user, riskConfirmation: new AcceptRiskConfirmation(), maintenanceLock: new TestMaintenanceLock(), dependencyService: dependency);
+
+        await service.PurgeTaskAsync("predecessor", new ProjectManagementRecycleTaskPurgeRequest(1, "secret", true));
+
+        Assert.Empty(await db.Queryable<ProjectManagementTaskEntity>().Where(item => item.Id == "predecessor").ToListAsync());
+        Assert.Empty(await db.Queryable<ProjectManagementTaskDependencyEntity>().ToListAsync());
+        Assert.Contains(audit.Events, item => item.ActivityType == "task.dependency.purged");
+        Assert.Contains(audit.Events, item => item.ActivityType == "task.purged");
+    }
+
     private static SqlSugarClient CreateDb() => new(new ConnectionConfig
     {
         ConnectionString = $"Data Source=file:overview-recycle-{Guid.NewGuid():N};Mode=Memory;Cache=Shared",
@@ -243,12 +269,33 @@ public sealed class ProjectManagementOverviewRecycleTests
         public Task RefreshAsync(string projectId, CancellationToken cancellationToken = default) => throw new InvalidOperationException("projection failure");
     }
 
+    private sealed class RecordingActivityWriter : IProjectManagementActivityWriter
+    {
+        public List<ProjectManagementActivityEvent> Events { get; } = [];
+        public Task AppendAsync(ProjectManagementActivityEvent activity, CancellationToken cancellationToken = default) { Events.Add(activity); return Task.CompletedTask; }
+    }
+
+    private sealed class AcceptRiskConfirmation : IProjectManagementRiskConfirmationService
+    {
+        public Task EnsureConfirmedAsync(string currentPassword, bool confirmRisk, CancellationToken cancellationToken = default) => confirmRisk ? Task.CompletedTask : throw new InvalidOperationException();
+    }
+
+    private sealed class TestMaintenanceLock : IProjectManagementMaintenanceLock
+    {
+        public Task<string> AcquireAsync(string lockKey, TimeSpan duration, CancellationToken cancellationToken = default) => Task.FromResult("lock");
+        public Task ReleaseAsync(string operationId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    }
+
     private sealed class RecordingDependencyService : IProjectManagementTaskDependencyService
     {
         public List<string> RefreshedProjectIds { get; } = [];
         public Task<IReadOnlyList<ProjectManagementTaskDependencyResponse>> QueryAsync(string projectId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<ProjectManagementTaskDependencyResponse> CreateAsync(string projectId, ProjectManagementTaskDependencyUpsertRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<ProjectManagementTaskDependencyResponse>> CreateBatchAsync(string projectId, ProjectManagementTaskDependencyBatchCreateRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task DeleteAsync(string projectId, string id, long versionNo, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<ProjectManagementTaskDependencyForceStartResponse> ForceStartAsync(string projectId, string taskId, ProjectManagementTaskDependencyForceStartRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<int> PurgeForTasksAsync(string projectId, IReadOnlyCollection<string> taskIds, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<int> PurgeDeletedTasksAsync(string projectId, IReadOnlyCollection<string> taskIds, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task RefreshBlockedStatesAsync(string projectId, CancellationToken cancellationToken = default)
         {
             RefreshedProjectIds.Add(projectId);

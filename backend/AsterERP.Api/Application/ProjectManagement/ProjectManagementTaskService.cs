@@ -89,7 +89,8 @@ public sealed class ProjectManagementTaskService(
             Items = items.Select(item =>
             {
                 var blockers = dependencyRows.Where(dependency => dependency.SuccessorTaskId == item.Id && (!predecessorStatus.TryGetValue(dependency.PredecessorTaskId, out var predecessor) || predecessor != ProjectManagementDomainRules.TaskDone)).ToList();
-                return MapList(item, blockers.Count, blockers.Count == 0, blockers.Count == 0 ? item.BlockedReason : $"存在 {blockers.Count} 个未完成前置任务");
+                var forceStarted = IsForceStarted(item.BlockedReason);
+                return MapList(item, blockers.Count, blockers.Count == 0 || forceStarted, blockers.Count == 0 || forceStarted ? item.BlockedReason : $"存在 {blockers.Count} 个未完成前置任务");
             }).ToList()
         };
     }
@@ -193,6 +194,15 @@ public sealed class ProjectManagementTaskService(
         }
         await PublishInvalidationAsync(entity, "task.updated", cancellationToken);
         return await MapDetailAsync(entity, cancellationToken);
+    }
+
+    public async Task<ProjectManagementTaskDependencyForceStartResponse> ForceStartAsync(string id, ProjectManagementTaskDependencyForceStartRequest request, CancellationToken cancellationToken = default)
+    {
+        var task = await GetRequiredAsync(id, cancellationToken);
+        // 任务入口只负责定位对象与项目级 Owner/Manager 授权；阻塞判断、版本校验和审计保持在依赖聚合内。
+        await AccessPolicy.EnsureCanManageProjectAsync(task.ProjectId, cancellationToken);
+        if (dependencyService is null) throw new ValidationException("任务依赖服务未配置");
+        return await dependencyService.ForceStartAsync(task.ProjectId, task.Id, request, cancellationToken);
     }
 
     public async Task<ProjectManagementTaskDetailResponse> MoveAsync(string id, ProjectManagementTaskMoveRequest request, CancellationToken cancellationToken = default)
@@ -598,6 +608,7 @@ public sealed class ProjectManagementTaskService(
     }
 
     private static string NormalizePriority(string value) => Priorities.Contains(value.Trim(), StringComparer.Ordinal) ? value.Trim() : throw new ValidationException("任务优先级不受支持");
+    private static bool IsForceStarted(string? blockedReason) => blockedReason?.StartsWith("已强制开始：", StringComparison.Ordinal) == true;
     private string RequireTenantId() => currentUser.GetAsterErpTenantId()?.Trim() ?? throw new ValidationException("当前会话缺少租户");
     private string RequireAppCode() => currentUser.GetAsterErpAppCode()?.Trim().ToUpperInvariant() ?? throw new ValidationException("当前会话缺少应用");
     private string RequireUserId() => currentUser.GetAsterErpUserId()?.Trim() ?? throw new ValidationException("当前会话缺少用户");
@@ -622,7 +633,8 @@ public sealed class ProjectManagementTaskService(
             .ToListAsync(cancellationToken);
         var predecessorStatus = predecessors.ToDictionary(item => item.Id, item => item.Status, StringComparer.Ordinal);
         var blockedByCount = dependencyRows.Count(dependency => !predecessorStatus.TryGetValue(dependency.PredecessorTaskId, out var status) || status != ProjectManagementDomainRules.TaskDone);
-        return MapDetail(entity, blockedByCount, blockedByCount == 0, blockedByCount == 0 ? entity.BlockedReason : $"存在 {blockedByCount} 个未完成前置任务");
+        var forceStarted = IsForceStarted(entity.BlockedReason);
+        return MapDetail(entity, blockedByCount, blockedByCount == 0 || forceStarted, blockedByCount == 0 || forceStarted ? entity.BlockedReason : $"存在 {blockedByCount} 个未完成前置任务");
     }
 
     private static ProjectManagementTaskListItemResponse MapList(ProjectManagementTaskEntity entity, int blockedByCount, bool canStart, string? blockedReason) => new(entity.Id, entity.ProjectId, entity.MilestoneId, entity.ParentTaskId, entity.TaskCode, entity.Title, entity.Status, entity.Priority, entity.AssigneeUserId, entity.StartDate, entity.DueDate, entity.ProgressPercent, entity.SortOrder, entity.Depth, entity.VersionNo, blockedByCount, canStart, blockedReason);

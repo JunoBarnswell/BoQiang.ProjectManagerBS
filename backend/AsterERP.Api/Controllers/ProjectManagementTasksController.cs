@@ -29,6 +29,11 @@ public sealed class ProjectManagementTasksController(IProjectManagementTaskServi
     public async Task<IActionResult> UpdateAsync(string id, [FromBody] ProjectManagementTaskUpsertRequest request, CancellationToken cancellationToken)
         => ApiOk(await service.UpdateAsync(id, request, cancellationToken));
 
+    [HttpPost("{id}/force-start")]
+    [Permission(PermissionCodes.ProjectManagementTaskManageDependency)]
+    public async Task<IActionResult> ForceStartAsync(string id, [FromBody] ProjectManagementTaskDependencyForceStartRequest request, CancellationToken cancellationToken)
+        => ApiOk(await service.ForceStartAsync(id, request, cancellationToken));
+
     [HttpPost("{id}/move")]
     [Permission(PermissionCodes.ProjectManagementTaskMove)]
     public async Task<IActionResult> MoveAsync(string id, [FromBody] ProjectManagementTaskMoveRequest request, CancellationToken cancellationToken)
