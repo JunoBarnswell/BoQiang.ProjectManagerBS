@@ -410,6 +410,7 @@ export interface ProjectManagementTaskListItem {
 
 export interface ProjectManagementTaskDetail extends ProjectManagementTaskListItem {
   description?: string;
+  markdown?: string;
   assigneeEmploymentId?: string;
   weight: number;
   estimateMinutes?: number;
@@ -425,6 +426,7 @@ export interface ProjectManagementTaskUpsertRequest {
   taskCode: string;
   title: string;
   description?: string;
+  markdown?: string;
   status?: string;
   priority?: string;
   milestoneId?: string;

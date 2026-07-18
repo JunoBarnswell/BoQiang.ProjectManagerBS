@@ -289,14 +289,7 @@ public sealed class ProjectManagementTaskCommentService(
     private void RequireTenant() => _ = Tenant();
     private void RequireApp() => _ = App();
     private static string NormalizeMarkdown(string value)
-    {
-        if (string.IsNullOrWhiteSpace(value)) throw new ValidationException("评论内容不能为空");
-        var markdown = value.Trim();
-        if (markdown.Length > 20000) throw new ValidationException("评论内容不能超过 20000 个字符");
-        var blocked = new[] { "<script", "</script", "javascript:", "vbscript:", " onerror=", " onclick=", " onload=" };
-        if (blocked.Any(item => markdown.Contains(item, StringComparison.OrdinalIgnoreCase))) throw new ValidationException("评论包含不安全内容");
-        return markdown;
-    }
+        => ProjectManagementMarkdownPolicy.NormalizeRequired(value, "评论内容不能为空", "评论内容不能超过 20000 个字符");
     private static string NormalizeSort(string? value) => value?.Trim().ToLowerInvariant() switch
     {
         null or "" or "timeline" or "asc" => "timeline",

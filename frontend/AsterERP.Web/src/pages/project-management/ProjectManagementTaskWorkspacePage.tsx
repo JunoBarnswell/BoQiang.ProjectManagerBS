@@ -232,7 +232,7 @@ export function ProjectManagementTaskWorkspacePage() {
     setForm({
       assigneeEmploymentId: selectedTask.assigneeEmploymentId,
       assigneeUserId: selectedTask.assigneeUserId,
-      description: selectedTask.description,
+      description: selectedTask.markdown ?? selectedTask.description,
       dueDate: selectedTask.dueDate,
       estimateMinutes: selectedTask.estimateMinutes,
       milestoneId: selectedTask.milestoneId,

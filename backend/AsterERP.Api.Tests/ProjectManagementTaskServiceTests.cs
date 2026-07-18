@@ -94,7 +94,7 @@ public sealed class ProjectManagementTaskServiceTests
         }).ExecuteCommandAsync();
         var service = new ProjectManagementTaskService(new TestWorkspaceDatabaseAccessor(db), CreateUser());
 
-        var created = await service.CreateAsync("project-a", new ProjectManagementTaskUpsertRequest("T-1", "任务", AssigneeUserId: "member-a", EstimateMinutes: 120, Weight: 2, Summary: "列表摘要", Markdown: "## 完整详情"));
+        var created = await service.CreateAsync("project-a", new ProjectManagementTaskUpsertRequest("T-1", "任务", AssigneeUserId: "member-a", EstimateMinutes: 120, Weight: 2, Summary: "列表摘要", Markdown: "## 完整详情 <img src=x onerror=alert(1)> [bad](javascript:alert(1)) [good](https://example.com)"));
         var page = await service.QueryAsync(new ProjectManagementTaskQuery("project-a", PageIndex: 1, PageSize: 20));
         var listItem = Assert.Single(page.Items);
         Assert.Equal(created.Id, listItem.Id);
@@ -104,8 +104,8 @@ public sealed class ProjectManagementTaskServiceTests
 
         var detail = await service.GetAsync(created.Id);
         Assert.Equal("列表摘要", detail.Summary);
-        Assert.Equal("## 完整详情", detail.Markdown);
-        Assert.Equal("## 完整详情", detail.Description);
+        Assert.Equal("## 完整详情  bad [good](https://example.com)", detail.Markdown);
+        Assert.Equal(detail.Markdown, detail.Description);
         Assert.Equal(120, detail.EstimateMinutes);
         await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() =>
             service.CreateAsync("project-a", new ProjectManagementTaskUpsertRequest("T-2", "无效负责人", AssigneeUserId: "outside-user")));

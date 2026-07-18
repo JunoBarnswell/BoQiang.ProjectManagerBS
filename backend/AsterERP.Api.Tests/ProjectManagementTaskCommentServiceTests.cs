@@ -30,7 +30,6 @@ public sealed class ProjectManagementTaskCommentServiceTests
         var root = await service.CreateAsync("task-a", new ProjectManagementTaskCommentUpsertRequest("**root**", MentionUserIds: ["user-a"]));
         var reply = await service.CreateAsync("task-a", new ProjectManagementTaskCommentUpsertRequest("reply", root.Id));
         Assert.Equal(root.Id, reply.ParentCommentId);
-        await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() => service.CreateAsync("task-a", new ProjectManagementTaskCommentUpsertRequest("<script>alert(1)</script>")));
         var edited = await service.UpdateAsync("task-a", root.Id, new ProjectManagementTaskCommentUpsertRequest("edited", VersionNo: root.VersionNo));
         await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() => service.UpdateAsync("task-a", root.Id, new ProjectManagementTaskCommentUpsertRequest("stale", VersionNo: root.VersionNo)));
         await service.DeleteAsync("task-a", reply.Id, reply.VersionNo);
@@ -40,6 +39,23 @@ public sealed class ProjectManagementTaskCommentServiceTests
         Assert.Equal("user-a", mention.UserId);
         Assert.Equal("Alice", mention.DisplayName);
         Assert.Equal(["comment.created", "comment.created", "comment.updated", "comment.deleted"], realtime.Events);
+    }
+
+    [Fact]
+    public async Task Comment_markdown_persists_only_the_safe_subset()
+    {
+        using var db = new SqlSugarClient(new ConnectionConfig { ConnectionString = $"Data Source=file:project-management-comment-markdown-{Guid.NewGuid():N};Mode=Memory;Cache=Shared", DbType = DbType.Sqlite, IsAutoCloseConnection = false });
+        await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
+        await db.Insertable(new ProjectManagementProjectEntity { Id = "project-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "A", ProjectName = "A", OwnerUserId = "operator" }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementTaskEntity { Id = "task-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", TaskCode = "T-1", Title = "Task", CreatedBy = "operator", CreatedTime = DateTime.UtcNow }).ExecuteCommandAsync();
+
+        var service = new ProjectManagementTaskCommentService(new TestWorkspaceDatabaseAccessor(db), CreateUser());
+        var result = await service.CreateAsync("task-a", new ProjectManagementTaskCommentUpsertRequest("<script>alert(1)</script> [bad](javascript:alert(1)) [good](https://example.com)"));
+
+        Assert.DoesNotContain("<script", result.Markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("javascript:", result.Markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("alert(1)", result.Markdown);
+        Assert.Contains("[good](https://example.com)", result.Markdown);
     }
 
     [Fact]
