@@ -21,6 +21,7 @@ public static class ProjectManagementDataPermissionFilterRegistrar
             !currentUser.IsAsterErpPlatformAdmin() &&
             !currentUser.HasAsterErpPermission("*") &&
             !string.Equals(currentUser.GetAsterErpDataScope(), "ALL", StringComparison.OrdinalIgnoreCase);
+        var taskScopePredicate = ProjectManagementTaskScopeSqlPredicate.Create(tenantId, appCode, userId, restrictToMembership);
 
         if (entityType == typeof(ProjectManagementProjectEntity))
         {
@@ -61,14 +62,7 @@ public static class ProjectManagementDataPermissionFilterRegistrar
 
         if (entityType == typeof(ProjectManagementTaskEntity))
         {
-            db.QueryFilter.AddTableFilter<ProjectManagementTaskEntity>(task =>
-                task.TenantId == tenantId && task.AppCode == appCode &&
-                (!restrictToMembership || SqlFunc.Subqueryable<ProjectManagementProjectEntity>()
-                    .Where(project => project.Id == task.ProjectId && project.TenantId == tenantId && project.AppCode == appCode &&
-                        (project.OwnerUserId == userId || SqlFunc.Subqueryable<ProjectManagementProjectMemberEntity>()
-                            .Where(projectMember => projectMember.ProjectId == project.Id && projectMember.TenantId == tenantId && projectMember.AppCode == appCode && projectMember.UserId == userId && projectMember.IsActive && !projectMember.IsDeleted)
-                            .Any()))
-                    .Any()));
+            db.QueryFilter.AddTableFilter(taskScopePredicate);
             return true;
         }
 
@@ -76,12 +70,9 @@ public static class ProjectManagementDataPermissionFilterRegistrar
         {
             db.QueryFilter.AddTableFilter<ProjectManagementTaskDependencyEntity>(dependency =>
                 dependency.TenantId == tenantId && dependency.AppCode == appCode &&
-                (!restrictToMembership || SqlFunc.Subqueryable<ProjectManagementProjectEntity>()
-                    .Where(project => project.Id == dependency.ProjectId && project.TenantId == tenantId && project.AppCode == appCode &&
-                        (project.OwnerUserId == userId || SqlFunc.Subqueryable<ProjectManagementProjectMemberEntity>()
-                            .Where(projectMember => projectMember.ProjectId == project.Id && projectMember.TenantId == tenantId && projectMember.AppCode == appCode && projectMember.UserId == userId && projectMember.IsActive && !projectMember.IsDeleted)
-                            .Any()))
-                    .Any()));
+                (!restrictToMembership ||
+                 SqlFunc.Subqueryable<ProjectManagementTaskEntity>().Where(taskScopePredicate).Where(task => task.Id == dependency.PredecessorTaskId).Any() &&
+                 SqlFunc.Subqueryable<ProjectManagementTaskEntity>().Where(taskScopePredicate).Where(task => task.Id == dependency.SuccessorTaskId).Any()));
             return true;
         }
 
@@ -89,12 +80,7 @@ public static class ProjectManagementDataPermissionFilterRegistrar
         {
             db.QueryFilter.AddTableFilter<ProjectManagementTaskParticipantEntity>(participant =>
                 participant.TenantId == tenantId && participant.AppCode == appCode &&
-                (!restrictToMembership || SqlFunc.Subqueryable<ProjectManagementProjectEntity>()
-                    .Where(project => project.Id == participant.ProjectId && project.TenantId == tenantId && project.AppCode == appCode &&
-                        (project.OwnerUserId == userId || SqlFunc.Subqueryable<ProjectManagementProjectMemberEntity>()
-                            .Where(projectMember => projectMember.ProjectId == project.Id && projectMember.TenantId == tenantId && projectMember.AppCode == appCode && projectMember.UserId == userId && projectMember.IsActive && !projectMember.IsDeleted)
-                            .Any()))
-                    .Any()));
+                (!restrictToMembership || SqlFunc.Subqueryable<ProjectManagementTaskEntity>().Where(taskScopePredicate).Where(task => task.Id == participant.TaskId).Any()));
             return true;
         }
 
@@ -112,9 +98,7 @@ public static class ProjectManagementDataPermissionFilterRegistrar
         {
             db.QueryFilter.AddTableFilter<ProjectManagementTaskLabelEntity>(link =>
                 link.TenantId == tenantId && link.AppCode == appCode &&
-                (!restrictToMembership || SqlFunc.Subqueryable<ProjectManagementProjectEntity>()
-                    .Where(project => project.Id == link.ProjectId && (project.OwnerUserId == userId || SqlFunc.Subqueryable<ProjectManagementProjectMemberEntity>()
-                        .Where(member => member.ProjectId == project.Id && member.UserId == userId && member.IsActive && !member.IsDeleted).Any())).Any()));
+                (!restrictToMembership || SqlFunc.Subqueryable<ProjectManagementTaskEntity>().Where(taskScopePredicate).Where(task => task.Id == link.TaskId).Any()));
             return true;
         }
 
@@ -122,9 +106,7 @@ public static class ProjectManagementDataPermissionFilterRegistrar
         {
             db.QueryFilter.AddTableFilter<ProjectManagementTaskTimeLogEntity>(log =>
                 log.TenantId == tenantId && log.AppCode == appCode &&
-                (!restrictToMembership || SqlFunc.Subqueryable<ProjectManagementProjectEntity>()
-                    .Where(project => project.Id == log.ProjectId && (project.OwnerUserId == userId || SqlFunc.Subqueryable<ProjectManagementProjectMemberEntity>()
-                        .Where(member => member.ProjectId == project.Id && member.UserId == userId && member.IsActive && !member.IsDeleted).Any())).Any()));
+                (!restrictToMembership || SqlFunc.Subqueryable<ProjectManagementTaskEntity>().Where(taskScopePredicate).Where(task => task.Id == log.TaskId).Any()));
             return true;
         }
 
@@ -135,7 +117,7 @@ public static class ProjectManagementDataPermissionFilterRegistrar
         }
         if (entityType == typeof(ProjectManagementTaskOccurrenceEntity))
         {
-            db.QueryFilter.AddTableFilter<ProjectManagementTaskOccurrenceEntity>(occurrence => occurrence.TenantId == tenantId && occurrence.AppCode == appCode && (!restrictToMembership || SqlFunc.Subqueryable<ProjectManagementProjectEntity>().Where(project => project.Id == occurrence.ProjectId && (project.OwnerUserId == userId || SqlFunc.Subqueryable<ProjectManagementProjectMemberEntity>().Where(member => member.ProjectId == project.Id && member.UserId == userId && member.IsActive && !member.IsDeleted).Any())).Any()));
+            db.QueryFilter.AddTableFilter<ProjectManagementTaskOccurrenceEntity>(occurrence => occurrence.TenantId == tenantId && occurrence.AppCode == appCode && (!restrictToMembership || SqlFunc.Subqueryable<ProjectManagementTaskEntity>().Where(taskScopePredicate).Where(task => task.Id == occurrence.RootTaskId).Any()));
             return true;
         }
 
@@ -147,13 +129,13 @@ public static class ProjectManagementDataPermissionFilterRegistrar
 
         if (entityType == typeof(ProjectManagementTaskCommentEntity))
         {
-            db.QueryFilter.AddTableFilter<ProjectManagementTaskCommentEntity>(comment => comment.TenantId == tenantId && comment.AppCode == appCode && (!restrictToMembership || SqlFunc.Subqueryable<ProjectManagementProjectEntity>().Where(project => project.Id == comment.ProjectId && (project.OwnerUserId == userId || SqlFunc.Subqueryable<ProjectManagementProjectMemberEntity>().Where(member => member.ProjectId == project.Id && member.UserId == userId && member.IsActive && !member.IsDeleted).Any())).Any()));
+            db.QueryFilter.AddTableFilter<ProjectManagementTaskCommentEntity>(comment => comment.TenantId == tenantId && comment.AppCode == appCode && (!restrictToMembership || SqlFunc.Subqueryable<ProjectManagementTaskEntity>().Where(taskScopePredicate).Where(task => task.Id == comment.TaskId).Any()));
             return true;
         }
 
         if (entityType == typeof(ProjectManagementTaskCommentMentionEntity))
         {
-            db.QueryFilter.AddTableFilter<ProjectManagementTaskCommentMentionEntity>(mention => mention.TenantId == tenantId && mention.AppCode == appCode && (!restrictToMembership || SqlFunc.Subqueryable<ProjectManagementProjectEntity>().Where(project => project.Id == mention.ProjectId && (project.OwnerUserId == userId || SqlFunc.Subqueryable<ProjectManagementProjectMemberEntity>().Where(member => member.ProjectId == project.Id && member.UserId == userId && member.IsActive && !member.IsDeleted).Any())).Any()));
+            db.QueryFilter.AddTableFilter<ProjectManagementTaskCommentMentionEntity>(mention => mention.TenantId == tenantId && mention.AppCode == appCode && (!restrictToMembership || SqlFunc.Subqueryable<ProjectManagementTaskEntity>().Where(taskScopePredicate).Where(task => task.Id == mention.TaskId).Any()));
             return true;
         }
 
@@ -165,7 +147,7 @@ public static class ProjectManagementDataPermissionFilterRegistrar
 
         if (entityType == typeof(ProjectManagementTaskReminderEntity))
         {
-            db.QueryFilter.AddTableFilter<ProjectManagementTaskReminderEntity>(reminder => reminder.TenantId == tenantId && reminder.AppCode == appCode && (!restrictToMembership || SqlFunc.Subqueryable<ProjectManagementProjectEntity>().Where(project => project.Id == reminder.ProjectId && (project.OwnerUserId == userId || SqlFunc.Subqueryable<ProjectManagementProjectMemberEntity>().Where(member => member.ProjectId == project.Id && member.UserId == userId && member.IsActive && !member.IsDeleted).Any())).Any()));
+            db.QueryFilter.AddTableFilter<ProjectManagementTaskReminderEntity>(reminder => reminder.TenantId == tenantId && reminder.AppCode == appCode && (!restrictToMembership || SqlFunc.Subqueryable<ProjectManagementTaskEntity>().Where(taskScopePredicate).Where(task => task.Id == reminder.TaskId).Any()));
             return true;
         }
 
@@ -177,7 +159,7 @@ public static class ProjectManagementDataPermissionFilterRegistrar
 
         if (entityType == typeof(ProjectManagementTaskAttachmentEntity))
         {
-            db.QueryFilter.AddTableFilter<ProjectManagementTaskAttachmentEntity>(attachment => attachment.TenantId == tenantId && attachment.AppCode == appCode && (!restrictToMembership || SqlFunc.Subqueryable<ProjectManagementProjectEntity>().Where(project => project.Id == attachment.ProjectId && (project.OwnerUserId == userId || SqlFunc.Subqueryable<ProjectManagementProjectMemberEntity>().Where(member => member.ProjectId == project.Id && member.UserId == userId && member.IsActive && !member.IsDeleted).Any())).Any()));
+            db.QueryFilter.AddTableFilter<ProjectManagementTaskAttachmentEntity>(attachment => attachment.TenantId == tenantId && attachment.AppCode == appCode && (!restrictToMembership || SqlFunc.Subqueryable<ProjectManagementTaskEntity>().Where(taskScopePredicate).Where(task => task.Id == attachment.TaskId).Any()));
             return true;
         }
 

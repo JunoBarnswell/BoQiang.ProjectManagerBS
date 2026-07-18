@@ -284,7 +284,7 @@ public sealed class ProjectManagementTaskService(
         var db = databaseAccessor.GetCurrentDb();
         var placement = await TaskHierarchy.ResolvePlacementAsync(db, entity.ProjectId, request.ParentTaskId, entity.Id, cancellationToken);
         var parent = placement.Parent;
-        await EnsureTaskWriteAccessAsync(entity.ProjectId, entity.Id, parent?.Id, request.AssigneeUserId, cancellationToken);
+        await EnsureTaskWriteAccessAsync(entity.ProjectId, entity.Id, parent?.Id, request.AssigneeUserId, cancellationToken, requireParentScope: true);
         await EnsureAssigneeAsync(entity.ProjectId, request.AssigneeUserId, cancellationToken);
         await EnsureWipAsync(entity.ProjectId, state.Status, request.OverrideWip, cancellationToken, entity.Id);
         if (state.Status == ProjectManagementDomainRules.TaskDone && entity.Status != ProjectManagementDomainRules.TaskDone)
@@ -351,7 +351,7 @@ public sealed class ProjectManagementTaskService(
         var db = databaseAccessor.GetCurrentDb();
         var placement = await TaskHierarchy.ResolvePlacementAsync(db, entity.ProjectId, request.ParentTaskId, entity.Id, cancellationToken);
         var parent = placement.Parent;
-        await EnsureTaskWriteAccessAsync(entity.ProjectId, entity.Id, parent?.Id, entity.AssigneeUserId, cancellationToken);
+        await EnsureTaskWriteAccessAsync(entity.ProjectId, entity.Id, parent?.Id, entity.AssigneeUserId, cancellationToken, requireParentScope: true);
         if (request.UpdateMilestone) await EnsureMilestoneAsync(entity.ProjectId, request.MilestoneId, cancellationToken);
         var depth = placement.RootDepth;
         var siblings = await LoadSiblingsAsync(entity.ProjectId, parent?.Id, entity.Id, cancellationToken);
@@ -522,8 +522,8 @@ public sealed class ProjectManagementTaskService(
     private ProjectManagementTaskStateMachine StateMachine => taskStateMachine ?? new ProjectManagementTaskStateMachine();
 
     // 保持任务写入授权在单一接缝：ScopeRootTaskId 权限落地后只需在此转发任务与父任务上下文。
-    private Task EnsureTaskWriteAccessAsync(string projectId, string? taskId, string? parentTaskId, string? assigneeUserId, CancellationToken cancellationToken)
-        => AccessPolicy.EnsureCanManageTaskAsync(projectId, assigneeUserId, cancellationToken);
+    private Task EnsureTaskWriteAccessAsync(string projectId, string? taskId, string? parentTaskId, string? assigneeUserId, CancellationToken cancellationToken, bool requireParentScope = false)
+        => AccessPolicy.EnsureCanManageTaskAsync(projectId, taskId, parentTaskId, assigneeUserId, requireParentScope, cancellationToken);
 
     private async Task EnsureProjectAsync(string projectId, CancellationToken cancellationToken)
     {
