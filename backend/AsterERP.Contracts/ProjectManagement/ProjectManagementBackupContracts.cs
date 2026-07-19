@@ -10,7 +10,8 @@ public sealed record ProjectManagementBackupResponse(
     string Status,
     string CreatedByUserId,
     DateTime CreatedTime,
-    DateTime? CompletedAt);
+    DateTime? CompletedAt,
+    string? OperationId = null);
 
 public sealed record ProjectManagementRestoreRequest(string CurrentPassword, bool ConfirmRisk);
 

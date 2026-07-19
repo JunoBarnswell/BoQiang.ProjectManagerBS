@@ -86,6 +86,7 @@ export interface ProjectManagementBackup {
   createdByUserId: string;
   createdTime: string;
   completedAt?: string;
+  operationId?: string;
 }
 
 export interface ProjectManagementDataSpaceImpact {
