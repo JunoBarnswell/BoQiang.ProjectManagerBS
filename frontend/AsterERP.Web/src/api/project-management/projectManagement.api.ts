@@ -919,6 +919,14 @@ export function createProjectManagementBackup(request: {
   return httpClient.post<ProjectManagementBackup, typeof request>("/project-management/backups", request);
 }
 
+export function downloadProjectManagementBackup(id: string): Promise<{ blob: Blob; fileName: string }> {
+  return httpClient.downloadBlob(`/project-management/backups/${id}/download`);
+}
+
+export function deleteProjectManagementBackup(id: string, request: { currentPassword: string; confirmRisk: boolean }): Promise<ApiEnvelope<boolean>> {
+  return httpClient.post<boolean, typeof request>(`/project-management/backups/${id}/delete`, request);
+}
+
 export function restoreProjectManagementBackup(
   id: string,
   request: { currentPassword: string; confirmRisk: boolean },

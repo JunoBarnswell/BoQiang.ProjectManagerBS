@@ -4,6 +4,8 @@ import { Link } from 'react-router-dom';
 
 import {
   createProjectManagementBackup,
+  deleteProjectManagementBackup,
+  downloadProjectManagementBackup,
   downloadProjectManagementDataSpaceExport,
   exportProjectManagementSync,
   getProjectManagementBackups,
@@ -102,6 +104,16 @@ export function ProjectManagementDataSpacePage() {
       message.success('备份已完成，可在下方查看审计状态');
       void queryClient.invalidateQueries({ queryKey: queryKeys.projectManagement.backups(scope) });
     }
+  });
+  const backupDownloadMutation = useApiMutation({
+    mutationFn: (id: string) => downloadProjectManagementBackup(id),
+    onError: (error) => message.error(getErrorMessage(error, '备份下载失败')),
+    onSuccess: ({ blob, fileName }) => { const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = fileName; anchor.click(); URL.revokeObjectURL(url); }
+  });
+  const backupDeleteMutation = useApiMutation({
+    mutationFn: (id: string) => deleteProjectManagementBackup(id, { currentPassword: password, confirmRisk }),
+    onError: (error) => message.error(getErrorMessage(error, '备份删除失败')),
+    onSuccess: async () => { message.success('备份已删除'); await queryClient.invalidateQueries({ queryKey: queryKeys.projectManagement.backups(scope) }); }
   });
   const restoreMutation = useApiMutation({
     mutationFn: (id: string) => restoreProjectManagementBackup(id, { currentPassword: password, confirmRisk }),
@@ -202,7 +214,7 @@ export function ProjectManagementDataSpacePage() {
           <PermissionButton code="project-management:backup:manage" disabled={!password || !confirmRisk || backupMutation.isPending} onClick={() => backupMutation.mutate()}>创建备份</PermissionButton>
         </div>
         {restorePreview ? <div className="mt-3 rounded border border-amber-300 bg-amber-50 p-3 text-sm"><div className="font-medium">恢复影响确认 · {restorePreview.backup.backupName}</div><p className="mt-1">{restorePreview.impactScope}</p><p className="mt-1">当前记录：项目 {restorePreview.currentDataSpace.projectCount}、任务 {restorePreview.currentDataSpace.taskCount}；备份记录：项目 {restorePreview.backupDataSpace.projectCount}、任务 {restorePreview.backupDataSpace.taskCount}。</p>{restoreWarnings.length ? <div className="mt-2 rounded border border-amber-200 bg-white/70 p-2"><div className="font-medium text-amber-900">部分恢复警告</div><ul className="mt-1 list-disc space-y-1 pl-5">{restoreWarnings.map((warning) => <li key={warning}>{warning}</li>)}</ul></div> : <p className="mt-2 text-emerald-800">计数一致：未发现需要额外确认的对象数量差异。</p>}<p className="mt-2">失败补偿：{restorePreview.failureCompensationHint}</p><p className="mt-1">成功后回滚：{restorePreview.successfulRestoreRollbackHint}</p><div className="mt-2 flex gap-2"><PermissionButton code="project-management:backup:manage" disabled={!password || !confirmRisk || restoreMutation.isPending} onClick={() => restoreMutation.mutate(restorePreview.backup.id)}>{restoreMutation.isPending ? '恢复中…' : '确认恢复'}</PermissionButton><button type="button" onClick={() => setRestorePreview(null)}>取消</button></div></div> : null}
-        {backupsQuery.isLoading ? <div className="mt-3 text-sm text-gray-500">备份列表加载中…</div> : backupsQuery.isError ? <div className="mt-3 rounded bg-amber-50 p-3 text-sm text-amber-800"><div>备份列表加载失败。</div><button type="button" className="mt-2 underline" onClick={() => void backupsQuery.refetch()}>重试</button></div> : backupsQuery.data?.data?.length ? <div className="mt-3 space-y-2">{backupsQuery.data.data.map((backup) => <div className="flex flex-wrap items-center justify-between gap-2 rounded border border-gray-100 p-3 text-sm" key={backup.id}><span>{backup.backupName} · {Math.round(backup.fileSize / 1024)} KB · {backup.sha256.slice(0, 12)}…</span><PermissionButton code="project-management:backup:manage" disabled={restorePreviewMutation.isPending} onClick={() => restorePreviewMutation.mutate(backup.id)}>{restorePreviewMutation.isPending ? '预览中…' : '查看恢复影响'}</PermissionButton></div>)}</div> : <div className="mt-3 text-sm text-gray-500">暂无备份</div>}
+        {backupsQuery.isLoading ? <div className="mt-3 text-sm text-gray-500">备份列表加载中…</div> : backupsQuery.isError ? <div className="mt-3 rounded bg-amber-50 p-3 text-sm text-amber-800"><div>备份列表加载失败。</div><button type="button" className="mt-2 underline" onClick={() => void backupsQuery.refetch()}>重试</button></div> : backupsQuery.data?.data?.length ? <div className="mt-3 space-y-2">{backupsQuery.data.data.map((backup) => <div className="flex flex-wrap items-center justify-between gap-2 rounded border border-gray-100 p-3 text-sm" key={backup.id}><span>{backup.backupName} · {Math.round(backup.fileSize / 1024)} KB · {backup.sha256.slice(0, 12)}…</span><div className="flex gap-2"><PermissionButton code="project-management:backup:manage" disabled={backupDownloadMutation.isPending} onClick={() => backupDownloadMutation.mutate(backup.id)}>下载</PermissionButton><PermissionButton code="project-management:backup:manage" disabled={restorePreviewMutation.isPending} onClick={() => restorePreviewMutation.mutate(backup.id)}>{restorePreviewMutation.isPending ? '预览中…' : '查看恢复影响'}</PermissionButton><PermissionButton code="project-management:backup:manage" disabled={!password || !confirmRisk || backupDeleteMutation.isPending} onClick={() => backupDeleteMutation.mutate(backup.id)}>删除</PermissionButton></div></div>)}</div> : <div className="mt-3 text-sm text-gray-500">暂无备份</div>}
         {operationResult ? <div className="mt-3 rounded border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900" role="status">{operationResult}</div> : null}
         {operationId ? <PermissionGuard code="project-management:operation:view" fallback={<p className="mt-3 text-sm text-gray-500">当前账号无权读取任务追踪详情，请到审计中心查看操作记录。</p>}><div className="mt-3"><ProjectManagementOperationProgress operationId={operationId} onTrackingEnded={() => setOperationId(null)} /></div></PermissionGuard> : null}
       </section>

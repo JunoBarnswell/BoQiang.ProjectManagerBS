@@ -66,6 +66,33 @@ public sealed class ProjectManagementBackupService(
         return rows.Select(item => Map(item)).ToList();
     }
 
+    public async Task<ProjectManagementBackupDownload> DownloadAsync(string id, CancellationToken cancellationToken = default)
+    {
+        EnsureLogicalBackupSupported();
+        var target = await GetReadyBackupAsync(id, cancellationToken);
+        var path = GetAbsoluteBackupPath(target.RelativePath);
+        await VerifyFileAsync(path, target.Sha256, target.FileSize, cancellationToken);
+        return new ProjectManagementBackupDownload(Path.GetFileName(path), "application/vnd.sqlite3", File.OpenRead(path));
+    }
+
+    public async Task DeleteAsync(string id, ProjectManagementBackupDeleteRequest request, CancellationToken cancellationToken = default)
+    {
+        EnsureLogicalBackupSupported();
+        await riskConfirmation.EnsureConfirmedAsync(request.CurrentPassword, request.ConfirmRisk, cancellationToken);
+        var target = await GetReadyBackupAsync(id, cancellationToken);
+        var readyCount = await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementBackupEntity>()
+            .Where(item => item.TenantId == Tenant() && item.AppCode == App() && item.Status == "Ready" && !item.IsDeleted)
+            .CountAsync(cancellationToken);
+        if (readyCount <= 1) throw new ValidationException("不能删除唯一可用的安全恢复点");
+        target.IsDeleted = true;
+        target.DeletedBy = UserId();
+        target.DeletedTime = DateTime.UtcNow;
+        target.UpdatedBy = UserId();
+        target.UpdatedTime = target.DeletedTime;
+        await databaseAccessor.GetProjectManagementDb().Updateable(target).ExecuteCommandAsync(cancellationToken);
+        TryDelete(GetAbsoluteBackupPath(target.RelativePath));
+    }
+
     public async Task<ProjectManagementBackupRestorePreviewResponse> PreviewRestoreAsync(string id, CancellationToken cancellationToken = default)
     {
         EnsureLogicalBackupSupported();

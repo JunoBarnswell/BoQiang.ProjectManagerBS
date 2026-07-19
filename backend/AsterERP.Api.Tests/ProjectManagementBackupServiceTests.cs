@@ -49,12 +49,21 @@ public sealed class ProjectManagementBackupServiceTests
 
             var backup = await service.CreateAsync(new ProjectManagementBackupRequest("secret", true, "test backup"));
             Assert.Equal("Ready", backup.Status);
+            var download = await service.DownloadAsync(backup.Id);
+            Assert.Equal($"{backup.Id}.db", download.FileName);
+            Assert.Equal("application/vnd.sqlite3", download.ContentType);
+            await download.Stream.DisposeAsync();
+            await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() => service.DeleteAsync(backup.Id, new ProjectManagementBackupDeleteRequest("secret", true)));
             await db.Updateable<ProjectManagementProjectEntity>().SetColumns(item => new ProjectManagementProjectEntity { ProjectCode = "after" }).Where(item => item.Id == "project-1").ExecuteCommandAsync();
             await service.RestoreAsync(backup.Id, new ProjectManagementRestoreRequest("secret", true));
             Assert.Equal("before", (await db.Queryable<ProjectManagementProjectEntity>().Where(item => item.Id == "project-1").FirstAsync()).ProjectCode);
             Assert.Contains(await service.ListAsync(), item => item.Id == backup.Id);
+            var secondBackup = await service.CreateAsync(new ProjectManagementBackupRequest("secret", true, "second safe point"));
+            await service.DeleteAsync(backup.Id, new ProjectManagementBackupDeleteRequest("secret", true));
+            Assert.DoesNotContain(await service.ListAsync(), item => item.Id == backup.Id);
+            Assert.Contains(await service.ListAsync(), item => item.Id == secondBackup.Id);
             var operations = await db.Queryable<ProjectManagementOperationEntity>().Where(item => !item.IsDeleted).ToListAsync();
-            Assert.Equal(2, operations.Count);
+            Assert.Equal(3, operations.Count);
             Assert.Contains(operations, item => item.OperationType == "backup.restore" && item.Status == "Succeeded");
             Assert.Contains(operations, item => item.OperationType == "backup.create" && item.Status == "Succeeded");
         }

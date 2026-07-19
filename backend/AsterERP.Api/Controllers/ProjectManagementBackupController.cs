@@ -13,6 +13,13 @@ public sealed class ProjectManagementBackupController(IProjectManagementBackupSe
     [HttpGet]
     public async Task<IActionResult> ListAsync(CancellationToken cancellationToken) => ApiOk(await service.ListAsync(cancellationToken));
 
+    [HttpGet("{id}/download")]
+    public async Task<IActionResult> DownloadAsync(string id, CancellationToken cancellationToken)
+    {
+        var download = await service.DownloadAsync(id, cancellationToken);
+        return File(download.Stream, download.ContentType, download.FileName);
+    }
+
     [HttpPost]
     public async Task<IActionResult> CreateAsync([FromBody] ProjectManagementBackupRequest request, CancellationToken cancellationToken) => ApiOk(await service.CreateAsync(request, cancellationToken));
 
@@ -21,4 +28,11 @@ public sealed class ProjectManagementBackupController(IProjectManagementBackupSe
 
     [HttpPost("{id}/restore")]
     public async Task<IActionResult> RestoreAsync(string id, [FromBody] ProjectManagementRestoreRequest request, CancellationToken cancellationToken) => ApiOk(await service.RestoreAsync(id, request, cancellationToken));
+
+    [HttpPost("{id}/delete")]
+    public async Task<IActionResult> DeleteAsync(string id, [FromBody] ProjectManagementBackupDeleteRequest request, CancellationToken cancellationToken)
+    {
+        await service.DeleteAsync(id, request, cancellationToken);
+        return ApiOk(true);
+    }
 }

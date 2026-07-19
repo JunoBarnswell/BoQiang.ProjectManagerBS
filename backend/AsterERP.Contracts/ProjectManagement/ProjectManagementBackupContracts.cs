@@ -2,6 +2,10 @@ namespace AsterERP.Contracts.ProjectManagement;
 
 public sealed record ProjectManagementBackupRequest(string CurrentPassword, bool ConfirmRisk, string? Reason = null);
 
+public sealed record ProjectManagementBackupDeleteRequest(string CurrentPassword, bool ConfirmRisk);
+
+public sealed record ProjectManagementBackupDownload(string FileName, string ContentType, Stream Stream);
+
 public sealed record ProjectManagementBackupResponse(
     string Id,
     string BackupName,
