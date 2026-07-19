@@ -691,6 +691,34 @@ export interface ProjectManagementReportSnapshotRequest {
 
 export interface ProjectManagementReportSnapshotStartResponse {
   operationId: string;
+export type ProjectManagementExcelImportPreviewStatus = 'Completed' | 'CompletedWithErrors';
+
+export interface ProjectManagementExcelImportRowError {
+  sheetName: string;
+  rowNumber: number;
+  stableId?: string;
+  code: string;
+  message: string;
+  severity: string;
+}
+
+export interface ProjectManagementExcelImportPreview {
+  previewId: string;
+  status: ProjectManagementExcelImportPreviewStatus;
+  templateVersion: string;
+  parsedAt: string;
+  totalRows: number;
+  importableRows: number;
+  duplicateRows: number;
+  errorRows: number;
+  warningRows: number;
+  newRows: number;
+  updatedRows: number;
+  skippedRows: number;
+  errors: ProjectManagementExcelImportRowError[];
+  errorsTruncated: boolean;
+}
+
 }
 
 export interface ProjectManagementSyncWatermark {

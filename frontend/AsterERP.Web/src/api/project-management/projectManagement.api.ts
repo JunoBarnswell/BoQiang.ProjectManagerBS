@@ -67,6 +67,7 @@ import type {
   ProjectManagementReportQuery,
   ProjectManagementReportSnapshotRequest,
   ProjectManagementReportSnapshotStartResponse,
+  ProjectManagementExcelImportPreview,
   ProjectManagementSearchQuery,
   ProjectManagementSearchResponse,
   ProjectManagementSearchIndexStatus,
@@ -655,6 +656,19 @@ export function startProjectManagementReportSnapshot(
 
 export function downloadProjectManagementReportSnapshot(operationId: string): Promise<{ blob: Blob; fileName: string }> {
   return httpClient.downloadBlob(`/project-management/reports/snapshots/${encodeURIComponent(operationId)}/download`, { timeoutMs: 120_000 });
+}
+
+export function downloadProjectManagementExcelTemplate(signal?: AbortSignal): Promise<{ blob: Blob; fileName: string }> {
+  return httpClient.downloadBlob('/project-management/excel-import/template', { timeoutMs: 120_000 }, signal);
+}
+
+export function previewProjectManagementExcel(
+  file: File,
+  signal?: AbortSignal,
+): Promise<ApiEnvelope<ProjectManagementExcelImportPreview>> {
+  const formData = new FormData();
+  formData.append('file', file);
+  return httpClient.postForm<ProjectManagementExcelImportPreview>('/project-management/excel-import/preview', formData, { timeoutMs: 120_000 }, signal);
 }
 
 export function exportProjectManagementSync(request: {

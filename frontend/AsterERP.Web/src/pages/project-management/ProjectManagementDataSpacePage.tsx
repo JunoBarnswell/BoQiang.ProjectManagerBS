@@ -14,9 +14,9 @@ import { usePermission } from '../../core/auth/usePermission';
 import { isHttpError } from '../../core/http/httpError';
 import { queryKeys } from '../../core/query/queryKeys';
 import { useApiMutation } from '../../core/query/useApiMutation';
-import { useProjectManagementWorkspaceScope } from '../../features/project-management/state/projectManagementWorkspaceScope';
 import { ProjectManagementOperationProgress } from '../../features/project-management/components/ProjectManagementOperationProgress';
 import { toProjectManagementPlatformRoute } from '../../features/project-management/state/projectManagementPlatformRoutes';
+import { useProjectManagementWorkspaceScope } from '../../features/project-management/state/projectManagementWorkspaceScope';
 import { PermissionButton } from '../../shared/auth/PermissionButton';
 import { PermissionGuard } from '../../shared/auth/PermissionGuard';
 import { useMessage } from '../../shared/feedback/useMessage';
@@ -26,6 +26,7 @@ import { PageError } from '../../shared/status/PageError';
 import { PageLoading } from '../../shared/status/PageLoading';
 import { getErrorMessage } from '../../shared/utils/errorMessage';
 
+import { ProjectManagementExcelImportPanel } from './components/ProjectManagementExcelImportPanel';
 import { ProjectManagementSyncPackageImportPanel } from './components/ProjectManagementSyncPackageImportPanel';
 
 export function ProjectManagementDataSpacePage() {
@@ -121,6 +122,7 @@ export function ProjectManagementDataSpacePage() {
           <PermissionButton code="project-management:sync:export" disabled={exportMutation.isPending} onClick={() => exportMutation.mutate()}>{exportMutation.isPending ? '导出中…' : '导出 bqsync'}</PermissionButton>
         </div>
         <ProjectManagementSyncPackageImportPanel />
+        <ProjectManagementExcelImportPanel />
       </section>
       <section className="mt-4 rounded-lg border border-gray-200 p-4">
         <h2 className="font-semibold">备份与恢复</h2>
