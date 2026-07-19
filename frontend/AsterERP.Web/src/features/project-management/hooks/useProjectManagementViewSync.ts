@@ -5,6 +5,7 @@ import type { ProjectManagementWorkspaceScope } from '../state/projectManagement
 import {
   getProjectManagementViewSyncInvalidationTargets,
   type ProjectManagementViewSyncInvalidation,
+  type ProjectManagementViewSyncInvalidationTarget,
 } from '../view-sync/projectManagementViewSyncModel';
 
 export interface ProjectManagementViewSyncContext {
@@ -23,8 +24,17 @@ export async function invalidateProjectManagementViewSyncCaches(
 ): Promise<void> {
   if (!context.scope.isAvailable || !context.projectId || event.projectId !== context.projectId) return;
 
-  const targets = getProjectManagementViewSyncInvalidationTargets(event);
-  await Promise.all(targets.map((target) => {
+  await invalidateProjectManagementViewSyncTargets(queryClient, context, getProjectManagementViewSyncInvalidationTargets(event));
+}
+
+export async function invalidateProjectManagementViewSyncTargets(
+  queryClient: Pick<QueryClient, 'invalidateQueries'>,
+  context: ProjectManagementViewSyncContext,
+  targets: Iterable<ProjectManagementViewSyncInvalidationTarget>,
+): Promise<void> {
+  if (!context.scope.isAvailable || !context.projectId) return;
+
+  await Promise.all([...targets].map((target) => {
     switch (target) {
       case 'tasks':
         return queryClient.invalidateQueries({ queryKey: queryKeys.projectManagement.tasksProject(context.scope, context.projectId) });
