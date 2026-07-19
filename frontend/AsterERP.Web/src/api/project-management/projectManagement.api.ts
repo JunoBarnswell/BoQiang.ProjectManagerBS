@@ -184,8 +184,8 @@ export function getProjectManagementMemberCandidates(
 export function getProjectManagementMembers(
   projectId: string,
   signal?: AbortSignal,
-): Promise<ApiEnvelope<ProjectManagementMember[]>> {
-  return httpClient.get<ProjectManagementMember[]>(
+): Promise<ApiEnvelope<GridPageResult<ProjectManagementMember>>> {
+  return httpClient.get<GridPageResult<ProjectManagementMember>>(
     `/project-management/projects/${projectId}/members`,
     undefined,
     signal,

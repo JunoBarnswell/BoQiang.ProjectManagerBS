@@ -355,7 +355,7 @@ export function ProjectManagementTaskWorkspacePage() {
     try {
       const parsed = JSON.parse(view.queryJson) as Partial<TaskWorkspaceState>;
       const unavailable: string[] = [];
-      const knownMembers = new Set((membersQuery.data?.data ?? []).map((member) => member.userId));
+      const knownMembers = new Set((membersQuery.data?.data?.items ?? []).map((member) => member.userId));
       const knownLabels = new Set((labelsQuery.data?.data ?? []).map((label) => label.id));
       const sanitized = { ...parsed, selectedTaskId: undefined };
       if (sanitized.assigneeUserId && membersQuery.isSuccess && !knownMembers.has(sanitized.assigneeUserId)) { delete sanitized.assigneeUserId; unavailable.push('负责人'); }
@@ -374,7 +374,7 @@ export function ProjectManagementTaskWorkspacePage() {
     } catch {
       message.error('保存视图内容无效，未应用。');
     }
-  }, [labelsQuery.data?.data, labelsQuery.isSuccess, membersQuery.data?.data, membersQuery.isSuccess, message, milestoneLabels, milestonesQuery.isSuccess, navigate, projectId]);
+  }, [labelsQuery.data?.data, labelsQuery.isSuccess, membersQuery.data?.data?.items, membersQuery.isSuccess, message, milestoneLabels, milestonesQuery.isSuccess, navigate, projectId]);
   useEffect(() => {
     if (appliedDefaultViewProject.current === projectId || !savedViewsQuery.isSuccess || !membersQuery.isSuccess || !labelsQuery.isSuccess || !milestonesQuery.isSuccess) return;
     appliedDefaultViewProject.current = projectId;
@@ -1004,7 +1004,7 @@ export function ProjectManagementTaskWorkspacePage() {
             attachmentMutation.mutate(file);
           }}
           reminderCreating={reminderCreateMutation.isPending || reminderCancelMutation.isPending || reminderDeleteMutation.isPending}
-          reminderMembers={membersQuery.data?.data ?? []}
+          reminderMembers={membersQuery.data?.data?.items ?? []}
           reminders={remindersQuery.data?.data ?? []}
           remindersError={remindersQuery.isError}
           remindersLoading={remindersQuery.isLoading}

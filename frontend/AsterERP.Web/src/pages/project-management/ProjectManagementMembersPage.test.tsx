@@ -86,7 +86,7 @@ describe("ProjectManagementMembersPage", () => {
     api.createMember.mockResolvedValue({ data: {} });
     api.deleteMember.mockResolvedValue({ data: {} });
     api.updateMember.mockResolvedValue({ data: {} });
-    queryState.members = queryResult({ data: [] });
+    queryState.members = queryResult({ data: { total: 0, items: [] } });
     queryState.candidates = queryResult({
       data: {
         total: 3,

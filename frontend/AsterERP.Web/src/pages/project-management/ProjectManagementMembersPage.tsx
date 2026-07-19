@@ -123,7 +123,7 @@ export function ProjectManagementMembersPage() {
       />
     );
   }
-  const members = membersQuery.data?.data ?? [];
+  const members = membersQuery.data?.data?.items ?? [];
   const candidates = candidatesQuery.data?.data?.items ?? [];
   const userCandidates = Array.from(candidates.reduce((byUser, candidate) => {
     const current = byUser.get(candidate.userId);
