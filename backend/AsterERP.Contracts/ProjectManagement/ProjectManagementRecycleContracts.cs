@@ -39,6 +39,24 @@ public sealed record ProjectManagementRecycleRestoreRequest(long VersionNo, bool
 
 public sealed record ProjectManagementRecyclePurgeRequest(long VersionNo, string CurrentPassword, bool ConfirmRisk);
 
+public sealed record ProjectManagementRecyclePurgeServerState(
+    string ProjectId,
+    long VersionNo,
+    bool IsDeleted,
+    DateTime? DeletedTime);
+
+public sealed record ProjectManagementRecyclePurgeConflict(
+    ProjectManagementRecyclePurgeServerState? Server,
+    ProjectManagementRecyclePurgeRequest Local,
+    IReadOnlyList<string> Fields);
+
+public sealed record ProjectManagementRecyclePurgeResponse(
+    string ProjectId,
+    bool Purged,
+    string? OperationId,
+    int FileCleanupPendingCount,
+    ProjectManagementRecyclePurgeConflict? Conflict);
+
 public sealed record ProjectManagementRecyclePurgePreviewResponse(
     string ProjectId,
     string ProjectCode,

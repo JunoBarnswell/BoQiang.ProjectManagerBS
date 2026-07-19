@@ -335,6 +335,13 @@ CREATE TABLE IF NOT EXISTS pm_operation_events (
     CreatedBy TEXT NULL, CreatedTime TEXT NOT NULL, UpdatedBy TEXT NULL, UpdatedTime TEXT NULL,
     DeletedBy TEXT NULL, DeletedTime TEXT NULL, IsDeleted INTEGER NOT NULL DEFAULT 0, Remark TEXT NULL
 );
+CREATE TABLE IF NOT EXISTS pm_file_cleanup_pending (
+    Id TEXT NOT NULL PRIMARY KEY, TenantId TEXT NOT NULL, AppCode TEXT NOT NULL, ProjectId TEXT NOT NULL,
+    FileId TEXT NOT NULL, Status TEXT NOT NULL DEFAULT 'Pending', AttemptCount INTEGER NOT NULL DEFAULT 0,
+    LastAttemptTime TEXT NULL, CompletedTime TEXT NULL, LastError TEXT NULL,
+    CreatedBy TEXT NULL, CreatedTime TEXT NOT NULL, UpdatedBy TEXT NULL, UpdatedTime TEXT NULL,
+    DeletedBy TEXT NULL, DeletedTime TEXT NULL, IsDeleted INTEGER NOT NULL DEFAULT 0, Remark TEXT NULL
+);
 """);
         schema.EnsureColumn("pm_operations", "Phase", "TEXT NOT NULL DEFAULT 'Pending'");
         schema.EnsureColumn("pm_operations", "ProgressPercent", "INTEGER NOT NULL DEFAULT 0");
@@ -391,6 +398,8 @@ CREATE TABLE IF NOT EXISTS pm_operation_events (
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_backups_created ON pm_backups(TenantId, AppCode, CreatedTime, IsDeleted);");
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_operations_status_time ON pm_operations(TenantId, AppCode, Status, StartedTime, IsDeleted);");
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_operation_events_operation_time ON pm_operation_events(TenantId, AppCode, OperationId, CreatedTime, IsDeleted);");
+        schema.Execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_pm_file_cleanup_pending_file ON pm_file_cleanup_pending(TenantId, AppCode, FileId) WHERE IsDeleted = 0;");
+        schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_file_cleanup_pending_retry ON pm_file_cleanup_pending(TenantId, AppCode, Status, CreatedTime, IsDeleted);");
     }
 
     private static void NormalizeTaskSiblingOrdering(SqliteSchemaExecutor schema)
@@ -420,7 +429,7 @@ WHERE Id IN (SELECT Id FROM ordered);
     {
         schema.Execute("""
 INSERT INTO pm_schema_versions (ModuleKey, VersionNo, AppliedAt, AppliedBy)
-VALUES ('project-management', 2, CURRENT_TIMESTAMP, 'schema-migrator')
+VALUES ('project-management', 3, CURRENT_TIMESTAMP, 'schema-migrator')
 ON CONFLICT(ModuleKey) DO UPDATE SET VersionNo = excluded.VersionNo, AppliedAt = excluded.AppliedAt, AppliedBy = excluded.AppliedBy;
 """);
     }
