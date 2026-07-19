@@ -1,6 +1,7 @@
 import type { ApiEnvelope } from "../../core/http/apiEnvelope";
 import { httpClient } from "../../core/http/httpClient";
 import { buildQueryString } from "../queryString";
+import type { GridPageResult } from "../shared.types";
 
 import type {
   ProjectManagementMemberCandidate,
@@ -246,8 +247,8 @@ export function deleteProjectManagementMember(
 export function getProjectManagementMilestones(
   projectId: string,
   signal?: AbortSignal,
-): Promise<ApiEnvelope<ProjectManagementMilestone[]>> {
-  return httpClient.get<ProjectManagementMilestone[]>(
+): Promise<ApiEnvelope<GridPageResult<ProjectManagementMilestone>>> {
+  return httpClient.get<GridPageResult<ProjectManagementMilestone>>(
     `/project-management/projects/${projectId}/milestones`,
     undefined,
     signal,

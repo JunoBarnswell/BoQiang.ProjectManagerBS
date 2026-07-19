@@ -101,6 +101,16 @@ public sealed class ProjectManagementDataPermissionFilterTests
         }).ExecuteCommandAsync();
         await db.Insertable(new[]
         {
+            new ProjectManagementTaskRecurrenceEntity { Id = "recurrence-visible", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-visible", SourceTaskId = "task-visible", Frequency = "Daily" },
+            new ProjectManagementTaskRecurrenceEntity { Id = "recurrence-hidden", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-hidden", SourceTaskId = "task-hidden", Frequency = "Daily" }
+        }).ExecuteCommandAsync();
+        await db.Insertable(new[]
+        {
+            new ProjectManagementTaskRecurrenceOccurrenceEntity { Id = "recurrence-occurrence-visible", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-visible", RecurrenceId = "recurrence-visible", TaskId = "task-visible", RecurrenceKey = "visible" },
+            new ProjectManagementTaskRecurrenceOccurrenceEntity { Id = "recurrence-occurrence-hidden", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-hidden", RecurrenceId = "recurrence-hidden", TaskId = "task-hidden", RecurrenceKey = "hidden" }
+        }).ExecuteCommandAsync();
+        await db.Insertable(new[]
+        {
             new ProjectManagementImConversationLinkEntity { Id = "link-visible", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-visible", ConversationKey = "pm:visible", Status = "Active" },
             new ProjectManagementImConversationLinkEntity { Id = "link-hidden", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-hidden", ConversationKey = "pm:hidden", Status = "Active" }
         }).ExecuteCommandAsync();
@@ -119,12 +129,16 @@ public sealed class ProjectManagementDataPermissionFilterTests
         Assert.True(ProjectManagementDataPermissionFilterRegistrar.TryRegister(db, typeof(ProjectManagementTaskEntity), currentUser, "tenant-a", "SYSTEM"));
         Assert.True(ProjectManagementDataPermissionFilterRegistrar.TryRegister(db, typeof(ProjectManagementTaskDependencyEntity), currentUser, "tenant-a", "SYSTEM"));
         Assert.True(ProjectManagementDataPermissionFilterRegistrar.TryRegister(db, typeof(ProjectManagementTaskParticipantEntity), currentUser, "tenant-a", "SYSTEM"));
+        Assert.True(ProjectManagementDataPermissionFilterRegistrar.TryRegister(db, typeof(ProjectManagementTaskRecurrenceEntity), currentUser, "tenant-a", "SYSTEM"));
+        Assert.True(ProjectManagementDataPermissionFilterRegistrar.TryRegister(db, typeof(ProjectManagementTaskRecurrenceOccurrenceEntity), currentUser, "tenant-a", "SYSTEM"));
         Assert.True(ProjectManagementDataPermissionFilterRegistrar.TryRegister(db, typeof(ProjectManagementImConversationLinkEntity), currentUser, "tenant-a", "SYSTEM"));
 
         Assert.Equal("milestone-visible", Assert.Single(await db.Queryable<ProjectManagementMilestoneEntity>().ToListAsync()).Id);
         Assert.Equal("task-visible", Assert.Single(await db.Queryable<ProjectManagementTaskEntity>().ToListAsync()).Id);
         Assert.Equal("dependency-visible", Assert.Single(await db.Queryable<ProjectManagementTaskDependencyEntity>().ToListAsync()).Id);
         Assert.Equal("participant-visible", Assert.Single(await db.Queryable<ProjectManagementTaskParticipantEntity>().ToListAsync()).Id);
+        Assert.Equal("recurrence-visible", Assert.Single(await db.Queryable<ProjectManagementTaskRecurrenceEntity>().ToListAsync()).Id);
+        Assert.Equal("recurrence-occurrence-visible", Assert.Single(await db.Queryable<ProjectManagementTaskRecurrenceOccurrenceEntity>().ToListAsync()).Id);
         Assert.Equal("link-visible", Assert.Single(await db.Queryable<ProjectManagementImConversationLinkEntity>().ToListAsync()).Id);
     }
 

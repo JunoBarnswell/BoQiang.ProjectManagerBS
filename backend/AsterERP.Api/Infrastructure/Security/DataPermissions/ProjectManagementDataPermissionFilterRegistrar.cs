@@ -121,6 +121,28 @@ public static class ProjectManagementDataPermissionFilterRegistrar
             return true;
         }
 
+        if (entityType == typeof(ProjectManagementTaskRecurrenceEntity))
+        {
+            db.QueryFilter.AddTableFilter<ProjectManagementTaskRecurrenceEntity>(recurrence =>
+                recurrence.TenantId == tenantId && recurrence.AppCode == appCode &&
+                (!restrictToMembership || SqlFunc.Subqueryable<ProjectManagementTaskEntity>()
+                    .Where(taskScopePredicate)
+                    .Where(task => task.Id == recurrence.SourceTaskId)
+                    .Any()));
+            return true;
+        }
+
+        if (entityType == typeof(ProjectManagementTaskRecurrenceOccurrenceEntity))
+        {
+            db.QueryFilter.AddTableFilter<ProjectManagementTaskRecurrenceOccurrenceEntity>(occurrence =>
+                occurrence.TenantId == tenantId && occurrence.AppCode == appCode &&
+                (!restrictToMembership || SqlFunc.Subqueryable<ProjectManagementTaskEntity>()
+                    .Where(taskScopePredicate)
+                    .Where(task => task.Id == occurrence.TaskId)
+                    .Any()));
+            return true;
+        }
+
         if (entityType == typeof(ProjectManagementActivityEntity))
         {
             db.QueryFilter.AddTableFilter<ProjectManagementActivityEntity>(activity => activity.TenantId == tenantId && activity.AppCode == appCode && (!restrictToMembership || SqlFunc.Subqueryable<ProjectManagementProjectEntity>().Where(project => project.Id == activity.ProjectId && (project.OwnerUserId == userId || SqlFunc.Subqueryable<ProjectManagementProjectMemberEntity>().Where(member => member.ProjectId == project.Id && member.UserId == userId && member.IsActive && !member.IsDeleted).Any())).Any()));

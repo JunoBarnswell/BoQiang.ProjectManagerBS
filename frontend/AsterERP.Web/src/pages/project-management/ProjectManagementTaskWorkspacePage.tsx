@@ -347,7 +347,8 @@ export function ProjectManagementTaskWorkspacePage() {
     return [...byId.values()];
   }, [boardRows, rows, state.viewKey]);
   const participantLabels = useMemo(() => Object.fromEntries((memberCandidatesQuery.data?.data?.items ?? []).map((candidate) => [candidate.userId, candidate.displayName || candidate.userName])), [memberCandidatesQuery.data?.data?.items]);
-  const milestoneLabels = useMemo(() => Object.fromEntries((milestonesQuery.data?.data ?? []).map((milestone) => [milestone.id, milestone.milestoneName])), [milestonesQuery.data?.data]);
+  const milestones = useMemo(() => milestonesQuery.data?.data.items ?? [], [milestonesQuery.data?.data.items]);
+  const milestoneLabels = useMemo(() => Object.fromEntries(milestones.map((milestone) => [milestone.id, milestone.milestoneName])), [milestones]);
   const selectedListTask = rows.find((task) => task.id === selectedTaskId);
   const selectedTask = taskDetailQuery.data?.data;
   const selectedTasks = useMemo(() => selectableRows.filter((task) => selectedTaskIds.has(task.id)), [selectableRows, selectedTaskIds]);
@@ -1024,7 +1025,7 @@ export function ProjectManagementTaskWorkspacePage() {
         candidatesError={memberCandidatesQuery.isError}
         labels={labelsQuery.data?.data ?? []}
         labelsError={labelsQuery.isError}
-        milestones={milestonesQuery.data?.data ?? []}
+        milestones={milestones}
         milestonesError={milestonesQuery.isError}
         onClose={() => setBatchOpen(false)}
         onSubmit={(request) => batchMutation.mutate(request)}
@@ -1112,7 +1113,7 @@ export function ProjectManagementTaskWorkspacePage() {
           selectedTaskIds={selectedTaskIds}
           state={state}
           dependencies={dependenciesQuery.data?.data ?? []}
-          milestones={milestonesQuery.data?.data ?? []}
+          milestones={milestones}
         />
       </section>
     </ResponsivePage>

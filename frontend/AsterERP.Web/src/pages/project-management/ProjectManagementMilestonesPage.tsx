@@ -92,7 +92,7 @@ export function ProjectManagementMilestonesPage() {
       />
     );
   }
-  const milestones = milestonesQuery.data?.data ?? [];
+  const milestones = milestonesQuery.data?.data.items ?? [];
   const update = (next: ProjectManagementMilestoneUpsertRequest) => {
     setForm(next);
     setDirty(true);
