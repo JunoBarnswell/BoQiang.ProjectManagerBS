@@ -8,7 +8,7 @@ import { queryKeys } from '../../../core/query/queryKeys';
 import type { ProjectManagementWorkspaceScope } from '../state/projectManagementWorkspaceScope';
 import { TaskCard, type TaskCardDragHandlers } from './TaskCardProjection';
 import { groupTaskCards, type TaskCardGroup } from './taskCardProjectionModel';
-import { buildTaskBoardColumnQuery, type TaskBoardStatus } from './taskBoardProjectionModel';
+import { buildTaskBoardColumnQuery, taskBoardStatuses, type TaskBoardStatus } from './taskBoardProjectionModel';
 import type { TaskGroupBy } from './taskMoveIntent';
 
 interface TaskBoardColumnProjectionProps {
@@ -18,6 +18,7 @@ interface TaskBoardColumnProjectionProps {
   groupDropBy?: TaskGroupBy;
   milestoneLabels?: Readonly<Record<string, string>>;
   onAddChildTask?: (task: ProjectManagementTaskListItem) => void;
+  onChangeTaskStatus?: (task: ProjectManagementTaskListItem, status: string) => void;
   onCompleteTask?: (task: ProjectManagementTaskListItem) => void;
   onDeleteTask?: (task: ProjectManagementTaskListItem) => void;
   onMetricChange?: (metric: { loaded: number; status: TaskBoardStatus; total?: number }) => void;
@@ -29,13 +30,14 @@ interface TaskBoardColumnProjectionProps {
   scope: ProjectManagementWorkspaceScope;
   selectedTaskIds: ReadonlySet<string>;
   status: TaskBoardStatus;
+  optimisticRows?: Readonly<Record<string, ProjectManagementTaskListItem>>;
 }
 
 type BoardVirtualItem =
   | { kind: 'lane'; lane: TaskCardGroup }
   | { kind: 'task'; laneKey: string; task: ProjectManagementTaskListItem };
 
-export function TaskBoardColumnProjection({ baseQuery, drag, groupBy, groupDropBy, milestoneLabels, onAddChildTask, onCompleteTask, onDeleteTask, onMetricChange, onRowsLoaded, onSelectTask, onToggleTaskSelection, participantLabels, pendingTaskId, scope, selectedTaskIds, status }: TaskBoardColumnProjectionProps) {
+export function TaskBoardColumnProjection({ baseQuery, drag, groupBy, groupDropBy, milestoneLabels, onAddChildTask, onChangeTaskStatus, onCompleteTask, onDeleteTask, onMetricChange, onRowsLoaded, onSelectTask, onToggleTaskSelection, optimisticRows, participantLabels, pendingTaskId, scope, selectedTaskIds, status }: TaskBoardColumnProjectionProps) {
   const [pageIndex, setPageIndex] = useState(1);
   const [loadedRows, setLoadedRows] = useState<Map<string, ProjectManagementTaskListItem>>(() => new Map());
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -62,7 +64,14 @@ export function TaskBoardColumnProjection({ baseQuery, drag, groupBy, groupDropB
     });
   }, [pageQueryResult.data?.data?.items]);
 
-  const rows = useMemo(() => [...loadedRows.values()], [loadedRows]);
+  const rows = useMemo(() => {
+    const merged = new Map(loadedRows);
+    Object.values(optimisticRows ?? {}).forEach((task) => {
+      if (task.status === status) merged.set(task.id, task);
+      else merged.delete(task.id);
+    });
+    return [...merged.values()].filter((task) => task.status === status);
+  }, [loadedRows, optimisticRows, status]);
   const total = pageQueryResult.data?.data?.total;
   const hasMore = typeof total === 'number' && rows.length < total;
   const groups = useMemo(() => groupTaskCards(rows, groupBy), [groupBy, rows]);
@@ -112,7 +121,7 @@ export function TaskBoardColumnProjection({ baseQuery, drag, groupBy, groupDropB
               >
                 <strong>{item.lane.label}</strong><span>{item.lane.rows.length}</span>
               </div>
-              : <TaskCard drag={drag} milestoneLabels={milestoneLabels} onAddChildTask={onAddChildTask} onCompleteTask={onCompleteTask} onDeleteTask={onDeleteTask} onSelectTask={onSelectTask} onToggleTaskSelection={onToggleTaskSelection} participantLabels={participantLabels} pending={pendingTaskId === item.task.id} selected={selectedTaskIds.has(item.task.id)} task={item.task} />}
+              : <TaskCard drag={drag} milestoneLabels={milestoneLabels} onAddChildTask={onAddChildTask} onChangeTaskStatus={onChangeTaskStatus} onCompleteTask={onCompleteTask} onDeleteTask={onDeleteTask} onSelectTask={onSelectTask} onToggleTaskSelection={onToggleTaskSelection} participantLabels={participantLabels} pending={pendingTaskId === item.task.id} selected={selectedTaskIds.has(item.task.id)} statusOptions={taskBoardStatuses} task={item.task} />}
           </div>;
         })}
       </div>

@@ -68,6 +68,7 @@ import { TaskWorkspaceBatchCommandPanel } from '../../features/project-managemen
 import { TaskWorkspaceBatchResultPanel } from '../../features/project-management/task-workspace/TaskWorkspaceBatchResultPanel';
 import { taskBatchResultToCsv } from '../../features/project-management/task-workspace/taskBatchExecutionModel';
 import { resolveBoardStatusProgress, rollbackBoardStatus } from '../../features/project-management/task-workspace/taskBoardStatusMutationModel';
+import { applyOptimisticBoardMove, clearOptimisticBoardMove, rollbackOptimisticBoardMove } from '../../features/project-management/task-workspace/taskBoardInteractionModel';
 import { TaskWorkspaceImConversationPanel } from '../../features/project-management/task-workspace/TaskWorkspaceImConversationPanel';
 import { TaskWorkspaceLabelManager } from '../../features/project-management/task-workspace/TaskWorkspaceLabelManager';
 import { TaskWorkspaceProjection } from '../../features/project-management/task-workspace/TaskWorkspaceProjection';
@@ -155,6 +156,7 @@ export function ProjectManagementTaskWorkspacePage() {
   const [batchResult, setBatchResult] = useState<ProjectManagementTaskBatchExecutionResult | null>(null);
   const [optimisticBoardStatuses, setOptimisticBoardStatuses] = useState<Record<string, string>>({});
   const [optimisticBoardProgress, setOptimisticBoardProgress] = useState<Record<string, number>>({});
+  const [optimisticBoardRows, setOptimisticBoardRows] = useState<Record<string, ProjectManagementTaskListItem>>({});
   const [boardRowsById, setBoardRowsById] = useState<Record<string, ProjectManagementTaskListItem>>({});
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(() => new Set());
   const [openingConversationScope, setOpeningConversationScope] = useState<'project' | 'task' | null>(null);
@@ -184,8 +186,13 @@ export function ProjectManagementTaskWorkspacePage() {
     labelFilter: labelFilter.labelIds.length > 0 ? labelFilter : undefined,
   }), [labelFilter, projectId, state]);
   const activeView = taskViewMeta[state.viewKey];
+  const clearOptimisticBoardState = useCallback(() => {
+    setOptimisticBoardRows({});
+    setOptimisticBoardStatuses({});
+    setOptimisticBoardProgress({});
+  }, []);
 
-  useProjectManagementRealtimeConnection('/hubs/system-notification', scope, projectId, scope.isAvailable && Boolean(projectId));
+  useProjectManagementRealtimeConnection('/hubs/system-notification', scope, projectId, scope.isAvailable && Boolean(projectId), clearOptimisticBoardState);
 
   const tasksQuery = useQuery({
     enabled: scope.isAvailable && Boolean(projectId),
@@ -620,16 +627,22 @@ export function ProjectManagementTaskWorkspacePage() {
     },
   });
   const boardStatusMutation = useApiMutation({
-    mutationFn: ({ task, status }: { previousProgress: number; previousStatus: string; task: ProjectManagementTaskListItem; status: string }) => {
+    mutationFn: ({ task, status }: { previousProgress: number; previousStatus: string; snapshot: ReturnType<typeof applyOptimisticBoardMove>['snapshot']; task: ProjectManagementTaskListItem; status: string }) => {
       return changeProjectManagementTaskStatus(task.id, { status, versionNo: task.versionNo });
     },
     onError: async (error, variables) => {
+      setOptimisticBoardRows((current) => rollbackOptimisticBoardMove(current, variables.snapshot));
       setOptimisticBoardStatuses((current) => rollbackBoardStatus(current, variables.task.id, variables.previousStatus));
       setOptimisticBoardProgress((current) => ({ ...current, [variables.task.id]: variables.previousProgress }));
       message.error(getErrorMessage(error, '看板状态更新失败，已回滚显示'));
       await invalidateProjectTaskViews();
+      setOptimisticBoardRows((current) => clearOptimisticBoardMove(current, variables.task.id));
+      setOptimisticBoardStatuses((current) => { const next = { ...current }; delete next[variables.task.id]; return next; });
+      setOptimisticBoardProgress((current) => { const next = { ...current }; delete next[variables.task.id]; return next; });
     },
     onSuccess: async (_result, variables) => {
+      await invalidateProjectTaskViews();
+      setOptimisticBoardRows((current) => clearOptimisticBoardMove(current, variables.task.id));
       setOptimisticBoardStatuses((current) => {
         const next = { ...current };
         delete next[variables.task.id];
@@ -641,7 +654,6 @@ export function ProjectManagementTaskWorkspacePage() {
         return next;
       });
       message.success('任务状态已更新');
-      await invalidateProjectTaskViews();
     },
   });
   const savedViewMutation = useApiMutation({
@@ -909,6 +921,7 @@ export function ProjectManagementTaskWorkspacePage() {
           participantLabels={participantLabels}
           pendingTaskId={quickActionTaskId}
           projectId={projectId}
+          optimisticBoardRows={optimisticBoardRows}
           onMoveTask={(task, target) => {
             if (moveMutation.isPending || groupMutation.isPending || boardStatusMutation.isPending) {
               message.error('正在提交上一项任务移动，请稍候');
@@ -931,8 +944,11 @@ export function ProjectManagementTaskWorkspacePage() {
               return;
             }
             setOptimisticBoardStatuses((current) => ({ ...current, [task.id]: status }));
-            setOptimisticBoardProgress((current) => ({ ...current, [task.id]: resolveBoardStatusProgress(task, status) }));
-            boardStatusMutation.mutate({ previousProgress: task.progressPercent, previousStatus: task.status, task, status });
+            const nextProgress = resolveBoardStatusProgress(task, status);
+            setOptimisticBoardProgress((current) => ({ ...current, [task.id]: nextProgress }));
+            const optimistic = applyOptimisticBoardMove(optimisticBoardRows, task, status, nextProgress);
+            setOptimisticBoardRows(optimistic.rows);
+            boardStatusMutation.mutate({ previousProgress: task.progressPercent, previousStatus: task.status, snapshot: optimistic.snapshot, task, status });
           }}
           onSelectTask={(taskId) => {
             setCreating(false);

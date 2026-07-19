@@ -11,10 +11,15 @@ import { moveTaskGroup, orderTaskGroups, readTaskGroupPreference, taskGroupPrefe
 
 export interface TaskCardDragHandlers {
   draggedTaskId?: string;
+  keyboardHintId?: string;
+  keyboardTaskId?: string;
   onDragEnd: () => void;
   onDragOver: (event: DragEvent<HTMLElement>) => void;
   onDragStart: (event: DragEvent<HTMLElement>, task: ProjectManagementTaskListItem) => void;
   onDrop: (event: DragEvent<HTMLElement>, target: { kind: 'before' | 'child'; task: ProjectManagementTaskListItem } | { kind: 'root' } | { kind: 'status'; status: string } | TaskGroupDropTarget) => void;
+  onKeyboardCancel?: () => void;
+  onKeyboardMove?: (task: ProjectManagementTaskListItem, direction: 'next' | 'previous') => void;
+  onKeyboardStart?: (task: ProjectManagementTaskListItem) => void;
 }
 
 interface TaskCardActions {
@@ -96,10 +101,11 @@ export function TaskCardProjection({ drag, groupBy, milestoneLabels, onAddChildT
   </div>;
 }
 
-export function TaskCard({ drag, milestoneLabels, onAddChildTask, onCompleteTask, onDeleteTask, onSelectTask, onToggleTaskSelection, participantLabels, pending = false, selected, task }: {
+export function TaskCard({ drag, milestoneLabels, onAddChildTask, onChangeTaskStatus, onCompleteTask, onDeleteTask, onSelectTask, onToggleTaskSelection, participantLabels, pending = false, selected, statusOptions, task }: {
   drag?: TaskCardDragHandlers;
   milestoneLabels?: Readonly<Record<string, string>>;
   onAddChildTask?: (task: ProjectManagementTaskListItem) => void;
+  onChangeTaskStatus?: (task: ProjectManagementTaskListItem, status: string) => void;
   onCompleteTask?: (task: ProjectManagementTaskListItem) => void;
   onDeleteTask?: (task: ProjectManagementTaskListItem) => void;
   onSelectTask: (taskId: string) => void;
@@ -107,12 +113,29 @@ export function TaskCard({ drag, milestoneLabels, onAddChildTask, onCompleteTask
   participantLabels?: Readonly<Record<string, string>>;
   pending?: boolean;
   selected: boolean;
+  statusOptions?: readonly string[];
   task: ProjectManagementTaskListItem;
 }) {
   const risks = getTaskCardRisks(task);
   const participantIds = task.participantUserIds ?? [];
   const riskClass = risks.length ? risks.join(' ') : 'normal';
-  return <article aria-label={`任务 ${task.title}`} className={`pm-task-card pm-task-card--risk-${riskClass}${selected ? ' is-selected' : ''}${drag?.draggedTaskId === task.id ? ' is-dragging' : ''}`} data-risk={riskClass} draggable={drag ? true : undefined} onDragEnd={drag?.onDragEnd} onDragOver={drag?.onDragOver} onDragStart={drag ? (event) => drag.onDragStart(event, task) : undefined} onDrop={drag ? (event) => drag.onDrop(event, { kind: 'before', task }) : undefined} role="listitem">
+  return <article aria-describedby={drag?.keyboardHintId} aria-grabbed={drag?.keyboardTaskId === task.id || undefined} aria-label={`任务 ${task.title}`} className={`pm-task-card pm-task-card--risk-${riskClass}${selected ? ' is-selected' : ''}${drag?.draggedTaskId === task.id ? ' is-dragging' : ''}`} data-project-task-id={task.id} data-risk={riskClass} draggable={drag ? true : undefined} onDragEnd={drag?.onDragEnd} onDragOver={drag?.onDragOver} onDragStart={drag ? (event) => drag.onDragStart(event, task) : undefined} onDrop={drag ? (event) => drag.onDrop(event, { kind: 'before', task }) : undefined} onKeyDown={(event) => {
+    const target = event.target as HTMLElement;
+    if (['BUTTON', 'INPUT', 'SELECT', 'TEXTAREA', 'A'].includes(target.tagName)) return;
+    if (event.key === 'Escape' && drag?.keyboardTaskId === task.id) {
+      event.preventDefault();
+      drag.onKeyboardCancel?.();
+    } else if ((event.key === ' ' || event.key === 'Enter') && !drag?.keyboardTaskId) {
+      event.preventDefault();
+      drag?.onKeyboardStart?.(task);
+    } else if (drag?.keyboardTaskId === task.id && event.key === 'ArrowRight') {
+      event.preventDefault();
+      drag.onKeyboardMove?.(task, 'next');
+    } else if (drag?.keyboardTaskId === task.id && event.key === 'ArrowLeft') {
+      event.preventDefault();
+      drag.onKeyboardMove?.(task, 'previous');
+    }
+  }} role="listitem" tabIndex={0}>
     <div className="pm-task-card__content">
       <div className="pm-task-card__meta"><input aria-label={`选择任务 ${task.title}`} checked={selected} type="checkbox" onChange={() => onToggleTaskSelection(task.id)} /><code>{task.taskCode}</code><span className="pm-task-card__risk-list">{risks.map((risk) => <span className={`pm-risk-chip pm-risk-chip--${risk}`} key={risk}>{riskLabel(risk)}</span>)}</span></div>
       <button className="pm-task-card__open" onClick={() => onSelectTask(task.id)} type="button">{task.title}</button>
@@ -123,6 +146,13 @@ export function TaskCard({ drag, milestoneLabels, onAddChildTask, onCompleteTask
       <div className="pm-task-card__labels">{task.labels?.length ? task.labels.map((label) => <span key={label.id} style={{ borderColor: label.color, color: label.color }}>{label.labelName}</span>) : <span>无标签</span>}</div>
       {task.blockedReason ? <p className="pm-task-card__blocked">阻塞：{task.blockedReason}</p> : null}
       <div className="pm-task-card__actions">
+        {onChangeTaskStatus && statusOptions?.length ? <label>
+          <span className="sr-only">触屏操作：将任务移动到状态列</span>
+          <select aria-label={`移动任务 ${task.title} 到状态列`} disabled={pending} onChange={(event) => { if (event.target.value) onChangeTaskStatus(task, event.target.value); event.currentTarget.value = ''; }} defaultValue="">
+            <option value="">移动到列…</option>
+            {statusOptions.filter((status) => status !== task.status).map((status) => <option key={status} value={status}>{statusLabel(status)}</option>)}
+          </select>
+        </label> : null}
         <PermissionButton code="project-management:task:edit" disabled={pending} onClick={() => onSelectTask(task.id)}>快速编辑</PermissionButton>
         {onCompleteTask ? <PermissionButton code="project-management:task:edit" disabled={pending || task.status === 'Done' || task.status === 'Cancelled'} onClick={() => onCompleteTask(task)}>完成</PermissionButton> : null}
         {onAddChildTask ? <PermissionButton code="project-management:task:add" disabled={pending} onClick={() => onAddChildTask(task)}>新增子任务</PermissionButton> : null}

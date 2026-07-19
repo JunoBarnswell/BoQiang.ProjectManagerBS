@@ -23,6 +23,7 @@ export function useProjectManagementRealtimeConnection(
   scope: ProjectManagementWorkspaceScope,
   projectId: string,
   enabled: boolean,
+  onReconciled?: () => void,
 ) {
   const queryClient = useQueryClient();
 
@@ -55,6 +56,7 @@ export function useProjectManagementRealtimeConnection(
       pendingAggregateTypes.add('Task');
       pendingAggregateTypes.add('TaskComment');
       pendingAggregateTypes.add('TaskAttachment');
+      onReconciled?.();
       flushInvalidations();
     };
     const invalidate = (event: ProjectManagementInvalidation) => {
@@ -81,5 +83,5 @@ export function useProjectManagementRealtimeConnection(
       if (flushTimer) clearTimeout(flushTimer);
       connection.dispose();
     };
-  }, [enabled, projectId, queryClient, scope, signalRUrl]);
+  }, [enabled, onReconciled, projectId, queryClient, scope, signalRUrl]);
 }
