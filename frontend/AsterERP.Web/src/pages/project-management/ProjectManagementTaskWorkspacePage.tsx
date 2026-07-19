@@ -939,6 +939,7 @@ export function ProjectManagementTaskWorkspacePage() {
             }
             scheduleMutation.mutate({ dueDate, startDate, task });
           }}
+          onGanttScheduleSaved={invalidateProjectTaskViews}
           onCreateTaskOnDate={(date) => {
             setCreating(true);
             setForm({ ...emptyForm, dueDate: date, startDate: date });

@@ -1,5 +1,5 @@
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState, type MutableRefObject, type PointerEvent } from 'react';
 
 import type { ProjectManagementMilestone, ProjectManagementTaskDependency, ProjectManagementTaskListItem } from '../../../api/project-management/projectManagement.types';
 import { ProjectManagementTaskCalendar } from '../calendar/ProjectManagementTaskCalendar';
@@ -7,13 +7,15 @@ import { DependencyAnalysisOverlay } from '../gantt/dependency-analysis/Dependen
 import { DependencyImpactPreviewPanel } from '../gantt/dependency-analysis/DependencyImpactPreviewPanel';
 import { previewTaskDependencyImpact } from '../gantt/dependency-analysis/dependencyAnalysisApi';
 import { useDependencyAnalysis } from '../gantt/dependency-analysis/useDependencyAnalysis';
+import { updateGanttSchedule } from '../gantt/ganttSchedule.api';
 import {
   buildTaskScheduleRows,
+  adjustTaskSchedule,
+  buildSubtreeScheduleChanges,
   createScheduleWindow,
   getSchedulePlacement,
   milestonePlacement,
-  shiftScheduleDate,
-  type TaskScheduleRow,
+  type GanttScheduleEditMode, type TaskScheduleRow,
 } from './taskScheduleProjectionModel';
 
 interface TaskScheduleProjectionProps {
@@ -23,6 +25,7 @@ interface TaskScheduleProjectionProps {
   onCreateTask?: (date: string) => void;
   onSelectTask: (taskId: string) => void;
   onToggleTaskSelection: (taskId: string) => void;
+  onGanttScheduleSaved?: () => Promise<void> | void;
   projectId?: string;
   rows: ProjectManagementTaskListItem[];
   schedulePending?: boolean;
@@ -32,7 +35,7 @@ interface TaskScheduleProjectionProps {
 const dayWidth = 36;
 const labelWidth = 240;
 
-export function TaskGanttScheduleProjection({ dependencies = [], milestones = [], onChangeTaskSchedule, onSelectTask, onToggleTaskSelection, projectId, rows, selectedTaskIds }: TaskScheduleProjectionProps) {
+export function TaskGanttScheduleProjection({ dependencies = [], milestones = [], onChangeTaskSchedule, onGanttScheduleSaved, onSelectTask, onToggleTaskSelection, projectId, rows, selectedTaskIds }: TaskScheduleProjectionProps) {
   const dependencyAnalysisQuery = useDependencyAnalysis(projectId);
   const criticalTaskIds = useMemo(() => new Set((dependencyAnalysisQuery.data?.data?.tasks ?? []).filter((task) => task.isCritical).map((task) => task.taskId)), [dependencyAnalysisQuery.data?.data?.tasks]);
   const scheduleRows = useMemo(() => buildTaskScheduleRows(rows, dependencies).map((task) => ({ ...task, isCritical: dependencyAnalysisQuery.data ? criticalTaskIds.has(task.id) : task.isCritical })), [criticalTaskIds, dependencies, dependencyAnalysisQuery.data, rows]);
@@ -42,9 +45,10 @@ export function TaskGanttScheduleProjection({ dependencies = [], milestones = []
   const [anchorDate, setAnchorDate] = useState(() => firstDate ? new Date(`${firstDate.slice(0, 10)}T00:00:00`) : new Date());
   const range = useMemo(() => createScheduleWindow(anchorDate, rangeDays), [anchorDate, rangeDays]);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const pointerRef = useRef<{ task: TaskScheduleRow; startX: number } | null>(null);
+  const pointerRef = useRef<{ mode: GanttScheduleEditMode; task: TaskScheduleRow; startX: number } | null>(null);
   const [impactPreview, setImpactPreview] = useState<Awaited<ReturnType<typeof previewTaskDependencyImpact>>['data']>();
-  const [pendingScheduleMove, setPendingScheduleMove] = useState<{ dueDate: string; startDate: string; task: ProjectManagementTaskListItem }>();
+  const [pendingScheduleMove, setPendingScheduleMove] = useState<{ change: ReturnType<typeof adjustTaskSchedule>; includeSubtree: boolean; task: TaskScheduleRow }>();
+  const [savingSchedule, setSavingSchedule] = useState(false);
   const [previewError, setPreviewError] = useState<string>();
   const virtualizer = useVirtualizer({ count: datedRows.length, getScrollElement: () => scrollRef.current, estimateSize: () => 58, overscan: 8 });
   const virtualItems = virtualizer.getVirtualItems();
@@ -55,19 +59,36 @@ export function TaskGanttScheduleProjection({ dependencies = [], milestones = []
     const placement = task ? getSchedulePlacement(task.scheduleStartDate, task.scheduleDueDate, range) : undefined;
     return task && placement ? [{ taskId: task.id, left: labelWidth + placement.startOffset * dayWidth, top: virtualRow.start + 52, width: (placement.endOffset - placement.startOffset + 1) * dayWidth, height: 56 }] : [];
   }), [datedRows, range, virtualItems]);
-  const previewScheduleMove = async (task: TaskScheduleRow, startDate: string | undefined, dueDate: string | undefined) => {
-    if (!projectId || !startDate || !dueDate) {
+  const previewScheduleMove = async (task: TaskScheduleRow, change: ReturnType<typeof adjustTaskSchedule>) => {
+    if (!projectId || !change) {
       setPreviewError('任务必须同时具有开始和完成日期，才能预览依赖影响。');
       return;
     }
     setPreviewError(undefined);
     try {
-      const response = await previewTaskDependencyImpact(projectId, { taskId: task.id, proposedStartDate: startDate, proposedDueDate: dueDate });
+      const response = await previewTaskDependencyImpact(projectId, { taskId: task.id, proposedStartDate: change.startDate, proposedDueDate: change.dueDate });
       setImpactPreview(response.data);
-      setPendingScheduleMove({ dueDate, startDate, task });
+      setPendingScheduleMove({ change, includeSubtree: false, task });
     } catch {
       setPreviewError('无法计算依赖影响，当前日期调整未保存。请检查任务依赖诊断后重试。');
     }
+  };
+  const savePendingSchedule = async () => {
+    if (!projectId || !pendingScheduleMove?.change) return;
+    const dayDelta = calendarDayDelta(pendingScheduleMove.task.startDate, pendingScheduleMove.change.startDate);
+    const items = pendingScheduleMove.includeSubtree && dayDelta !== undefined
+      ? buildSubtreeScheduleChanges(pendingScheduleMove.task.id, scheduleRows, dayDelta)
+      : [pendingScheduleMove.change];
+    if (!items.length) return;
+    setSavingSchedule(true); setPreviewError(undefined);
+    try {
+      await updateGanttSchedule({ projectId, items });
+      await onGanttScheduleSaved?.();
+      setImpactPreview(undefined); setPendingScheduleMove(undefined);
+    } catch {
+      setPreviewError('任务调期失败或存在并发冲突，已保留原甘特条并刷新跨视图缓存。');
+      await onGanttScheduleSaved?.();
+    } finally { setSavingSchedule(false); }
   };
 
   if (!datedRows.length) return <div className="pm-gantt"><p className="pm-projection-empty">没有包含计划日期的任务。请在任务详情填写开始日期或截止日期。</p></div>;
@@ -77,7 +98,7 @@ export function TaskGanttScheduleProjection({ dependencies = [], milestones = []
       <div className="flex flex-wrap gap-2"><button className="rounded border border-gray-300 px-2 py-1 text-xs" onClick={() => setAnchorDate((value) => addDays(value, -rangeDays))} type="button">前移窗口</button><button className="rounded border border-gray-300 px-2 py-1 text-xs" onClick={() => setAnchorDate((value) => addDays(value, rangeDays))} type="button">后移窗口</button>{[28, 56, 84].map((days) => <button aria-pressed={rangeDays === days} className={rangeDays === days ? 'rounded bg-blue-600 px-2 py-1 text-xs text-white' : 'rounded border border-gray-300 px-2 py-1 text-xs'} key={days} onClick={() => setRangeDays(days)} type="button">{days / 7} 周</button>)}</div>
     </div>
     {previewError ? <p className="mb-2 text-sm text-red-600" role="alert">{previewError}</p> : null}
-    {impactPreview && pendingScheduleMove ? <div className="mb-3 rounded border border-amber-300 bg-amber-50 p-3"><DependencyImpactPreviewPanel preview={impactPreview} /><div className="mt-3 flex gap-2"><button className="rounded bg-blue-600 px-3 py-1 text-sm text-white" onClick={() => { onChangeTaskSchedule?.(pendingScheduleMove.task, pendingScheduleMove.startDate, pendingScheduleMove.dueDate); setImpactPreview(undefined); setPendingScheduleMove(undefined); }} type="button">确认并保存调期</button><button className="rounded border border-gray-300 px-3 py-1 text-sm" onClick={() => { setImpactPreview(undefined); setPendingScheduleMove(undefined); }} type="button">取消</button></div></div> : null}
+    {impactPreview && pendingScheduleMove ? <div className="mb-3 rounded border border-amber-300 bg-amber-50 p-3"><DependencyImpactPreviewPanel preview={impactPreview} /><label className="mt-3 flex items-center gap-2 text-sm"><input checked={pendingScheduleMove.includeSubtree} disabled={!pendingScheduleMove.task.hasChildren} onChange={(event) => setPendingScheduleMove((current) => current ? { ...current, includeSubtree: event.target.checked } : current)} type="checkbox" />同时平移子树（仅手动日期任务）</label><div className="mt-3 flex gap-2"><button className="rounded bg-blue-600 px-3 py-1 text-sm text-white" disabled={savingSchedule} onClick={() => void savePendingSchedule()} type="button">{savingSchedule ? '保存中…' : '确认并保存调期'}</button><button className="rounded border border-gray-300 px-3 py-1 text-sm" disabled={savingSchedule} onClick={() => { setImpactPreview(undefined); setPendingScheduleMove(undefined); }} type="button">取消</button></div></div> : null}
     <div className="overflow-auto rounded border border-gray-200" ref={scrollRef} style={{ maxHeight: '68vh' }}>
       <div className="relative" style={{ height: virtualizer.getTotalSize() + 52, minWidth: contentWidth }}>
         <div className="sticky top-0 z-20 grid border-b border-gray-200 bg-gray-50 text-xs text-gray-500" style={{ gridTemplateColumns: `${labelWidth}px repeat(${range.days.length}, ${dayWidth}px)` }}><div className="p-2 font-medium">任务 / {formatDateKey(range.start)}</div>{range.days.map((day) => <div className={day.getDay() === 0 || day.getDay() === 6 ? 'border-l border-gray-100 bg-gray-100 p-1 text-center' : 'border-l border-gray-100 p-1 text-center'} key={formatDateKey(day)}>{day.getDate()}</div>)}</div>
@@ -87,7 +108,7 @@ export function TaskGanttScheduleProjection({ dependencies = [], milestones = []
           const placement = getSchedulePlacement(task.scheduleStartDate, task.scheduleDueDate, range);
           return <div className="absolute left-0 right-0 grid min-h-14 border-b border-gray-100" data-index={virtualRow.index} key={task.id} ref={virtualizer.measureElement} style={{ gridTemplateColumns: `${labelWidth}px repeat(${range.days.length}, ${dayWidth}px)`, top: virtualRow.start + 52 }}>
             <div className="flex items-center gap-2 p-2"><input aria-label={`选择任务 ${task.title}`} checked={selectedTaskIds.has(task.id)} type="checkbox" onChange={() => onToggleTaskSelection(task.id)} /><button className="truncate text-left text-sm hover:underline" onClick={() => onSelectTask(task.id)} title={task.title} type="button">{task.isSummary ? '▰ ' : ''}{task.title}<span className="ml-1 text-xs text-slate-500">{task.childTaskCount ? `(${task.childTaskCount} 项)` : ''}</span>{task.isCritical ? <span className="ml-1 text-xs text-red-600">关键路径</span> : null}</button></div>
-            {placement ? <button className={task.isSummary ? 'my-3 min-w-0 rounded bg-slate-500 px-2 text-left text-xs text-white' : task.isCritical ? 'my-3 min-w-0 rounded bg-red-600 px-2 text-left text-xs text-white' : 'my-3 min-w-0 rounded bg-blue-600 px-2 text-left text-xs text-white'} disabled={task.isSummary || !onChangeTaskSchedule} onClick={() => onSelectTask(task.id)} onPointerDown={(event) => { if (!task.isSummary) { event.currentTarget.setPointerCapture(event.pointerId); pointerRef.current = { task, startX: event.clientX }; } }} onPointerUp={(event) => { const pointer = pointerRef.current; pointerRef.current = null; if (!pointer || task.isSummary) return; const delta = Math.round((event.clientX - pointer.startX) / dayWidth); if (delta) void previewScheduleMove(task, shiftScheduleDate(task.startDate, delta), shiftScheduleDate(task.dueDate, delta)); }} style={{ gridColumn: `${placement.startOffset + 2} / ${placement.endOffset + 3}` }} title={`${task.title} · ${formatDate(task.scheduleStartDate)} — ${formatDate(task.scheduleDueDate)}`} type="button">{task.taskCode} · {task.progressPercent}%</button> : null}
+            {placement ? <div className={task.isSummary ? 'my-3 flex min-w-0 rounded bg-slate-500 text-xs text-white' : task.isCritical ? 'my-3 flex min-w-0 rounded bg-red-600 text-xs text-white' : 'my-3 flex min-w-0 rounded bg-blue-600 text-xs text-white'} style={{ gridColumn: `${placement.startOffset + 2} / ${placement.endOffset + 3}` }} title={`${task.title} · ${formatDate(task.scheduleStartDate)} — ${formatDate(task.scheduleDueDate)}`}><span aria-label={`调整 ${task.title} 开始日期`} aria-orientation="horizontal" aria-valuemax={placement.endOffset} aria-valuemin={placement.startOffset} className="cursor-ew-resize px-1" onPointerDown={(event) => startSchedulePointer(event, task, 'resize-start', pointerRef)} onPointerUp={(event) => finishSchedulePointer(event, pointerRef, previewScheduleMove)} role="slider" tabIndex={task.isSummary && !task.hasManualSchedule ? -1 : 0}>⋮</span><button className="min-w-0 flex-1 truncate px-1 text-left" disabled={task.isSummary && !task.hasManualSchedule || !onChangeTaskSchedule} onClick={() => onSelectTask(task.id)} onPointerDown={(event) => startSchedulePointer(event, task, 'move', pointerRef)} onPointerUp={(event) => finishSchedulePointer(event, pointerRef, previewScheduleMove)} type="button">{task.taskCode} · {task.progressPercent}%</button><span aria-label={`调整 ${task.title} 完成日期`} aria-orientation="horizontal" aria-valuemax={placement.endOffset} aria-valuemin={placement.startOffset} className="cursor-ew-resize px-1" onPointerDown={(event) => startSchedulePointer(event, task, 'resize-end', pointerRef)} onPointerUp={(event) => finishSchedulePointer(event, pointerRef, previewScheduleMove)} role="slider" tabIndex={task.isSummary && !task.hasManualSchedule ? -1 : 0}>⋮</span></div> : null}
           </div>;
         })}
         {dependencyAnalysisQuery.data?.data ? <DependencyAnalysisOverlay analysis={dependencyAnalysisQuery.data.data} height={virtualizer.getTotalSize() + 52} onSelectTask={onSelectTask} rows={dependencyRows} width={contentWidth} /> : null}
@@ -115,3 +136,6 @@ export function TaskCalendarScheduleProjection({ dependencies = [], milestones =
 function addDays(value: Date, days: number): Date { const next = new Date(value); next.setDate(next.getDate() + days); return next; }
 function formatDate(value: string | undefined): string { return value ? new Date(value).toLocaleDateString() : '未设置'; }
 function formatDateKey(value: Date): string { return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`; }
+function calendarDayDelta(from: string | undefined, to: string): number | undefined { const fromTime = from ? Date.parse(`${from.slice(0, 10)}T00:00:00Z`) : Number.NaN; const toTime = Date.parse(`${to.slice(0, 10)}T00:00:00Z`); return Number.isFinite(fromTime) && Number.isFinite(toTime) ? Math.round((toTime - fromTime) / 86_400_000) : undefined; }
+function startSchedulePointer(event: PointerEvent<HTMLElement>, task: TaskScheduleRow, mode: GanttScheduleEditMode, pointerRef: MutableRefObject<{ mode: GanttScheduleEditMode; task: TaskScheduleRow; startX: number } | null>) { if (task.isSummary && !task.hasManualSchedule) return; event.currentTarget.setPointerCapture(event.pointerId); pointerRef.current = { mode, task, startX: event.clientX }; }
+function finishSchedulePointer(event: PointerEvent<HTMLElement>, pointerRef: MutableRefObject<{ mode: GanttScheduleEditMode; task: TaskScheduleRow; startX: number } | null>, preview: (task: TaskScheduleRow, change: ReturnType<typeof adjustTaskSchedule>) => Promise<void>) { const pointer = pointerRef.current; pointerRef.current = null; if (!pointer) return; const delta = Math.round((event.clientX - pointer.startX) / dayWidth); if (delta) void preview(pointer.task, adjustTaskSchedule(pointer.task, pointer.mode, delta)); }

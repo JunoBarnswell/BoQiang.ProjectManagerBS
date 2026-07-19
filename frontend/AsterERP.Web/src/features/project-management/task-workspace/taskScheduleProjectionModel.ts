@@ -6,6 +6,7 @@ export interface TaskScheduleRow extends ProjectManagementTaskListItem {
   isSummary: boolean;
   childTaskCount: number;
   isCritical: boolean;
+  hasManualSchedule?: boolean;
 }
 
 export interface ScheduleWindow {
@@ -47,8 +48,48 @@ export function buildTaskScheduleRows(rows: readonly ProjectManagementTaskListIt
       isSummary,
       childTaskCount: childRows.length,
       isCritical: criticalIds.has(row.id),
+      hasManualSchedule: Boolean(row.startDate || row.dueDate),
     };
   });
+}
+
+export type GanttScheduleEditMode = 'move' | 'resize-end' | 'resize-start';
+
+export interface GanttScheduleChange {
+  taskId: string;
+  startDate: string;
+  dueDate: string;
+  versionNo: number;
+}
+
+/** 使用 UTC 日序号做日历运算，避开本机时区和 DST 造成的一小时偏移。 */
+export function adjustTaskSchedule(task: TaskScheduleRow, mode: GanttScheduleEditMode, dayDelta: number): GanttScheduleChange | undefined {
+  if (!task.startDate || !task.dueDate || task.isSummary && !task.hasManualSchedule) return undefined;
+  const start = toCalendarOrdinal(task.startDate);
+  const due = toCalendarOrdinal(task.dueDate);
+  if (start === undefined || due === undefined) return undefined;
+  const nextStart = mode === 'resize-end' ? start : start + dayDelta;
+  const nextDue = mode === 'resize-start' ? due : due + dayDelta;
+  if (nextStart > nextDue) return undefined;
+  return { taskId: task.id, startDate: fromCalendarOrdinal(nextStart), dueDate: fromCalendarOrdinal(nextDue), versionNo: task.versionNo };
+}
+
+/** 当前任务的“子树平移”只移动拥有手动日期的节点；无手动日期的父任务继续由子节点汇总。 */
+export function buildSubtreeScheduleChanges(rootTaskId: string, rows: readonly TaskScheduleRow[], dayDelta: number): GanttScheduleChange[] {
+  const children = new Map<string, TaskScheduleRow[]>();
+  rows.forEach((row) => { if (row.parentTaskId) children.set(row.parentTaskId, [...(children.get(row.parentTaskId) ?? []), row]); });
+  const result: GanttScheduleChange[] = [];
+  const visit = (taskId: string) => {
+    const row = rows.find((candidate) => candidate.id === taskId);
+    if (!row) return;
+    if (!row.isSummary || row.hasManualSchedule) {
+      const change = adjustTaskSchedule(row, 'move', dayDelta);
+      if (change) result.push(change);
+    }
+    (children.get(taskId) ?? []).forEach((child) => visit(child.id));
+  };
+  visit(rootTaskId);
+  return result;
 }
 
 export function deriveCriticalTaskIds(rows: readonly ProjectManagementTaskListItem[], dependencies: readonly ProjectManagementTaskDependency[]): Set<string> {
@@ -93,8 +134,8 @@ export function getSchedulePlacement(startDate: string | undefined, dueDate: str
 }
 
 export function shiftScheduleDate(value: string | undefined, dayDelta: number): string | undefined {
-  const date = toLocalDate(value);
-  return date ? formatDateKey(addCalendarDays(date, dayDelta)) : undefined;
+  const ordinal = value ? toCalendarOrdinal(value) : undefined;
+  return ordinal === undefined ? undefined : fromCalendarOrdinal(ordinal + dayDelta);
 }
 
 export function validateScheduleMove(
@@ -155,6 +196,17 @@ function dateDuration(startDate?: string, dueDate?: string): number {
 function minDate(values: readonly string[]): string | undefined { return [...values].sort()[0]; }
 function maxDate(values: readonly string[]): string | undefined { return [...values].sort().at(-1); }
 function toLocalDate(value: string | undefined): Date | undefined { if (!value) return undefined; const date = new Date(`${value.slice(0, 10)}T00:00:00`); return Number.isNaN(date.getTime()) ? undefined : date; }
+function toCalendarOrdinal(value: string): number | undefined {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (!match) return undefined;
+  const year = Number(match[1]); const month = Number(match[2]); const day = Number(match[3]);
+  const timestamp = Date.UTC(year, month - 1, day);
+  const date = new Date(timestamp);
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day ? Math.floor(timestamp / 86_400_000) : undefined;
+}
+function fromCalendarOrdinal(value: number): string {
+  const date = new Date(value * 86_400_000);
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
+}
 function startOfDay(value: Date): Date { return new Date(value.getFullYear(), value.getMonth(), value.getDate()); }
 function addCalendarDays(value: Date, days: number): Date { const next = new Date(value); next.setDate(next.getDate() + days); return next; }
-function formatDateKey(value: Date): string { return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`; }
