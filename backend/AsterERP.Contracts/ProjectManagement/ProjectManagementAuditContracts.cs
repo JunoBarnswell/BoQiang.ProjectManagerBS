@@ -32,6 +32,51 @@ public sealed record ProjectManagementAuditItem(
     string? SourceDeviceId = null,
     bool IsSuccess = true);
 
+/// <summary>
+/// 单条审计记录的受控详情。不会暴露 pm_activities.Remark 原文，字段差异会在服务端再次脱敏。
+/// </summary>
+public sealed record ProjectManagementAuditDetail(
+    ProjectManagementAuditItem Audit,
+    IReadOnlyList<ProjectManagementActivityFieldChange> FieldChanges,
+    ProjectManagementActivityBatch? Batch,
+    ProjectManagementAuditEntitySnapshot EntitySnapshot,
+    string? FailureReason,
+    IReadOnlyList<ProjectManagementAuditRelatedEvent> RelatedEvents,
+    IReadOnlyList<ProjectManagementAuditReference> References,
+    string? TraceDiagnosticsRoute);
+
+/// <summary>
+/// 以审计行自身的不可变标识构成的历史快照；目标实体已删除时仍可用于定位当时的操作对象。
+/// </summary>
+public sealed record ProjectManagementAuditEntitySnapshot(
+    string ProjectId,
+    string AggregateType,
+    string AggregateId,
+    string? Summary,
+    bool IsDeleted);
+
+/// <summary>
+/// 同一 Trace 中按发生时间排序的事件。Causality 描述它与当前审计行的因果位置。
+/// </summary>
+public sealed record ProjectManagementAuditRelatedEvent(
+    string Id,
+    string Kind,
+    string Causality,
+    string? AggregateType,
+    string? AggregateId,
+    string? ActivityType,
+    string? Summary,
+    string? Status,
+    DateTime OccurredAt);
+
+/// <summary>
+/// 从审计上下文提取的同步、导入、备份、工作流或操作任务标识。
+/// </summary>
+public sealed record ProjectManagementAuditReference(
+    string Kind,
+    string Id,
+    string? DisplayName = null);
+
 public sealed record ProjectManagementAuditExportResponse(
     string FileName,
     byte[] Content,

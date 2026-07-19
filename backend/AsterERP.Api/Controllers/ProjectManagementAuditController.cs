@@ -14,6 +14,10 @@ public sealed class ProjectManagementAuditController(IProjectManagementAuditServ
     public async Task<IActionResult> QueryAsync([FromQuery] ProjectManagementAuditQuery query, CancellationToken cancellationToken)
         => ApiOk(await service.QueryAsync(query, cancellationToken));
 
+    [HttpGet("{id}")]
+    public async Task<IActionResult> DetailAsync(string id, CancellationToken cancellationToken)
+        => ApiOk(await service.GetDetailAsync(id, cancellationToken));
+
     [HttpGet("operations")]
     public async Task<IActionResult> OperationsAsync([FromQuery] ProjectManagementOperationQuery query, CancellationToken cancellationToken)
         => ApiOk(await service.QueryOperationsAsync(query, cancellationToken));

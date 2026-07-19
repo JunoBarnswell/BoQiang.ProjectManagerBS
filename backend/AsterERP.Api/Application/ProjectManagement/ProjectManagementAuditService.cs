@@ -42,6 +42,53 @@ public sealed class ProjectManagementAuditService(
         };
     }
 
+    public async Task<ProjectManagementAuditDetail> GetDetailAsync(string id, CancellationToken cancellationToken = default)
+    {
+        ProjectManagementPlatformScope.RequireSystemWorkspace(currentUser);
+        var tenantId = RequireTenant();
+        var appCode = RequireApp();
+        var auditId = NormalizeOptional(id, 128, "审计标识") ?? throw new ValidationException("审计标识不能为空");
+        var db = databaseAccessor.GetProjectManagementDb();
+
+        // 先经过已注册的 ORM 数据权限过滤器，再执行对象级项目授权；详情不能绕过 HAO-524 的可见性边界。
+        var entity = (await db.Queryable<ProjectManagementActivityEntity>()
+            .Where(item => item.Id == auditId && !item.IsDeleted)
+            .Take(1)
+            .ToListAsync(cancellationToken))
+            .FirstOrDefault() ?? throw new NotFoundException("审计记录不存在", ErrorCodes.PlatformResourceNotFound);
+        await accessPolicy.EnsureCanViewProjectAsync(entity.ProjectId, cancellationToken);
+
+        var payload = DeserializePayload(entity.Remark);
+        var batch = SanitizeBatch(payload?.Batch);
+        var relatedActivities = await db.Queryable<ProjectManagementActivityEntity>()
+            .Where(item => item.ProjectId == entity.ProjectId && item.TraceId == entity.TraceId && !item.IsDeleted)
+            .OrderBy(item => item.CreatedTime, OrderByType.Asc)
+            .OrderBy(item => item.Id, OrderByType.Asc)
+            .ToListAsync(cancellationToken);
+        var operations = await db.Queryable<ProjectManagementOperationEntity>()
+            .Where(item => item.TenantId == tenantId && item.AppCode == appCode && item.TraceId == entity.TraceId && !item.IsDeleted)
+            .OrderBy(item => item.StartedTime, OrderByType.Asc)
+            .ToListAsync(cancellationToken);
+        var journals = await db.Queryable<ProjectManagementSyncJournalEntity>()
+            .Where(item => item.TenantId == tenantId && item.AppCode == appCode && item.ProjectId == entity.ProjectId && item.TraceId == entity.TraceId && !item.IsDeleted)
+            .OrderBy(item => item.CreatedTime, OrderByType.Asc)
+            .ToListAsync(cancellationToken);
+        var device = journals.Where(item => !string.IsNullOrWhiteSpace(item.DeviceId)).OrderByDescending(item => item.CreatedTime).FirstOrDefault()?.DeviceId;
+        var audit = Map(entity, device);
+
+        return new ProjectManagementAuditDetail(
+            audit,
+            SanitizeFieldChanges(payload?.FieldChanges),
+            batch,
+            await CreateSnapshotAsync(db, entity, tenantId, appCode, cancellationToken),
+            audit.IsSuccess ? null : audit.Summary,
+            CreateRelatedEvents(entity, relatedActivities, operations, journals),
+            CreateReferences(entity, batch, relatedActivities, operations, journals),
+            currentUser.HasAsterErpPermission(PermissionCodes.SystemOperationLogQuery)
+                ? $"/system/operation-logs?traceId={Uri.EscapeDataString(entity.TraceId)}"
+                : null);
+    }
+
     public async Task<ProjectManagementAuditExportResponse> ExportAsync(ProjectManagementAuditQuery query, CancellationToken cancellationToken = default)
     {
         var activityQuery = await BuildQueryAsync(query, cancellationToken);
@@ -198,5 +245,122 @@ public sealed class ProjectManagementAuditService(
         }
         return new ProjectManagementAuditItem(entity.Id, entity.ProjectId, entity.AggregateType, entity.AggregateId, entity.ActivityType, entity.Summary, entity.TraceId, entity.ActorUserId, entity.CreatedTime, source, sourceDeviceId, !IsFailedActivity(entity));
     }
+
+    private static ProjectManagementActivityPayload? DeserializePayload(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        try { return JsonSerializer.Deserialize<ProjectManagementActivityPayload>(value, JsonOptions); }
+        catch (JsonException) { return null; }
+    }
+
+    private static IReadOnlyList<ProjectManagementActivityFieldChange> SanitizeFieldChanges(IReadOnlyList<ProjectManagementActivityFieldChange>? changes) =>
+        (changes ?? []).Select(change =>
+        {
+            var sensitive = change.IsSensitive || IsSensitiveField(change.Field);
+            return change with
+            {
+                Before = sensitive ? Mask(change.Before) : LimitDetailValue(change.Before),
+                After = sensitive ? Mask(change.After) : LimitDetailValue(change.After),
+                IsSensitive = sensitive
+            };
+        }).ToList();
+
+    private static ProjectManagementActivityBatch? SanitizeBatch(ProjectManagementActivityBatch? batch)
+    {
+        if (batch is null) return null;
+        return batch with
+        {
+            Details = (batch.Details ?? []).Take(200).Select(item => item with
+            {
+                Summary = LimitDetailValue(item.Summary),
+                FieldChanges = SanitizeFieldChanges(item.FieldChanges)
+            }).ToList()
+        };
+    }
+
+    private static string? LimitDetailValue(string? value) => value is null ? null : value.Length <= 4_000 ? value : $"{value[..4_000]}…";
+
+    private static bool IsSensitiveField(string field) =>
+        field.Contains("password", StringComparison.OrdinalIgnoreCase) ||
+        field.Contains("secret", StringComparison.OrdinalIgnoreCase) ||
+        field.Contains("token", StringComparison.OrdinalIgnoreCase) ||
+        field.Contains("apikey", StringComparison.OrdinalIgnoreCase) ||
+        field.Contains("privatekey", StringComparison.OrdinalIgnoreCase) ||
+        field.Contains("credential", StringComparison.OrdinalIgnoreCase) ||
+        field.Contains("authorization", StringComparison.OrdinalIgnoreCase) ||
+        field.Contains("密码", StringComparison.Ordinal) ||
+        field.Contains("密钥", StringComparison.Ordinal) ||
+        field.Contains("令牌", StringComparison.Ordinal);
+
+    private static string? Mask(string? value) => value is null ? null : "[已脱敏]";
+
+    private static async Task<ProjectManagementAuditEntitySnapshot> CreateSnapshotAsync(
+        ISqlSugarClient db,
+        ProjectManagementActivityEntity entity,
+        string tenantId,
+        string appCode,
+        CancellationToken cancellationToken)
+    {
+        var isDeleted = entity.AggregateType switch
+        {
+            "Task" => !(await db.Queryable<ProjectManagementTaskEntity>()
+                .Where(item => item.Id == entity.AggregateId && item.ProjectId == entity.ProjectId && item.TenantId == tenantId && item.AppCode == appCode && !item.IsDeleted)
+                .AnyAsync(cancellationToken)),
+            "Project" => !(await db.Queryable<ProjectManagementProjectEntity>()
+                .Where(item => item.Id == entity.AggregateId && item.TenantId == tenantId && item.AppCode == appCode && !item.IsDeleted)
+                .AnyAsync(cancellationToken)),
+            _ => false
+        };
+        return new ProjectManagementAuditEntitySnapshot(entity.ProjectId, entity.AggregateType, entity.AggregateId, entity.Summary, isDeleted);
+    }
+
+    private static IReadOnlyList<ProjectManagementAuditRelatedEvent> CreateRelatedEvents(
+        ProjectManagementActivityEntity current,
+        IReadOnlyList<ProjectManagementActivityEntity> activities,
+        IReadOnlyList<ProjectManagementOperationEntity> operations,
+        IReadOnlyList<ProjectManagementSyncJournalEntity> journals)
+    {
+        var events = new List<ProjectManagementAuditRelatedEvent>();
+        events.AddRange(activities.Select(item => new ProjectManagementAuditRelatedEvent(
+            item.Id, "Activity", Causality(current, item.CreatedTime, item.Id), item.AggregateType, item.AggregateId,
+            item.ActivityType, item.Summary, IsFailedActivity(item) ? "Failed" : "Succeeded", item.CreatedTime)));
+        events.AddRange(operations.Select(item => new ProjectManagementAuditRelatedEvent(
+            item.Id, "Operation", Causality(current, item.StartedTime, item.Id), null, null,
+            item.OperationType, null, item.Status, item.StartedTime)));
+        events.AddRange(journals.Select(item => new ProjectManagementAuditRelatedEvent(
+            item.Id, "SyncJournal", Causality(current, item.CreatedTime, item.Id), item.AggregateType, item.AggregateId,
+            item.Operation, null, null, item.CreatedTime)));
+        return events.OrderBy(item => item.OccurredAt).ThenBy(item => item.Id, StringComparer.Ordinal).ToList();
+    }
+
+    private static string Causality(ProjectManagementActivityEntity current, DateTime occurredAt, string id)
+    {
+        if (id == current.Id) return "Current";
+        if (occurredAt < current.CreatedTime || occurredAt == current.CreatedTime && string.CompareOrdinal(id, current.Id) < 0) return "Preceded";
+        return "Followed";
+    }
+
+    private static IReadOnlyList<ProjectManagementAuditReference> CreateReferences(
+        ProjectManagementActivityEntity current,
+        ProjectManagementActivityBatch? batch,
+        IReadOnlyList<ProjectManagementActivityEntity> activities,
+        IReadOnlyList<ProjectManagementOperationEntity> operations,
+        IReadOnlyList<ProjectManagementSyncJournalEntity> journals)
+    {
+        var references = new List<ProjectManagementAuditReference>();
+        if (batch is not null) references.Add(new ProjectManagementAuditReference("BatchOperation", batch.OperationId));
+        references.AddRange(operations.Select(item => new ProjectManagementAuditReference("Operation", item.Id, item.OperationType)));
+        references.AddRange(journals.Select(item => new ProjectManagementAuditReference("SyncChange", item.Id, $"{item.AggregateType}/{item.AggregateId}")));
+        foreach (var activity in activities.Append(current))
+        {
+            var kind = activity.ActivityType.Contains("backup", StringComparison.OrdinalIgnoreCase) ? "Backup"
+                : activity.ActivityType.Contains("import", StringComparison.OrdinalIgnoreCase) ? "Import"
+                : activity.ActivityType.Contains("approval", StringComparison.OrdinalIgnoreCase) || activity.ActivityType.Contains("workflow", StringComparison.OrdinalIgnoreCase) ? "Workflow"
+                : null;
+            if (kind is not null) references.Add(new ProjectManagementAuditReference(kind, activity.AggregateId, activity.ActivityType));
+        }
+        return references.DistinctBy(item => (item.Kind, item.Id)).ToList();
+    }
+
     private static string Escape(string? value) => $"\"{(value ?? string.Empty).Replace("\"", "\"\"")}\"";
 }
