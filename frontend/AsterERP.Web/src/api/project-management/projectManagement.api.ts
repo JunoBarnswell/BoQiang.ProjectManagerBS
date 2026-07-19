@@ -591,6 +591,23 @@ export function uploadProjectManagementTaskAttachment(
   );
 }
 
+export function downloadProjectManagementTaskAttachment(
+  attachment: ProjectManagementTaskAttachment,
+  signal?: AbortSignal,
+): Promise<{ blob: Blob; fileName: string }> {
+  if (!attachment.downloadUrl) return Promise.reject(new Error('附件下载链接已失效'));
+  return httpClient.downloadBlob(normalizeProjectManagementAttachmentPath(attachment.downloadUrl), { signal, timeoutMs: 120_000 });
+}
+
+export function previewProjectManagementTaskAttachment(
+  attachment: ProjectManagementTaskAttachment,
+  signal?: AbortSignal,
+): Promise<{ blob: Blob; fileName: string }> {
+  if (!attachment.previewSupported) return Promise.reject(new Error('当前文件格式不支持在线预览，请下载后查看'));
+  if (!attachment.previewUrl) return Promise.reject(new Error('附件预览链接已失效'));
+  return httpClient.downloadBlob(normalizeProjectManagementAttachmentPath(attachment.previewUrl), { signal, timeoutMs: 120_000 });
+}
+
 export function getProjectManagementDataSpaceSummary(
   signal?: AbortSignal,
 ): Promise<ApiEnvelope<ProjectManagementDataSpaceSummary>> {
@@ -852,4 +869,11 @@ function buildProjectManagementLabelFilterQuery<TQuery extends { labelFilter?: P
   labelFilter.labelIds.forEach((labelId, index) => searchParams.append(`labelFilter.labelIds[${index}]`, labelId));
   if (labelFilter.matchMode) searchParams.set('labelFilter.matchMode', labelFilter.matchMode);
   return `?${searchParams.toString()}`;
+}
+
+
+function normalizeProjectManagementAttachmentPath(path: string): string {
+  const trimmed = path.trim();
+  if (trimmed.startsWith('/api/')) return trimmed.slice(4);
+  return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
 }

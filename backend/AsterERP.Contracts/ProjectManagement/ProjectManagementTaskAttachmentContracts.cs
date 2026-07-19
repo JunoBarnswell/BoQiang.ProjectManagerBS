@@ -12,4 +12,7 @@ public sealed record ProjectManagementTaskAttachmentResponse(
     string PreviewUrl,
     string UploadedByUserId,
     DateTime CreatedTime,
-    long VersionNo);
+    long VersionNo,
+    bool PreviewSupported = false,
+    string? PreviewType = null,
+    string? PreviewPipeline = null);

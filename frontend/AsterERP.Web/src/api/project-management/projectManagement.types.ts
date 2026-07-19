@@ -614,6 +614,9 @@ export interface ProjectManagementTaskAttachment {
   uploadedByUserId: string;
   createdTime: string;
   versionNo: number;
+  previewSupported: boolean;
+  previewType?: string;
+  previewPipeline?: string;
 }
 
 export interface ProjectManagementDataSpaceSummary {
@@ -691,6 +694,8 @@ export interface ProjectManagementReportSnapshotRequest {
 
 export interface ProjectManagementReportSnapshotStartResponse {
   operationId: string;
+}
+
 export type ProjectManagementExcelImportPreviewStatus = 'Completed' | 'CompletedWithErrors';
 
 export interface ProjectManagementExcelImportRowError {
@@ -717,8 +722,6 @@ export interface ProjectManagementExcelImportPreview {
   skippedRows: number;
   errors: ProjectManagementExcelImportRowError[];
   errorsTruncated: boolean;
-}
-
 }
 
 export interface ProjectManagementSyncWatermark {

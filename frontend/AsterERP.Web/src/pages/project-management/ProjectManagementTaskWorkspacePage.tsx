@@ -8,6 +8,8 @@ import {
   ensureProjectManagementImConversation,
   createProjectManagementTask,
   createProjectManagementTaskComment,
+  downloadProjectManagementTaskAttachment,
+  deleteProjectManagementTask,
   deleteProjectManagementTaskComment,
   createProjectManagementTaskReminders,
   cancelProjectManagementTaskReminder,
@@ -23,6 +25,7 @@ import {
   getProjectManagementTask,
   getProjectManagementTaskReminders,
   getProjectManagementTasks,
+  previewProjectManagementTaskAttachment,
   moveProjectManagementTask,
   updateProjectManagementTask,
   updateProjectManagementTaskComment,
@@ -30,11 +33,14 @@ import {
   updateProjectManagementSavedView,
 } from '../../api/project-management/projectManagement.api';
 import type {
+  ProjectManagementTaskAttachment,
   ProjectManagementTaskComment,
   ProjectManagementTaskCommentUpsertRequest,
   ProjectManagementActivityQuery,
   ProjectManagementTaskBatchUpdateRequest,
+  ProjectManagementTaskDetail,
   ProjectManagementTaskLabelFilter,
+  ProjectManagementTaskListItem,
   ProjectManagementTaskReminder,
   ProjectManagementTaskReminderCreateRequest,
   ProjectManagementTaskUpsertRequest,
@@ -58,11 +64,13 @@ import { TaskWorkspaceLabelManager } from '../../features/project-management/tas
 import { TaskWorkspaceProjection } from '../../features/project-management/task-workspace/TaskWorkspaceProjection';
 import { TaskWorkspaceSelectionPanel } from '../../features/project-management/task-workspace/TaskWorkspaceSelectionPanel';
 import { TaskWorkspaceToolbar } from '../../features/project-management/task-workspace/TaskWorkspaceToolbar';
+import { ProjectManagementTaskAttachmentPreviewDialog } from '../../features/project-management/task-workspace/ProjectManagementTaskAttachmentPreviewDialog';
 import { uploadProjectManagementTaskAttachmentWithProgress } from '../../features/project-management/task-workspace/taskAttachmentUpload.api';
 import { getProjectManagementTaskActivities } from '../../features/project-management/task-workspace/taskActivity.api';
 import { TaskActivityTimeline } from '../../features/project-management/task-workspace/TaskActivityTimeline';
 import { useConfirm } from '../../shared/feedback/useConfirm';
 import { useMessage } from '../../shared/feedback/useMessage';
+import { saveBlob } from '../../shared/file-preview/filePreviewUtils';
 import { ResponsivePage } from '../../shared/responsive/ResponsivePage';
 import { Page403 } from '../../shared/status/Page403';
 import { PageError } from '../../shared/status/PageError';
@@ -77,6 +85,28 @@ const emptyForm: ProjectManagementTaskUpsertRequest = {
   title: '',
   weight: 1,
 };
+
+type QuickTaskAction = 'complete' | 'delete';
+
+function toTaskUpsertRequest(task: ProjectManagementTaskDetail, status = task.status): ProjectManagementTaskUpsertRequest {
+  return {
+    assigneeEmploymentId: task.assigneeEmploymentId,
+    assigneeUserId: task.assigneeUserId,
+    description: task.markdown ?? task.description,
+    dueDate: task.dueDate,
+    estimateMinutes: task.estimateMinutes,
+    milestoneId: task.milestoneId,
+    parentTaskId: task.parentTaskId,
+    priority: task.priority,
+    progressPercent: status === 'Done' ? 100 : task.progressPercent,
+    startDate: task.startDate,
+    status,
+    taskCode: task.taskCode,
+    title: task.title,
+    versionNo: task.versionNo,
+    weight: task.weight,
+  };
+}
 
 function resolveView(pathname: string): ProjectManagementTaskView {
   if (pathname.endsWith('/list')) return 'list';
@@ -121,6 +151,16 @@ export function ProjectManagementTaskWorkspacePage() {
   const [attachmentUploadProgress, setAttachmentUploadProgress] = useState(0);
   const [attachmentUploadError, setAttachmentUploadError] = useState<string | undefined>();
   const attachmentAbortController = useRef<AbortController | null>(null);
+  const [attachmentDownloadingId, setAttachmentDownloadingId] = useState<string | undefined>();
+  const [attachmentDownloadError, setAttachmentDownloadError] = useState<string | undefined>();
+  const [attachmentDownloadErrorId, setAttachmentDownloadErrorId] = useState<string | undefined>();
+  const [attachmentPreviewState, setAttachmentPreviewState] = useState<{
+    attachment: ProjectManagementTaskAttachment | null;
+    error?: string;
+    loading: boolean;
+    previewFile: File | null;
+  }>({ attachment: null, loading: false, previewFile: null });
+  const attachmentPreviewAbortController = useRef<AbortController | null>(null);
   const [labelFilter, setLabelFilter] = useState<ProjectManagementTaskLabelFilter>({ labelIds: [], matchMode: 'Any' });
   const query = useMemo(() => ({
     ...taskWorkspaceStateToQuery(projectId, state),
@@ -167,6 +207,12 @@ export function ProjectManagementTaskWorkspacePage() {
     setAttachmentUploadFile(null);
     setAttachmentUploadProgress(0);
     setAttachmentUploadError(undefined);
+    attachmentPreviewAbortController.current?.abort();
+    attachmentPreviewAbortController.current = null;
+    setAttachmentDownloadingId(undefined);
+    setAttachmentDownloadError(undefined);
+    setAttachmentDownloadErrorId(undefined);
+    setAttachmentPreviewState({ attachment: null, loading: false, previewFile: null });
     setCommentPageIndex(1);
     setTaskActivityQuery({ pageIndex: 1, pageSize: 20 });
     setEditingComment(null);
@@ -208,6 +254,8 @@ export function ProjectManagementTaskWorkspacePage() {
     queryKey: queryKeys.projectManagement.memberCandidates(scope, { pageIndex: 1, pageSize: 200 }),
   });
   const rows = useMemo(() => tasksQuery.data?.data?.items ?? [], [tasksQuery.data?.data?.items]);
+  const participantLabels = useMemo(() => Object.fromEntries((memberCandidatesQuery.data?.data?.items ?? []).map((candidate) => [candidate.userId, candidate.displayName || candidate.userName])), [memberCandidatesQuery.data?.data?.items]);
+  const milestoneLabels = useMemo(() => Object.fromEntries((milestonesQuery.data?.data ?? []).map((milestone) => [milestone.id, milestone.milestoneName])), [milestonesQuery.data?.data]);
   const selectedListTask = rows.find((task) => task.id === selectedTaskId);
   const selectedTask = taskDetailQuery.data?.data;
   const selectedTasks = useMemo(() => rows.filter((task) => selectedTaskIds.has(task.id)), [rows, selectedTaskIds]);
@@ -284,6 +332,26 @@ export function ProjectManagementTaskWorkspacePage() {
       await invalidateProjectTaskViews();
     },
   });
+  const [quickActionTaskId, setQuickActionTaskId] = useState<string>();
+  const quickActionMutation = useApiMutation({
+    mutationFn: async ({ action, task }: { action: QuickTaskAction; task: ProjectManagementTaskListItem }) => {
+      if (action === 'delete') return deleteProjectManagementTask(task.id, task.versionNo);
+      const detail = (await getProjectManagementTask(task.id)).data;
+      return updateProjectManagementTask(task.id, toTaskUpsertRequest(detail, 'Done'));
+    },
+    onError: (error) => message.error(getErrorMessage(error, '任务快速操作失败')),
+    onSuccess: async (_result, variables) => {
+      message.success(variables.action === 'delete' ? '任务已删除' : '任务已完成');
+      if (variables.task.id === selectedTaskId) {
+        setCreating(false);
+        setState({ selectedTaskId: undefined }, { replace: true });
+      }
+      setQuickActionTaskId(undefined);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.projectManagement.all(scope) });
+      await invalidateProjectTaskViews();
+    },
+    onSettled: () => setQuickActionTaskId(undefined),
+  });
   const commentMutation = useApiMutation({
     mutationFn: () => createProjectManagementTaskComment(selectedTaskId, commentForm),
     onError: (error) => message.error(getErrorMessage(error, '评论发布失败')),
@@ -332,6 +400,41 @@ export function ProjectManagementTaskWorkspacePage() {
     },
     onSettled: () => { attachmentAbortController.current = null; },
   });
+  const downloadAttachment = async (attachment: ProjectManagementTaskAttachment) => {
+    setAttachmentDownloadingId(attachment.id);
+    setAttachmentDownloadError(undefined);
+    setAttachmentDownloadErrorId(undefined);
+    try {
+      const result = await downloadProjectManagementTaskAttachment(attachment);
+      saveBlob(result.blob, result.fileName || attachment.fileName);
+    } catch (error) {
+      setAttachmentDownloadErrorId(attachment.id);
+      setAttachmentDownloadError(getErrorMessage(error, '附件下载失败，链接可能已失效'));
+    } finally {
+      setAttachmentDownloadingId(undefined);
+    }
+  };
+  const previewAttachment = async (attachment: ProjectManagementTaskAttachment) => {
+    attachmentPreviewAbortController.current?.abort();
+    const controller = new AbortController();
+    attachmentPreviewAbortController.current = controller;
+    setAttachmentPreviewState({ attachment, loading: true, previewFile: null });
+    try {
+      const result = await previewProjectManagementTaskAttachment(attachment, controller.signal);
+      const previewFile = new File([result.blob], result.fileName || attachment.fileName, { type: result.blob.type || attachment.contentType });
+      setAttachmentPreviewState({ attachment, loading: false, previewFile });
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') return;
+      setAttachmentPreviewState({ attachment, error: getErrorMessage(error, '附件预览失败，链接可能已失效'), loading: false, previewFile: null });
+    } finally {
+      if (attachmentPreviewAbortController.current === controller) attachmentPreviewAbortController.current = null;
+    }
+  };
+  const closeAttachmentPreview = () => {
+    attachmentPreviewAbortController.current?.abort();
+    attachmentPreviewAbortController.current = null;
+    setAttachmentPreviewState({ attachment: null, loading: false, previewFile: null });
+  };
   const reminderCreateMutation = useApiMutation({
     mutationFn: (request: ProjectManagementTaskReminderCreateRequest) => createProjectManagementTaskReminders(selectedTaskId, request),
     onError: (error) => message.error(getErrorMessage(error, '提醒创建失败')),
@@ -468,6 +571,12 @@ export function ProjectManagementTaskWorkspacePage() {
         <TaskWorkspaceSelectionPanel
           attachments={attachmentsQuery.data?.data ?? []}
           attachmentsError={attachmentsQuery.isError}
+          attachmentDownloadError={attachmentDownloadError}
+          attachmentDownloadErrorId={attachmentDownloadErrorId}
+          attachmentDownloadingId={attachmentDownloadingId}
+          attachmentPreviewError={attachmentPreviewState.error}
+          attachmentPreviewErrorId={attachmentPreviewState.attachment?.id}
+          attachmentPreviewingId={attachmentPreviewState.loading ? attachmentPreviewState.attachment?.id : undefined}
           attachmentUploadError={attachmentUploadError}
           attachmentUploadProgress={attachmentUploadProgress}
           attachmentUploading={attachmentMutation.isPending}
@@ -509,6 +618,11 @@ export function ProjectManagementTaskWorkspacePage() {
           onSubmit={() => saveMutation.mutate()}
           onCancelUpload={() => attachmentAbortController.current?.abort()}
           onRetryUpload={() => attachmentUploadFile && attachmentMutation.mutate(attachmentUploadFile)}
+          onRetryAttachments={() => void attachmentsQuery.refetch()}
+          onDownloadAttachment={(attachment) => void downloadAttachment(attachment)}
+          onRetryDownloadAttachment={(attachment) => void downloadAttachment(attachment)}
+          onPreviewAttachment={(attachment) => void previewAttachment(attachment)}
+          onRetryPreviewAttachment={(attachment) => void previewAttachment(attachment)}
           onUpload={(file) => {
             setAttachmentUploadFile(file);
             setAttachmentUploadProgress(0);
@@ -522,6 +636,14 @@ export function ProjectManagementTaskWorkspacePage() {
           remindersLoading={remindersQuery.isLoading}
           saving={saveMutation.isPending}
           selectedTask={selectedTask}
+        />
+        <ProjectManagementTaskAttachmentPreviewDialog
+          attachment={attachmentPreviewState.attachment}
+          error={attachmentPreviewState.error}
+          loading={attachmentPreviewState.loading}
+          open={Boolean(attachmentPreviewState.attachment)}
+          previewFile={attachmentPreviewState.previewFile}
+          onClose={closeAttachmentPreview}
         />
         {selectedTask && !creating ? <TaskActivityTimeline
           canView={canViewTaskActivities}
@@ -577,6 +699,16 @@ export function ProjectManagementTaskWorkspacePage() {
         <div className="pm-projection-heading"><div><h2 id="task-projection-title">{activeView.label}</h2><p>当前渲染的是服务端返回的任务数据；选择、批量更新和可用的移动命令均继续使用原有请求链路。</p></div><span className="pm-view-note">{rows.length} 条已加载</span></div>
         <TaskWorkspaceProjection
           labelFilter={labelFilter.labelIds.length > 0 ? labelFilter : undefined}
+          milestoneLabels={milestoneLabels}
+          onAddChildTask={(task) => {
+            setCreating(true);
+            setForm({ ...emptyForm, milestoneId: task.milestoneId, parentTaskId: task.id });
+            setState({ selectedTaskId: undefined });
+          }}
+          onCompleteTask={(task) => confirm({ title: '完成任务', content: `将任务“${task.title}”标记为已完成，并将进度设为 100%。`, confirmText: '完成任务', onConfirm: () => { setQuickActionTaskId(task.id); quickActionMutation.mutate({ action: 'complete', task }); } })}
+          onDeleteTask={(task) => confirm({ title: '删除任务', content: `删除任务“${task.title}”及其子任务？删除后可从回收站恢复。`, confirmText: '删除任务', onConfirm: () => { setQuickActionTaskId(task.id); quickActionMutation.mutate({ action: 'delete', task }); } })}
+          participantLabels={participantLabels}
+          pendingTaskId={quickActionTaskId}
           projectId={projectId}
           onMoveTask={(task, target) => {
             if (moveMutation.isPending) {

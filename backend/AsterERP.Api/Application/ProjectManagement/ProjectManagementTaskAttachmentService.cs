@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using AsterERP.Api.Application.System.Files;
 using AsterERP.Api.Infrastructure.Database;
 using AsterERP.Api.Infrastructure.Security;
 using AsterERP.Api.Modules.ProjectManagement;
@@ -15,6 +16,7 @@ public sealed class ProjectManagementTaskAttachmentService(
     ICurrentUser currentUser,
     IProjectManagementFileStore fileStore,
     ProjectManagementAccessPolicy accessPolicy,
+    IFileAppService fileAppService,
     IProjectManagementRealtimePublisher? realtimePublisher = null,
     IProjectManagementActivityWriter? activityWriter = null) : IProjectManagementTaskAttachmentService
 {
@@ -73,6 +75,15 @@ public sealed class ProjectManagementTaskAttachmentService(
         return (Map(entity), await fileStore.OpenReadAsync(entity.FileId, cancellationToken));
     }
 
+    public async Task<(ProjectManagementTaskAttachmentResponse Metadata, FilePreviewStreamResult Preview)> PreviewAsync(string taskId, string id, CancellationToken cancellationToken = default)
+    {
+        var task = await GetTaskAsync(taskId, cancellationToken);
+        await accessPolicy.EnsureCanViewProjectAsync(task.ProjectId, cancellationToken);
+        var entity = await FindAsync(task.Id, id, cancellationToken);
+        var preview = await fileAppService.PreviewAsync(entity.FileId, cancellationToken);
+        return (Map(entity), preview);
+    }
+
     public async Task DeleteAsync(string taskId, string id, long versionNo, CancellationToken cancellationToken = default)
     {
         var task = await GetTaskAsync(taskId, cancellationToken);
@@ -127,7 +138,26 @@ public sealed class ProjectManagementTaskAttachmentService(
     {
         public static AttachmentActivitySnapshot From(ProjectManagementTaskAttachmentEntity entity) => new(entity.FileName, entity.ContentType, entity.FileSize, entity.IsDeleted);
     }
-    private ProjectManagementTaskAttachmentResponse Map(ProjectManagementTaskAttachmentEntity item) => new(item.Id, item.ProjectId, item.TaskId, item.FileId, item.FileName, item.ContentType, item.FileSize, $"/api/project-management/tasks/{item.TaskId}/attachments/{item.Id}/download", $"/api/system/files/{Uri.EscapeDataString(item.FileId)}/preview", item.UploadedByUserId, item.CreatedTime, item.VersionNo);
+    private ProjectManagementTaskAttachmentResponse Map(ProjectManagementTaskAttachmentEntity item)
+    {
+        var format = FilePreviewFormatCatalog.Resolve(FilePreviewFormatCatalog.NormalizeExtensionFromFileName(item.FileName));
+        return new(
+            item.Id,
+            item.ProjectId,
+            item.TaskId,
+            item.FileId,
+            item.FileName,
+            item.ContentType,
+            item.FileSize,
+            $"/api/project-management/tasks/{Uri.EscapeDataString(item.TaskId)}/attachments/{Uri.EscapeDataString(item.Id)}/download",
+            $"/api/project-management/tasks/{Uri.EscapeDataString(item.TaskId)}/attachments/{Uri.EscapeDataString(item.Id)}/preview",
+            item.UploadedByUserId,
+            item.CreatedTime,
+            item.VersionNo,
+            format is not null,
+            format?.ViewerType,
+            format?.PreviewPipeline);
+    }
     private string Tenant() => currentUser.GetAsterErpTenantId()?.Trim() ?? throw new ValidationException("当前会话缺少租户", ErrorCodes.PermissionDenied);
     private string App() => currentUser.GetAsterErpAppCode()?.Trim().ToUpperInvariant() ?? throw new ValidationException("当前会话缺少应用", ErrorCodes.PermissionDenied);
     private string User() => currentUser.GetAsterErpUserId()?.Trim() ?? throw new ValidationException("当前会话缺少用户", ErrorCodes.PermissionDenied);
