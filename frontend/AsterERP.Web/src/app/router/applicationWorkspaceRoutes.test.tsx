@@ -48,6 +48,18 @@ describe('applicationWorkspaceRoutes', () => {
     expect(permissionCode).toBe('project-management:project:view');
   });
 
+  it('keeps the project management root reachable in both workspace route trees', () => {
+    const workspaceRoute = flattenRoutes(workspaceRoutes).find((item) => item.path === 'project-management');
+    const applicationWorkspaceRoute = flattenRoutes(applicationWorkspaceRoutes).find((item) => item.path === 'project-management');
+    const workspacePermissionCode = (workspaceRoute?.element as { props?: { permissionCode?: string } } | undefined)?.props?.permissionCode;
+    const applicationRouteMeta = (applicationWorkspaceRoute?.handle as { routeMeta?: { path?: string } } | undefined)?.routeMeta;
+
+    expect(workspaceRoute).toBeDefined();
+    expect(workspacePermissionCode).toBe('project-management:project:view');
+    expect(applicationWorkspaceRoute).toBeDefined();
+    expect(applicationRouteMeta?.path).toBe('/tenants/:tenantId/apps/:appCode/admin/project-management');
+  });
+
   it('keeps the latest Page Studio entry actions behind designer permissions', () => {
     const source = Object.values(import.meta.glob('../../pages/application-console/development-center/ApplicationDevelopmentPagesPage.tsx', { eager: true, import: 'default', query: '?raw' }))[0] as string;
     const pageBoardSource = Object.values(import.meta.glob('../../pages/application-console/development-center/PageBoard.tsx', { eager: true, import: 'default', query: '?raw' }))[0] as string;

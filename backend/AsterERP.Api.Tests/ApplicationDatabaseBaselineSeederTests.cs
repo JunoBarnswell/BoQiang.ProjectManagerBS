@@ -150,6 +150,56 @@ public sealed class ApplicationDatabaseBaselineSeederTests : IDisposable
     }
 
     [Fact]
+    public async Task SeedAsync_RepairsProjectManagementMenuAndKeepsItBoundToProjectView()
+    {
+        using var db = CreateDb();
+        new ApplicationSystemAdministrationSchemaInitializer().Initialize(db);
+        var seeder = CreateSeeder();
+        var currentUser = CreateCurrentUser();
+
+        await seeder.SeedAsync(db, "tenant-a", "MES", currentUser, CancellationToken.None);
+        var projectManagementMenu = await db.Queryable<SystemMenuEntity>()
+            .FirstAsync(item => item.TenantId == "tenant-a" && item.AppCode == "MES" && item.MenuCode == "project-management");
+
+        Assert.Equal("/project-management", projectManagementMenu.RoutePath);
+        Assert.Equal(PermissionCodes.ProjectManagementProjectView, projectManagementMenu.PermissionCode);
+        Assert.True(projectManagementMenu.Visible);
+
+        projectManagementMenu.IsDeleted = true;
+        projectManagementMenu.Visible = false;
+        projectManagementMenu.RoutePath = "/legacy-project-management";
+        await db.Updateable(projectManagementMenu).ExecuteCommandAsync();
+
+        Assert.False(await seeder.IsCurrentAsync(db, "tenant-a", "MES", null, CancellationToken.None));
+
+        await seeder.SeedAsync(db, "tenant-a", "MES", currentUser, CancellationToken.None);
+        var repairedMenu = await db.Queryable<SystemMenuEntity>()
+            .FirstAsync(item => item.TenantId == "tenant-a" && item.AppCode == "MES" && item.MenuCode == "project-management");
+
+        Assert.False(repairedMenu.IsDeleted);
+        Assert.True(repairedMenu.Visible);
+        Assert.Equal("/project-management", repairedMenu.RoutePath);
+        Assert.Equal(PermissionCodes.ProjectManagementProjectView, repairedMenu.PermissionCode);
+    }
+
+    [Fact]
+    public void BuildVisibleMenuTree_ShowsProjectManagementOnlyWithProjectViewPermission()
+    {
+        var permittedMenuCodes = ApplicationShellMenuCatalog.BuildVisibleMenuTree(
+                "tenant-a",
+                "MES",
+                [PermissionCodes.ProjectManagementProjectView])
+            .Select(item => item.MenuCode)
+            .ToArray();
+        var deniedMenuCodes = ApplicationShellMenuCatalog.BuildVisibleMenuTree("tenant-a", "MES", [])
+            .Select(item => item.MenuCode)
+            .ToArray();
+
+        Assert.Contains("project-management", permittedMenuCodes);
+        Assert.DoesNotContain("project-management", deniedMenuCodes);
+    }
+
+    [Fact]
     public async Task SeedAsync_RegistersDevelopmentCenterMonitoringPermission()
     {
         using var db = CreateDb();
@@ -383,8 +433,8 @@ public sealed class ApplicationDatabaseBaselineSeederTests : IDisposable
         var reader = new ApplicationDatabaseCapabilityReader(NullLogger<ApplicationDatabaseCapabilityReader>.Instance);
         var counts = await reader.ReadCountsAsync(db, "tenant-a", "MES");
 
-        Assert.Equal(5, counts.RootMenuCount);
-        Assert.Equal(5, counts.MenuCount);
+        Assert.Equal(ApplicationShellMenuCatalog.CoreItems.Count, counts.RootMenuCount);
+        Assert.Equal(ApplicationShellMenuCatalog.CoreItems.Count, counts.MenuCount);
     }
 
     [Fact]

@@ -12,7 +12,7 @@ public sealed class ApplicationDatabaseBaselineSeeder(
     ApplicationWorkflowAcceptanceBaselineSeeder workflowAcceptanceBaselineSeeder,
     ApplicationShellCapabilityResolver shellCapabilityResolver)
 {
-    public const string BaselineVersion = "2026.07.18.1";
+    public const string BaselineVersion = "2026.07.18.2";
     public const string BaselineParameterKey = "app.shell.baselineVersion";
     public const string CapabilitySignatureParameterKey = "app.shell.capabilitySignature";
     private const string RetiredAdminCenterMenuCode = "admin-center";
@@ -41,6 +41,7 @@ public sealed class ApplicationDatabaseBaselineSeeder(
             return false;
         }
 
+        var shellCapabilities = shellCapabilityResolver.Resolve(tenantAppConfigJson);
         var expectedSignature = BuildCapabilitySignature(tenantAppConfigJson);
         var currentSignature = await ReadParameterValueAsync(appDb, CapabilitySignatureParameterKey, cancellationToken);
         if (!string.Equals(currentSignature, expectedSignature, StringComparison.Ordinal))
@@ -49,7 +50,13 @@ public sealed class ApplicationDatabaseBaselineSeeder(
         }
 
         return await HasRuntimeMenuDataModelAsync(appDb, tenantId, appCode, cancellationToken) &&
-            !await HasRuntimeMenuRoutesToNormalizeAsync(appDb, tenantId, appCode, cancellationToken);
+            !await HasRuntimeMenuRoutesToNormalizeAsync(appDb, tenantId, appCode, cancellationToken) &&
+            await HasFixedShellMenusAsync(
+                appDb,
+                tenantId,
+                appCode,
+                ApplicationShellMenuCatalog.GetItems(shellCapabilities),
+                cancellationToken);
     }
 
     public async Task SeedAsync(
@@ -254,6 +261,34 @@ public sealed class ApplicationDatabaseBaselineSeeder(
                 item.Status == "Published" &&
                 !item.IsDeleted)
             .AnyAsync(cancellationToken);
+    }
+
+    private static async Task<bool> HasFixedShellMenusAsync(
+        ISqlSugarClient appDb,
+        string tenantId,
+        string appCode,
+        IReadOnlyList<ApplicationShellMenuDefinition> shellMenuDefinitions,
+        CancellationToken cancellationToken)
+    {
+        var normalizedAppCode = appCode.Trim().ToUpperInvariant();
+        var menuCodes = shellMenuDefinitions.Select(item => item.MenuCode).ToArray();
+        var persistedMenus = await appDb.Queryable<SystemMenuEntity>()
+            .Where(item => item.TenantId == tenantId && item.AppCode == normalizedAppCode && menuCodes.Contains(item.MenuCode) && !item.IsDeleted)
+            .ToListAsync(cancellationToken);
+
+        return shellMenuDefinitions.All(definition => persistedMenus.Any(menu =>
+            menu.MenuName == definition.MenuName &&
+            menu.MenuCode == definition.MenuCode &&
+            menu.ParentCode == definition.ParentCode &&
+            menu.RoutePath == definition.RoutePath &&
+            menu.ComponentName == definition.ComponentName &&
+            menu.ScopeType == "ApplicationShell" &&
+            menu.ConfigJson == ApplicationShellMenuCatalog.FixedShellConfig() &&
+            menu.MenuType == definition.MenuType &&
+            menu.SortOrder == definition.SortOrder &&
+            menu.Visible &&
+            menu.PermissionCode == definition.PermissionCode &&
+            menu.Icon == definition.Icon));
     }
 
     private static async Task UpsertRuntimeMenuDataModelAsync(

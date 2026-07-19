@@ -160,6 +160,22 @@ export const workspaceRoutes: RouteObject[] = [
     }),
     element: lazyPage(<ModulesPage />)
   },
+  {
+    path: 'project-management',
+    handle: routeMeta({
+      breadcrumbKey: 'breadcrumbs.projectManagement',
+      cachePolicy: 'tab-alive',
+      iconKey: 'activity',
+      labelKey: 'nav.projectManagement',
+      layoutVariant: 'app',
+      path: '/project-management'
+    }),
+    element: (
+      <PermissionRoute permissionCode="project-management:project:view">
+        {lazyPage(<ProjectManagementPage />)}
+      </PermissionRoute>
+    )
+  },
   ...platformRoutes,
   ...systemRoutes,
   ...workflowRoutes,
