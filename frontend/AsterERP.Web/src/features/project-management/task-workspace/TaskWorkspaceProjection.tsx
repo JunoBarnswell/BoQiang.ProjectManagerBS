@@ -2,7 +2,7 @@ import { useQueries } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from 'react';
 
 import { getProjectManagementTasks } from '../../../api/project-management/projectManagement.api';
-import type { ProjectManagementTaskLabelFilter, ProjectManagementTaskListItem } from '../../../api/project-management/projectManagement.types';
+import type { ProjectManagementTaskLabelFilter, ProjectManagementTaskListItem, ProjectManagementTaskQuery } from '../../../api/project-management/projectManagement.types';
 import { useAuthStore } from '../../../core/state';
 import { queryKeys } from '../../../core/query/queryKeys';
 import { DataTable } from '../../../shared/table/DataTable';
@@ -22,8 +22,9 @@ import {
 } from '../state/taskTreeState';
 
 import type { TaskMoveDropTarget } from './taskMoveIntent';
-import { TaskCard, TaskCardProjection, type TaskCardDragHandlers } from './TaskCardProjection';
-import { buildTaskBoardColumns } from './taskBoardProjectionModel';
+import { TaskCardProjection, type TaskCardDragHandlers } from './TaskCardProjection';
+import { TaskBoardColumnProjection } from './TaskBoardColumnProjection';
+import { summarizeTaskBoardColumns, taskBoardStatuses, type TaskBoardStatus } from './taskBoardProjectionModel';
 
 interface TaskWorkspaceProjectionProps {
   labelFilter?: ProjectManagementTaskLabelFilter;
@@ -32,6 +33,7 @@ interface TaskWorkspaceProjectionProps {
   onCompleteTask?: (task: ProjectManagementTaskListItem) => void;
   onChangeTaskStatus?: (task: ProjectManagementTaskListItem, status: string) => void;
   onDeleteTask?: (task: ProjectManagementTaskListItem) => void;
+  onBoardRowsLoaded?: (rows: ProjectManagementTaskListItem[]) => void;
   participantLabels?: Readonly<Record<string, string>>;
   pendingTaskId?: string;
   projectId: string;
@@ -43,7 +45,7 @@ interface TaskWorkspaceProjectionProps {
   state: TaskWorkspaceState;
 }
 
-export function TaskWorkspaceProjection({ labelFilter, milestoneLabels, onAddChildTask, onChangeTaskStatus, onCompleteTask, onDeleteTask, onMoveTask, onSelectTask, onToggleTaskSelection, participantLabels, pendingTaskId, projectId, rows, selectedTaskIds, state }: TaskWorkspaceProjectionProps) {
+export function TaskWorkspaceProjection({ labelFilter, milestoneLabels, onAddChildTask, onBoardRowsLoaded, onChangeTaskStatus, onCompleteTask, onDeleteTask, onMoveTask, onSelectTask, onToggleTaskSelection, participantLabels, pendingTaskId, projectId, rows, selectedTaskIds, state }: TaskWorkspaceProjectionProps) {
   const scope = useProjectManagementWorkspaceScope();
   const userId = useAuthStore((current) => current.user?.userId ?? '');
   const expansionKey = useMemo(
@@ -146,7 +148,7 @@ export function TaskWorkspaceProjection({ labelFilter, milestoneLabels, onAddChi
   };
   const rootDropZone = <div aria-label="拖到此处成为顶级任务" className="pm-root-drop-zone" onDragOver={drag.onDragOver} onDrop={(event) => drag.onDrop(event, { kind: 'root' })}>拖到此处成为顶级任务</div>;
 
-  if (state.viewKey === 'board') return <TaskBoardProjection drag={drag} groupBy={state.groupBy} milestoneLabels={milestoneLabels} onAddChildTask={onAddChildTask} onCompleteTask={onCompleteTask} onDeleteTask={onDeleteTask} participantLabels={participantLabels} pendingTaskId={pendingTaskId} rows={rows} onSelectTask={onSelectTask} onToggleTaskSelection={onToggleTaskSelection} selectedTaskIds={selectedTaskIds} />;
+  if (state.viewKey === 'board') return <TaskBoardProjection baseQuery={{ ...taskWorkspaceStateToQuery(projectId, state), labelFilter: labelFilter?.labelIds.length ? labelFilter : undefined }} drag={drag} groupBy={state.groupBy} milestoneLabels={milestoneLabels} onAddChildTask={onAddChildTask} onBoardRowsLoaded={onBoardRowsLoaded} onCompleteTask={onCompleteTask} onDeleteTask={onDeleteTask} participantLabels={participantLabels} pendingTaskId={pendingTaskId} onSelectTask={onSelectTask} onToggleTaskSelection={onToggleTaskSelection} selectedTaskIds={selectedTaskIds} />;
   if (state.viewKey === 'card') return <>{rootDropZone}<TaskCardProjection drag={drag} groupBy={state.groupBy} milestoneLabels={milestoneLabels} onAddChildTask={onAddChildTask} onCompleteTask={onCompleteTask} onDeleteTask={onDeleteTask} onSelectTask={onSelectTask} onToggleTaskSelection={onToggleTaskSelection} participantLabels={participantLabels} pendingTaskId={pendingTaskId} rows={rows} selectedTaskIds={selectedTaskIds} /></>;
   if (state.viewKey === 'gantt') return <TaskGanttProjection rows={rows} onSelectTask={onSelectTask} onToggleTaskSelection={onToggleTaskSelection} selectedTaskIds={selectedTaskIds} />;
   if (state.viewKey === 'calendar') return <TaskCalendarProjection rows={rows} onSelectTask={onSelectTask} onToggleTaskSelection={onToggleTaskSelection} selectedTaskIds={selectedTaskIds} />;
@@ -208,18 +210,28 @@ function TaskTableProjection({ childStateByParent, expandedTaskIds, onLoadMoreCh
   return <DataTable columnSettingsKey={`project-management-tasks-${state.viewKey}`} columns={columns} emptyText="暂无任务" rowActions={(row) => <button type="button" onClick={() => onSelectTask(row.id)}>查看</button>} rowKey={(row) => row.id} rowVirtualize={state.viewKey === 'tree' || state.viewKey === 'list'} rowVirtualization={{ overscan: 8, rowHeight: 56 }} rows={rows} showColumnSettings />;
 }
 
-function TaskBoardProjection({ drag, groupBy, milestoneLabels, onAddChildTask, onCompleteTask, onDeleteTask, participantLabels, pendingTaskId, onSelectTask, onToggleTaskSelection, rows, selectedTaskIds }: Pick<TaskWorkspaceProjectionProps, 'milestoneLabels' | 'onAddChildTask' | 'onCompleteTask' | 'onDeleteTask' | 'onSelectTask' | 'onToggleTaskSelection' | 'participantLabels' | 'pendingTaskId' | 'rows' | 'selectedTaskIds'> & { drag: TaskCardDragHandlers; groupBy?: TaskWorkspaceState['groupBy'] }) {
-  const columns = buildTaskBoardColumns(rows, groupBy);
-  return <div aria-label="任务看板" className="pm-board">{columns.map((column) => {
-    const { lanes, rows: statusRows, status } = column;
-    return <section className="pm-board-column" key={status} onDragOver={drag.onDragOver} onDrop={(event) => drag.onDrop(event, { kind: 'status', status })}>
-      <header><StatusBadge status={status} /><span>{statusRows.length}</span></header>
-      <div className="pm-board-column__body">{lanes.map((lane) => <div className="pm-board-lane" key={`${status}-${lane.key}`}>
-        {groupBy ? <div className="pm-board-lane__heading"><strong>{lane.label}</strong><span>{lane.rows.length}</span></div> : null}
-        {lane.rows.length ? lane.rows.map((task) => <TaskCard drag={drag} key={task.id} milestoneLabels={milestoneLabels} onAddChildTask={onAddChildTask} onCompleteTask={onCompleteTask} onDeleteTask={onDeleteTask} onSelectTask={onSelectTask} onToggleTaskSelection={onToggleTaskSelection} participantLabels={participantLabels} pending={pendingTaskId === task.id} selected={selectedTaskIds.has(task.id)} task={task} />) : null}
-      </div>)}</div>
-    </section>;
-  })}</div>;
+function TaskBoardProjection({ baseQuery, drag, groupBy, milestoneLabels, onAddChildTask, onBoardRowsLoaded, onCompleteTask, onDeleteTask, participantLabels, pendingTaskId, onSelectTask, onToggleTaskSelection, selectedTaskIds }: Pick<TaskWorkspaceProjectionProps, 'milestoneLabels' | 'onAddChildTask' | 'onBoardRowsLoaded' | 'onCompleteTask' | 'onDeleteTask' | 'onSelectTask' | 'onToggleTaskSelection' | 'participantLabels' | 'pendingTaskId' | 'selectedTaskIds'> & { baseQuery: ProjectManagementTaskQuery; drag: TaskCardDragHandlers; groupBy?: TaskWorkspaceState['groupBy'] }) {
+  const scope = useProjectManagementWorkspaceScope();
+  const [rowsByStatus, setRowsByStatus] = useState<Partial<Record<TaskBoardStatus, ProjectManagementTaskListItem[]>>>({});
+  const [metrics, setMetrics] = useState(() => taskBoardStatuses.map((status) => ({ loaded: 0, status })));
+  const summary = summarizeTaskBoardColumns(metrics);
+  const reportRows = useCallback((status: TaskBoardStatus, rows: ProjectManagementTaskListItem[]) => {
+    setRowsByStatus((current) => ({ ...current, [status]: rows }));
+  }, []);
+  const reportMetric = useCallback((metric: { loaded: number; status: TaskBoardStatus; total?: number }) => {
+    setMetrics((current) => current.map((item) => item.status === metric.status ? metric : item));
+  }, []);
+
+  useEffect(() => {
+    onBoardRowsLoaded?.(taskBoardStatuses.flatMap((status) => rowsByStatus[status] ?? []));
+  }, [onBoardRowsLoaded, rowsByStatus]);
+
+  return <div aria-label="任务看板" className="pm-board-shell">
+    <div aria-live="polite" className="pm-board-summary"><strong>看板数量摘要</strong><span>可见任务 {summary.total ?? '—'}</span><span>已加载 {summary.loaded}</span></div>
+    <div className="pm-board">{taskBoardStatuses.map((status) => <div key={status} onDragOver={drag.onDragOver} onDrop={(event) => drag.onDrop(event, { kind: 'status', status })}>
+      <TaskBoardColumnProjection baseQuery={baseQuery} drag={drag} groupBy={groupBy} milestoneLabels={milestoneLabels} onAddChildTask={onAddChildTask} onCompleteTask={onCompleteTask} onDeleteTask={onDeleteTask} onMetricChange={reportMetric} onRowsLoaded={(rows) => reportRows(status, rows)} onSelectTask={onSelectTask} onToggleTaskSelection={onToggleTaskSelection} participantLabels={participantLabels} pendingTaskId={pendingTaskId} scope={scope} selectedTaskIds={selectedTaskIds} status={status} />
+    </div>)}</div>
+  </div>;
 }
 
 function TaskGanttProjection({ onSelectTask, onToggleTaskSelection, rows, selectedTaskIds }: Pick<TaskWorkspaceProjectionProps, 'onSelectTask' | 'onToggleTaskSelection' | 'rows' | 'selectedTaskIds'>) {

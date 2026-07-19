@@ -502,11 +502,30 @@
   padding-bottom: 4px;
 }
 
+.pm-board-shell {
+  display: grid;
+  gap: 10px;
+}
+
+.pm-board-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  color: var(--pm-muted);
+  font-size: var(--app-text-sm);
+}
+
+.pm-board-summary strong {
+  color: var(--pm-text);
+}
+
 .pm-board-column {
   display: grid;
   align-content: start;
   gap: 9px;
   min-height: 180px;
+  min-width: 260px;
   padding: 11px;
 }
 
@@ -527,8 +546,31 @@
   gap: 8px;
 }
 
-.pm-board-column {
-  min-width: 260px;
+.pm-board-column__scroll {
+  min-height: 72px;
+  height: min(70vh, 720px);
+  overflow-y: auto;
+  padding-right: 3px;
+}
+
+.pm-board-column__virtual-item {
+  padding-bottom: 8px;
+}
+
+.pm-board-column__load-more {
+  justify-self: center;
+  padding: 5px 10px;
+  border: 1px solid var(--pm-border);
+  border-radius: var(--app-radius-sm);
+  color: var(--pm-accent);
+  background: transparent;
+  cursor: pointer;
+  font-size: var(--app-text-xs);
+}
+
+.pm-board-column__load-more:disabled {
+  cursor: wait;
+  opacity: 0.65;
 }
 
 .pm-board-column[aria-dropeffect] {

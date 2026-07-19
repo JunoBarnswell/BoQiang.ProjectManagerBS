@@ -150,6 +150,7 @@ export function ProjectManagementTaskWorkspacePage() {
   const [batchOpen, setBatchOpen] = useState(false);
   const [batchResult, setBatchResult] = useState<ProjectManagementTaskBatchExecutionResult | null>(null);
   const [optimisticBoardStatuses, setOptimisticBoardStatuses] = useState<Record<string, string>>({});
+  const [boardRowsById, setBoardRowsById] = useState<Record<string, ProjectManagementTaskListItem>>({});
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(() => new Set());
   const [openingConversationScope, setOpeningConversationScope] = useState<'project' | 'task' | null>(null);
   const [form, setForm] = useState<ProjectManagementTaskUpsertRequest>(emptyForm);
@@ -278,11 +279,20 @@ export function ProjectManagementTaskWorkspacePage() {
   });
   const serverRows = useMemo(() => tasksQuery.data?.data?.items ?? [], [tasksQuery.data?.data?.items]);
   const rows = useMemo(() => serverRows.map((task) => optimisticBoardStatuses[task.id] ? { ...task, status: optimisticBoardStatuses[task.id] } : task), [optimisticBoardStatuses, serverRows]);
+  const boardRows = useMemo(() => Object.values(boardRowsById).map((task) => optimisticBoardStatuses[task.id] ? { ...task, status: optimisticBoardStatuses[task.id] } : task), [boardRowsById, optimisticBoardStatuses]);
+  const handleBoardRowsLoaded = useCallback((loadedRows: ProjectManagementTaskListItem[]) => {
+    setBoardRowsById(Object.fromEntries(loadedRows.map((task) => [task.id, task])));
+  }, []);
+  const selectableRows = useMemo(() => {
+    const byId = new Map<string, ProjectManagementTaskListItem>(rows.map((task) => [task.id, task]));
+    if (state.viewKey === 'board') boardRows.forEach((task) => byId.set(task.id, task));
+    return [...byId.values()];
+  }, [boardRows, rows, state.viewKey]);
   const participantLabels = useMemo(() => Object.fromEntries((memberCandidatesQuery.data?.data?.items ?? []).map((candidate) => [candidate.userId, candidate.displayName || candidate.userName])), [memberCandidatesQuery.data?.data?.items]);
   const milestoneLabels = useMemo(() => Object.fromEntries((milestonesQuery.data?.data ?? []).map((milestone) => [milestone.id, milestone.milestoneName])), [milestonesQuery.data?.data]);
   const selectedListTask = rows.find((task) => task.id === selectedTaskId);
   const selectedTask = taskDetailQuery.data?.data;
-  const selectedTasks = useMemo(() => rows.filter((task) => selectedTaskIds.has(task.id)), [rows, selectedTaskIds]);
+  const selectedTasks = useMemo(() => selectableRows.filter((task) => selectedTaskIds.has(task.id)), [selectableRows, selectedTaskIds]);
   const childTasks = childTasksQuery.data?.data?.items ?? [];
   const dependencyLabels = useMemo(() => Object.fromEntries(rows.map((task) => [task.id, `${task.taskCode} · ${task.title}`])), [rows]);
   const taskDetailErrorMessage = taskDetailQuery.error
@@ -301,12 +311,16 @@ export function ProjectManagementTaskWorkspacePage() {
   }, [selectedListTask, selectedTaskId, setState, tasksQuery.isSuccess]);
 
   useEffect(() => {
-    const availableIds = new Set(rows.map((task) => task.id));
+    const availableIds = new Set(selectableRows.map((task) => task.id));
     setSelectedTaskIds((current) => {
       const next = new Set([...current].filter((taskId) => availableIds.has(taskId)));
       return next.size === current.size ? current : next;
     });
-  }, [rows]);
+  }, [selectableRows]);
+
+  useEffect(() => {
+    if (state.viewKey !== 'board') setBoardRowsById({});
+  }, [state.viewKey]);
 
   useEffect(() => {
     if (!selectedTask || creating) return;
@@ -602,7 +616,7 @@ export function ProjectManagementTaskWorkspacePage() {
           onExport={() => exportMutation.mutate()}
           onOpenBatch={() => setBatchOpen(true)}
           onSelectAll={() => setSelectedTaskIds((current) => {
-            const pageIds = rows.map((task) => task.id);
+            const pageIds = selectableRows.map((task) => task.id);
             const allSelected = pageIds.length > 0 && pageIds.every((taskId) => current.has(taskId));
             const next = new Set(current);
             pageIds.forEach((taskId) => allSelected ? next.delete(taskId) : next.add(taskId));
@@ -797,6 +811,7 @@ export function ProjectManagementTaskWorkspacePage() {
             setForm({ ...emptyForm, milestoneId: task.milestoneId, parentTaskId: task.id });
             setState({ selectedTaskId: undefined });
           }}
+          onBoardRowsLoaded={handleBoardRowsLoaded}
           onCompleteTask={(task) => confirm({ title: '完成任务', content: `将任务“${task.title}”标记为已完成，并将进度设为 100%。`, confirmText: '完成任务', onConfirm: () => { setQuickActionTaskId(task.id); quickActionMutation.mutate({ action: 'complete', task }); } })}
           onDeleteTask={(task) => confirm({ title: '删除任务', content: `删除任务“${task.title}”及其子任务？删除后可从回收站恢复。`, confirmText: '删除任务', onConfirm: () => { setQuickActionTaskId(task.id); quickActionMutation.mutate({ action: 'delete', task }); } })}
           participantLabels={participantLabels}
