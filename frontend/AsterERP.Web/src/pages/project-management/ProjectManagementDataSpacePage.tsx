@@ -12,6 +12,7 @@ import {
   previewProjectManagementBackupRestore,
   restoreProjectManagementBackup,
   startProjectManagementDataSpaceExport,
+  startProjectManagementDataSpaceImport,
 } from '../../api/project-management/projectManagement.api';
 import { usePermission } from '../../core/auth/usePermission';
 import { isHttpError } from '../../core/http/httpError';
@@ -43,6 +44,7 @@ export function ProjectManagementDataSpacePage() {
   const [restorePreview, setRestorePreview] = useState<NonNullable<Awaited<ReturnType<typeof previewProjectManagementBackupRestore>>['data']> | null>(null);
   const { hasPermission: canManageBackup } = usePermission('project-management:backup:manage');
   const { hasPermission: canExportDatabase } = usePermission('project-management:data-space:export');
+  const { hasPermission: canImportDatabase } = usePermission('project-management:data-space:import');
   const summaryQuery = useQuery({
     enabled: scope.isAvailable,
     queryKey: queryKeys.projectManagement.dataSpaceSummary(scope),
@@ -79,6 +81,15 @@ export function ProjectManagementDataSpacePage() {
       anchor.click();
       URL.revokeObjectURL(url);
       void databaseExportsQuery.refetch();
+    },
+  });
+  const databaseImportMutation = useApiMutation({
+    mutationFn: (exportId: string) => startProjectManagementDataSpaceImport({ exportId, currentPassword: password, confirmRisk, reason: '项目管理数据空间受控整库导入' }),
+    onError: (error) => message.error(getErrorMessage(error, '整库导入任务创建失败')),
+    onSuccess: (result) => {
+      const task = result.data;
+      setOperationId(task?.operationId ?? null);
+      setOperationResult(task ? '整库导入已进入维护队列：系统会校验清单、自动备份并在失败时回滚。' : '整库导入已进入维护队列。');
     },
   });
   const backupMutation = useApiMutation({
@@ -153,7 +164,7 @@ export function ProjectManagementDataSpacePage() {
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <PermissionButton code="project-management:data-space:export" disabled={!password || !confirmRisk || databaseExportMutation.isPending} onClick={() => databaseExportMutation.mutate()}>{databaseExportMutation.isPending ? '正在入队…' : '创建整库导出'}</PermissionButton>
         </div>
-        {databaseExportsQuery.isLoading ? <div className="mt-3 text-sm text-gray-500">整库导出记录加载中…</div> : databaseExportsQuery.data?.data?.length ? <div className="mt-3 space-y-2">{databaseExportsQuery.data.data.map((item) => <div className="flex flex-wrap items-center justify-between gap-2 rounded border border-gray-100 p-3 text-sm" key={item.id}><span>{item.packageName} · {item.status} · 下载 {item.downloadCount}/{item.maxDownloadCount} · 有效至 {new Date(item.downloadExpiresAt).toLocaleString()}{item.manifest ? ` · schema v${item.manifest.schemaVersion}` : ''}</span><PermissionButton code="project-management:data-space:export" disabled={item.status !== 'Ready' || databaseExportDownloadMutation.isPending} onClick={() => databaseExportDownloadMutation.mutate(item.id)}>{databaseExportDownloadMutation.isPending ? '下载中…' : '下载加密包'}</PermissionButton></div>)}</div> : <div className="mt-3 text-sm text-gray-500">暂无整库导出记录</div>}
+        {databaseExportsQuery.isLoading ? <div className="mt-3 text-sm text-gray-500">整库导出记录加载中…</div> : databaseExportsQuery.data?.data?.length ? <div className="mt-3 space-y-2">{databaseExportsQuery.data.data.map((item) => <div className="flex flex-wrap items-center justify-between gap-2 rounded border border-gray-100 p-3 text-sm" key={item.id}><span>{item.packageName} · {item.status} · 下载 {item.downloadCount}/{item.maxDownloadCount} · 有效至 {new Date(item.downloadExpiresAt).toLocaleString()}{item.manifest ? ` · schema v${item.manifest.schemaVersion}` : ''}</span><div className="flex gap-2"><PermissionButton code="project-management:data-space:export" disabled={item.status !== 'Ready' || databaseExportDownloadMutation.isPending} onClick={() => databaseExportDownloadMutation.mutate(item.id)}>{databaseExportDownloadMutation.isPending ? '下载中…' : '下载加密包'}</PermissionButton>{canImportDatabase ? <PermissionButton code="project-management:data-space:import" disabled={item.status !== 'Ready' || !password || !confirmRisk || databaseImportMutation.isPending} onClick={() => databaseImportMutation.mutate(item.id)}>{databaseImportMutation.isPending ? '正在入队…' : '从此包整库导入'}</PermissionButton> : null}</div></div>)}</div> : <div className="mt-3 text-sm text-gray-500">暂无整库导出记录</div>}
       </section>
       <section className="mt-4 rounded-lg border border-gray-200 p-4">
         <h2 className="font-semibold">同步包</h2>

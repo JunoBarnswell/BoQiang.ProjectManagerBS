@@ -33,6 +33,7 @@ import type {
   ProjectManagementBackup,
   ProjectManagementBackupRestorePreview,
   ProjectManagementDataSpaceExport,
+  ProjectManagementDataSpaceImport,
   ProjectManagementRecyclePurgePreview,
   ProjectManagementRecycleTaskPurgePreview,
   ProjectManagementTaskUpsertRequest,
@@ -928,6 +929,15 @@ export function startProjectManagementDataSpaceExport(request: {
 
 export function downloadProjectManagementDataSpaceExport(id: string): Promise<{ blob: Blob; fileName: string }> {
   return httpClient.downloadBlob(`/project-management/data-space-exports/${id}/download`, { timeoutMs: 120_000 });
+}
+
+export function startProjectManagementDataSpaceImport(request: {
+  exportId: string;
+  currentPassword: string;
+  confirmRisk: boolean;
+  reason?: string;
+}): Promise<ApiEnvelope<ProjectManagementDataSpaceImport>> {
+  return httpClient.post<ProjectManagementDataSpaceImport, typeof request>('/project-management/data-space-imports', request);
 }
 
 export function getProjectManagementSavedViews(

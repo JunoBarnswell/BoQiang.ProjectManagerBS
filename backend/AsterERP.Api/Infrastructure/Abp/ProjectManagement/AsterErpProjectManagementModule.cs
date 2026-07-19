@@ -36,6 +36,7 @@ public sealed class AsterErpProjectManagementModule : AbpModule
         context.Services.AddScoped<IProjectManagementRiskConfirmationService, ProjectManagementRiskConfirmationService>();
         context.Services.AddScoped<IProjectManagementBackupService, ProjectManagementBackupService>();
         context.Services.AddScoped<IProjectManagementDataSpaceExportService, ProjectManagementDataSpaceExportService>();
+        context.Services.AddScoped<IProjectManagementDataSpaceImportService, ProjectManagementDataSpaceImportService>();
         context.Services.AddScoped<IProjectManagementRealtimeTransport, ProjectManagementRealtimeTransport>();
         context.Services.AddScoped<IProjectManagementOperationProgressPublisher, ProjectManagementOperationProgressPublisher>();
         context.Services.AddScoped<IProjectManagementOperationWriter, ProjectManagementOperationWriter>();
@@ -47,6 +48,7 @@ public sealed class AsterErpProjectManagementModule : AbpModule
         context.Services.AddScoped<ProjectManagementWorkspaceValidationExecutor>();
         context.Services.AddScoped<ProjectManagementReportSnapshotExecutor>();
         context.Services.AddScoped<ProjectManagementDataSpaceExportExecutor>();
+        context.Services.AddScoped<ProjectManagementDataSpaceImportExecutor>();
         context.Services.AddScoped<ProjectManagementPurgeFileDeletionExecutor>();
         context.Services.AddScoped<IProjectManagementPurgeFileDeletionService, ProjectManagementPurgeFileDeletionService>();
         context.Services.AddTransient<ProjectManagementOperationRunner>();
