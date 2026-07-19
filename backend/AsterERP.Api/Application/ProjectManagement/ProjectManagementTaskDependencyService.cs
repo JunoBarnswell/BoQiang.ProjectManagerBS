@@ -140,6 +140,18 @@ public sealed class ProjectManagementTaskDependencyService(
         return new ProjectManagementTaskDependencyForceStartResponse(task!.Id, task.ProjectId, task.Status, blockerCount, reason, task.VersionNo);
     }
 
+    public async Task EnsureCanStartAsync(string projectId, string taskId, CancellationToken cancellationToken = default)
+    {
+        await EnsureProjectAsync(projectId, cancellationToken);
+        var task = await EnsureTaskAsync(projectId, taskId, cancellationToken);
+        if (task.Status == ProjectManagementDomainRules.TaskInProgress) return;
+        var snapshot = await LoadDependencySnapshotAsync(projectId, cancellationToken);
+        var blockers = CountBlockers(task.Id, snapshot.Dependencies, snapshot.StatusByTaskId, out var missingPredecessorCount);
+        if (blockers == 0) return;
+        var detail = missingPredecessorCount > 0 ? "存在已删除或不可见的前置任务" : $"存在 {blockers} 个未完成前置任务";
+        throw new ValidationException($"任务不能直接拖入进行中：{detail}。如需绕过依赖，请使用强制开始命令。");
+    }
+
     public async Task RefreshBlockedStatesAsync(string projectId, CancellationToken cancellationToken = default)
     {
         await EnsureProjectAsync(projectId, cancellationToken);

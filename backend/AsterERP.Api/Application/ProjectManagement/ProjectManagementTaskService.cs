@@ -346,6 +346,8 @@ public sealed class ProjectManagementTaskService(
         await EnsureTaskWriteAccessAsync(entity.ProjectId, entity.Id, parent?.Id, request.AssigneeUserId, cancellationToken, requireParentScope: true);
         await EnsureAssigneeAsync(entity.ProjectId, request.AssigneeUserId, cancellationToken);
         var entersInProgress = state.Status == ProjectManagementDomainRules.TaskInProgress && entity.Status != ProjectManagementDomainRules.TaskInProgress;
+        if (entersInProgress && dependencyService is not null)
+            await dependencyService.EnsureCanStartAsync(entity.ProjectId, entity.Id, cancellationToken);
         await using var wipLease = entersInProgress
             ? await WipCoordinator.EnterAsync(RequireTenantId(), RequireAppCode(), entity.ProjectId, cancellationToken)
             : null;
@@ -407,6 +409,24 @@ public sealed class ProjectManagementTaskService(
             ProjectManagementReversibleCommandHandler.Serialize(new ProjectManagementTaskUpdateCommand(entity.Id, before with { VersionNo = result.VersionNo })),
             $"更新任务 {entity.Title}", cancellationToken);
         return result;
+    }
+
+    public async Task<ProjectManagementTaskDetailResponse> ChangeStatusAsync(string id, ProjectManagementTaskStatusChangeRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var detail = await GetAsync(id, cancellationToken);
+        var progress = string.Equals(request.Status, ProjectManagementDomainRules.TaskDone, StringComparison.Ordinal)
+            ? 100m
+            : string.Equals(detail.Status, ProjectManagementDomainRules.TaskDone, StringComparison.Ordinal)
+                ? 0m
+                : detail.ProgressPercent;
+        var update = ProjectManagementReversibleCommandHandler.ToUpsert(detail) with
+        {
+            ProgressPercent = progress,
+            Status = request.Status,
+            VersionNo = request.VersionNo
+        };
+        return await UpdateAsync(id, update, cancellationToken);
     }
 
     public async Task<ProjectManagementTaskDependencyForceStartResponse> ForceStartAsync(string id, ProjectManagementTaskDependencyForceStartRequest request, CancellationToken cancellationToken = default)

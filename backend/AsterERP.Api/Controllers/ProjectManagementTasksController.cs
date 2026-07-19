@@ -38,6 +38,20 @@ public sealed class ProjectManagementTasksController(IProjectManagementTaskServi
         }
     }
 
+    [HttpPost("{id}/status")]
+    [Permission(PermissionCodes.ProjectManagementTaskEdit)]
+    public async Task<IActionResult> ChangeStatusAsync(string id, [FromBody] ProjectManagementTaskStatusChangeRequest request, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return ApiOk(await service.ChangeStatusAsync(id, request, cancellationToken));
+        }
+        catch (ProjectManagementTaskVersionConflictException exception)
+        {
+            return StatusCode(StatusCodes.Status409Conflict, ApiResultFactory.Ok(exception.Conflict, HttpContext.TraceIdentifier, exception.Message));
+        }
+    }
+
     [HttpPost("{id}/force-start")]
     [Permission(PermissionCodes.ProjectManagementTaskManageDependency)]
     public async Task<IActionResult> ForceStartAsync(string id, [FromBody] ProjectManagementTaskDependencyForceStartRequest request, CancellationToken cancellationToken)

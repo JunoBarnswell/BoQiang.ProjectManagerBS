@@ -448,6 +448,16 @@ export function updateProjectManagementTask(
   );
 }
 
+export function changeProjectManagementTaskStatus(
+  id: string,
+  request: { status: string; versionNo: number },
+): Promise<ApiEnvelope<ProjectManagementTaskDetail>> {
+  return httpClient.post<ProjectManagementTaskDetail, typeof request>(
+    `/project-management/tasks/${id}/status`,
+    request,
+  );
+}
+
 export function moveProjectManagementTask(
   id: string,
   request: {

@@ -59,11 +59,11 @@ public static class ProjectManagementDomainRules
         if (current == next) return;
         var allowed = current switch
         {
-            TaskBacklog => new[] { TaskTodo, TaskInProgress, TaskCancelled },
-            TaskTodo => new[] { TaskBacklog, TaskInProgress, TaskCancelled },
+            TaskBacklog => new[] { TaskTodo, TaskInProgress, TaskDone, TaskCancelled },
+            TaskTodo => new[] { TaskBacklog, TaskInProgress, TaskDone, TaskCancelled },
             TaskInProgress => new[] { TaskBacklog, TaskBlocked, TaskDone, TaskCancelled },
-            TaskBlocked => new[] { TaskBacklog, TaskTodo, TaskInProgress, TaskCancelled },
-            TaskDone => new[] { TaskInProgress },
+            TaskBlocked => new[] { TaskBacklog, TaskTodo, TaskInProgress, TaskDone, TaskCancelled },
+            TaskDone => new[] { TaskBacklog, TaskTodo, TaskInProgress, TaskCancelled },
             _ => Array.Empty<string>()
         };
         if (!allowed.Contains(next, StringComparer.Ordinal)) throw new ValidationException($"任务状态不能从 {current} 变更为 {next}");

@@ -11,9 +11,12 @@ public sealed class ProjectManagementTaskStateMachine
         var requested = ProjectManagementDomainRules.RequireTaskStatus(requestedStatus);
         var progress = ProjectManagementDomainRules.RequireProgress(progressPercent, "任务");
         var next = progress == 100m ? ProjectManagementDomainRules.TaskDone :
-            currentStatus == ProjectManagementDomainRules.TaskDone && progress < 100m ? ProjectManagementDomainRules.TaskInProgress : requested;
+            currentStatus == ProjectManagementDomainRules.TaskDone && requestedStatus == ProjectManagementDomainRules.TaskDone && progress < 100m
+                ? ProjectManagementDomainRules.TaskInProgress
+                : requested;
         if (!isNew) ProjectManagementDomainRules.EnsureTaskStatusTransition(currentStatus, next);
-        return new ProjectManagementTaskStateTransition(next, progress,
+        var normalizedProgress = next == ProjectManagementDomainRules.TaskDone ? 100m : progress;
+        return new ProjectManagementTaskStateTransition(next, normalizedProgress,
             next is ProjectManagementDomainRules.TaskInProgress or ProjectManagementDomainRules.TaskDone ? actualStartAt ?? now : actualStartAt,
             next == ProjectManagementDomainRules.TaskDone ? actualEndAt ?? now : actualEndAt);
     }

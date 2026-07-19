@@ -403,6 +403,7 @@ public sealed class ProjectManagementOverviewRecycleTests
         public Task<IReadOnlyList<ProjectManagementTaskDependencyResponse>> CreateBatchAsync(string projectId, ProjectManagementTaskDependencyBatchCreateRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task DeleteAsync(string projectId, string id, long versionNo, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<ProjectManagementTaskDependencyForceStartResponse> ForceStartAsync(string projectId, string taskId, ProjectManagementTaskDependencyForceStartRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task EnsureCanStartAsync(string projectId, string taskId, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task<int> PurgeForTasksAsync(string projectId, IReadOnlyCollection<string> taskIds, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<int> PurgeDeletedTasksAsync(string projectId, IReadOnlyCollection<string> taskIds, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task RefreshBlockedStatesAsync(string projectId, CancellationToken cancellationToken = default)

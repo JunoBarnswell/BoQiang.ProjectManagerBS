@@ -7,6 +7,7 @@ import {
   deleteProjectManagementSavedView,
   ensureProjectManagementImConversation,
   createProjectManagementTask,
+  changeProjectManagementTaskStatus,
   createProjectManagementTaskComment,
   downloadProjectManagementTaskAttachment,
   executeProjectManagementTasksBatch,
@@ -64,6 +65,7 @@ import { createTaskMoveRequest } from '../../features/project-management/task-wo
 import { TaskWorkspaceBatchCommandPanel } from '../../features/project-management/task-workspace/TaskWorkspaceBatchCommandPanel';
 import { TaskWorkspaceBatchResultPanel } from '../../features/project-management/task-workspace/TaskWorkspaceBatchResultPanel';
 import { taskBatchResultToCsv } from '../../features/project-management/task-workspace/taskBatchExecutionModel';
+import { resolveBoardStatusProgress, rollbackBoardStatus } from '../../features/project-management/task-workspace/taskBoardStatusMutationModel';
 import { TaskWorkspaceImConversationPanel } from '../../features/project-management/task-workspace/TaskWorkspaceImConversationPanel';
 import { TaskWorkspaceLabelManager } from '../../features/project-management/task-workspace/TaskWorkspaceLabelManager';
 import { TaskWorkspaceProjection } from '../../features/project-management/task-workspace/TaskWorkspaceProjection';
@@ -150,6 +152,7 @@ export function ProjectManagementTaskWorkspacePage() {
   const [batchOpen, setBatchOpen] = useState(false);
   const [batchResult, setBatchResult] = useState<ProjectManagementTaskBatchExecutionResult | null>(null);
   const [optimisticBoardStatuses, setOptimisticBoardStatuses] = useState<Record<string, string>>({});
+  const [optimisticBoardProgress, setOptimisticBoardProgress] = useState<Record<string, number>>({});
   const [boardRowsById, setBoardRowsById] = useState<Record<string, ProjectManagementTaskListItem>>({});
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(() => new Set());
   const [openingConversationScope, setOpeningConversationScope] = useState<'project' | 'task' | null>(null);
@@ -278,8 +281,12 @@ export function ProjectManagementTaskWorkspacePage() {
     queryKey: ['project-management-task-dependencies', scope.tenantId, scope.appCode, projectId],
   });
   const serverRows = useMemo(() => tasksQuery.data?.data?.items ?? [], [tasksQuery.data?.data?.items]);
-  const rows = useMemo(() => serverRows.map((task) => optimisticBoardStatuses[task.id] ? { ...task, status: optimisticBoardStatuses[task.id] } : task), [optimisticBoardStatuses, serverRows]);
-  const boardRows = useMemo(() => Object.values(boardRowsById).map((task) => optimisticBoardStatuses[task.id] ? { ...task, status: optimisticBoardStatuses[task.id] } : task), [boardRowsById, optimisticBoardStatuses]);
+  const rows = useMemo(() => serverRows.map((task) => optimisticBoardStatuses[task.id] || optimisticBoardProgress[task.id] !== undefined
+    ? { ...task, progressPercent: optimisticBoardProgress[task.id] ?? task.progressPercent, status: optimisticBoardStatuses[task.id] ?? task.status }
+    : task), [optimisticBoardProgress, optimisticBoardStatuses, serverRows]);
+  const boardRows = useMemo(() => Object.values(boardRowsById).map((task) => optimisticBoardStatuses[task.id] || optimisticBoardProgress[task.id] !== undefined
+    ? { ...task, progressPercent: optimisticBoardProgress[task.id] ?? task.progressPercent, status: optimisticBoardStatuses[task.id] ?? task.status }
+    : task), [boardRowsById, optimisticBoardProgress, optimisticBoardStatuses]);
   const handleBoardRowsLoaded = useCallback((loadedRows: ProjectManagementTaskListItem[]) => {
     setBoardRowsById(Object.fromEntries(loadedRows.map((task) => [task.id, task])));
   }, []);
@@ -536,18 +543,26 @@ export function ProjectManagementTaskWorkspacePage() {
     },
   });
   const boardStatusMutation = useApiMutation({
-    mutationFn: async ({ task, status }: { task: ProjectManagementTaskListItem; status: string }) => {
-      const detail = (await getProjectManagementTask(task.id)).data;
-      if (!detail) throw new Error('任务详情不存在，无法移动看板状态');
-      return updateProjectManagementTask(task.id, { ...taskDetailToForm(detail), status });
+    mutationFn: ({ task, status }: { previousProgress: number; previousStatus: string; task: ProjectManagementTaskListItem; status: string }) => {
+      return changeProjectManagementTaskStatus(task.id, { status, versionNo: task.versionNo });
     },
-    onError: async (error) => {
-      setOptimisticBoardStatuses({});
+    onError: async (error, variables) => {
+      setOptimisticBoardStatuses((current) => rollbackBoardStatus(current, variables.task.id, variables.previousStatus));
+      setOptimisticBoardProgress((current) => ({ ...current, [variables.task.id]: variables.previousProgress }));
       message.error(getErrorMessage(error, '看板状态更新失败，已回滚显示'));
       await invalidateProjectTaskViews();
     },
-    onSuccess: async () => {
-      setOptimisticBoardStatuses({});
+    onSuccess: async (_result, variables) => {
+      setOptimisticBoardStatuses((current) => {
+        const next = { ...current };
+        delete next[variables.task.id];
+        return next;
+      });
+      setOptimisticBoardProgress((current) => {
+        const next = { ...current };
+        delete next[variables.task.id];
+        return next;
+      });
       message.success('任务状态已更新');
       await invalidateProjectTaskViews();
     },
@@ -832,7 +847,8 @@ export function ProjectManagementTaskWorkspacePage() {
               return;
             }
             setOptimisticBoardStatuses((current) => ({ ...current, [task.id]: status }));
-            boardStatusMutation.mutate({ task, status });
+            setOptimisticBoardProgress((current) => ({ ...current, [task.id]: resolveBoardStatusProgress(task, status) }));
+            boardStatusMutation.mutate({ previousProgress: task.progressPercent, previousStatus: task.status, task, status });
           }}
           onSelectTask={(taskId) => {
             setCreating(false);

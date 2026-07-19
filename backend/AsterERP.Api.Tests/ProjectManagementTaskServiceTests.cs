@@ -212,6 +212,33 @@ public sealed class ProjectManagementTaskServiceTests
     }
 
     [Fact]
+    public async Task Board_status_change_enforces_dependency_and_normalizes_done_round_trip()
+    {
+        using var db = CreateDb("task-board-status-change");
+        await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
+        await db.Insertable(new ProjectManagementProjectEntity { Id = "project-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "A", ProjectName = "A", OwnerUserId = "operator" }).ExecuteCommandAsync();
+        var accessor = new TestWorkspaceDatabaseAccessor(db);
+        var user = CreateUser();
+        var dependencyService = new ProjectManagementTaskDependencyService(accessor, user);
+        var service = new ProjectManagementTaskService(accessor, user, dependencyService: dependencyService);
+        var predecessor = await service.CreateAsync("project-a", new ProjectManagementTaskUpsertRequest("P", "前置任务"));
+        var successor = await service.CreateAsync("project-a", new ProjectManagementTaskUpsertRequest("S", "看板任务"));
+        await dependencyService.CreateAsync("project-a", new ProjectManagementTaskDependencyUpsertRequest(predecessor.Id, successor.Id));
+        successor = await service.GetAsync(successor.Id);
+
+        await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() => service.ChangeStatusAsync(successor.Id, new ProjectManagementTaskStatusChangeRequest("InProgress", successor.VersionNo)));
+
+        predecessor = await service.ChangeStatusAsync(predecessor.Id, new ProjectManagementTaskStatusChangeRequest("Done", predecessor.VersionNo));
+        successor = await service.GetAsync(successor.Id);
+        var done = await service.ChangeStatusAsync(successor.Id, new ProjectManagementTaskStatusChangeRequest("Done", successor.VersionNo));
+        Assert.Equal(ProjectManagementDomainRules.TaskDone, done.Status);
+        Assert.Equal(100m, done.ProgressPercent);
+        var reopened = await service.ChangeStatusAsync(done.Id, new ProjectManagementTaskStatusChangeRequest("Todo", done.VersionNo));
+        Assert.Equal(ProjectManagementDomainRules.TaskTodo, reopened.Status);
+        Assert.Equal(0m, reopened.ProgressPercent);
+    }
+
+    [Fact]
     public void Task_controller_separates_view_add_edit_move_and_delete_permissions()
     {
         Assert.Contains(typeof(ProjectManagementTasksController).GetCustomAttributes(typeof(PermissionAttribute), true), attribute => ((PermissionAttribute)attribute).Code == PermissionCodes.ProjectManagementTaskView);
