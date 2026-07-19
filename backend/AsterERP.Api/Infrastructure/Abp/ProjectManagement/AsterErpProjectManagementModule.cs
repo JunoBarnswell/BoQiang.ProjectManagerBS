@@ -27,6 +27,9 @@ public sealed class AsterErpProjectManagementModule : AbpModule
         context.Services.AddScoped<ProjectManagementAccessPolicy>();
         context.Services.AddScoped<IProjectManagementActivityService, ProjectManagementActivityService>();
         context.Services.AddScoped<IProjectManagementActivityWriter>(provider => provider.GetRequiredService<IProjectManagementActivityService>());
+        context.Services.AddScoped<IProjectManagementWebhookService, ProjectManagementWebhookService>();
+        context.Services.AddTransient<ProjectManagementWebhookDeliveryRunner>();
+        context.Services.AddTransient<ProjectManagementWebhookDeliveryJob>();
         context.Services.AddScoped<IProjectManagementAuditService, ProjectManagementAuditService>();
         context.Services.AddScoped<IProjectManagementMaintenanceLock, ProjectManagementMaintenanceLock>();
         context.Services.AddScoped<ProjectManagementWipCoordinator>();

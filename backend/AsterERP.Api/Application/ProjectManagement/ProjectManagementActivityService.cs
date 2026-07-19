@@ -13,7 +13,7 @@ namespace AsterERP.Api.Application.ProjectManagement;
 /// <summary>
 /// 项目成员可见的业务时间线。平台安全/操作审计由独立的审计基础设施负责，不能把原始敏感值写入此处。
 /// </summary>
-public sealed class ProjectManagementActivityService(IWorkspaceDatabaseAccessor databaseAccessor, ICurrentUser currentUser) : IProjectManagementActivityService
+public sealed class ProjectManagementActivityService(IWorkspaceDatabaseAccessor databaseAccessor, ICurrentUser currentUser, IProjectManagementWebhookService? webhookService = null) : IProjectManagementActivityService
 {
     private const int MaxPayloadBytes = 64 * 1024;
     private const int MaxFieldChanges = 64;
@@ -44,6 +44,8 @@ public sealed class ProjectManagementActivityService(IWorkspaceDatabaseAccessor 
             CreatedTime = activity.OccurredAt ?? DateTime.UtcNow,
             Remark = payloadJson
         }).ExecuteCommandAsync(cancellationToken);
+        if (webhookService is not null)
+            await webhookService.PublishActivityAsync(activity, cancellationToken);
     }
 
     public async Task<GridPageResult<ProjectManagementActivityResponse>> QueryAsync(
