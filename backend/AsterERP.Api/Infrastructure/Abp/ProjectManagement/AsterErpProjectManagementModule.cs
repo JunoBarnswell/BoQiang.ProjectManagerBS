@@ -88,6 +88,10 @@ public sealed class AsterErpProjectManagementModule : AbpModule
         context.Services.AddScoped<IProjectManagementTaskTemplateInstantiationService, ProjectManagementTaskTemplateInstantiationService>();
         context.Services.AddScoped<IProjectManagementRecycleService, ProjectManagementRecycleService>();
         context.Services.AddScoped<IProjectManagementImConversationService, ProjectManagementImConversationService>();
+        context.Services.AddScoped<ProjectManagementAutomationService>();
+        context.Services.AddScoped<IProjectManagementAutomationService>(provider => provider.GetRequiredService<ProjectManagementAutomationService>());
+        context.Services.AddTransient<ProjectManagementAutomationRunner>();
+        context.Services.AddTransient<ProjectManagementAutomationWebhookJob>();
     }
 
     public static void RegisterDataFilters(IDataPermissionFilterRegistry registry)
