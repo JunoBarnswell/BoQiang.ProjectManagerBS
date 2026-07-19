@@ -26,4 +26,14 @@ public sealed class ProjectManagementAutomationContractTests
         Assert.Equal("trace-1", payload.TraceId);
         Assert.Equal("ProjectManagement", payload.Data["source"]);
     }
+
+    [Fact]
+    public void Outbound_webhook_contract_has_explicit_event_allowlist_and_stable_event_id()
+    {
+        Assert.Contains(ProjectManagementWebhookEventTypes.StatusChanged, ProjectManagementWebhookEventTypes.All);
+        var payload = new ProjectManagementWebhookEventPayload("event-1", ProjectManagementWebhookEventTypes.CommentCreated,
+            DateTimeOffset.UtcNow, "project-1", "TaskComment", "comment-1", "trace-1", new Dictionary<string, string?> { ["activityType"] = "comment.created" });
+        Assert.Equal("event-1", payload.EventId);
+        Assert.Equal("comment-1", payload.ResourceId);
+    }
 }

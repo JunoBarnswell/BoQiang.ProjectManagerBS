@@ -1058,4 +1058,42 @@ export interface ProjectManagementActivityPage {
   items: ProjectManagementActivity[];
 }
 
+export interface ProjectManagementWebhookSubscription {
+  id: string;
+  projectId: string;
+  name: string;
+  endpointUrl: string;
+  secretConfigured: boolean;
+  eventTypes: string[];
+  isEnabled: boolean;
+  maxAttempts: number;
+  createdTime: string;
+  updatedTime?: string;
+}
+
+export interface ProjectManagementWebhookSubscriptionUpsertRequest {
+  id?: string;
+  projectId: string;
+  name: string;
+  endpointUrl: string;
+  secret?: string;
+  eventTypes: string[];
+  isEnabled: boolean;
+  maxAttempts?: number;
+}
+
+export interface ProjectManagementWebhookDelivery {
+  eventId: string;
+  subscriptionId: string;
+  projectId: string;
+  eventType: string;
+  status: string;
+  attemptCount: number;
+  maxAttempts: number;
+  nextAttemptAt: string;
+  errorMessage?: string;
+  createdTime: string;
+  completedTime?: string;
+}
+
 export type ProjectManagementPageState = "loading" | "empty" | "error" | "forbidden";

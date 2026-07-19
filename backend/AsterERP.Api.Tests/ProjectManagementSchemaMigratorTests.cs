@@ -21,12 +21,13 @@ public sealed class ProjectManagementSchemaMigratorTests
         await migrator.MigrateAsync(db, CancellationToken.None);
 
         Assert.True(db.Ado.GetInt("SELECT COUNT(1) FROM sqlite_master WHERE type = 'table' AND name LIKE 'pm_%'") >= 15);
-        Assert.Equal(2, db.Ado.GetInt("SELECT VersionNo FROM pm_schema_versions WHERE ModuleKey = 'project-management'"));
+        Assert.Equal(5, db.Ado.GetInt("SELECT VersionNo FROM pm_schema_versions WHERE ModuleKey = 'project-management'"));
         Assert.Equal(1, db.Ado.GetInt("SELECT COUNT(1) FROM sqlite_master WHERE type = 'index' AND name = 'ux_pm_projects_code'"));
         Assert.Equal(1, db.Ado.GetInt("SELECT COUNT(1) FROM sqlite_master WHERE type = 'index' AND name = 'ux_pm_task_dependencies_pair'"));
         Assert.Equal(1, db.Ado.GetInt("SELECT COUNT(1) FROM sqlite_master WHERE type = 'index' AND name = 'ux_pm_tasks_sibling_sort_v2'"));
         Assert.Equal(1, db.Ado.GetInt("SELECT COUNT(1) FROM sqlite_master WHERE type = 'table' AND name = 'pm_task_attachments'"));
         Assert.Equal(1, db.Ado.GetInt("SELECT COUNT(1) FROM sqlite_master WHERE type = 'table' AND name = 'pm_im_conversation_links'"));
+        Assert.Equal(1, db.Ado.GetInt("SELECT COUNT(1) FROM sqlite_master WHERE type = 'table' AND name = 'pm_webhook_subscriptions'"));
         Assert.Equal(1, db.Ado.GetInt("SELECT COUNT(1) FROM sqlite_master WHERE type = 'index' AND name = 'ux_pm_im_conversation_link_scope'"));
     }
 

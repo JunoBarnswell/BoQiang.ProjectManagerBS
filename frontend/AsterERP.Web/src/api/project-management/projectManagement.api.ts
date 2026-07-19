@@ -79,6 +79,9 @@ import type {
   ProjectManagementSyncWatermark,
   ProjectManagementSyncHistoryDetail,
   ProjectManagementSyncHistoryPage,
+  ProjectManagementWebhookDelivery,
+  ProjectManagementWebhookSubscription,
+  ProjectManagementWebhookSubscriptionUpsertRequest,
 } from "./projectManagement.types";
 
 export function getProjectManagementProjects(
@@ -960,6 +963,26 @@ function buildProjectManagementLabelFilterQuery<TQuery extends { labelFilter?: P
   labelFilter.labelIds.forEach((labelId, index) => searchParams.append(`labelFilter.labelIds[${index}]`, labelId));
   if (labelFilter.matchMode) searchParams.set('labelFilter.matchMode', labelFilter.matchMode);
   return `?${searchParams.toString()}`;
+}
+
+export function getProjectManagementWebhookSubscriptions(projectId: string, signal?: AbortSignal): Promise<ApiEnvelope<ProjectManagementWebhookSubscription[]>> {
+  return httpClient.get<ProjectManagementWebhookSubscription[]>(`/project-management/webhooks/subscriptions${buildQueryString({ projectId })}`, undefined, signal);
+}
+
+export function saveProjectManagementWebhookSubscription(request: ProjectManagementWebhookSubscriptionUpsertRequest): Promise<ApiEnvelope<ProjectManagementWebhookSubscription>> {
+  return httpClient.put<ProjectManagementWebhookSubscription, ProjectManagementWebhookSubscriptionUpsertRequest>('/project-management/webhooks/subscriptions', request);
+}
+
+export function deleteProjectManagementWebhookSubscription(id: string): Promise<ApiEnvelope<null>> {
+  return httpClient.delete<null>(`/project-management/webhooks/subscriptions/${id}`);
+}
+
+export function getProjectManagementWebhookDeliveries(projectId: string, query: { pageIndex?: number; pageSize?: number }, signal?: AbortSignal): Promise<ApiEnvelope<{ total: number; items: ProjectManagementWebhookDelivery[] }>> {
+  return httpClient.get<{ total: number; items: ProjectManagementWebhookDelivery[] }>(`/project-management/webhooks/deliveries${buildQueryString({ projectId, ...query })}`, undefined, signal);
+}
+
+export function replayProjectManagementWebhookDelivery(eventId: string, reason?: string): Promise<ApiEnvelope<ProjectManagementWebhookDelivery>> {
+  return httpClient.post<ProjectManagementWebhookDelivery, { reason?: string }>(`/project-management/webhooks/deliveries/${eventId}/replay`, { reason });
 }
 
 
