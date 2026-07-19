@@ -11,7 +11,6 @@ namespace AsterERP.Api.Application.ProjectManagement;
 public sealed class ProjectManagementHomeQueryService(
     IWorkspaceDatabaseAccessor databaseAccessor,
     ICurrentUser currentUser,
-    IProjectManagementDisplayProjectionService displayProjection,
     ProjectManagementHomeHealthProjector healthProjector) : IProjectManagementHomeQueryService
 {
     public async Task<ProjectManagementHomeProjectsResponse> QueryProjectsAsync(ProjectManagementHomeQuery query, CancellationToken cancellationToken = default)
@@ -70,14 +69,24 @@ public sealed class ProjectManagementHomeQueryService(
         var db = databaseAccessor.GetProjectManagementDb();
         var tasks = await db.Queryable<ProjectManagementTaskEntity>()
             .Where(task => ids.Contains(task.ProjectId) && !task.IsDeleted)
-            .Select(task => new TaskProjection(task.ProjectId, task.Status, task.DueDate, task.BlockedReason))
+            .Select(task => new TaskProjection
+            {
+                ProjectId = task.ProjectId,
+                Status = task.Status,
+                DueDate = task.DueDate,
+                BlockedReason = task.BlockedReason
+            })
             .ToListAsync(cancellationToken);
         var milestones = await db.Queryable<ProjectManagementMilestoneEntity>()
             .Where(milestone => ids.Contains(milestone.ProjectId) && !milestone.IsDeleted)
             .OrderBy(milestone => milestone.DueDate, OrderByType.Asc)
-            .Select(milestone => new MilestoneProjection(milestone.ProjectId, milestone.Id, milestone.MilestoneName))
+            .Select(milestone => new MilestoneProjection
+            {
+                ProjectId = milestone.ProjectId,
+                Id = milestone.Id,
+                Name = milestone.MilestoneName
+            })
             .ToListAsync(cancellationToken);
-        var users = await displayProjection.ResolveAsync([], [], projects.Select(project => project.OwnerUserId), cancellationToken);
         var now = DateTime.UtcNow;
         return projects.Select(project =>
         {
@@ -86,7 +95,7 @@ public sealed class ProjectManagementHomeQueryService(
             var blocked = projectTasks.Count(task => task.Status == ProjectManagementDomainRules.TaskBlocked || !string.IsNullOrWhiteSpace(task.BlockedReason));
             var health = healthProjector.Project(project, open, blocked, now);
             var milestone = milestones.FirstOrDefault(item => item.ProjectId == project.Id);
-            var displayName = users.User(project.OwnerUserId);
+            var displayName = project.OwnerUserId;
             return new ProjectManagementHomeProjectItem(
                 project.Id, project.ProjectCode, project.ProjectName, project.Status, project.Priority, health,
                 project.OwnerUserId, displayName, project.StartDate, project.DueDate, milestone?.Id, milestone?.Name,
@@ -112,6 +121,18 @@ public sealed class ProjectManagementHomeQueryService(
     private static void RequirePlatformScope(ICurrentUser currentUser) => ProjectManagementPlatformScope.RequireSystemWorkspace(currentUser);
     private void RequirePlatformScope() => RequirePlatformScope(currentUser);
 
-    private sealed record TaskProjection(string ProjectId, string Status, DateTime? DueDate, string? BlockedReason);
-    private sealed record MilestoneProjection(string ProjectId, string Id, string Name);
+    public sealed class TaskProjection
+    {
+        public string ProjectId { get; set; } = string.Empty;
+        public string Status { get; set; } = string.Empty;
+        public DateTime? DueDate { get; set; }
+        public string? BlockedReason { get; set; }
+    }
+
+    public sealed class MilestoneProjection
+    {
+        public string ProjectId { get; set; } = string.Empty;
+        public string Id { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+    }
 }

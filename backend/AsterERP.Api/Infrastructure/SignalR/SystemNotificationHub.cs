@@ -30,7 +30,7 @@ public sealed class SystemNotificationHub(
             await Groups.AddToGroupAsync(Context.ConnectionId, BuildImPresenceGroupName(tenantId, appCode));
             await Groups.AddToGroupAsync(Context.ConnectionId, BuildProjectManagementNotificationUserGroupName(tenantId, appCode, userId));
             await Groups.AddToGroupAsync(Context.ConnectionId, BuildProjectManagementOperationUserGroupName(tenantId, appCode, userId));
-            await Groups.AddToGroupAsync(Context.ConnectionId, BuildProjectManagementHomeGroupName(tenantId, appCode));
+            await Groups.AddToGroupAsync(Context.ConnectionId, BuildProjectManagementHomeGroupName(tenantId, appCode, userId));
             var changed = await presenceService.ConnectedAsync(tenantId, appCode, userId, Context.ConnectionAborted);
             if (changed is not null)
             {
@@ -100,6 +100,6 @@ public sealed class SystemNotificationHub(
     public static string BuildProjectManagementOperationUserGroupName(string tenantId, string appCode, string userId) =>
         $"pm:operation:{tenantId.Trim()}:{appCode.Trim().ToUpperInvariant()}:{userId.Trim()}";
 
-    public static string BuildProjectManagementHomeGroupName(string tenantId, string appCode) =>
-        $"pm:home:{tenantId.Trim()}:{appCode.Trim().ToUpperInvariant()}";
+    public static string BuildProjectManagementHomeGroupName(string tenantId, string appCode, string userId) =>
+        $"pm:home:{tenantId.Trim()}:{appCode.Trim().ToUpperInvariant()}:{userId.Trim()}";
 }

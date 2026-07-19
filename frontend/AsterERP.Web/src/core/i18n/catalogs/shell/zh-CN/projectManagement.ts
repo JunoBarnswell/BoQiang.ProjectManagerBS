@@ -5,6 +5,7 @@ export const projectManagementMessagesZhCN = {
   'projectManagement.sidebar.workspace': '工作区',
   'projectManagement.sidebar.projects': '项目',
   'projectManagement.sidebar.views': '视图',
+  'projectManagement.sidebar.help': '帮助',
   'projectManagement.sidebar.expand': '展开项目管理菜单',
   'projectManagement.sidebar.collapse': '收起项目管理菜单',
   'projectManagement.sidebar.openMobile': '打开项目管理菜单',
@@ -81,5 +82,19 @@ export const projectManagementMessagesZhCN = {
   'projectManagement.home.health.OffTrack': '已偏离',
   'projectManagement.home.health.OnTrack': '正常',
   'projectManagement.home.health.NoUpdateExpected': '无需更新',
-  'projectManagement.home.unassigned': '未分配'
+  'projectManagement.home.unassigned': '未分配',
+  'projectManagement.home.validationRequired': '此字段为必填项',
+  'projectManagement.home.notFound': '项目不存在或当前账号无权访问',
+  'projectManagement.home.updateFailed': '项目更新失败，表单内容已保留。',
+  'projectManagement.home.overviewIssuesHint': 'Issues 将在现有任务工作区中继续管理。',
+  'projectManagement.home.openIssues': '打开 Issues',
+  'projectManagement.home.overviewEmptyDescription': '为这个项目添加说明。',
+  'projectManagement.home.latestUpdate': '最新更新',
+  'projectManagement.home.overviewEmptyUpdate': '还没有项目更新。',
+  'projectManagement.home.milestones': '里程碑',
+  'projectManagement.home.noMilestones': '暂无里程碑。',
+  'projectManagement.home.noActivity': '暂无活动。',
+  'projectManagement.home.properties': '属性',
+  'projectManagement.home.activity': '活动',
+  'projectManagement.home.updatedTime': '更新时间'
 } as const;

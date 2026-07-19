@@ -5,6 +5,7 @@ export const projectManagementMessagesEnUS = {
   'projectManagement.sidebar.workspace': 'Workspace',
   'projectManagement.sidebar.projects': 'Projects',
   'projectManagement.sidebar.views': 'Views',
+  'projectManagement.sidebar.help': 'Help',
   'projectManagement.sidebar.expand': 'Expand project management menu',
   'projectManagement.sidebar.collapse': 'Collapse project management menu',
   'projectManagement.sidebar.openMobile': 'Open project management menu',
@@ -81,5 +82,19 @@ export const projectManagementMessagesEnUS = {
   'projectManagement.home.health.OffTrack': 'Off track',
   'projectManagement.home.health.OnTrack': 'On track',
   'projectManagement.home.health.NoUpdateExpected': 'No update expected',
-  'projectManagement.home.unassigned': 'Unassigned'
+  'projectManagement.home.unassigned': 'Unassigned',
+  'projectManagement.home.validationRequired': 'This field is required',
+  'projectManagement.home.notFound': 'The project does not exist or you do not have access',
+  'projectManagement.home.updateFailed': 'Project update failed. The form has been kept.',
+  'projectManagement.home.overviewIssuesHint': 'Issues remain available in the existing task workspace.',
+  'projectManagement.home.openIssues': 'Open issues',
+  'projectManagement.home.overviewEmptyDescription': 'Add a description for this project.',
+  'projectManagement.home.latestUpdate': 'Latest update',
+  'projectManagement.home.overviewEmptyUpdate': 'No project update yet.',
+  'projectManagement.home.milestones': 'Milestones',
+  'projectManagement.home.noMilestones': 'No milestones yet.',
+  'projectManagement.home.noActivity': 'No activity yet.',
+  'projectManagement.home.properties': 'Properties',
+  'projectManagement.home.activity': 'Activity',
+  'projectManagement.home.updatedTime': 'Updated'
 } as const;

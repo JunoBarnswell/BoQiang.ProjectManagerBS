@@ -2,14 +2,13 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
 
 import { useI18n } from '../../../core/i18n/I18nProvider';
+import { PmContent, PmMobileTrigger, PmPage, ProjectManagementThemeProvider } from '../../../ui/project-management';
 import { ProjectManagementWorkbenchProvider, useProjectManagementWorkbenchContext } from '../state/ProjectManagementWorkbenchContext';
 import { parseProjectManagementWorkbenchRoute } from '../state/projectManagementWorkbenchNavigation';
 
 import { ProjectManagementWorkbenchSidebar } from './ProjectManagementWorkbenchSidebar';
-import './projectManagementWorkbench.css';
-
 export function ProjectManagementWorkbenchLayout({ children }: { children: ReactNode }) {
-  return <ProjectManagementWorkbenchProvider><ProjectManagementWorkbenchLayoutContent>{children}</ProjectManagementWorkbenchLayoutContent></ProjectManagementWorkbenchProvider>;
+  return <ProjectManagementThemeProvider><ProjectManagementWorkbenchProvider><ProjectManagementWorkbenchLayoutContent>{children}</ProjectManagementWorkbenchLayoutContent></ProjectManagementWorkbenchProvider></ProjectManagementThemeProvider>;
 }
 
 function ProjectManagementWorkbenchLayoutContent({ children }: { children: ReactNode }) {
@@ -23,13 +22,13 @@ function ProjectManagementWorkbenchLayoutContent({ children }: { children: React
     markPanelVisited(`${route.area}:${route.projectId ?? ''}:${route.projectSection ?? ''}`);
   }, [markPanelVisited, route.area, route.projectId, route.projectSection]);
 
-  return <section aria-label={translate('projectManagement.sidebar.ariaLabel')} className="responsive-page pm-workbench-page">
-    <div className="pm-workbench">
+  return <section aria-label={translate('projectManagement.sidebar.ariaLabel')} className="responsive-page">
+    <PmPage>
       <ProjectManagementWorkbenchSidebar activeArea={route.area} mobileOpen={mobileMenuOpen} onCloseMobile={() => setMobileMenuOpen(false)} />
-      <div className="pm-workbench__content">
-        <button aria-label={translate('projectManagement.sidebar.openMobile')} className="pm-workbench__mobile-trigger" onClick={() => setMobileMenuOpen(true)} type="button">☰</button>
+      <PmContent>
+        <PmMobileTrigger aria-label={translate('projectManagement.sidebar.openMobile')} onClick={() => setMobileMenuOpen(true)} type="button">☰</PmMobileTrigger>
         <div className="responsive-page-content">{children}</div>
-      </div>
-    </div>
+      </PmContent>
+    </PmPage>
   </section>;
 }

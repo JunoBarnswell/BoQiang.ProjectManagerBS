@@ -9,4 +9,11 @@ public sealed record ProjectManagementRealtimeEvent(
     string? EventId = null,
     long Sequence = 0,
     IReadOnlyList<string>? ChangedFields = null,
-    string? TraceId = null);
+    string? TraceId = null,
+    string? TenantId = null,
+    string? AppCode = null,
+    long AggregateVersion = 0,
+    long WorkspaceSequence = 0,
+    long ProjectSequence = 0,
+    IReadOnlyDictionary<string, object?>? Patch = null,
+    string? ClientMutationId = null);
