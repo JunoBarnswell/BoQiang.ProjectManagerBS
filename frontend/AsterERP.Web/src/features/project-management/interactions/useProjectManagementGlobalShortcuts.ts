@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 
 import type { ProjectManagementPreferredView } from '../state/projectManagementInteractionPreferences';
+
 import {
   resolveProjectManagementShortcut,
   shouldIgnoreProjectManagementShortcut,

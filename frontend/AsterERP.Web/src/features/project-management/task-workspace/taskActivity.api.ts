@@ -1,7 +1,7 @@
+import type { ProjectManagementActivityPage, ProjectManagementActivityQuery } from '../../../api/project-management/projectManagement.types';
+import { buildQueryString } from '../../../api/queryString';
 import type { ApiEnvelope } from '../../../core/http/apiEnvelope';
 import { httpClient } from '../../../core/http/httpClient';
-import { buildQueryString } from '../../../api/queryString';
-import type { ProjectManagementActivityPage, ProjectManagementActivityQuery } from '../../../api/project-management/projectManagement.types';
 
 export function getProjectManagementTaskActivities(
   taskId: string,

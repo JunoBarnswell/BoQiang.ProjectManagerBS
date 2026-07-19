@@ -1,6 +1,6 @@
 import type { ProjectManagementTaskListItem, ProjectManagementTaskQuery } from '../../../api/project-management/projectManagement.types';
-
 import type { TaskWorkspaceGroupBy } from '../state/taskWorkspaceState';
+
 import { groupTaskCards, type TaskCardGroup } from './taskCardProjectionModel';
 
 export const taskBoardStatuses = ['Backlog', 'Todo', 'InProgress', 'Blocked', 'Done', 'Cancelled'] as const;

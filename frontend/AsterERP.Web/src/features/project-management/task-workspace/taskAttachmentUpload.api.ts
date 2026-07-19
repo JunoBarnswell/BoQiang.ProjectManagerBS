@@ -1,8 +1,8 @@
+import type { ProjectManagementTaskAttachment } from '../../../api/project-management/projectManagement.types';
 import { appEnv } from '../../../core/config/env';
 import type { ApiEnvelope } from '../../../core/http/apiEnvelope';
 import { getAccessToken } from '../../../core/http/tokenStorage';
 import { getStoredWorkspace } from '../../../core/http/workspaceStorage';
-import type { ProjectManagementTaskAttachment } from '../../../api/project-management/projectManagement.types';
 
 export interface TaskAttachmentUploadOptions {
   onProgress?: (loaded: number, total: number) => void;

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { ProjectManagementTaskListItem } from '../../../api/project-management/projectManagement.types';
+
 import {
   buildVisibleTaskTreeRows,
   taskTreeAriaLevel,

@@ -1,5 +1,5 @@
-import type { SystemFileRecordDto } from '../../../api/system/files.types';
 import type { ProjectManagementTaskAttachment } from '../../../api/project-management/projectManagement.types';
+import type { SystemFileRecordDto } from '../../../api/system/files.types';
 import { FilePreviewDialog } from '../../../shared/file-preview/FilePreviewDialog';
 import { getFileExtension } from '../../../shared/file-preview/filePreviewUtils';
 import { useProjectManagementEscapeLayer } from '../interactions/ProjectManagementEscapeStack';

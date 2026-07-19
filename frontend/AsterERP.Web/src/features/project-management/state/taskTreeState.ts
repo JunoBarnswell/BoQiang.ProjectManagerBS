@@ -1,4 +1,5 @@
 import type { ProjectManagementTaskListItem } from '../../../api/project-management/projectManagement.types';
+
 import { projectCenterPreferenceKey } from './projectCenterPreferences';
 
 export type TaskTreeRow = ProjectManagementTaskListItem & { hasChildren?: boolean };

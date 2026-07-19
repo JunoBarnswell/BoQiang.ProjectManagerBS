@@ -1,9 +1,9 @@
-import { isHttpError } from '../../../core/http/httpError';
 import type {
   ProjectManagementTaskDetail,
   ProjectManagementTaskUpsertRequest,
   ProjectManagementTaskVersionConflictResponse,
 } from '../../../api/project-management/projectManagement.types';
+import { isHttpError } from '../../../core/http/httpError';
 
 export const taskDetailSections = [
   { key: 'basic', label: '基本信息' },

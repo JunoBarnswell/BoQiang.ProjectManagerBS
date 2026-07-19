@@ -6,9 +6,10 @@ import { getProjectManagementTasks } from '../../../api/project-management/proje
 import type { ProjectManagementTaskListItem, ProjectManagementTaskQuery } from '../../../api/project-management/projectManagement.types';
 import { queryKeys } from '../../../core/query/queryKeys';
 import type { ProjectManagementWorkspaceScope } from '../state/projectManagementWorkspaceScope';
+
+import { buildTaskBoardColumnQuery, taskBoardStatuses, type TaskBoardStatus } from './taskBoardProjectionModel';
 import { TaskCard, type TaskCardDragHandlers } from './TaskCardProjection';
 import { groupTaskCards, type TaskCardGroup } from './taskCardProjectionModel';
-import { buildTaskBoardColumnQuery, taskBoardStatuses, type TaskBoardStatus } from './taskBoardProjectionModel';
 import type { TaskGroupBy } from './taskMoveIntent';
 
 interface TaskBoardColumnProjectionProps {

@@ -5,9 +5,10 @@ import type { ProjectManagementTaskListItem } from '../../../api/project-managem
 import { useAuthStore } from '../../../core/state';
 import { PermissionButton } from '../../../shared/auth/PermissionButton';
 import { useProjectManagementWorkspaceScope } from '../state/projectManagementWorkspaceScope';
-import type { TaskGroupDropTarget } from './taskMoveIntent';
+
 import { groupTaskCards, getTaskCardRisks, type TaskCardGroupBy } from './taskCardProjectionModel';
 import { moveTaskGroup, orderTaskGroups, readTaskGroupPreference, taskGroupPreferenceKey, toggleTaskGroup, writeTaskGroupPreference, type TaskGroupPreference } from './taskGroupPreferenceModel';
+import type { TaskGroupDropTarget } from './taskMoveIntent';
 
 export interface TaskCardDragHandlers {
   draggedTaskId?: string;

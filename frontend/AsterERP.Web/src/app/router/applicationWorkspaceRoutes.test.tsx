@@ -3,8 +3,8 @@
 import { matchRoutes, type RouteObject } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
 
-import { buildRuntimePageViewPermission } from './RuntimePagePermissionRoute';
 import { platformRoutes } from './routes/platformRoutes';
+import { buildRuntimePageViewPermission } from './RuntimePagePermissionRoute';
 import { applicationWorkspaceRoutes, workspaceRoutes } from './workspaceRoutes';
 import { workspaceRoutes as targetApplicationWorkspaceRoutes } from './workspaceRoutes.target';
 

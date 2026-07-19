@@ -7,7 +7,7 @@ export type { LayoutProtocol } from '../layout/LayoutProtocol';
 export type DesignerLayoutProtocol = CanonicalLayoutProtocol;
 
 export interface DesignerNodeLayout {
-  /** Canonical persisted layout protocol sections. Legacy flat fields remain readable during migration. */
+  /** Canonical persisted layout protocol sections. Earlier flat fields remain readable during migration. */
   container?: CanonicalLayoutProtocol['container'];
   constraints?: Record<string, unknown>;
   display?: string;

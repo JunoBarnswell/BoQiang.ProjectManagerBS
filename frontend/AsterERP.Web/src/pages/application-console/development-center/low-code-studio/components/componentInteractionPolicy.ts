@@ -26,7 +26,7 @@ const FLOW_PARENT_LAYOUTS: readonly ComponentParentLayout[] = ['flex', 'grid'];
 const ABSOLUTE_PARENT_LAYOUTS: readonly ComponentParentLayout[] = ['free', 'constraints'];
 
 /**
- * Legacy manifests predate CMP-01. Their missing policy means no new type/layout
+ * Earlier manifests predate CMP-01. Their missing policy means no new type/layout
  * restriction, while their existing acceptsChildren flag remains authoritative.
  */
 export function resolveComponentInteractionPolicy(manifest: ComponentManifest): ComponentInteractionPolicy {

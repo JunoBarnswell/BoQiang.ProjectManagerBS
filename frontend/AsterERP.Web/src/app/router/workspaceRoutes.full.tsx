@@ -1,9 +1,9 @@
 import { lazy, type ReactNode } from 'react';
 import { Navigate, type RouteObject } from 'react-router-dom';
 
+import { projectManagementPlatformRoutePrefix, projectManagementRoutePaths } from '../../features/project-management/state/projectManagementPlatformRoutes';
 import { Page403 } from '../../shared/status/Page403';
 import { Page404 } from '../../shared/status/Page404';
-import { projectManagementPlatformRoutePrefix, projectManagementRoutePaths } from '../../features/project-management/state/projectManagementPlatformRoutes';
 import { routeMeta, type AppRouteMeta } from '../navigation/routeMeta';
 
 import { ApplicationDatabaseRequiredRoute } from './ApplicationDatabaseRequiredRoute';

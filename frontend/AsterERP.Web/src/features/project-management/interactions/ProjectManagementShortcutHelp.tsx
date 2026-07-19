@@ -1,5 +1,5 @@
-import { projectManagementShortcutHelpItems } from './projectManagementShortcutDefinitions';
 import { useProjectManagementEscapeLayer } from './ProjectManagementEscapeStack';
+import { projectManagementShortcutHelpItems } from './projectManagementShortcutDefinitions';
 
 interface ProjectManagementShortcutHelpProps {
   open: boolean;

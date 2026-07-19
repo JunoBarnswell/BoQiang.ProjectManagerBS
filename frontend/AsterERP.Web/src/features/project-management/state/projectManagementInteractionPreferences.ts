@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useAuthStore } from '../../../core/state';
+
 import { useProjectManagementWorkspaceScope } from './projectManagementWorkspaceScope';
 
 export type ProjectManagementPreferredView = 'tree' | 'list' | 'card' | 'board' | 'gantt' | 'calendar';

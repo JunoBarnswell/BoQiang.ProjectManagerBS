@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { ProjectManagementTaskBatchExecutionResult } from '../../../api/project-management/projectManagement.types';
+
 import { taskBatchResultToCsv } from './taskBatchExecutionModel';
 
 describe('taskBatchResultToCsv', () => {

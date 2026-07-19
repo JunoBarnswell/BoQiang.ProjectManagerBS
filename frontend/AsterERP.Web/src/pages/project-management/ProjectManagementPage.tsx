@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 import {
@@ -93,10 +93,10 @@ export function ProjectManagementPage() {
   useEffect(() => {
     setPreferences(readProjectCenterPreferences(preferenceKey));
   }, [preferenceKey]);
-  const updatePreferences = (next: ProjectCenterPreferences) => {
+  const updatePreferences = useCallback((next: ProjectCenterPreferences) => {
     setPreferences(next);
     writeProjectCenterPreferences(preferenceKey, next);
-  };
+  }, [preferenceKey]);
   const projectQuery = useMemo(() => ({
     pageIndex: collection === 'all' ? pageIndex : 1,
     pageSize: collection === 'all' ? pageSize : 200,
@@ -163,7 +163,10 @@ export function ProjectManagementPage() {
     updatePreferences(rememberRecentProject(preferences, projectId));
     navigate(toProjectManagementPlatformRoute(`projects/${encodeURIComponent(projectId)}/overview`));
   };
-  const toggleFavorite = (projectId: string) => updatePreferences(toggleProjectFavorite(preferences, projectId));
+  const toggleFavorite = useCallback(
+    (projectId: string) => updatePreferences(toggleProjectFavorite(preferences, projectId)),
+    [preferences, updatePreferences]
+  );
 
   const columns: DataTableColumn<ProjectManagementProject>[] = useMemo(() => [
     { key: 'favorite', title: '收藏', width: '72px', render: (row) => <button aria-label={(preferences.favoriteProjectIds.includes(row.id) ? '取消收藏' : '收藏') + '项目 ' + row.projectName} onClick={() => toggleFavorite(row.id)} type="button">{preferences.favoriteProjectIds.includes(row.id) ? '★' : '☆'}</button> },

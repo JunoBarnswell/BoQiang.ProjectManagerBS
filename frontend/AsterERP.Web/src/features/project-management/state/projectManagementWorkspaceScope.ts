@@ -29,6 +29,6 @@ export function useProjectManagementWorkspaceScope(): ProjectManagementWorkspace
 
   return useMemo(
     () => resolveProjectManagementWorkspaceScope(workspace),
-    [workspace?.appCode, workspace?.tenantId, workspace?.workspaceLevel],
+    [workspace],
   );
 }

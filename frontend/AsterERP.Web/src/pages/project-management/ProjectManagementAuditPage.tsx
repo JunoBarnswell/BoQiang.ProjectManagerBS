@@ -7,11 +7,11 @@ import type { ProjectManagementAuditQuery, ProjectManagementOperationQuery } fro
 import { isHttpError } from '../../core/http/httpError';
 import { projectManagementQueryKeys } from '../../core/query/projectManagementQueryKeys';
 import { useApiMutation } from '../../core/query/useApiMutation';
-import { useProjectManagementWorkspaceScope } from '../../features/project-management/state/projectManagementWorkspaceScope';
 import { useAuthStore } from '../../core/state/authStore';
+import { ProjectManagementOperationProgress } from '../../features/project-management/components/ProjectManagementOperationProgress';
 import { clearProjectManagementOperationTracking, getProjectManagementOperationTrackingKey, readProjectManagementOperationTracking, writeProjectManagementOperationTracking } from '../../features/project-management/state/projectManagementOperationTracking';
 import { toProjectManagementPlatformRoute } from '../../features/project-management/state/projectManagementPlatformRoutes';
-import { ProjectManagementOperationProgress } from '../../features/project-management/components/ProjectManagementOperationProgress';
+import { useProjectManagementWorkspaceScope } from '../../features/project-management/state/projectManagementWorkspaceScope';
 import { PermissionButton } from '../../shared/auth/PermissionButton';
 import { PermissionGuard } from '../../shared/auth/PermissionGuard';
 import { useMessage } from '../../shared/feedback/useMessage';
@@ -20,6 +20,7 @@ import { Page403 } from '../../shared/status/Page403';
 import { PageError } from '../../shared/status/PageError';
 import { PageLoading } from '../../shared/status/PageLoading';
 import { getErrorMessage } from '../../shared/utils/errorMessage';
+
 import { ProjectManagementAuditDetailDrawer } from './components/ProjectManagementAuditDetailDrawer';
 
 function optional(value: string): string | undefined {

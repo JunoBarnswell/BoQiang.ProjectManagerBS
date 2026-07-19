@@ -216,7 +216,7 @@ function applyTargetPlacement(
   columns: number
 ): DesignerDocumentNode['layout'] {
   // A canonical child layout describes the child itself. Switching its parent
-  // container must not overwrite that child-owned protocol. Legacy children
+  // container must not overwrite that child-owned protocol. Earlier children
   // still use the computed migration below so the boundary is upgraded once.
   if (readCanonicalProtocol(snapshot.originalLayout)) return snapshot.originalLayout;
   const sourceContainer = defaultContainerLayout(targetMode);

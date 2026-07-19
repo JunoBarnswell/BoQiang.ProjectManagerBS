@@ -1,14 +1,14 @@
 import { lazy, Suspense, type ReactNode } from 'react';
 import { Navigate, type RouteObject } from 'react-router-dom';
 
+import { projectManagementPlatformRoutePrefix, projectManagementRoutePaths } from '../../features/project-management/state/projectManagementPlatformRoutes';
 import { Page403 } from '../../shared/status/Page403';
 import { Page404 } from '../../shared/status/Page404';
 import { PageLoading } from '../../shared/status/PageLoading';
-import { projectManagementPlatformRoutePrefix, projectManagementRoutePaths } from '../../features/project-management/state/projectManagementPlatformRoutes';
 import { routeMeta } from '../navigation/routeMeta';
 
-import { RuntimePagePermissionRoute } from './RuntimePagePermissionRoute';
 import { projectManagementPlatformRoutes } from './routes/projectManagementPlatformRoutes';
+import { RuntimePagePermissionRoute } from './RuntimePagePermissionRoute';
 
 const DashboardPage = lazy(() => import('@/pages/dashboard/DashboardPage'));
 const RuntimePage = lazy(() => import('../../pages/runtime/RuntimePage').then((module) => ({ default: module.RuntimePage })));

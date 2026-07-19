@@ -3,14 +3,24 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { ProjectManagementOperationProgress } from './ProjectManagementOperationProgress';
+import type { ProjectManagementOperation } from '../../../api/project-management/projectManagement.types';
 import { HttpError } from '../../../core/http/httpError';
 
+import { ProjectManagementOperationProgress } from './ProjectManagementOperationProgress';
+
 const mutationState = vi.hoisted(() => ({ mutate: vi.fn() }));
+type OperationQueryState = {
+  data?: { data: ProjectManagementOperation };
+  error?: unknown;
+  isError: boolean;
+  isFetching: boolean;
+  isLoading: boolean;
+  refetch: ReturnType<typeof vi.fn>;
+};
 const queryState = vi.hoisted(() => ({ value: {
-  data: { data: { completedTime: undefined, errorMessage: undefined, id: 'operation-1', impactJson: '{}', isCancellationRequested: false, operationType: 'maintenance.workspace-validation', phase: 'ValidatingTasks', progressPercent: 40, startedTime: '2026-01-01T00:00:00Z', status: 'Running', traceId: 'trace-1' } },
+  data: { data: { actorUserId: 'user-a', completedTime: undefined, errorMessage: undefined, id: 'operation-1', impactJson: '{}', isCancellationRequested: false, operationType: 'maintenance.workspace-validation', phase: 'ValidatingTasks', progressPercent: 40, startedTime: '2026-01-01T00:00:00Z', status: 'Running', traceId: 'trace-1' } },
   isError: false, isFetching: false, isLoading: false, refetch: vi.fn()
-} as any }));
+} as OperationQueryState }));
 
 vi.mock('@tanstack/react-query', () => ({
   useQuery: () => queryState.value,
@@ -53,7 +63,7 @@ describe('ProjectManagementOperationProgress', () => {
 
   it('marks a refetching operation busy and clears completed tracking', () => {
     const onTrackingEnded = vi.fn();
-    queryState.value = { data: { data: { completedTime: '2026-01-01T00:01:00Z', errorMessage: undefined, id: 'operation-1', impactJson: '{}', isCancellationRequested: false, operationType: 'maintenance.workspace-validation', phase: 'Completed', progressPercent: 100, startedTime: '2026-01-01T00:00:00Z', status: 'Succeeded', traceId: 'trace-1' } }, isError: false, isFetching: true, isLoading: false, refetch: vi.fn() };
+    queryState.value = { data: { data: { actorUserId: 'user-a', completedTime: '2026-01-01T00:01:00Z', errorMessage: undefined, id: 'operation-1', impactJson: '{}', isCancellationRequested: false, operationType: 'maintenance.workspace-validation', phase: 'Completed', progressPercent: 100, startedTime: '2026-01-01T00:00:00Z', status: 'Succeeded', traceId: 'trace-1' } }, isError: false, isFetching: true, isLoading: false, refetch: vi.fn() };
     render(<ProjectManagementOperationProgress operationId="operation-1" onTrackingEnded={onTrackingEnded} />);
     expect(screen.getByLabelText('长任务进度').closest('section')?.getAttribute('aria-busy')).toBe('true');
     expect(onTrackingEnded).toHaveBeenCalledOnce();

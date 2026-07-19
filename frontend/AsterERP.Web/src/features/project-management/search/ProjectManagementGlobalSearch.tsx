@@ -12,10 +12,10 @@ import type {
   ProjectManagementSearchResponse,
 } from '../../../api/project-management/projectManagement.types';
 import { isHttpError } from '../../../core/http/httpError';
-import { normalizeProjectManagementTargetRoute } from '../state/projectManagementPlatformRoutes';
-import { useProjectManagementWorkspaceScope } from '../state/projectManagementWorkspaceScope';
 import { ProjectManagementEscapeStack, useProjectManagementEscapeLayer } from '../interactions/ProjectManagementEscapeStack';
 import { useProjectManagementGlobalShortcuts } from '../interactions/useProjectManagementGlobalShortcuts';
+import { normalizeProjectManagementTargetRoute } from '../state/projectManagementPlatformRoutes';
+import { useProjectManagementWorkspaceScope } from '../state/projectManagementWorkspaceScope';
 
 const DEBOUNCE_MS = 280;
 

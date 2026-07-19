@@ -13,8 +13,8 @@ import { PermissionGuard } from '../../../shared/auth/PermissionGuard';
 import { ProjectManagementMarkdownContent } from '../collaboration/projectManagementMarkdown';
 import { ProjectManagementMarkdownEditor } from '../collaboration/ProjectManagementMarkdownEditor';
 
-import { TaskWorkspaceReminderPanel } from './TaskWorkspaceReminderPanel';
 import type { TaskDetailSection } from './taskDetailDrawerModel';
+import { TaskWorkspaceReminderPanel } from './TaskWorkspaceReminderPanel';
 
 interface TaskWorkspaceSelectionPanelProps {
   activeSection?: TaskDetailSection;
