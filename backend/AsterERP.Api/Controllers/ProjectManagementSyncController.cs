@@ -48,10 +48,12 @@ public sealed class ProjectManagementSyncController(IProjectManagementSyncServic
         [FromForm] string currentPassword,
         [FromForm] bool confirmRisk,
         [FromForm] string conflictStrategy,
+        [FromForm] string? idempotencyKey,
+        [FromForm] string? deviceId,
         CancellationToken cancellationToken)
     {
         if (file is null || file.Length <= 0) return BadRequest("同步包不能为空");
         await using var stream = file.OpenReadStream();
-        return ApiOk(await service.ImportAsync(stream, new ProjectManagementSyncImportRequest(currentPassword, confirmRisk, conflictStrategy), cancellationToken));
+        return ApiOk(await service.ImportAsync(stream, new ProjectManagementSyncImportRequest(currentPassword, confirmRisk, conflictStrategy, idempotencyKey, deviceId), cancellationToken));
     }
 }

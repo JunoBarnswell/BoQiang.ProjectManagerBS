@@ -46,7 +46,8 @@ public sealed record ProjectManagementSyncImportRequest(
     string CurrentPassword,
     bool ConfirmRisk,
     string ConflictStrategy = "Skip",
-    string? IdempotencyKey = null);
+    string? IdempotencyKey = null,
+    string? DeviceId = null);
 
 public sealed record ProjectManagementSyncImportResponse(
     string PackageId,
@@ -81,4 +82,12 @@ public sealed record ProjectManagementSyncJournalItem(
     long VersionNo,
     string PayloadJson,
     string TraceId,
-    DateTime CreatedTime);
+    DateTime CreatedTime,
+    string Source = "User",
+    IReadOnlyList<ProjectManagementSyncFieldChange>? FieldChanges = null,
+    string? DeviceId = null);
+
+public sealed record ProjectManagementSyncFieldChange(
+    string Field,
+    string? Before,
+    string? After);

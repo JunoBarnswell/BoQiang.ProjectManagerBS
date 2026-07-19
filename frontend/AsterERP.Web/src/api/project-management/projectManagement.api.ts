@@ -764,7 +764,7 @@ export function previewProjectManagementSync(file: File): Promise<ApiEnvelope<Pr
 
 export function applyProjectManagementSync(
   file: File,
-  request: { currentPassword: string; confirmRisk: boolean; conflictStrategy: "Skip" | "Overwrite" | "Reject"; idempotencyKey?: string },
+  request: { currentPassword: string; confirmRisk: boolean; conflictStrategy: "Skip" | "Overwrite" | "Reject"; idempotencyKey?: string; deviceId?: string },
 ): Promise<ApiEnvelope<ProjectManagementSyncImportResponse>> {
   const formData = new FormData();
   formData.append("file", file);
@@ -772,6 +772,7 @@ export function applyProjectManagementSync(
   formData.append("confirmRisk", String(request.confirmRisk));
   formData.append("conflictStrategy", request.conflictStrategy);
   if (request.idempotencyKey?.trim()) formData.append("idempotencyKey", request.idempotencyKey.trim());
+  if (request.deviceId?.trim()) formData.append("deviceId", request.deviceId.trim());
   return httpClient.postForm<ProjectManagementSyncImportResponse>("/project-management/sync/apply", formData, {
     timeoutMs: 120_000,
   });

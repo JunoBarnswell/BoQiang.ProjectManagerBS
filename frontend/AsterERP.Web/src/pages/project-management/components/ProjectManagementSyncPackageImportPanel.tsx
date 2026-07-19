@@ -18,7 +18,11 @@ import { getErrorMessage } from '../../../shared/utils/errorMessage';
 type ConflictStrategy = 'Skip' | 'Overwrite' | 'Reject';
 type FailedAction = 'preview' | 'apply' | null;
 
-export function ProjectManagementSyncPackageImportPanel() {
+interface ProjectManagementSyncPackageImportPanelProps {
+  deviceId?: string;
+}
+
+export function ProjectManagementSyncPackageImportPanel({ deviceId }: ProjectManagementSyncPackageImportPanelProps) {
   const { hasPermission: canImport } = usePermission("project-management:sync:import");
   const message = useMessage();
   const [packageFile, setPackageFile] = useState<File | null>(null);
@@ -54,7 +58,7 @@ export function ProjectManagementSyncPackageImportPanel() {
   const applyMutation = useApiMutation({
     mutationFn: () => {
       if (!packageFile) throw new Error('请先选择同步包');
-      return applyProjectManagementSync(packageFile, { currentPassword: password, confirmRisk, conflictStrategy, idempotencyKey });
+      return applyProjectManagementSync(packageFile, { currentPassword: password, confirmRisk, conflictStrategy, idempotencyKey, deviceId });
     },
     onError: (error) => {
       const messageText = getErrorMessage(error, '同步包导入失败');

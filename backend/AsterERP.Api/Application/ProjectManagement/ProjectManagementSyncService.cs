@@ -27,6 +27,7 @@ public sealed class ProjectManagementSyncService(
     private const string SchemaVersion = "2";
     private const int MaxPackageBytes = 200 * 1024 * 1024;
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly SemaphoreSlim DeviceWriteLock = new(1, 1);
 
     public async Task<(byte[] Content, string FileName)> ExportAsync(ProjectManagementSyncExportRequest request, CancellationToken cancellationToken = default)
     {
@@ -123,7 +124,14 @@ public sealed class ProjectManagementSyncService(
             .OrderBy(item => item.SequenceNo, OrderByType.Asc)
             .Take(Math.Clamp(limit, 1, 1000))
             .ToListAsync(cancellationToken);
-        return rows.Select(item => new ProjectManagementSyncJournalItem(item.SequenceNo, item.AggregateType, item.AggregateId, item.ProjectId, item.Operation, item.VersionNo, item.PayloadJson, item.TraceId, item.CreatedTime)).ToList();
+        return rows.Select(item =>
+        {
+            var metadata = ProjectManagementSyncJournalWriter.ReadMetadata(item.PayloadJson);
+            return new ProjectManagementSyncJournalItem(
+                item.SequenceNo, item.AggregateType, item.AggregateId, item.ProjectId, item.Operation,
+                item.VersionNo, item.PayloadJson, item.TraceId, item.CreatedTime, metadata.Source,
+                metadata.FieldChanges, item.DeviceId);
+        }).ToList();
     }
 
     public async Task<ProjectManagementSyncWatermarkResponse> AcknowledgeAsync(ProjectManagementSyncAcknowledgeRequest request, CancellationToken cancellationToken = default)
@@ -133,13 +141,7 @@ public sealed class ProjectManagementSyncService(
         var current = await GetJournalSequenceNoAsync(await ResolveScopeAsync(null, cancellationToken), cancellationToken);
         if (request.SequenceNo > current) throw new ValidationException("不能确认尚未存在的同步水位");
         var db = databaseAccessor.GetCurrentDb();
-        var rows = await db.Queryable<ProjectManagementSyncDeviceEntity>().Where(item => item.TenantId == Tenant() && item.AppCode == App() && item.DeviceId == deviceId && !item.IsDeleted).Take(1).ToListAsync(cancellationToken);
-        var row = rows.FirstOrDefault() ?? new ProjectManagementSyncDeviceEntity { TenantId = Tenant(), AppCode = App(), DeviceId = deviceId, CreatedBy = UserId(), CreatedTime = DateTime.UtcNow };
-        row.LastAcknowledgedSequenceNo = Math.Max(row.LastAcknowledgedSequenceNo, request.SequenceNo);
-        row.LastSeenAt = DateTime.UtcNow;
-        row.UpdatedBy = UserId();
-        row.UpdatedTime = row.LastSeenAt;
-        if (rows.Count == 0) await db.Insertable(row).ExecuteCommandAsync(cancellationToken); else await db.Updateable(row).ExecuteCommandAsync(cancellationToken);
+        var row = await AdvanceAcknowledgedWatermarkAsync(db, deviceId, request.SequenceNo, cancellationToken);
         return new ProjectManagementSyncWatermarkResponse(deviceId, current, row.LastAcknowledgedSequenceNo, row.LastSeenAt);
     }
 
@@ -198,7 +200,9 @@ public sealed class ProjectManagementSyncService(
         var projectIds = await ResolveScopeAsync(manifest.ProjectId, cancellationToken);
         ValidateSnapshotScope(snapshot, projectIds);
         var idempotencyKey = NormalizeIdempotencyKey(request.IdempotencyKey, manifest.PackageId);
-        var replay = await FindImportResultAsync(manifest.PackageId, idempotencyKey, cancellationToken);
+        var replay = string.IsNullOrWhiteSpace(request.IdempotencyKey)
+            ? null
+            : await FindImportResultAsync(manifest.PackageId, idempotencyKey, cancellationToken);
         if (replay is not null) return replay with { Replayed = true };
         var conflicts = await DetectConflictsAsync(snapshot, projectIds, cancellationToken);
         if (strategy == "Reject" && conflicts.Count > 0) throw new ValidationException($"同步包存在 {conflicts.Count} 个冲突，已拒绝导入");
@@ -261,6 +265,8 @@ public sealed class ProjectManagementSyncService(
                 CreatedBy = UserId(),
                 CreatedTime = DateTime.UtcNow
             }).ExecuteCommandAsync(cancellationToken);
+            if (!string.IsNullOrWhiteSpace(request.DeviceId))
+                await AdvanceAcknowledgedWatermarkAsync(db, NormalizeRequiredDevice(request.DeviceId), manifest.JournalSequenceNo, cancellationToken);
             db.Ado.CommitTran();
             transactionStarted = false;
             if (operationId is not null && operationWriter is not null) await operationWriter.SucceedAsync(operationId, cancellationToken);
@@ -408,17 +414,59 @@ public sealed class ProjectManagementSyncService(
     {
         var normalized = NormalizeRequiredDevice(deviceId);
         var db = databaseAccessor.GetCurrentDb();
-        var rows = await db.Queryable<ProjectManagementSyncDeviceEntity>().Where(item => item.TenantId == Tenant() && item.AppCode == App() && item.DeviceId == normalized && !item.IsDeleted).Take(1).ToListAsync(cancellationToken);
-        var now = DateTime.UtcNow;
-        var row = rows.FirstOrDefault() ?? new ProjectManagementSyncDeviceEntity { TenantId = Tenant(), AppCode = App(), DeviceId = normalized, CreatedBy = UserId(), CreatedTime = now };
-        row.LastExportedSequenceNo = Math.Max(row.LastExportedSequenceNo, sequenceNo);
-        row.LastSeenAt = now;
-        row.UpdatedBy = UserId();
-        row.UpdatedTime = now;
-        if (rows.Count == 0) await db.Insertable(row).ExecuteCommandAsync(cancellationToken); else await db.Updateable(row).ExecuteCommandAsync(cancellationToken);
+        await DeviceWriteLock.WaitAsync(cancellationToken);
+        try
+        {
+            var rows = await db.Queryable<ProjectManagementSyncDeviceEntity>().Where(item => item.TenantId == Tenant() && item.AppCode == App() && item.DeviceId == normalized && !item.IsDeleted).Take(1).ToListAsync(cancellationToken);
+            var now = DateTime.UtcNow;
+            var row = rows.FirstOrDefault() ?? new ProjectManagementSyncDeviceEntity { TenantId = Tenant(), AppCode = App(), DeviceId = normalized, CreatedBy = UserId(), CreatedTime = now };
+            row.LastExportedSequenceNo = Math.Max(row.LastExportedSequenceNo, sequenceNo);
+            row.LastSeenAt = now;
+            row.UpdatedBy = UserId();
+            row.UpdatedTime = now;
+            if (rows.Count == 0) await db.Insertable(row).ExecuteCommandAsync(cancellationToken); else await db.Updateable(row).ExecuteCommandAsync(cancellationToken);
+        }
+        finally
+        {
+            DeviceWriteLock.Release();
+        }
     }
 
-    private static string NormalizeRequiredDevice(string value) => string.IsNullOrWhiteSpace(value) ? throw new ValidationException("设备标识不能为空") : value.Trim();
+    private async Task<ProjectManagementSyncDeviceEntity> AdvanceAcknowledgedWatermarkAsync(ISqlSugarClient db, string deviceId, long sequenceNo, CancellationToken cancellationToken)
+    {
+        await DeviceWriteLock.WaitAsync(cancellationToken);
+        try
+        {
+            var rows = await db.Queryable<ProjectManagementSyncDeviceEntity>()
+                .Where(item => item.TenantId == Tenant() && item.AppCode == App() && item.DeviceId == deviceId && !item.IsDeleted)
+                .Take(1).ToListAsync(cancellationToken);
+            var now = DateTime.UtcNow;
+            var row = rows.FirstOrDefault() ?? new ProjectManagementSyncDeviceEntity
+            {
+                TenantId = Tenant(), AppCode = App(), DeviceId = deviceId,
+                CreatedBy = UserId(), CreatedTime = now
+            };
+            row.LastAcknowledgedSequenceNo = Math.Max(row.LastAcknowledgedSequenceNo, sequenceNo);
+            row.LastSeenAt = now;
+            row.UpdatedBy = UserId();
+            row.UpdatedTime = now;
+            if (rows.Count == 0) await db.Insertable(row).ExecuteCommandAsync(cancellationToken);
+            else await db.Updateable(row).ExecuteCommandAsync(cancellationToken);
+            return row;
+        }
+        finally
+        {
+            DeviceWriteLock.Release();
+        }
+    }
+
+    private static string NormalizeRequiredDevice(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) throw new ValidationException("设备标识不能为空");
+        var normalized = value.Trim();
+        if (normalized.Length > 120 || normalized.Any(char.IsControl)) throw new ValidationException("设备标识长度或字符无效");
+        return normalized;
+    }
     private string UserId() => currentUser.GetAsterErpUserId()?.Trim() ?? throw new ValidationException("当前会话缺少用户", ErrorCodes.PermissionDenied);
 
     private async Task<IReadOnlyList<ProjectManagementSyncConflict>> DetectConflictsAsync(SyncSnapshot snapshot, IReadOnlyList<string> projectIds, CancellationToken cancellationToken)

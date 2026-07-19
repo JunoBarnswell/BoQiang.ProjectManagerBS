@@ -1,3 +1,5 @@
+using AsterERP.Contracts.ProjectManagement;
+
 namespace AsterERP.Api.Application.ProjectManagement;
 
 public sealed record ProjectManagementSyncJournalEvent(
@@ -11,4 +13,7 @@ public sealed record ProjectManagementSyncJournalEvent(
     string PayloadJson,
     string ActorUserId,
     string? DeviceId,
-    string TraceId);
+    string TraceId,
+    string Source = "User",
+    string? PreviousPayloadJson = null,
+    IReadOnlyList<ProjectManagementSyncFieldChange>? FieldChanges = null);

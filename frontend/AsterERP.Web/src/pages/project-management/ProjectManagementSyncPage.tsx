@@ -81,13 +81,13 @@ export function ProjectManagementSyncPage() {
     </section>
     <section className="mt-5">
       <div className="mb-2 flex items-center justify-between gap-2"><h2 className="font-semibold">变更记录</h2><span className="text-sm text-gray-500">{changes.length} 条（最多 200 条）</span></div>
-      {changes.length === 0 ? <div className="rounded-lg border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500">该水位之后暂无可见变更。</div> : <div className="overflow-x-auto rounded-lg border border-gray-200"><table className="min-w-full text-left text-sm"><thead className="bg-gray-50"><tr><th className="px-3 py-2">序号</th><th className="px-3 py-2">对象</th><th className="px-3 py-2">操作</th><th className="px-3 py-2">版本</th><th className="px-3 py-2">时间</th><th className="px-3 py-2">TraceId</th></tr></thead><tbody>{changes.map((item) => <tr className="border-t border-gray-100" key={item.sequenceNo}><td className="px-3 py-2">{item.sequenceNo}</td><td className="px-3 py-2">{item.aggregateType} / {item.aggregateId}</td><td className="px-3 py-2">{item.operation}</td><td className="px-3 py-2">{item.versionNo}</td><td className="whitespace-nowrap px-3 py-2">{new Date(item.createdTime).toLocaleString()}</td><td className="px-3 py-2 font-mono text-xs">{item.traceId}</td></tr>)}</tbody></table></div>}
+      {changes.length === 0 ? <div className="rounded-lg border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500">该水位之后暂无可见变更。</div> : <div className="overflow-x-auto rounded-lg border border-gray-200"><table className="min-w-full text-left text-sm"><thead className="bg-gray-50"><tr><th className="px-3 py-2">序号</th><th className="px-3 py-2">对象</th><th className="px-3 py-2">操作</th><th className="px-3 py-2">版本</th><th className="px-3 py-2">来源</th><th className="px-3 py-2">字段差异</th><th className="px-3 py-2">时间</th><th className="px-3 py-2">TraceId</th></tr></thead><tbody>{changes.map((item) => <tr className="border-t border-gray-100" key={item.sequenceNo}><td className="px-3 py-2">{item.sequenceNo}</td><td className="px-3 py-2">{item.aggregateType} / {item.aggregateId}</td><td className="px-3 py-2">{item.operation}</td><td className="px-3 py-2">{item.versionNo}</td><td className="px-3 py-2">{item.source}</td><td className="px-3 py-2">{item.fieldChanges?.length ? item.fieldChanges.map((change) => change.field).join('、') : '未提供'}</td><td className="whitespace-nowrap px-3 py-2">{new Date(item.createdTime).toLocaleString()}</td><td className="px-3 py-2 font-mono text-xs">{item.traceId}</td></tr>)}</tbody></table></div>}
     </section>
     </> : <section className="rounded-lg border border-gray-200 p-4 text-sm text-gray-600">你拥有同步导入权限，但没有同步导出权限；请前往数据空间选择并预览同步包。</section>}
     <section className={canExport ? 'mt-5 rounded-lg border border-gray-200 p-4' : 'rounded-lg border border-gray-200 p-4'}>
       <h2 className="font-semibold">导入同步包</h2>
       <p className="mt-1 text-sm text-gray-500">导入前会校验同步包、展示冲突预览，并要求当前密码和高风险确认。</p>
-      <ProjectManagementSyncPackageImportPanel />
+      <ProjectManagementSyncPackageImportPanel deviceId={submittedDeviceId} />
     </section>
   </ResponsivePage>;
 }

@@ -836,6 +836,9 @@ export interface ProjectManagementSyncJournalItem {
   payloadJson: string;
   traceId: string;
   createdTime: string;
+  source: string;
+  fieldChanges?: ProjectManagementSyncFieldChange[] | null;
+  deviceId?: string | null;
 }
 
 export interface ProjectManagementSyncConflict {
@@ -848,6 +851,12 @@ export interface ProjectManagementSyncConflict {
   localVersionNo?: number | null;
   remoteVersionNo?: number | null;
   recommendedStrategy: string;
+}
+
+export interface ProjectManagementSyncFieldChange {
+  field: string;
+  before?: string | null;
+  after?: string | null;
 }
 
 export interface ProjectManagementSyncPreviewResponse {
