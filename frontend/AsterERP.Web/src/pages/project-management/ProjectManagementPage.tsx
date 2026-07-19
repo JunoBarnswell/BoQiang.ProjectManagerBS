@@ -18,6 +18,7 @@ import { isHttpError } from '../../core/http/httpError';
 import { queryKeys } from '../../core/query/queryKeys';
 import { useApiMutation } from '../../core/query/useApiMutation';
 import { useAuthStore } from '../../core/state';
+import { registerWorkspaceTransitionBlocker } from '../../core/state/workspaceTransitionGuard';
 import '../../features/project-management/projectManagement.css';
 import { ProjectManagementPageStateView } from '../../features/project-management/components/ProjectManagementPageState';
 import { ProjectManagementReversibleCommandControls } from '../../features/project-management/components/ProjectManagementReversibleCommandControls';
@@ -119,6 +120,11 @@ export function ProjectManagementPage() {
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [formDirty]);
+
+  useEffect(() => registerWorkspaceTransitionBlocker('project-management-project-editor', {
+    isDirty: () => formDirty,
+    reason: '项目表单有未保存更改'
+  }), [formDirty]);
 
   const refresh = async () => {
     await queryClient.invalidateQueries({ queryKey: queryKeys.projectManagement.projects(scope, projectQuery) });

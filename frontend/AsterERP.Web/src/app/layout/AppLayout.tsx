@@ -7,11 +7,13 @@ import { findMenuNodeByPath } from '../../core/auth/menuUtils';
 import { getActiveTokenSlot, hasPlatformAccessToken } from '../../core/http/tokenStorage';
 import { useI18n } from '../../core/i18n/I18nProvider';
 import { useAuthStore, useMenuStore, useTabStore, useThemeStore, useWorkspaceStore } from '../../core/state';
+import { getWorkspaceTransitionBlockers } from '../../core/state/workspaceTransitionGuard';
 import { ImConversationDrawer } from '../../features/im/components/ImConversationDrawer';
 import { ImProvider } from '../../features/im/components/ImProvider';
 import { ImUnreadEntry } from '../../features/im/components/ImUnreadEntry';
 import { ProjectManagementImConversationTargetLink } from '../../features/project-management/im/ProjectManagementImConversationTargetLink';
 import { ProjectManagementNotificationEntry } from '../../features/project-management/notifications/ProjectManagementNotificationEntry';
+import { useConfirm } from '../../shared/feedback/useConfirm';
 import { resolveMenuLabel } from '../navigation/menuLabels';
 
 import { BasicLayout } from './BasicLayout';
@@ -20,6 +22,7 @@ export function AppLayout() {
   const { locale, setLocale, translate } = useI18n();
   const location = useLocation();
   const navigate = useNavigate();
+  const confirm = useConfirm();
   const openTabs = useTabStore((state) => state.openTabs);
   const addTab = useTabStore((state) => state.addTab);
   const closeTab = useTabStore((state) => state.closeTab);
@@ -171,8 +174,21 @@ export function AppLayout() {
           }
         : undefined}
       onSwitchSystem={() => {
-        clearWorkspace();
-        navigate('/workspace', { replace: true });
+        const blockers = getWorkspaceTransitionBlockers();
+        const switchWorkspace = () => {
+          clearWorkspace();
+          navigate('/workspace', { replace: true });
+        };
+        if (blockers.length === 0) {
+          switchWorkspace();
+          return;
+        }
+        confirm({
+          title: '切换工作区',
+          content: `当前存在${blockers.join('、')}。切换后未保存内容将被丢弃，是否继续？`,
+          confirmText: '继续切换',
+          onConfirm: switchWorkspace
+        });
       }}
       onRefreshCurrent={() => refreshTab(locationKey)}
       onTabClick={(path) => navigate(path)}
