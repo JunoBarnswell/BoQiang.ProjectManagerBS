@@ -65,6 +65,40 @@ public sealed class ProjectManagementAccessPolicy(IWorkspaceDatabaseAccessor dat
         throw new ValidationException("当前项目角色不能修改该任务", ErrorCodes.PermissionDenied);
     }
 
+    public async Task EnsureCanDeleteTaskAttachmentAsync(
+        string projectId,
+        string? assigneeUserId,
+        string? uploadedByUserId,
+        CancellationToken cancellationToken = default)
+    {
+        ProjectManagementPlatformScope.RequireSystemWorkspace(currentUser);
+        if (currentUser.IsAsterErpPlatformAdmin() || currentUser.HasAsterErpPermission("*")) return;
+
+        var userId = RequireUserId();
+        var tenantId = RequireTenantId();
+        var appCode = RequireAppCode();
+        var db = databaseAccessor.GetProjectManagementDb();
+        var project = await db.Queryable<ProjectManagementProjectEntity>()
+            .Where(item => item.Id == projectId && item.TenantId == tenantId && item.AppCode == appCode && !item.IsDeleted)
+            .Take(1)
+            .ToListAsync(cancellationToken);
+        if (string.Equals(project.FirstOrDefault()?.OwnerUserId, userId, StringComparison.OrdinalIgnoreCase)) return;
+
+        var member = (await db.Queryable<ProjectManagementProjectMemberEntity>()
+            .Where(item => item.ProjectId == projectId && item.TenantId == tenantId && item.AppCode == appCode && item.UserId == userId && item.IsActive && !item.IsDeleted)
+            .Take(1)
+            .ToListAsync(cancellationToken))
+            .FirstOrDefault();
+        if (member is null)
+            throw new ValidationException("当前用户无权删除该附件", ErrorCodes.PermissionDenied);
+
+        if (member.RoleCode is "Owner" or "Manager" ||
+            string.Equals(assigneeUserId, userId, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(uploadedByUserId, userId, StringComparison.OrdinalIgnoreCase)) return;
+
+        throw new ValidationException("当前用户无权删除该附件", ErrorCodes.PermissionDenied);
+    }
+
     /// <summary>
     /// 对单个任务（或新建任务的父节点）执行对象级写授权。Lead 的 ScopeRootTaskId 以当前持久化成员关系和任务树为准，
     /// 不缓存授权结果，因此成员范围调整后会立即生效。

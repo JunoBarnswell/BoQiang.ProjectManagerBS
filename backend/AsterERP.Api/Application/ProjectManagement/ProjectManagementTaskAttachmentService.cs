@@ -87,8 +87,9 @@ public sealed class ProjectManagementTaskAttachmentService(
     public async Task DeleteAsync(string taskId, string id, long versionNo, CancellationToken cancellationToken = default)
     {
         var task = await GetTaskAsync(taskId, cancellationToken);
-        await accessPolicy.EnsureCanManageTaskAsync(task.ProjectId, task.AssigneeUserId, cancellationToken);
+        await accessPolicy.EnsureCanViewProjectAsync(task.ProjectId, cancellationToken);
         var entity = await FindAsync(task.Id, id, cancellationToken);
+        await accessPolicy.EnsureCanDeleteTaskAttachmentAsync(task.ProjectId, task.AssigneeUserId, entity.UploadedByUserId, cancellationToken);
         if (entity.VersionNo != versionNo) throw new ValidationException("附件已被其他用户修改，请刷新后重试", ErrorCodes.ApplicationDevelopmentPageRevisionConflict);
         var before = AttachmentActivitySnapshot.From(entity);
         entity.IsDeleted = true; entity.DeletedBy = User(); entity.DeletedTime = DateTime.UtcNow; entity.UpdatedBy = User(); entity.UpdatedTime = entity.DeletedTime; entity.VersionNo++;

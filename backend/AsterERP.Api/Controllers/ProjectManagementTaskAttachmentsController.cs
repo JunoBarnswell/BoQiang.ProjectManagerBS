@@ -5,10 +5,10 @@ using Microsoft.AspNetCore.Mvc;
 namespace AsterERP.Api.Controllers;
 
 [Route("api/project-management/tasks/{taskId}/attachments")]
-[Permission(PermissionCodes.ProjectManagementTaskView)]
 public sealed class ProjectManagementTaskAttachmentsController(IProjectManagementTaskAttachmentService service) : BaseApiController
 {
     [HttpGet]
+    [Permission(PermissionCodes.ProjectManagementTaskView)]
     public async Task<IActionResult> QueryAsync(string taskId, CancellationToken cancellationToken) => ApiOk(await service.QueryAsync(taskId, cancellationToken));
 
     [HttpPost]
@@ -16,6 +16,7 @@ public sealed class ProjectManagementTaskAttachmentsController(IProjectManagemen
     public async Task<IActionResult> UploadAsync(string taskId, IFormFile file, CancellationToken cancellationToken) => ApiOk(await service.UploadAsync(taskId, file, cancellationToken));
 
     [HttpGet("{id}/download")]
+    [Permission(PermissionCodes.ProjectManagementTaskView)]
     public async Task<IActionResult> DownloadAsync(string taskId, string id, CancellationToken cancellationToken)
     {
         var result = await service.DownloadAsync(taskId, id, cancellationToken);
@@ -23,6 +24,7 @@ public sealed class ProjectManagementTaskAttachmentsController(IProjectManagemen
     }
 
     [HttpGet("{id}/preview")]
+    [Permission(PermissionCodes.ProjectManagementTaskView)]
     public async Task<IActionResult> PreviewAsync(string taskId, string id, CancellationToken cancellationToken)
     {
         var result = await service.PreviewAsync(taskId, id, cancellationToken);

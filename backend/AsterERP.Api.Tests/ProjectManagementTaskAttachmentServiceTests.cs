@@ -1,6 +1,8 @@
+using System.Reflection;
 using System.Security.Claims;
 using AsterERP.Api.Application.ProjectManagement;
 using AsterERP.Api.Application.System.Files;
+using AsterERP.Api.Controllers;
 using AsterERP.Api.Infrastructure.Abp.ProjectManagement;
 using AsterERP.Api.Infrastructure.Database;
 using AsterERP.Api.Infrastructure.Security;
@@ -85,8 +87,120 @@ public sealed class ProjectManagementTaskAttachmentServiceTests
         await Assert.ThrowsAsync<ValidationException>(() => service.PreviewAsync("task-a", "attachment-a"));
     }
 
-    private static ProjectManagementTaskAttachmentService CreateService(ISqlSugarClient db, ICurrentUser user, RecordingFileAppService fileApp) =>
-        new(new TestWorkspaceDatabaseAccessor(db), user, new RecordingFileStore(), new ProjectManagementAccessPolicy(new TestWorkspaceDatabaseAccessor(db), user), fileApp);
+    [Fact]
+    public async Task Attachment_delete_allows_uploader_assignee_owner_and_manager_but_not_unrelated_lead()
+    {
+        using var db = CreateDb("delete-policy");
+        await SeedTaskAsync(db);
+        await db.Updateable<ProjectManagementTaskEntity>()
+            .SetColumns(item => new ProjectManagementTaskEntity { AssigneeUserId = "assignee" })
+            .Where(item => item.Id == "task-a")
+            .ExecuteCommandAsync();
+        await db.Insertable(new[]
+        {
+            new ProjectManagementProjectMemberEntity { Id = "member-uploader", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", UserId = "uploader", RoleCode = "Member", IsActive = true },
+            new ProjectManagementProjectMemberEntity { Id = "member-assignee", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", UserId = "assignee", RoleCode = "Member", IsActive = true },
+            new ProjectManagementProjectMemberEntity { Id = "member-manager", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", UserId = "manager", RoleCode = "Manager", IsActive = true },
+            new ProjectManagementProjectMemberEntity { Id = "member-lead", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", UserId = "lead", RoleCode = "Lead", IsActive = true }
+        }).ExecuteCommandAsync();
+        await db.Insertable(new[]
+        {
+            Attachment("attachment-uploader", "uploader"),
+            Attachment("attachment-assignee", "other"),
+            Attachment("attachment-manager", "other"),
+            Attachment("attachment-owner", "other"),
+            Attachment("attachment-lead", "other")
+        }).ExecuteCommandAsync();
+
+        var activityWriter = new RecordingActivityWriter();
+        await CreateService(db, CreateUser("uploader"), new RecordingFileAppService(null), activityWriter: activityWriter).DeleteAsync("task-a", "attachment-uploader", 1);
+        await CreateService(db, CreateUser("assignee"), new RecordingFileAppService(null), activityWriter: activityWriter).DeleteAsync("task-a", "attachment-assignee", 1);
+        await CreateService(db, CreateUser("manager"), new RecordingFileAppService(null), activityWriter: activityWriter).DeleteAsync("task-a", "attachment-manager", 1);
+        await CreateService(db, CreateUser("operator"), new RecordingFileAppService(null), activityWriter: activityWriter).DeleteAsync("task-a", "attachment-owner", 1);
+        await Assert.ThrowsAsync<ValidationException>(() => CreateService(db, CreateUser("lead"), new RecordingFileAppService(null), activityWriter: activityWriter).DeleteAsync("task-a", "attachment-lead", 1));
+
+        Assert.Equal(4, activityWriter.Events.Count(item => item.ActivityType == "attachment.deleted"));
+        Assert.True(await db.Queryable<ProjectManagementTaskAttachmentEntity>().Where(item => item.Id == "attachment-lead").AnyAsync(item => !item.IsDeleted));
+    }
+
+    [Fact]
+    public async Task Attachment_upload_activity_failure_compensates_storage_and_database()
+    {
+        using var db = CreateDb("upload-audit-failure");
+        await SeedTaskAsync(db);
+        var activityWriter = new RecordingActivityWriter { Fail = true };
+        var fileStore = new RecordingFileStore();
+        var service = CreateService(db, CreateUser(), new RecordingFileAppService(null), fileStore, activityWriter);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.UploadAsync("task-a", CreateFormFile("证据.txt")));
+
+        Assert.Contains("file-upload", fileStore.DeletedFileIds);
+        Assert.Empty(await db.Queryable<ProjectManagementTaskAttachmentEntity>().Where(item => item.TaskId == "task-a").ToListAsync());
+    }
+
+    [Fact]
+    public async Task Attachment_access_is_revoked_after_member_removal_and_file_id_cannot_cross_task_boundary()
+    {
+        using var db = CreateDb("access-revocation");
+        await SeedTaskAsync(db);
+        await db.Insertable(new ProjectManagementProjectMemberEntity
+        {
+            Id = "member-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", UserId = "member-a", RoleCode = "Member", IsActive = true
+        }).ExecuteCommandAsync();
+        await db.Insertable(Attachment("attachment-a", "member-a")).ExecuteCommandAsync();
+        var fileStore = new RecordingFileStore();
+        var memberService = CreateService(db, CreateUser("member-a"), new RecordingFileAppService(null), fileStore);
+
+        Assert.Single(await memberService.QueryAsync("task-a"));
+        await db.Updateable<ProjectManagementProjectMemberEntity>()
+            .SetColumns(item => new ProjectManagementProjectMemberEntity { IsActive = false, IsDeleted = true })
+            .Where(item => item.Id == "member-a")
+            .ExecuteCommandAsync();
+        await Assert.ThrowsAsync<ValidationException>(() => memberService.DownloadAsync("task-a", "attachment-a"));
+        Assert.Equal(0, fileStore.OpenReadCount);
+
+        await db.Insertable(new ProjectManagementProjectEntity { Id = "project-b", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "B", ProjectName = "B", OwnerUserId = "operator" }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementTaskEntity { Id = "task-b", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-b", TaskCode = "B-1", Title = "B" }).ExecuteCommandAsync();
+        await db.Insertable(Attachment("attachment-b", "operator", "task-b", "project-b", "file-b")).ExecuteCommandAsync();
+        await Assert.ThrowsAsync<NotFoundException>(() => CreateService(db, CreateUser(), new RecordingFileAppService(null)).DownloadAsync("task-a", "attachment-b"));
+    }
+
+    [Fact]
+    public void Attachment_controller_splits_view_and_manage_permissions_by_operation()
+    {
+        var controller = typeof(ProjectManagementTaskAttachmentsController);
+        Assert.Empty(controller.GetCustomAttributes<PermissionAttribute>());
+        Assert.Equal(PermissionCodes.ProjectManagementTaskView, controller.GetMethod(nameof(ProjectManagementTaskAttachmentsController.QueryAsync))?.GetCustomAttributes<PermissionAttribute>().Single().Code);
+        Assert.Equal(PermissionCodes.ProjectManagementAttachmentManage, controller.GetMethod(nameof(ProjectManagementTaskAttachmentsController.UploadAsync))?.GetCustomAttributes<PermissionAttribute>().Single().Code);
+        Assert.Equal(PermissionCodes.ProjectManagementTaskView, controller.GetMethod(nameof(ProjectManagementTaskAttachmentsController.DownloadAsync))?.GetCustomAttributes<PermissionAttribute>().Single().Code);
+        Assert.Equal(PermissionCodes.ProjectManagementTaskView, controller.GetMethod(nameof(ProjectManagementTaskAttachmentsController.PreviewAsync))?.GetCustomAttributes<PermissionAttribute>().Single().Code);
+        Assert.Equal(PermissionCodes.ProjectManagementAttachmentManage, controller.GetMethod(nameof(ProjectManagementTaskAttachmentsController.DeleteAsync))?.GetCustomAttributes<PermissionAttribute>().Single().Code);
+    }
+
+    private static ProjectManagementTaskAttachmentService CreateService(
+        ISqlSugarClient db,
+        ICurrentUser user,
+        RecordingFileAppService fileApp,
+        RecordingFileStore? fileStore = null,
+        RecordingActivityWriter? activityWriter = null) =>
+        new(new TestWorkspaceDatabaseAccessor(db), user, fileStore ?? new RecordingFileStore(), new ProjectManagementAccessPolicy(new TestWorkspaceDatabaseAccessor(db), user), fileApp, null, activityWriter);
+
+    private static ProjectManagementTaskAttachmentEntity Attachment(string id, string uploadedByUserId, string taskId = "task-a", string projectId = "project-a", string? fileId = null) => new()
+    {
+        Id = id, TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = projectId, TaskId = taskId,
+        FileId = fileId ?? $"file-{id}", FileName = $"{id}.txt", ContentType = "text/plain", FileSize = 8,
+        UploadedByUserId = uploadedByUserId, CreatedBy = uploadedByUserId, CreatedTime = DateTime.UtcNow
+    };
+
+    private static FormFile CreateFormFile(string fileName)
+    {
+        var stream = new MemoryStream([1, 2, 3]);
+        return new FormFile(stream, 0, stream.Length, "file", fileName)
+        {
+            Headers = new HeaderDictionary(),
+            ContentType = "text/plain"
+        };
+    }
 
     private static async Task SeedTaskAsync(ISqlSugarClient db)
     {
@@ -116,12 +230,36 @@ public sealed class ProjectManagementTaskAttachmentServiceTests
 
     private sealed class RecordingFileStore : IProjectManagementFileStore
     {
+        public List<string> DeletedFileIds { get; } = [];
+        public int OpenReadCount { get; private set; }
+
         public Task<ProjectManagementStoredFile> StoreAsync(IFormFile file, ProjectManagementFileUploadContext context, CancellationToken cancellationToken = default) =>
             Task.FromResult(new ProjectManagementStoredFile("file-upload", file.FileName, file.Length));
 
-        public Task<Stream> OpenReadAsync(string fileId, CancellationToken cancellationToken = default) => Task.FromResult<Stream>(new MemoryStream([1, 2, 3]));
+        public Task<Stream> OpenReadAsync(string fileId, CancellationToken cancellationToken = default)
+        {
+            OpenReadCount++;
+            return Task.FromResult<Stream>(new MemoryStream([1, 2, 3]));
+        }
 
-        public Task DeleteAsync(string fileId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task DeleteAsync(string fileId, CancellationToken cancellationToken = default)
+        {
+            DeletedFileIds.Add(fileId);
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class RecordingActivityWriter : IProjectManagementActivityWriter
+    {
+        public List<ProjectManagementActivityEvent> Events { get; } = [];
+        public bool Fail { get; set; }
+
+        public Task AppendAsync(ProjectManagementActivityEvent activity, CancellationToken cancellationToken = default)
+        {
+            if (Fail) throw new InvalidOperationException("activity writer failed");
+            Events.Add(activity);
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class RecordingFileAppService(FilePreviewStreamResult? preview) : IFileAppService
