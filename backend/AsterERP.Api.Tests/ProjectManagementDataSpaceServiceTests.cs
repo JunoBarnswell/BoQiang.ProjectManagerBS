@@ -56,6 +56,22 @@ public sealed class ProjectManagementDataSpaceServiceTests
         Assert.Equal(2, summary.AttachmentCount);
     }
 
+    [Fact]
+    public async Task Summary_returns_an_actionable_unavailable_state_when_the_data_space_cannot_be_opened()
+    {
+        var currentUser = CreateUser("administrator", isPlatformAdministrator: true);
+        using var cache = new MemoryCache(new MemoryCacheOptions());
+        var service = new ProjectManagementDataSpaceService(new UnavailableWorkspaceDatabaseAccessor(), currentUser, cache);
+
+        var summary = await service.GetSummaryAsync();
+
+        Assert.Equal("Unavailable", summary.DatabaseStatus);
+        Assert.Equal(0, summary.ProjectCount);
+        Assert.Equal("/platform/project-management/operations", summary.HandlingRoute);
+        Assert.Contains("不可达", summary.StatusMessage);
+        Assert.Empty(summary.AvailableDataSpaces);
+    }
+
     private static SqlSugarClient CreateDatabase()
     {
         var db = new SqlSugarClient(new ConnectionConfig
@@ -121,5 +137,22 @@ public sealed class ProjectManagementDataSpaceServiceTests
         public Task<ISqlSugarClient> GetCurrentDbAsync(CancellationToken cancellationToken = default) => Task.FromResult(db);
         public Task<ISqlSugarClient> GetProjectManagementDbAsync(CancellationToken cancellationToken = default) => Task.FromResult(db);
         public Task<ISqlSugarClient> RequireApplicationDbAsync(CancellationToken cancellationToken = default) => Task.FromResult(db);
+    }
+
+    private sealed class UnavailableWorkspaceDatabaseAccessor : IWorkspaceDatabaseAccessor
+    {
+        public ISqlSugarClient MainDb => throw new InvalidOperationException("database unavailable");
+
+        public ISqlSugarClient GetCurrentDb() => throw new InvalidOperationException("database unavailable");
+
+        public ISqlSugarClient GetProjectManagementDb() => throw new InvalidOperationException("database unavailable");
+
+        public ISqlSugarClient RequireApplicationDb() => throw new InvalidOperationException("database unavailable");
+
+        public Task<ISqlSugarClient> GetCurrentDbAsync(CancellationToken cancellationToken = default) => throw new InvalidOperationException("database unavailable");
+
+        public Task<ISqlSugarClient> GetProjectManagementDbAsync(CancellationToken cancellationToken = default) => throw new InvalidOperationException("database unavailable");
+
+        public Task<ISqlSugarClient> RequireApplicationDbAsync(CancellationToken cancellationToken = default) => throw new InvalidOperationException("database unavailable");
     }
 }
