@@ -1,0 +1,93 @@
+name: Low-code quality gates
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      enforce_external_evidence:
+        description: Validate the controlled external evidence package
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  deterministic-gates:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/AsterERP.Web/package-lock.json
+      - name: Restore
+        run: |
+          dotnet restore AsterERP.sln
+          npm ci --prefix frontend/AsterERP.Web
+      - name: Build backend
+        run: dotnet build AsterERP.sln --configuration Release --no-restore
+      - name: Latest-only source scan
+        shell: pwsh
+        run: pwsh -File docs/low-code-refactor/scan-latest-only.ps1
+      - name: Backend latest, migration, runtime, and local Data Studio gates
+        run: >-
+          dotnet test backend/AsterERP.Api.Tests/AsterERP.Api.Tests.csproj
+          --configuration Release --no-restore
+          --filter "FullyQualifiedName~LatestOnlySourceScanGuardTests|FullyQualifiedName~LatestOnlyDeletionAcceptanceTests|FullyQualifiedName~ApplicationDevelopmentMigrationTests|FullyQualifiedName~RuntimePageSchemaServiceTests|FullyQualifiedName~ApplicationDataStudioSqliteIntegrationTests"
+      - name: Frontend typecheck
+        run: npm run typecheck --prefix frontend/AsterERP.Web
+      - name: Frontend lint
+        run: npm run lint --prefix frontend/AsterERP.Web
+      - name: Frontend runtime, security, monitoring, golden, and Page Studio gates
+        run: >-
+          npm test --prefix frontend/AsterERP.Web -- --run
+          src/runtime-kernel/RuntimeArtifactIntegrity.test.ts
+          src/runtime-kernel/RuntimeMonitoringContract.test.ts
+          src/shared/runtime/designer-document/runtimeSecurityPolicy.test.ts
+          scripts/goldenCases.test.ts
+          src/pages/application-console/development-center/low-code-studio/testing/acceptance/pageStudioHao111Acceptance.test.ts
+          src/pages/application-console/development-center/low-code-studio/testing/acceptance/pageStudioHao112Acceptance.test.ts
+          src/pages/application-console/development-center/low-code-studio/testing/acceptance/pageStudioHao113Acceptance.test.ts
+      - name: Frontend production build
+        run: npm run build --prefix frontend/AsterERP.Web
+      - name: External provider preflight
+        if: ${{ vars.RUN_EXTERNAL_PROVIDER_GATES == 'true' }}
+        run: >-
+          dotnet test backend/AsterERP.Api.Tests/AsterERP.Api.Tests.csproj
+          --configuration Release --no-restore
+          --filter FullyQualifiedName~ApplicationDataSourceExternalProviderGateTests
+      - name: Upload deterministic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: low-code-deterministic
+          path: artifacts/
+          if-no-files-found: ignore
+
+  controlled-external-evidence:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.enforce_external_evidence }}
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate low-code-external evidence contract
+        shell: pwsh
+        run: |
+          $contract = Get-Content docs/low-code-refactor/external-evidence-contract.json -Raw | ConvertFrom-Json
+          $requiredEvidenceFiles = @($contract.requiredFiles)
+          $requiredFields = @($contract.requiredFields)
+          foreach ($fileName in $requiredEvidenceFiles) {
+            $path = Join-Path artifacts/low-code-external $fileName
+            if (-not (Test-Path -LiteralPath $path)) { throw "Missing external evidence: $fileName" }
+            $record = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
+            foreach ($field in $requiredFields) {
+              if ([string]::IsNullOrWhiteSpace([string]$record.$field)) { throw "$fileName is missing $field" }
+            }
+            if ($record.status -ne 'Pass' -or -not [string]::IsNullOrWhiteSpace([string]$record.blockedReason)) {
+              throw "$fileName is not release-pass evidence"
+            }
+          }
