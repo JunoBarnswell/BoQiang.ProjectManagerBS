@@ -878,10 +878,16 @@ export interface ProjectManagementSyncPreviewResponse {
   isCompatible: boolean;
   warnings: string[];
   conflicts: string[];
-  mode: 'Full' | 'Incremental' | string;
+  mode: 'Full' | 'Incremental' | 'History' | string;
   sinceSequenceNo: number;
   conflictDetails?: ProjectManagementSyncConflict[] | null;
   alreadyImported: boolean;
+  signatureAlgorithm: string;
+  signatureKeyId: string;
+  signatureValid: boolean;
+  journalCount: number;
+  hasChanges: boolean;
+  attachmentEntryCount: number;
 }
 
 export interface ProjectManagementSyncImportResponse {

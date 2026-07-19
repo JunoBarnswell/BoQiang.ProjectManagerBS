@@ -18,7 +18,7 @@ type ExportStatus =
 export function ProjectManagementSyncPackageExportPanel({ deviceId }: ProjectManagementSyncPackageExportPanelProps) {
   const message = useMessage();
   const [includeAttachments, setIncludeAttachments] = useState(false);
-  const [mode, setMode] = useState<'Full' | 'Incremental'>('Full');
+  const [mode, setMode] = useState<'Full' | 'Incremental' | 'History'>('Full');
   const [sinceSequenceNo, setSinceSequenceNo] = useState('0');
   const [status, setStatus] = useState<ExportStatus>(null);
   const exportMutation = useApiMutation({
@@ -54,10 +54,11 @@ export function ProjectManagementSyncPackageExportPanel({ deviceId }: ProjectMan
             aria-label="同步导出模式"
             value={mode}
             disabled={exportMutation.isPending}
-            onChange={(event) => setMode(event.target.value as 'Full' | 'Incremental')}
+            onChange={(event) => setMode(event.target.value as 'Full' | 'Incremental' | 'History')}
           >
             <option value="Full">全量快照</option>
             <option value="Incremental">增量变更</option>
+            <option value="History">全部历史 Journal</option>
           </select>
         </label>
         {mode === 'Incremental' ? (
@@ -93,7 +94,7 @@ export function ProjectManagementSyncPackageExportPanel({ deviceId }: ProjectMan
         </PermissionButton>
       </div>
       <p className="text-sm text-gray-500">
-        导出范围由服务端按当前工作区与项目访问权限确定。增量模式按起始水位读取同步日志；包含附件会增加包体积。
+        导出范围由服务端按当前工作区与项目访问权限确定。增量模式按起始水位读取变更，全部历史模式只导出完整 Journal；附件按内容哈希去重并写入 Manifest。
       </p>
       {exportMutation.isPending ? (
         <div className="rounded border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900" role="status">

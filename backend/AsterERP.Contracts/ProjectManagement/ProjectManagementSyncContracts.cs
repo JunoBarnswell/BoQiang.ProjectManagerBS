@@ -40,7 +40,13 @@ public sealed record ProjectManagementSyncPreviewResponse(
     string Mode = "Full",
     long SinceSequenceNo = 0,
     IReadOnlyList<ProjectManagementSyncConflict>? ConflictDetails = null,
-    bool AlreadyImported = false);
+    bool AlreadyImported = false,
+    string SignatureAlgorithm = "",
+    string SignatureKeyId = "",
+    bool SignatureValid = false,
+    int JournalCount = 0,
+    bool HasChanges = true,
+    int AttachmentEntryCount = 0);
 
 public sealed record ProjectManagementSyncImportRequest(
     string CurrentPassword,

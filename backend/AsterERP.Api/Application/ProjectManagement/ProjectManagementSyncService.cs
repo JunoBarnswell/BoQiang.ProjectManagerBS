@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using AsterERP.Api.Infrastructure.Database;
 using AsterERP.Api.Infrastructure.Security;
@@ -24,7 +25,7 @@ public sealed class ProjectManagementSyncService(
     IProjectManagementOperationWriter? operationWriter = null) : IProjectManagementSyncService
 {
     private const string Magic = "BQSYNC";
-    private const string SchemaVersion = "2";
+    private const string SchemaVersion = "3";
     private const int MaxPackageBytes = 200 * 1024 * 1024;
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private static readonly SemaphoreSlim DeviceWriteLock = new(1, 1);
@@ -34,12 +35,14 @@ public sealed class ProjectManagementSyncService(
         var mode = NormalizeMode(request.Mode);
         var projectIds = await ResolveScopeAsync(request.ProjectId, cancellationToken);
         var sinceSequenceNo = await ResolveSinceSequenceNoAsync(request, mode, cancellationToken);
+        var journals = await LoadJournalItemsAsync(projectIds, mode == "Incremental" ? sinceSequenceNo : 0, cancellationToken);
         var snapshot = mode == "Incremental"
-            ? await LoadIncrementalSnapshotAsync(projectIds, sinceSequenceNo, cancellationToken)
-            : await LoadSnapshotAsync(projectIds, cancellationToken);
+            ? LoadIncrementalSnapshot(journals)
+            : mode == "History" ? new SyncSnapshot() : await LoadSnapshotAsync(projectIds, cancellationToken);
         var journalSequenceNo = await GetJournalSequenceNoAsync(projectIds, cancellationToken);
         var packageId = Guid.NewGuid().ToString("N");
         var data = JsonSerializer.SerializeToUtf8Bytes(snapshot, JsonOptions);
+        var journalData = JsonSerializer.SerializeToUtf8Bytes(journals, JsonOptions);
         var manifest = new SyncManifest
         {
             Magic = Magic,
@@ -55,6 +58,9 @@ public sealed class ProjectManagementSyncService(
             SinceSequenceNo = sinceSequenceNo,
             DataEntry = "data.json",
             DataSha256 = Sha256(data),
+            JournalEntry = "journal.json",
+            JournalSha256 = Sha256(journalData),
+            JournalCount = journals.Count,
             ProjectCount = snapshot.Projects.Count,
             MemberCount = snapshot.Members.Count,
             MilestoneCount = snapshot.Milestones.Count,
@@ -65,6 +71,8 @@ public sealed class ProjectManagementSyncService(
         };
 
         var attachmentChecksums = new Dictionary<string, string>(StringComparer.Ordinal);
+        var attachmentEntries = new Dictionary<string, string>(StringComparer.Ordinal);
+        var attachmentPaths = new Dictionary<string, byte[]>(StringComparer.Ordinal);
         if (request.IncludeAttachments)
         {
             if (fileStore is null) throw new ValidationException("文件服务不可用，无法导出附件");
@@ -74,25 +82,32 @@ public sealed class ProjectManagementSyncService(
                 await using var attachmentBytes = new MemoryStream();
                 await sourceStream.CopyToAsync(attachmentBytes, cancellationToken);
                 if (attachmentBytes.Length > MaxPackageBytes) throw new ValidationException("单个附件超过同步包限制", ErrorCodes.SchemaOrPayloadTooLarge);
-                attachmentChecksums[attachment.FileId] = Sha256(attachmentBytes.ToArray());
+                var bytes = attachmentBytes.ToArray();
+                var checksum = Sha256(bytes).ToLowerInvariant();
+                var entryName = $"attachments/{checksum}";
+                attachmentChecksums[attachment.FileId] = checksum;
+                attachmentEntries[attachment.FileId] = entryName;
+                attachmentPaths.TryAdd(entryName, bytes);
             }
         }
 
         manifest.AttachmentSha256 = attachmentChecksums;
+        manifest.AttachmentEntries = attachmentEntries;
+        manifest.SignatureAlgorithm = "HMAC-SHA256";
+        manifest.SignatureKeyId = "workspace-derived-v1";
+        manifest.Signature = ComputeManifestSignature(manifest);
         await using var finalizedOutput = new MemoryStream();
         using (var finalizedArchive = new ZipArchive(finalizedOutput, ZipArchiveMode.Create, leaveOpen: true))
         {
             await WriteEntryAsync(finalizedArchive, "manifest.json", JsonSerializer.SerializeToUtf8Bytes(manifest, JsonOptions), cancellationToken);
             await WriteEntryAsync(finalizedArchive, "data.json", data, cancellationToken);
+            await WriteEntryAsync(finalizedArchive, "journal.json", journalData, cancellationToken);
             if (request.IncludeAttachments)
             {
                 if (fileStore is null) throw new ValidationException("文件服务不可用，无法导出附件");
-                foreach (var attachment in snapshot.Attachments)
+                foreach (var attachment in attachmentPaths)
                 {
-                    await using var sourceStream = await fileStore.OpenReadAsync(attachment.FileId, cancellationToken);
-                    await using var attachmentBytes = new MemoryStream();
-                    await sourceStream.CopyToAsync(attachmentBytes, cancellationToken);
-                    await WriteEntryAsync(finalizedArchive, $"attachments/{attachment.FileId}", attachmentBytes.ToArray(), cancellationToken);
+                    await WriteEntryAsync(finalizedArchive, attachment.Key, attachment.Value, cancellationToken);
                 }
             }
         }
@@ -120,7 +135,7 @@ public sealed class ProjectManagementSyncService(
         if (sinceSequenceNo < 0) throw new ValidationException("同步起始水位不能为负数");
         var projectIds = await ResolveScopeAsync(projectId, cancellationToken);
         var rows = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementSyncJournalEntity>()
-            .Where(item => item.SequenceNo > sinceSequenceNo && (item.ProjectId == null || projectIds.Contains(item.ProjectId)) && !item.IsDeleted)
+            .Where(item => item.TenantId == Tenant() && item.AppCode == App() && item.SequenceNo > sinceSequenceNo && (item.ProjectId == null || projectIds.Contains(item.ProjectId)) && !item.IsDeleted)
             .OrderBy(item => item.SequenceNo, OrderByType.Asc)
             .Take(Math.Clamp(limit, 1, 1000))
             .ToListAsync(cancellationToken);
@@ -171,22 +186,33 @@ public sealed class ProjectManagementSyncService(
         if (!string.Equals(manifest.TenantId, Tenant(), StringComparison.Ordinal) || !string.Equals(manifest.AppCode, App(), StringComparison.OrdinalIgnoreCase))
             throw new ValidationException("同步包工作区与当前工作区不匹配", ErrorCodes.PermissionDenied);
 
+        ValidateManifestEntries(manifest, archive);
+        var signatureValid = VerifyManifestSignature(manifest);
         var data = await ReadBytesAsync(archive, manifest.DataEntry, cancellationToken);
         if (!string.Equals(Sha256(data), manifest.DataSha256, StringComparison.OrdinalIgnoreCase))
             throw new ValidationException("同步包校验和不匹配");
+        var journalData = await ReadBytesAsync(archive, manifest.JournalEntry, cancellationToken);
+        if (!string.Equals(Sha256(journalData), manifest.JournalSha256, StringComparison.OrdinalIgnoreCase))
+            throw new ValidationException("同步包 Journal 校验和不匹配");
         var snapshot = JsonSerializer.Deserialize<SyncSnapshot>(data, JsonOptions) ?? throw new ValidationException("同步包数据为空");
+        var journalRecords = JsonSerializer.Deserialize<List<ProjectManagementSyncJournalItem>>(journalData, JsonOptions) ?? [];
+        if (journalRecords.Count != manifest.JournalCount) throw new ValidationException("同步包 Journal 数量与 Manifest 不一致");
         var projectIds = await ResolveScopeAsync(manifest.ProjectId, cancellationToken);
         var conflicts = await DetectConflictsAsync(snapshot, projectIds, cancellationToken);
         var replay = await FindImportResultAsync(manifest.PackageId, null, cancellationToken);
         var warnings = manifest.IncludeAttachments && snapshot.Attachments.Count > 0
             ? new[] { "附件内容将在导入阶段按 FileId 和校验和校验" }
-            : Array.Empty<string>();
+            : manifest.Mode == "Incremental" && manifest.JournalCount == 0
+                ? new[] { "起始水位后没有变更，已生成空同步包" }
+                : Array.Empty<string>();
         return new ProjectManagementSyncPreviewResponse(
             manifest.PackageId, manifest.SchemaVersion, manifest.TenantId, manifest.AppCode,
             manifest.ExportedAt, manifest.SourceDeviceId, snapshot.Projects.Count, snapshot.Members.Count,
             snapshot.Milestones.Count, snapshot.Tasks.Count, snapshot.Dependencies.Count, snapshot.Attachments.Count,
-            packageBytes.LongLength, Sha256(packageBytes), manifest.JournalSequenceNo, true, warnings,
-            conflicts.Select(FormatConflict).ToList(), manifest.Mode, manifest.SinceSequenceNo, conflicts, replay is not null);
+            packageBytes.LongLength, Sha256(packageBytes), manifest.JournalSequenceNo, signatureValid, warnings,
+            conflicts.Select(FormatConflict).ToList(), manifest.Mode, manifest.SinceSequenceNo, conflicts, replay is not null,
+            manifest.SignatureAlgorithm, manifest.SignatureKeyId, signatureValid, manifest.JournalCount,
+            manifest.JournalCount > 0 || manifest.Mode == "Full", manifest.AttachmentEntries.Count);
         }
     }
 
@@ -329,13 +355,27 @@ public sealed class ProjectManagementSyncService(
         };
     }
 
-    private async Task<SyncSnapshot> LoadIncrementalSnapshotAsync(IReadOnlyList<string> projectIds, long sinceSequenceNo, CancellationToken cancellationToken)
+    private async Task<IReadOnlyList<ProjectManagementSyncJournalItem>> LoadJournalItemsAsync(
+        IReadOnlyList<string> projectIds,
+        long sinceSequenceNo,
+        CancellationToken cancellationToken)
     {
         var journals = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementSyncJournalEntity>()
-            .Where(item => item.SequenceNo > sinceSequenceNo && (item.ProjectId == null || projectIds.Contains(item.ProjectId)) && !item.IsDeleted)
+            .Where(item => item.TenantId == Tenant() && item.AppCode == App() && item.SequenceNo > sinceSequenceNo && (item.ProjectId == null || projectIds.Contains(item.ProjectId)) && !item.IsDeleted)
             .OrderBy(item => item.SequenceNo, OrderByType.Asc)
-            .Take(10000)
             .ToListAsync(cancellationToken);
+        return journals.Select(item =>
+        {
+            var metadata = ProjectManagementSyncJournalWriter.ReadMetadata(item.PayloadJson);
+            return new ProjectManagementSyncJournalItem(
+                item.SequenceNo, item.AggregateType, item.AggregateId, item.ProjectId, item.Operation,
+                item.VersionNo, item.PayloadJson, item.TraceId, item.CreatedTime, metadata.Source,
+                metadata.FieldChanges, item.DeviceId);
+        }).ToList();
+    }
+
+    private static SyncSnapshot LoadIncrementalSnapshot(IReadOnlyList<ProjectManagementSyncJournalItem> journals)
+    {
         var snapshot = new SyncSnapshot();
         foreach (var journal in journals)
         {
@@ -363,7 +403,7 @@ public sealed class ProjectManagementSyncService(
 
     private async Task<long> ResolveSinceSequenceNoAsync(ProjectManagementSyncExportRequest request, string mode, CancellationToken cancellationToken)
     {
-        if (mode == "Full") return 0;
+        if (mode is "Full" or "History") return 0;
         if (request.SinceSequenceNo < 0) throw new ValidationException("增量同步起始水位不能为负数");
         if (request.SinceSequenceNo > 0) return request.SinceSequenceNo;
         if (string.IsNullOrWhiteSpace(request.DeviceId)) throw new ValidationException("增量导出必须提供设备标识或起始水位");
@@ -414,6 +454,11 @@ public sealed class ProjectManagementSyncService(
     {
         var normalized = NormalizeRequiredDevice(deviceId);
         var db = databaseAccessor.GetCurrentDb();
+        await ProjectManagementMutationTransaction.RunAsync(db, () => TouchDeviceCoreAsync(db, normalized, sequenceNo, cancellationToken));
+    }
+
+    private async Task TouchDeviceCoreAsync(ISqlSugarClient db, string normalized, long sequenceNo, CancellationToken cancellationToken)
+    {
         await DeviceWriteLock.WaitAsync(cancellationToken);
         try
         {
@@ -639,7 +684,9 @@ public sealed class ProjectManagementSyncService(
         {
             var exists = await db.Queryable<ProjectManagementTaskAttachmentEntity>().Where(item => item.Id == source.Id && !item.IsDeleted).AnyAsync(cancellationToken);
             if (exists && strategy == "Skip") { onSkip(); continue; }
-            var entry = archive.GetEntry($"attachments/{source.FileId}") ?? throw new ValidationException($"同步包缺少附件 {source.FileId}");
+            var entryName = manifest.AttachmentEntries.GetValueOrDefault(source.FileId)
+                ?? throw new ValidationException($"同步包缺少附件 {source.FileId}");
+            var entry = archive.GetEntry(entryName) ?? throw new ValidationException($"同步包缺少附件 {source.FileId}");
             await using var stream = entry.Open();
             await using var attachmentBytes = new MemoryStream();
             await stream.CopyToAsync(attachmentBytes, cancellationToken);
@@ -700,9 +747,16 @@ public sealed class ProjectManagementSyncService(
             if (manifest.SinceSequenceNo < 0) throw new ValidationException("同步包起始水位不能为负数");
             if (!string.Equals(manifest.TenantId, Tenant(), StringComparison.Ordinal) || !string.Equals(manifest.AppCode, App(), StringComparison.OrdinalIgnoreCase))
                 throw new ValidationException("同步包工作区与当前工作区不匹配", ErrorCodes.PermissionDenied);
+            ValidateManifestEntries(manifest, archive);
+            if (!VerifyManifestSignature(manifest)) throw new ValidationException("同步包签名校验失败");
             var data = await ReadBytesAsync(archive, manifest.DataEntry, cancellationToken);
             if (!string.Equals(Sha256(data), manifest.DataSha256, StringComparison.OrdinalIgnoreCase)) throw new ValidationException("同步包校验和不匹配");
-            return (manifest, JsonSerializer.Deserialize<SyncSnapshot>(data, JsonOptions) ?? throw new ValidationException("同步包数据为空"), bytes);
+            var journalData = await ReadBytesAsync(archive, manifest.JournalEntry, cancellationToken);
+            if (!string.Equals(Sha256(journalData), manifest.JournalSha256, StringComparison.OrdinalIgnoreCase)) throw new ValidationException("同步包 Journal 校验和不匹配");
+            var snapshot = JsonSerializer.Deserialize<SyncSnapshot>(data, JsonOptions) ?? throw new ValidationException("同步包数据为空");
+            var journalRecords = JsonSerializer.Deserialize<List<ProjectManagementSyncJournalItem>>(journalData, JsonOptions) ?? [];
+            if (journalRecords.Count != manifest.JournalCount) throw new ValidationException("同步包 Journal 数量与 Manifest 不一致");
+            return (manifest, snapshot, bytes);
         }
     }
 
@@ -712,8 +766,25 @@ public sealed class ProjectManagementSyncService(
         foreach (var entry in archive.Entries)
         {
             var path = entry.FullName.Replace('\\', '/');
-            if (path.StartsWith('/') || path.Contains("../", StringComparison.Ordinal) || path.Contains("..\\", StringComparison.Ordinal))
+            if (path.StartsWith('/') || path.Contains(":", StringComparison.Ordinal) || path.Contains("../", StringComparison.Ordinal) || path.Contains("..\\", StringComparison.Ordinal) || path.Split('/').Any(string.IsNullOrWhiteSpace))
                 throw new ValidationException("同步包包含非法路径");
+        }
+    }
+
+    private static void ValidateManifestEntries(SyncManifest manifest, ZipArchive archive)
+    {
+        if (!string.Equals(manifest.DataEntry, "data.json", StringComparison.Ordinal) || !string.Equals(manifest.JournalEntry, "journal.json", StringComparison.Ordinal))
+            throw new ValidationException("同步包 Manifest 数据入口无效");
+        if (manifest.AttachmentSha256.Count != manifest.AttachmentEntries.Count)
+            throw new ValidationException("同步包附件校验和与归档入口数量不一致");
+        var paths = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var mapping in manifest.AttachmentEntries)
+        {
+            var entry = mapping.Value.Replace('\\', '/');
+            var checksum = manifest.AttachmentSha256.GetValueOrDefault(mapping.Key);
+            if (!entry.StartsWith("attachments/", StringComparison.Ordinal) || entry.Length != "attachments/".Length + 64 || !entry.Skip("attachments/".Length).All(Uri.IsHexDigit) || !string.Equals(checksum, entry["attachments/".Length..], StringComparison.OrdinalIgnoreCase))
+                throw new ValidationException("同步包附件入口或校验和无效");
+            if (!paths.Add(entry) || archive.GetEntry(entry) is null) throw new ValidationException("同步包附件入口重复或缺失");
         }
     }
 
@@ -737,6 +808,34 @@ public sealed class ProjectManagementSyncService(
     }
 
     private static string Sha256(byte[] content) => Convert.ToHexString(SHA256.HashData(content));
+    private string ComputeManifestSignature(SyncManifest manifest)
+    {
+        var original = manifest.Signature;
+        manifest.Signature = string.Empty;
+        var canonical = JsonSerializer.SerializeToUtf8Bytes(manifest, JsonOptions);
+        manifest.Signature = original;
+        var key = Encoding.UTF8.GetBytes($"{Tenant()}:{App()}:project-management-bqsync-v1");
+        return Convert.ToHexString(HMACSHA256.HashData(key, canonical));
+    }
+
+    private bool VerifyManifestSignature(SyncManifest manifest)
+    {
+        if (!string.Equals(manifest.SignatureAlgorithm, "HMAC-SHA256", StringComparison.Ordinal) ||
+            !string.Equals(manifest.SignatureKeyId, "workspace-derived-v1", StringComparison.Ordinal) ||
+            string.IsNullOrWhiteSpace(manifest.Signature)) return false;
+        try
+        {
+            var expected = ComputeManifestSignature(manifest);
+            var actualBytes = Convert.FromHexString(manifest.Signature);
+            var expectedBytes = Convert.FromHexString(expected);
+            return CryptographicOperations.FixedTimeEquals(actualBytes, expectedBytes);
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+    }
+
     private string Tenant() => currentUser.GetAsterErpTenantId()?.Trim() ?? throw new ValidationException("当前会话缺少租户", ErrorCodes.PermissionDenied);
     private string App() => currentUser.GetAsterErpAppCode()?.Trim().ToUpperInvariant() ?? throw new ValidationException("当前会话缺少应用", ErrorCodes.PermissionDenied);
     private static string? Normalize(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
@@ -745,7 +844,8 @@ public sealed class ProjectManagementSyncService(
     {
         null or "" or "Full" => "Full",
         "Incremental" => "Incremental",
-        _ => throw new ValidationException("同步导出模式必须是 Full 或 Incremental")
+        "History" => "History",
+        _ => throw new ValidationException("同步导出模式必须是 Full、Incremental 或 History")
     };
 
     private sealed class SyncManifest
@@ -763,6 +863,12 @@ public sealed class ProjectManagementSyncService(
         public long SinceSequenceNo { get; set; }
         public string DataEntry { get; set; } = string.Empty;
         public string DataSha256 { get; set; } = string.Empty;
+        public string JournalEntry { get; set; } = string.Empty;
+        public string JournalSha256 { get; set; } = string.Empty;
+        public int JournalCount { get; set; }
+        public string SignatureAlgorithm { get; set; } = string.Empty;
+        public string SignatureKeyId { get; set; } = string.Empty;
+        public string Signature { get; set; } = string.Empty;
         public int ProjectCount { get; set; }
         public int MemberCount { get; set; }
         public int MilestoneCount { get; set; }
@@ -771,6 +877,7 @@ public sealed class ProjectManagementSyncService(
         public int AttachmentCount { get; set; }
         public long JournalSequenceNo { get; set; }
         public Dictionary<string, string> AttachmentSha256 { get; set; } = new(StringComparer.Ordinal);
+        public Dictionary<string, string> AttachmentEntries { get; set; } = new(StringComparer.Ordinal);
     }
 
     private sealed record SyncImportImpact(

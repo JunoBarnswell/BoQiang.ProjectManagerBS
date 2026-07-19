@@ -748,7 +748,7 @@ export function exportProjectManagementSync(request: {
   projectId?: string;
   includeAttachments?: boolean;
   deviceId?: string;
-  mode?: 'Full' | 'Incremental';
+  mode?: 'Full' | 'Incremental' | 'History';
   sinceSequenceNo?: number;
 }): Promise<{ blob: Blob; fileName: string }> {
   return httpClient.postDownloadBlob("/project-management/sync/export", request, { timeoutMs: 120_000 });
