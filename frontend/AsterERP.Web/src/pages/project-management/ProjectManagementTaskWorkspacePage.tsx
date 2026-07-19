@@ -60,11 +60,12 @@ import { queryKeys } from '../../core/query/queryKeys';
 import { useApiMutation } from '../../core/query/useApiMutation';
 import { useOpenImConversation } from '../../features/im/hooks/useOpenImConversation';
 import '../../features/project-management/projectManagement.css';
-import { useProjectManagementRealtimeConnection } from '../../features/project-management/hooks/useProjectManagementRealtimeConnection';
+import { useProjectManagementViewSyncRealtime } from '../../features/project-management/hooks/useProjectManagementViewSyncRealtime';
 import { useTaskWorkspaceUrlState } from '../../features/project-management/hooks/useTaskWorkspaceUrlState';
 import { useProjectManagementWorkspaceScope } from '../../features/project-management/state/projectManagementWorkspaceScope';
 import { toProjectManagementPlatformRoute } from '../../features/project-management/state/projectManagementPlatformRoutes';
 import { taskWorkspaceStateToQuery, taskWorkspaceStateToSavedView } from '../../features/project-management/state/taskWorkspaceState';
+import { preserveProjectManagementViewSyncState, serializeProjectManagementViewSyncState } from '../../features/project-management/view-sync/projectManagementViewSyncModel';
 import { ProjectManagementEscapeStack } from '../../features/project-management/interactions/ProjectManagementEscapeStack';
 import { ProjectManagementShortcutHelp } from '../../features/project-management/interactions/ProjectManagementShortcutHelp';
 import { ProjectManagementUnsavedChangesDialog } from '../../features/project-management/interactions/ProjectManagementUnsavedChangesDialog';
@@ -210,8 +211,30 @@ export function ProjectManagementTaskWorkspacePage() {
     setOptimisticBoardStatuses({});
     setOptimisticBoardProgress({});
   }, []);
+  const clearDeletedTaskSelection = useCallback((taskId: string) => {
+    setSelectedTaskIds((current) => {
+      if (!current.has(taskId)) return current;
+      const next = new Set(current);
+      next.delete(taskId);
+      return next;
+    });
+    if (state.selectedTaskId !== taskId) return;
+    setCreating(false);
+    setTaskConflict(null);
+    setForm(emptyForm);
+    taskFormBaseline.current = JSON.stringify(emptyForm);
+    setState({ selectedTaskId: undefined }, { replace: true });
+  }, [setState, state.selectedTaskId]);
 
-  useProjectManagementRealtimeConnection('/hubs/system-notification', scope, projectId, scope.isAvailable && Boolean(projectId), clearOptimisticBoardState);
+  useProjectManagementViewSyncRealtime({
+    enabled: scope.isAvailable && Boolean(projectId),
+    onReconciled: clearOptimisticBoardState,
+    onSelectedTaskDeleted: clearDeletedTaskSelection,
+    projectId,
+    selectedTaskId: state.selectedTaskId,
+    signalRUrl: '/hubs/system-notification',
+    scope,
+  });
 
   const tasksQuery = useQuery({
     enabled: scope.isAvailable && Boolean(projectId),
@@ -778,7 +801,12 @@ export function ProjectManagementTaskWorkspacePage() {
     switchView: (view) => {
       const path = view === 'tree' ? 'tasks' : view;
       interactionPreferences.setPreferredView(view);
-      navigate(toProjectManagementPlatformRoute(`projects/${projectId}/${path}`));
+      const nextState = preserveProjectManagementViewSyncState(state, view);
+      const nextSearch = serializeProjectManagementViewSyncState(nextState).toString();
+      navigate({
+        pathname: toProjectManagementPlatformRoute(`projects/${projectId}/${path}`),
+        search: nextSearch ? `?${nextSearch}` : '',
+      });
     },
   }, {
     canExecute: (shortcut) => shortcut === 'newTask' || shortcut === 'newChildTask'
