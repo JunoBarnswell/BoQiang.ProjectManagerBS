@@ -27,7 +27,8 @@ public sealed class ProjectManagementSyncService(
     IProjectManagementMaintenanceLock? maintenanceLock = null,
     IProjectManagementOperationWriter? operationWriter = null,
     IProjectManagementSearchService? searchService = null,
-    IProjectManagementNotificationPublisher? notificationPublisher = null) : IProjectManagementSyncService
+    IProjectManagementNotificationPublisher? notificationPublisher = null,
+    IProjectManagementSyncHistoryService? syncHistoryService = null) : IProjectManagementSyncService
 {
     private const string Magic = "BQSYNC";
     private const string SchemaVersion = "3";
@@ -127,6 +128,8 @@ public sealed class ProjectManagementSyncService(
         if (!string.IsNullOrWhiteSpace(request.DeviceId))
             await TouchDeviceAsync(request.DeviceId, journalSequenceNo, cancellationToken);
         await PublishExportCompletedAsync(packageId, mode, projectIds, cancellationToken);
+        await RecordHistoryAsync("Export", packageId, Tenant(), App(), Normalize(request.DeviceId), "Succeeded",
+            new ProjectManagementSyncImportResponse(packageId, mode, 0, 0, 0, snapshot.Attachments.Count, [], Guid.NewGuid().ToString("N"), TraceId(), false), null, null, cancellationToken);
         return (content, $"project-management-{DateTime.UtcNow:yyyyMMddHHmmss}-{packageId}.bqsync");
     }
 
@@ -169,6 +172,32 @@ public sealed class ProjectManagementSyncService(
         var db = databaseAccessor.GetCurrentDb();
         var row = await AdvanceAcknowledgedWatermarkAsync(db, deviceId, request.SequenceNo, cancellationToken);
         return new ProjectManagementSyncWatermarkResponse(deviceId, current, row.LastAcknowledgedSequenceNo, row.LastSeenAt);
+    }
+
+    public Task<ProjectManagementSyncHistoryPage> GetHistoryAsync(ProjectManagementSyncHistoryQuery query, CancellationToken cancellationToken = default) =>
+        RequireHistoryService().QueryAsync(query, cancellationToken);
+
+    public Task<ProjectManagementSyncHistoryDetail> GetHistoryDetailAsync(string id, CancellationToken cancellationToken = default) =>
+        RequireHistoryService().GetAsync(id, cancellationToken);
+
+    public Task<(string FileName, byte[] Content)> DownloadHistoryReportAsync(string id, CancellationToken cancellationToken = default) =>
+        RequireHistoryService().DownloadSafeReportAsync(id, cancellationToken);
+
+    public async Task<ProjectManagementSyncImportResponse> RetryAsync(string historyId, Stream packageStream, ProjectManagementSyncImportRequest request, CancellationToken cancellationToken = default)
+    {
+        var history = await RequireHistoryService().GetAsync(historyId, cancellationToken);
+        if (!string.Equals(history.Item.OperationType, "Import", StringComparison.Ordinal) || !string.Equals(history.Item.Status, "Failed", StringComparison.Ordinal))
+            throw new ValidationException("只有失败的同步导入批次可以重试");
+        await using var bufferedPackage = new MemoryStream();
+        await packageStream.CopyToAsync(bufferedPackage, cancellationToken);
+        bufferedPackage.Position = 0;
+        var preview = await PreviewAsync(bufferedPackage, cancellationToken);
+        if (!string.Equals(preview.PackageId, history.Item.PackageId, StringComparison.Ordinal))
+            throw new ValidationException("重试同步包与原失败批次不匹配");
+        bufferedPackage.Position = 0;
+        if (string.IsNullOrWhiteSpace(request.IdempotencyKey))
+            request = request with { IdempotencyKey = history.Item.PackageId };
+        return await ImportAsync(bufferedPackage, request with { RetryOfHistoryId = history.Item.Id }, cancellationToken);
     }
 
     public async Task<ProjectManagementSyncPreviewResponse> PreviewAsync(Stream packageStream, CancellationToken cancellationToken = default)
@@ -240,12 +269,20 @@ public sealed class ProjectManagementSyncService(
         var projectIds = await ResolveScopeAsync(manifest.ProjectId, cancellationToken);
         ValidateSnapshotScope(snapshot, projectIds);
         var idempotencyKey = NormalizeIdempotencyKey(request.IdempotencyKey, manifest.PackageId);
+        var importId = Guid.NewGuid().ToString("N");
+        var traceId = TraceId();
         var replay = string.IsNullOrWhiteSpace(request.IdempotencyKey)
             ? null
             : await FindImportResultAsync(manifest.PackageId, idempotencyKey, cancellationToken);
         if (replay is not null) return replay with { Replayed = true };
         var conflicts = await DetectConflictsAsync(snapshot, projectIds, cancellationToken);
-        if (strategy == "Reject" && conflicts.Count > 0) throw new ValidationException($"同步包存在 {conflicts.Count} 个冲突，已拒绝导入");
+        if (strategy == "Reject" && conflicts.Count > 0)
+        {
+            var rejected = new ProjectManagementSyncImportResponse(manifest.PackageId, strategy, 0, 0, 0, 0, [], importId, traceId, false, conflicts.Count, conflicts, 0, 1);
+            await RecordHistoryAsync("Import", manifest.PackageId, manifest.TenantId, manifest.AppCode, manifest.SourceDeviceId, "Failed", rejected, $"同步包存在 {conflicts.Count} 个冲突，已拒绝导入", request.RetryOfHistoryId, cancellationToken);
+            await PublishImportCompletedAsync(rejected, "Failed", projectIds, cancellationToken);
+            throw new ValidationException($"同步包存在 {conflicts.Count} 个冲突，已拒绝导入");
+        }
         ValidateImportGraph(snapshot);
 
         var operationId = maintenanceLock is null ? null : await maintenanceLock.AcquireAsync("project-management-sync-import", TimeSpan.FromMinutes(30), cancellationToken);
@@ -257,8 +294,6 @@ public sealed class ProjectManagementSyncService(
         var skipped = 0;
         var importedFiles = new List<string>();
         var warnings = new List<string>();
-        var importId = Guid.NewGuid().ToString("N");
-        var traceId = global::System.Diagnostics.Activity.Current?.Id ?? Guid.NewGuid().ToString("N");
         var transactionStarted = false;
         try
         {
@@ -310,6 +345,7 @@ public sealed class ProjectManagementSyncService(
             }).ExecuteCommandAsync(cancellationToken);
             if (!string.IsNullOrWhiteSpace(request.DeviceId))
                 await AdvanceAcknowledgedWatermarkAsync(db, NormalizeRequiredDevice(request.DeviceId), manifest.JournalSequenceNo, cancellationToken);
+            await RecordHistoryAsync("Import", manifest.PackageId, manifest.TenantId, manifest.AppCode, manifest.SourceDeviceId, "Succeeded", result, null, request.RetryOfHistoryId, cancellationToken);
             db.Ado.CommitTran();
             transactionStarted = false;
             if (searchService is not null)
@@ -324,6 +360,7 @@ public sealed class ProjectManagementSyncService(
             if (operationStarted && operationId is not null && operationWriter is not null)
                 await operationWriter.ReportProgressAsync(operationId, "Committed", 90, cancellationToken);
             if (operationId is not null && operationWriter is not null) await operationWriter.SucceedAsync(operationId, cancellationToken);
+            await PublishImportCompletedAsync(result, "Succeeded", projectIds, CancellationToken.None);
             return result;
         }
         catch (Exception exception)
@@ -341,13 +378,16 @@ public sealed class ProjectManagementSyncService(
             {
                 try { await operationWriter.FailAsync(operationId, exception.Message, CancellationToken.None); } catch { }
             }
+            var failedResult = new ProjectManagementSyncImportResponse(
+                manifest.PackageId, strategy, inserted, updated, skipped, 0, warnings,
+                importId, traceId, false, conflicts.Count, conflicts, 0, 1);
             try
             {
-                await PersistImportFailureAsync(new ProjectManagementSyncImportResponse(
-                    manifest.PackageId, strategy, inserted, updated, skipped, 0, warnings,
-                    importId, traceId, false, conflicts.Count, conflicts), idempotencyKey, exception.Message, CancellationToken.None);
+                await PersistImportFailureAsync(failedResult, idempotencyKey, exception.Message, CancellationToken.None);
             }
             catch { }
+            await RecordHistoryAsync("Import", manifest.PackageId, manifest.TenantId, manifest.AppCode, manifest.SourceDeviceId, "Failed", failedResult, exception.Message, request.RetryOfHistoryId, CancellationToken.None);
+            await PublishImportCompletedAsync(failedResult, "Failed", projectIds, CancellationToken.None);
             throw;
         }
         finally
@@ -543,6 +583,26 @@ public sealed class ProjectManagementSyncService(
         return normalized;
     }
     private string UserId() => currentUser.GetAsterErpUserId()?.Trim() ?? throw new ValidationException("当前会话缺少用户", ErrorCodes.PermissionDenied);
+    private static string TraceId() => global::System.Diagnostics.Activity.Current?.Id ?? Guid.NewGuid().ToString("N");
+    private IProjectManagementSyncHistoryService RequireHistoryService() => syncHistoryService ?? throw new ValidationException("同步历史服务不可用");
+
+    private async Task RecordHistoryAsync(
+        string operationType,
+        string packageId,
+        string sourceTenantId,
+        string sourceAppCode,
+        string? sourceDeviceId,
+        string status,
+        ProjectManagementSyncImportResponse result,
+        string? errorMessage,
+        string? retryOfHistoryId,
+        CancellationToken cancellationToken)
+    {
+        if (syncHistoryService is null) return;
+        await syncHistoryService.RecordAsync(new ProjectManagementSyncHistoryRecord(
+            operationType, packageId, sourceTenantId, sourceAppCode, sourceDeviceId, status,
+            result, errorMessage, retryOfHistoryId), cancellationToken);
+    }
 
     private async Task PublishExportCompletedAsync(string packageId, string mode, IReadOnlyList<string> projectIds, CancellationToken cancellationToken)
     {
@@ -564,6 +624,29 @@ public sealed class ProjectManagementSyncService(
         catch (Exception) when (!cancellationToken.IsCancellationRequested)
         {
             // 导出文件已生成，通知持久化异常不应使调用方失去可下载结果。
+        }
+    }
+
+    private async Task PublishImportCompletedAsync(ProjectManagementSyncImportResponse result, string status, IReadOnlyList<string> projectIds, CancellationToken cancellationToken)
+    {
+        if (notificationPublisher is null) return;
+        var projectId = projectIds.Count == 1 ? projectIds[0] : null;
+        try
+        {
+            var succeeded = string.Equals(status, "Succeeded", StringComparison.Ordinal);
+            await notificationPublisher.PublishAsync(new ProjectManagementNotification(
+                Tenant(), App(),
+                succeeded ? ProjectManagementNotificationTypes.SyncImportCompleted : ProjectManagementNotificationTypes.SyncImportFailed,
+                UserId(), succeeded ? "项目同步导入完成" : "项目同步导入失败",
+                succeeded
+                    ? $"同步包 {result.PackageId} 已完成：新增 {result.Inserted}，更新 {result.Updated}，跳过 {result.Skipped}"
+                    : $"同步包 {result.PackageId} 导入失败：{result.ConflictCount} 个冲突，失败 {result.Failed} 项",
+                projectId is null ? "/project-sync" : $"/projects/{projectId}/tasks",
+                $"notification:project-sync-import:{status}:{result.ImportId}:{UserId()}", projectId), cancellationToken);
+        }
+        catch (Exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            // 通知是持久化后的附加体验，失败不能破坏导入或其历史报告。
         }
     }
 

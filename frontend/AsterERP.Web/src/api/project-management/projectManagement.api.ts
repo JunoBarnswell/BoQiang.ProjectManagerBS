@@ -77,6 +77,8 @@ import type {
   ProjectManagementSearchIndexStatus,
   ProjectManagementSyncJournalItem,
   ProjectManagementSyncWatermark,
+  ProjectManagementSyncHistoryDetail,
+  ProjectManagementSyncHistoryPage,
 } from "./projectManagement.types";
 
 export function getProjectManagementProjects(
@@ -766,7 +768,7 @@ export function previewProjectManagementSync(file: File, signal?: AbortSignal): 
 
 export function applyProjectManagementSync(
   file: File,
-  request: { currentPassword: string; confirmRisk: boolean; conflictStrategy: "Skip" | "Overwrite" | "Reject"; idempotencyKey?: string; deviceId?: string },
+  request: { currentPassword: string; confirmRisk: boolean; conflictStrategy: "Skip" | "Overwrite" | "Merge" | "Reject"; idempotencyKey?: string; deviceId?: string },
 ): Promise<ApiEnvelope<ProjectManagementSyncImportResponse>> {
   const formData = new FormData();
   formData.append("file", file);
@@ -778,6 +780,33 @@ export function applyProjectManagementSync(
   return httpClient.postForm<ProjectManagementSyncImportResponse>("/project-management/sync/apply", formData, {
     timeoutMs: 120_000,
   });
+}
+
+export function retryProjectManagementSync(
+  historyId: string,
+  file: File,
+  request: { currentPassword: string; confirmRisk: boolean; conflictStrategy: "Skip" | "Overwrite" | "Merge" | "Reject"; idempotencyKey?: string; deviceId?: string },
+): Promise<ApiEnvelope<ProjectManagementSyncImportResponse>> {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("currentPassword", request.currentPassword);
+  formData.append("confirmRisk", String(request.confirmRisk));
+  formData.append("conflictStrategy", request.conflictStrategy);
+  if (request.idempotencyKey?.trim()) formData.append("idempotencyKey", request.idempotencyKey.trim());
+  if (request.deviceId?.trim()) formData.append("deviceId", request.deviceId.trim());
+  return httpClient.postForm<ProjectManagementSyncImportResponse>(`/project-management/sync/history/${encodeURIComponent(historyId)}/retry`, formData, { timeoutMs: 120_000 });
+}
+
+export function getProjectManagementSyncHistory(params: { pageIndex?: number; pageSize?: number; status?: string } = {}): Promise<ApiEnvelope<ProjectManagementSyncHistoryPage>> {
+  return httpClient.get<ProjectManagementSyncHistoryPage>(`/project-management/sync/history${buildQueryString(params)}`);
+}
+
+export function getProjectManagementSyncHistoryDetail(historyId: string): Promise<ApiEnvelope<ProjectManagementSyncHistoryDetail>> {
+  return httpClient.get<ProjectManagementSyncHistoryDetail>(`/project-management/sync/history/${encodeURIComponent(historyId)}`);
+}
+
+export function downloadProjectManagementSyncHistoryReport(historyId: string): Promise<{ blob: Blob; fileName: string }> {
+  return httpClient.downloadBlob(`/project-management/sync/history/${encodeURIComponent(historyId)}/report`, { timeoutMs: 120_000 });
 }
 
 export function getProjectManagementSyncWatermark(deviceId: string): Promise<ApiEnvelope<ProjectManagementSyncWatermark>> {

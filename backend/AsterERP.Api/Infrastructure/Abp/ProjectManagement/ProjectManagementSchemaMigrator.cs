@@ -323,6 +323,17 @@ CREATE TABLE IF NOT EXISTS pm_sync_devices (
     LastSeenAt TEXT NOT NULL, CreatedBy TEXT NULL, CreatedTime TEXT NOT NULL, UpdatedBy TEXT NULL, UpdatedTime TEXT NULL,
     DeletedBy TEXT NULL, DeletedTime TEXT NULL, IsDeleted INTEGER NOT NULL DEFAULT 0, Remark TEXT NULL
 );
+CREATE TABLE IF NOT EXISTS pm_sync_history (
+    Id TEXT NOT NULL PRIMARY KEY, TenantId TEXT NOT NULL, AppCode TEXT NOT NULL, OperationType TEXT NOT NULL,
+    PackageId TEXT NOT NULL, SourceTenantId TEXT NOT NULL, SourceAppCode TEXT NOT NULL, SourceDeviceId TEXT NULL,
+    TargetTenantId TEXT NOT NULL, TargetAppCode TEXT NOT NULL, ActorUserId TEXT NOT NULL, Status TEXT NOT NULL,
+    Inserted INTEGER NOT NULL DEFAULT 0, Updated INTEGER NOT NULL DEFAULT 0, Deleted INTEGER NOT NULL DEFAULT 0,
+    Skipped INTEGER NOT NULL DEFAULT 0, ConflictCount INTEGER NOT NULL DEFAULT 0, Failed INTEGER NOT NULL DEFAULT 0,
+    AttachmentsImported INTEGER NOT NULL DEFAULT 0, Strategy TEXT NOT NULL, ReportJson TEXT NOT NULL,
+    ErrorMessage TEXT NULL, RetryOfHistoryId TEXT NULL, TraceId TEXT NOT NULL, OccurredAt TEXT NOT NULL,
+    CreatedBy TEXT NULL, CreatedTime TEXT NOT NULL, UpdatedBy TEXT NULL, UpdatedTime TEXT NULL,
+    DeletedBy TEXT NULL, DeletedTime TEXT NULL, IsDeleted INTEGER NOT NULL DEFAULT 0, Remark TEXT NULL
+);
 CREATE TABLE IF NOT EXISTS pm_maintenance_locks (
     Id TEXT NOT NULL PRIMARY KEY, TenantId TEXT NOT NULL, AppCode TEXT NOT NULL, LockKey TEXT NOT NULL,
     OperationId TEXT NOT NULL, OwnerUserId TEXT NOT NULL, ExpiresAt TEXT NOT NULL,
@@ -386,6 +397,8 @@ CREATE TABLE IF NOT EXISTS pm_reversible_commands (
         schema.EnsureColumn("pm_notifications", "ProjectId", "TEXT NULL");
         schema.EnsureColumn("pm_notifications", "TaskId", "TEXT NULL");
         schema.EnsureColumn("pm_task_comments", "MentionUserIdsJson", "TEXT NULL");
+        schema.EnsureColumn("pm_sync_history", "Deleted", "INTEGER NOT NULL DEFAULT 0");
+        schema.EnsureColumn("pm_sync_history", "Failed", "INTEGER NOT NULL DEFAULT 0");
     }
 
     private static void CreateIndexes(SqliteSchemaExecutor schema)
@@ -430,6 +443,8 @@ CREATE TABLE IF NOT EXISTS pm_reversible_commands (
         schema.Execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_pm_sync_journal_sequence ON pm_sync_journal(TenantId, AppCode, SequenceNo);");
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_sync_journal_project_sequence ON pm_sync_journal(TenantId, AppCode, ProjectId, SequenceNo, IsDeleted);");
         schema.Execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_pm_sync_devices_device ON pm_sync_devices(TenantId, AppCode, DeviceId) WHERE IsDeleted = 0;");
+        schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_sync_history_actor_time ON pm_sync_history(TenantId, AppCode, ActorUserId, OccurredAt, IsDeleted);");
+        schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_sync_history_package ON pm_sync_history(TenantId, AppCode, PackageId, Status, IsDeleted);");
         schema.Execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_pm_maintenance_locks_active ON pm_maintenance_locks(TenantId, AppCode, LockKey) WHERE IsDeleted = 0;");
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_maintenance_locks_expiry ON pm_maintenance_locks(TenantId, AppCode, ExpiresAt, IsDeleted);");
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_backups_created ON pm_backups(TenantId, AppCode, CreatedTime, IsDeleted);");

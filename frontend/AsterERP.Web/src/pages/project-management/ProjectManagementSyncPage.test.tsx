@@ -94,16 +94,19 @@ describe("ProjectManagementSyncPage", () => {
 
     expect(screen.getByText("当前账号可导入同步包，但没有查看同步水位和变更记录的权限。")).toBeTruthy();
     expect(screen.getByText("同步包导入控件")).toBeTruthy();
-    expect(queryCalls).toHaveLength(2);
-    expect(queryCalls.every((call) => call.enabled === false)).toBe(true);
+    expect(queryCalls).toHaveLength(4);
+    expect(queryCalls.slice(0, 2).every((call) => call.enabled === false)).toBe(true);
+    expect(queryCalls[2]?.enabled).toBe(true);
+    expect(queryCalls[3]?.enabled).toBe(false);
   });
 
   it("enables export queries but hides import confirmations for export-only access", () => {
     permissionState.canExport = true;
     render(<ProjectManagementSyncPage />);
 
-    expect(queryCalls).toHaveLength(2);
-    expect(queryCalls.every((call) => call.enabled)).toBe(true);
+    expect(queryCalls).toHaveLength(4);
+    expect(queryCalls.slice(0, 2).every((call) => call.enabled)).toBe(true);
+    expect(queryCalls.slice(2).every((call) => call.enabled === false)).toBe(true);
     expect(screen.getByText("同步包导出控件")).toBeTruthy();
     expect(screen.queryByText("确认当前水位")).toBeNull();
   });
@@ -113,7 +116,8 @@ describe("ProjectManagementSyncPage", () => {
     permissionState.canImport = true;
     render(<ProjectManagementSyncPage />);
 
-    expect(queryCalls.every((call) => call.enabled)).toBe(true);
+    expect(queryCalls.slice(0, 3).every((call) => call.enabled)).toBe(true);
+    expect(queryCalls[3]?.enabled).toBe(false);
     expect(screen.getByText("确认当前水位")).toBeTruthy();
   });
 

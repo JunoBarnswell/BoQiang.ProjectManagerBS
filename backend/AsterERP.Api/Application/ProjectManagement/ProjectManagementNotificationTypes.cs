@@ -16,6 +16,7 @@ public static class ProjectManagementNotificationTypes
     public const string ExcelImportCompleted = "project.excel-import";
     public const string SyncExportCompleted = "sync.export";
     public const string SyncImportCompleted = "sync.import";
+    public const string SyncImportFailed = "sync.import.failed";
     public const string OperationSucceeded = "operation.succeeded";
     public const string OperationFailed = "operation.failed";
 }
