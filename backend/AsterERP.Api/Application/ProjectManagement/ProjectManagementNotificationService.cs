@@ -34,7 +34,16 @@ public sealed class ProjectManagementNotificationService(
             };
             await db.Insertable(entity).ExecuteCommandAsync(cancellationToken);
             if (realtimeTransport is not null)
-                await realtimeTransport.PublishNotificationCreatedAsync(Tenant(), App(), recipient, entity.Id, cancellationToken);
+            {
+                try
+                {
+                    await realtimeTransport.PublishNotificationCreatedAsync(Tenant(), App(), recipient, entity.Id, cancellationToken);
+                }
+                catch (Exception) when (!cancellationToken.IsCancellationRequested)
+                {
+                    // The persisted notification is the durable fallback when a browser is offline or SignalR is unavailable.
+                }
+            }
         }
         catch (Exception exception) when (IsDuplicateNotification(exception))
         {
@@ -47,13 +56,15 @@ public sealed class ProjectManagementNotificationService(
         var pageIndex = Math.Max(1, query.PageIndex);
         var pageSize = Math.Clamp(query.PageSize, 1, 100);
         var notificationType = Optional(query.NotificationType);
+        var tenantId = Tenant();
+        var appCode = App();
         var userId = User();
         var db = databaseAccessor.GetCurrentDb();
-        var itemsQuery = db.Queryable<ProjectManagementNotificationEntity>().Where(item => item.RecipientUserId == userId && !item.IsDeleted);
+        var itemsQuery = db.Queryable<ProjectManagementNotificationEntity>().Where(item => item.TenantId == tenantId && item.AppCode == appCode && item.RecipientUserId == userId && !item.IsDeleted);
         if (query.UnreadOnly) itemsQuery = itemsQuery.Where(item => !item.IsRead);
         if (!string.IsNullOrWhiteSpace(notificationType)) itemsQuery = itemsQuery.Where(item => item.NotificationType == notificationType);
         var total = await itemsQuery.CountAsync(cancellationToken);
-        var unreadCount = await db.Queryable<ProjectManagementNotificationEntity>().Where(item => item.RecipientUserId == userId && !item.IsRead && !item.IsDeleted).CountAsync(cancellationToken);
+        var unreadCount = await db.Queryable<ProjectManagementNotificationEntity>().Where(item => item.TenantId == tenantId && item.AppCode == appCode && item.RecipientUserId == userId && !item.IsRead && !item.IsDeleted).CountAsync(cancellationToken);
         var items = await itemsQuery.OrderBy(item => item.CreatedTime, OrderByType.Desc).Skip((pageIndex - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
         return new ProjectManagementNotificationPageResponse(total, unreadCount, items.Select(Map).ToList());
     }
@@ -69,10 +80,12 @@ public sealed class ProjectManagementNotificationService(
     public async Task MarkAllReadAsync(CancellationToken cancellationToken = default)
     {
         var now = DateTime.UtcNow;
+        var tenantId = Tenant();
+        var appCode = App();
         var userId = User();
         await databaseAccessor.GetCurrentDb().Updateable<ProjectManagementNotificationEntity>()
             .SetColumns(item => new ProjectManagementNotificationEntity { IsRead = true, ReadTime = now, UpdatedBy = userId, UpdatedTime = now })
-            .Where(item => item.RecipientUserId == userId && !item.IsRead && !item.IsDeleted)
+            .Where(item => item.TenantId == tenantId && item.AppCode == appCode && item.RecipientUserId == userId && !item.IsRead && !item.IsDeleted)
             .ExecuteCommandAsync(cancellationToken);
     }
 
@@ -100,7 +113,7 @@ public sealed class ProjectManagementNotificationService(
     }
 
     private async Task<ProjectManagementNotificationEntity> GetOwnedAsync(string id, CancellationToken cancellationToken) =>
-        (await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementNotificationEntity>().Where(item => item.Id == id && item.RecipientUserId == User() && !item.IsDeleted).Take(1).ToListAsync(cancellationToken)).FirstOrDefault()
+        (await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementNotificationEntity>().Where(item => item.Id == id && item.TenantId == Tenant() && item.AppCode == App() && item.RecipientUserId == User() && !item.IsDeleted).Take(1).ToListAsync(cancellationToken)).FirstOrDefault()
         ?? throw new NotFoundException("通知不存在", ErrorCodes.PlatformResourceNotFound);
     private void EnsureWorkspace(ProjectManagementNotification notification)
     {

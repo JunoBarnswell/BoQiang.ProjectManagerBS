@@ -1,6 +1,6 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
-import { acquireProjectManagementHubConnection } from '../hooks/projectManagementHubConnection';
+import { acquireProjectManagementHubConnection, type ProjectManagementHubConnectionState } from '../hooks/projectManagementHubConnection';
 import type { ProjectManagementWorkspaceScope } from '../state/projectManagementWorkspaceScope';
 
 interface ProjectManagementNotificationCreatedEvent {
@@ -13,10 +13,18 @@ export function useProjectManagementNotificationRealtime(
   enabled: boolean,
   onNotificationCreated: () => void,
 ) {
+  const [connectionState, setConnectionState] = useState<ProjectManagementHubConnectionState>('disconnected');
+
   useEffect(() => {
-    if (!enabled || !scope.isAvailable) return undefined;
+    if (!enabled || !scope.isAvailable) {
+      setConnectionState('disconnected');
+      return undefined;
+    }
     const connection = acquireProjectManagementHubConnection(signalRUrl, scope);
-    if (!connection) return undefined;
+    if (!connection) {
+      setConnectionState('disconnected');
+      return undefined;
+    }
     const notify = (event: ProjectManagementNotificationCreatedEvent) => {
       if (!event.notificationId) return;
       onNotificationCreated();
@@ -25,9 +33,12 @@ export function useProjectManagementNotificationRealtime(
     connection.subscribeLifecycle({
       connected: onNotificationCreated,
       reconnected: onNotificationCreated,
+      stateChanged: setConnectionState,
     });
     return () => {
       connection.dispose();
     };
   }, [enabled, onNotificationCreated, scope, signalRUrl]);
+
+  return connectionState;
 }

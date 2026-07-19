@@ -38,6 +38,26 @@ public sealed class ProjectManagementTaskReminderServiceTests
     }
 
     [Fact]
+    public async Task Reminder_create_compensates_scheduled_jobs_when_persistence_fails()
+    {
+        using var db = CreateDatabase("reminder-compensation");
+        await SeedTaskAsync(db, "operator", "user-a");
+        var scheduler = new RecordingScheduler();
+        var service = new ProjectManagementTaskReminderService(
+            new TestWorkspaceDatabaseAccessor(db),
+            CreateUser(),
+            scheduler,
+            activityWriter: new ThrowingActivityWriter());
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.CreateAsync(
+            "task-a",
+            new ProjectManagementTaskReminderCreateRequest(DateTimeOffset.UtcNow.AddMinutes(10), "UTC", "Members", ["user-a"], "review", "request-compensation")));
+
+        Assert.Equal(["job-1"], scheduler.Deleted);
+        Assert.Empty(await db.Queryable<ProjectManagementTaskReminderEntity>().ToListAsync());
+    }
+
+    [Fact]
     public async Task Reminder_execution_is_idempotent_and_does_not_send_after_task_is_deleted()
     {
         using var db = CreateDatabase("reminder-execution");
@@ -159,6 +179,11 @@ public sealed class ProjectManagementTaskReminderServiceTests
     private sealed class ThrowingNotificationPublisher : IProjectManagementNotificationPublisher
     {
         public Task PublishAsync(ProjectManagementNotification notification, CancellationToken cancellationToken = default) => throw new InvalidOperationException("notification transport unavailable");
+    }
+
+    private sealed class ThrowingActivityWriter : IProjectManagementActivityWriter
+    {
+        public Task AppendAsync(ProjectManagementActivityEvent activity, CancellationToken cancellationToken = default) => throw new InvalidOperationException("activity failure");
     }
 
     private sealed class TestWorkspaceDatabaseAccessor(ISqlSugarClient db) : IWorkspaceDatabaseAccessor

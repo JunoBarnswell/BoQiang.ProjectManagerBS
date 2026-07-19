@@ -18,7 +18,7 @@ public sealed class ProjectManagementNotificationServiceTests
         using var db = new SqlSugarClient(new ConnectionConfig { ConnectionString = $"Data Source=file:project-management-notification-{Guid.NewGuid():N};Mode=Memory;Cache=Shared", DbType = DbType.Sqlite, IsAutoCloseConnection = false });
         await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
         var service = new ProjectManagementNotificationService(new TestWorkspaceDatabaseAccessor(db), CreateUser("user-a"));
-        var notification = new ProjectManagementNotification("tenant-a", "MES", "task.comment.mentioned", "user-a", "Mention", "Message", "/projects/p/tasks/t/comments/c", "trace");
+        var notification = new ProjectManagementNotification("tenant-a", "SYSTEM", "task.comment.mentioned", "user-a", "Mention", "Message", "/projects/p/tasks/t/comments/c", "trace");
         await service.PublishAsync(notification);
         await service.PublishAsync(notification);
         await service.PublishAsync(notification with { TraceId = "trace-2", Message = "Message 2" });
@@ -35,11 +35,11 @@ public sealed class ProjectManagementNotificationServiceTests
     {
         using var db = new SqlSugarClient(new ConnectionConfig { ConnectionString = $"Data Source=file:project-management-notification-open-{Guid.NewGuid():N};Mode=Memory;Cache=Shared", DbType = DbType.Sqlite, IsAutoCloseConnection = false });
         await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
-        await db.Insertable(new ProjectManagementProjectEntity { Id = "project-a", TenantId = "tenant-a", AppCode = "MES", ProjectCode = "A", ProjectName = "A", OwnerUserId = "user-a" }).ExecuteCommandAsync();
-        await db.Insertable(new ProjectManagementTaskEntity { Id = "task-a", TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-a", TaskCode = "T-1", Title = "Task" }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementProjectEntity { Id = "project-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "A", ProjectName = "A", OwnerUserId = "user-a" }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementTaskEntity { Id = "task-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", TaskCode = "T-1", Title = "Task" }).ExecuteCommandAsync();
         var service = new ProjectManagementNotificationService(new TestWorkspaceDatabaseAccessor(db), CreateUser("user-a"));
-        await service.PublishAsync(new ProjectManagementNotification("tenant-a", "MES", "task.reminder", "user-a", "Reminder", "Message", "/untrusted", "trace-a", "project-a", "task-a"));
-        await service.PublishAsync(new ProjectManagementNotification("tenant-a", "MES", "task.reminder", "user-a", "Stale", "Message", "/untrusted", "trace-b", "missing", "missing"));
+        await service.PublishAsync(new ProjectManagementNotification("tenant-a", "SYSTEM", "task.reminder", "user-a", "Reminder", "Message", "/untrusted", "trace-a", "project-a", "task-a"));
+        await service.PublishAsync(new ProjectManagementNotification("tenant-a", "SYSTEM", "task.reminder", "user-a", "Stale", "Message", "/untrusted", "trace-b", "missing", "missing"));
         var page = await service.QueryAsync(new ProjectManagementNotificationQuery(PageSize: 10));
         Assert.Equal(2, page.UnreadCount);
         await service.MarkAllReadAsync();
@@ -52,9 +52,40 @@ public sealed class ProjectManagementNotificationServiceTests
         Assert.Null(stale.TargetRoute);
     }
 
+    [Fact]
+    public async Task Notification_persistence_survives_realtime_transport_failure()
+    {
+        using var db = new SqlSugarClient(new ConnectionConfig { ConnectionString = $"Data Source=file:project-management-notification-fallback-{Guid.NewGuid():N};Mode=Memory;Cache=Shared", DbType = DbType.Sqlite, IsAutoCloseConnection = false });
+        await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
+        var service = new ProjectManagementNotificationService(new TestWorkspaceDatabaseAccessor(db), CreateUser("user-a"), realtimeTransport: new ThrowingRealtimeTransport());
+
+        await service.PublishAsync(new ProjectManagementNotification("tenant-a", "SYSTEM", "task.reminder", "user-a", "Reminder", "Message", "/projects/project-a/tasks", "transport-failure"));
+
+        var page = await service.QueryAsync(new ProjectManagementNotificationQuery());
+        Assert.Single(page.Items);
+        Assert.Equal("transport-failure", page.Items[0].TraceId);
+    }
+
+    [Fact]
+    public async Task Notification_actions_cannot_cross_tenant_or_application_scope()
+    {
+        using var db = new SqlSugarClient(new ConnectionConfig { ConnectionString = $"Data Source=file:project-management-notification-scope-{Guid.NewGuid():N};Mode=Memory;Cache=Shared", DbType = DbType.Sqlite, IsAutoCloseConnection = false });
+        await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
+        await db.Insertable(new ProjectManagementNotificationEntity
+        {
+            Id = "foreign-notification", TenantId = "tenant-b", AppCode = "SYSTEM", RecipientUserId = "user-a",
+            NotificationType = "task.reminder", Title = "Foreign", Message = "Foreign", TargetRoute = "/projects/foreign/tasks",
+            TraceId = "foreign", IdempotencyKey = "foreign", CreatedBy = "user-a", CreatedTime = DateTime.UtcNow
+        }).ExecuteCommandAsync();
+        var service = new ProjectManagementNotificationService(new TestWorkspaceDatabaseAccessor(db), CreateUser("user-a"));
+
+        await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.NotFoundException>(() => service.MarkReadAsync("foreign-notification"));
+        await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.NotFoundException>(() => service.OpenAsync("foreign-notification"));
+    }
+
     private static FixedAsterErpCurrentUser CreateUser(string userId) => new(new ClaimsPrincipal(new ClaimsIdentity(new[]
     {
-        new Claim(AsterErpClaimTypes.UserId, userId), new Claim(AsterErpClaimTypes.TenantId, "tenant-a"), new Claim(AsterErpClaimTypes.AppCode, "MES")
+        new Claim(AsterErpClaimTypes.UserId, userId), new Claim(AsterErpClaimTypes.TenantId, "tenant-a"), new Claim(AsterErpClaimTypes.AppCode, "SYSTEM")
     }, "test")));
     private sealed class TestWorkspaceDatabaseAccessor(ISqlSugarClient db) : IWorkspaceDatabaseAccessor
     {
@@ -63,5 +94,13 @@ public sealed class ProjectManagementNotificationServiceTests
         public ISqlSugarClient RequireApplicationDb() => db;
         public Task<ISqlSugarClient> GetCurrentDbAsync(CancellationToken cancellationToken = default) => Task.FromResult(db);
         public Task<ISqlSugarClient> RequireApplicationDbAsync(CancellationToken cancellationToken = default) => Task.FromResult(db);
+    }
+
+    private sealed class ThrowingRealtimeTransport : IProjectManagementRealtimeTransport
+    {
+        public Task PublishNotificationCreatedAsync(string tenantId, string appCode, string recipientUserId, string notificationId, CancellationToken cancellationToken = default) => throw new InvalidOperationException("SignalR unavailable");
+        public Task PublishOperationProgressAsync(string tenantId, string appCode, string userId, ProjectManagementOperationProgressEvent progressEvent, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task PublishInvalidationAsync(string tenantId, string appCode, string projectId, ProjectManagementRealtimeEvent invalidation, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task RevokeProjectAccessAsync(string tenantId, string appCode, string projectId, string connectionId, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 }

@@ -1,9 +1,10 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import {
   getProjectManagementNotifications,
+  markProjectManagementNotificationRead,
   markAllProjectManagementNotificationsRead,
   openProjectManagementNotification,
 } from '../../../api/project-management/projectManagement.api';
@@ -21,8 +22,6 @@ import { useProjectManagementWorkspaceScope } from '../state/projectManagementWo
 import { useProjectManagementBrowserNotifications } from './useProjectManagementBrowserNotifications';
 import { useProjectManagementNotificationRealtime } from './useProjectManagementNotificationRealtime';
 
-const notificationQuery = { pageIndex: 1, pageSize: 20, unreadOnly: false };
-
 export function ProjectManagementNotificationEntry() {
   return (
     <PermissionGuard code="project-management:notification:view" fallback={null}>
@@ -38,6 +37,8 @@ function ProjectManagementNotificationEntryContent() {
   const queryClient = useQueryClient();
   const message = useMessage();
   const [open, setOpen] = useState(false);
+  const [unreadOnly, setUnreadOnly] = useState(false);
+  const notificationQuery = useMemo(() => ({ pageIndex: 1, pageSize: 20, unreadOnly }), [unreadOnly]);
   const notifications = useQuery({
     enabled: scope.isAvailable,
     queryFn: ({ signal }) => getProjectManagementNotifications(notificationQuery, signal),
@@ -66,6 +67,11 @@ function ProjectManagementNotificationEntryContent() {
     onError: (error) => message.error(getErrorMessage(error, '全部标记已读失败')),
     onSuccess: () => { void refresh(); },
   });
+  const markRead = useApiMutation({
+    mutationFn: (item: ProjectManagementNotification) => markProjectManagementNotificationRead(item.id),
+    onError: (error) => message.error(getErrorMessage(error, '标记已读失败')),
+    onSuccess: () => { void refresh(); },
+  });
   const openNotification = useApiMutation({
     mutationFn: (item: ProjectManagementNotification) => openNotificationById(item.id),
     onError: (error) => message.error(getErrorMessage(error, '通知打开失败')),
@@ -77,7 +83,7 @@ function ProjectManagementNotificationEntryContent() {
     scope,
     userId,
   });
-  useProjectManagementNotificationRealtime('/hubs/system-notification', scope, scope.isAvailable, refresh);
+  const realtimeState = useProjectManagementNotificationRealtime('/hubs/system-notification', scope, scope.isAvailable, refresh);
 
   if (!scope.isAvailable) return null;
   const unread = page?.unreadCount ?? 0;
@@ -91,14 +97,19 @@ function ProjectManagementNotificationEntryContent() {
         <div className="absolute right-0 top-8 z-50 w-96 rounded border border-gray-200 bg-white p-3 text-gray-800 shadow-xl">
           <div className="mb-2 flex items-center justify-between">
             <strong>项目通知</strong>
-            <button disabled={markAll.isPending || unread === 0} onClick={() => markAll.mutate()} type="button">全部已读</button>
+            <div className="flex items-center gap-2 text-xs">
+              <button className={!unreadOnly ? 'font-semibold text-blue-700' : ''} onClick={() => setUnreadOnly(false)} type="button">全部</button>
+              <button className={unreadOnly ? 'font-semibold text-blue-700' : ''} onClick={() => setUnreadOnly(true)} type="button">未读</button>
+              <button disabled={markAll.isPending || unread === 0} onClick={() => markAll.mutate()} type="button">全部已读</button>
+            </div>
           </div>
+          {realtimeState !== 'connected' ? <p className="mb-2 text-xs text-amber-700">实时连接暂不可用，通知仍会保存在站内；连接恢复后自动刷新。</p> : null}
           {browser.canRequestPermission ? <button className="mb-2 text-sm text-blue-700 underline" onClick={() => { void browser.requestPermission(); }} type="button">启用浏览器通知</button> : null}
           {browser.supported && browser.permission === 'denied' ? <p className="mb-2 text-xs text-gray-500">浏览器通知已被拒绝，将仅显示站内通知。</p> : null}
           {notifications.isLoading ? <div className="py-4 text-sm text-gray-500">正在加载通知…</div> : null}
           {notifications.isError ? <div className="py-4 text-sm text-red-600">通知加载失败。<button className="ml-2 underline" onClick={() => void notifications.refetch()} type="button">重试</button></div> : null}
           {!notifications.isLoading && !notifications.isError && (page?.items.length ?? 0) === 0 ? <div className="py-4 text-sm text-gray-500">暂无项目通知</div> : null}
-          {!notifications.isLoading && !notifications.isError && (page?.items.length ?? 0) > 0 ? <div className="max-h-96 space-y-2 overflow-y-auto">{page?.items.map((item) => <button className={`block w-full rounded border p-2 text-left text-sm hover:bg-gray-50 ${item.isRead ? 'border-gray-100' : 'border-blue-200 bg-blue-50'}`} disabled={openNotification.isPending} key={item.id} onClick={() => openNotification.mutate(item)} type="button"><div className="font-medium">{item.title}</div><div className="mt-1 text-gray-600">{item.message}</div><div className="mt-1 text-xs text-gray-400">{new Date(item.createdTime).toLocaleString()}</div></button>)}</div> : null}
+          {!notifications.isLoading && !notifications.isError && (page?.items.length ?? 0) > 0 ? <div className="max-h-96 space-y-2 overflow-y-auto">{page?.items.map((item) => <div className={`rounded border p-2 text-sm ${item.isRead ? 'border-gray-100' : 'border-blue-200 bg-blue-50'}`} key={item.id}><button className="block w-full text-left hover:bg-gray-50" disabled={openNotification.isPending} onClick={() => openNotification.mutate(item)} type="button"><div className="font-medium">{item.title}</div><div className="mt-1 text-gray-600">{item.message}</div><div className="mt-1 text-xs text-gray-400">{new Date(item.createdTime).toLocaleString()}</div></button>{!item.isRead ? <button className="mt-1 text-xs text-blue-700 underline" disabled={markRead.isPending} onClick={() => markRead.mutate(item)} type="button">标记已读</button> : null}</div>)}</div> : null}
         </div>
       ) : null}
     </div>

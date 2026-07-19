@@ -58,7 +58,8 @@ export function useProjectManagementBrowserNotifications({ notifications, onOpen
   useEffect(() => {
     initialized.current = false;
     seen.current = key ? readSeen(key) : new Set();
-  }, [key]);
+    if (supported) setPermission(Notification.permission);
+  }, [key, supported]);
 
   useEffect(() => {
     if (!key) return undefined;
@@ -94,11 +95,16 @@ export function useProjectManagementBrowserNotifications({ notifications, onOpen
       seen.current.add(item.id);
       channel?.postMessage(item.id);
       if (permission === 'granted' && document.visibilityState !== 'visible') {
-        const notification = new Notification(item.title, { body: item.message, tag: `pm-notification:${item.id}` });
-        notification.onclick = () => {
-          window.focus();
-          onOpenRef.current(item.id);
-        };
+        try {
+          const notification = new Notification(item.title, { body: item.message, tag: `pm-notification:${item.id}` });
+          notification.onclick = () => {
+            notification.close();
+            window.focus();
+            onOpenRef.current(item.id);
+          };
+        } catch {
+          // Keep the persisted in-app notification when system delivery is blocked.
+        }
       }
     });
     channel?.close();

@@ -48,35 +48,51 @@ public sealed class ProjectManagementTaskReminderService(
         var existingKeys = existing.Select(item => item.IdempotencyKey).ToHashSet(StringComparer.Ordinal);
         var now = DateTime.UtcNow;
         var created = new List<ProjectManagementTaskReminderEntity>();
-        foreach (var recipientUserId in recipients)
+        var scheduledJobIds = new List<string>();
+        try
         {
-            var key = BuildIdempotencyKey(task.Id, recipientUserId, clientRequestId);
-            if (existingKeys.Contains(key)) continue;
-            var entity = new ProjectManagementTaskReminderEntity
+            foreach (var recipientUserId in recipients)
             {
-                TenantId = Tenant(), AppCode = App(), ProjectId = task.ProjectId, TaskId = task.Id,
-                RecipientUserId = recipientUserId, ReminderAtUtc = dueAt, TimeZoneId = timeZoneId,
-                Note = NormalizeNote(request.Note), Status = "Pending", IdempotencyKey = key,
-                MaxAttempts = MaximumAttempts, CreatedBy = User(), CreatedTime = now, VersionNo = 1
-            };
-            entity.HangfireJobId = await reminderScheduler.ScheduleAsync(ToJobArgs(entity), new DateTimeOffset(entity.ReminderAtUtc), cancellationToken);
-            created.Add(entity);
+                var key = BuildIdempotencyKey(task.Id, recipientUserId, clientRequestId);
+                if (existingKeys.Contains(key)) continue;
+                var entity = new ProjectManagementTaskReminderEntity
+                {
+                    TenantId = Tenant(), AppCode = App(), ProjectId = task.ProjectId, TaskId = task.Id,
+                    RecipientUserId = recipientUserId, ReminderAtUtc = dueAt, TimeZoneId = timeZoneId,
+                    Note = NormalizeNote(request.Note), Status = "Pending", IdempotencyKey = key,
+                    MaxAttempts = MaximumAttempts, CreatedBy = User(), CreatedTime = now, VersionNo = 1
+                };
+                entity.HangfireJobId = await reminderScheduler.ScheduleAsync(ToJobArgs(entity), new DateTimeOffset(entity.ReminderAtUtc), cancellationToken);
+                if (!string.IsNullOrWhiteSpace(entity.HangfireJobId)) scheduledJobIds.Add(entity.HangfireJobId);
+                created.Add(entity);
+            }
+            if (created.Count > 0)
+            {
+                await ProjectManagementMutationTransaction.RunAsync(db, async () =>
+                {
+                    await db.Insertable(created).ExecuteCommandAsync(cancellationToken);
+                    await WriteActivityAsync(
+                        task,
+                        created.Count == 1 ? "新增任务提醒" : $"新增任务提醒（{created.Count} 位接收人）",
+                        "task.reminder.created",
+                        CreateChanges(created),
+                        now,
+                        CreateBatch(created),
+                        cancellationToken);
+                });
+                await PublishInvalidationAsync(task, "task.reminder.created", cancellationToken);
+            }
         }
-        if (created.Count > 0)
+        catch (Exception exception) when (IsDuplicateReminder(exception))
         {
-            await ProjectManagementMutationTransaction.RunAsync(db, async () =>
-            {
-                await db.Insertable(created).ExecuteCommandAsync(cancellationToken);
-                await WriteActivityAsync(
-                    task,
-                    created.Count == 1 ? "新增任务提醒" : $"新增任务提醒（{created.Count} 位接收人）",
-                    "task.reminder.created",
-                    CreateChanges(created),
-                    now,
-                    CreateBatch(created),
-                    cancellationToken);
-            });
-            await PublishInvalidationAsync(task, "task.reminder.created", cancellationToken);
+            await DeleteJobsAsync(scheduledJobIds);
+            var replayed = await FindByIdempotencyKeysAsync(db, task.Id, recipients.Select(item => BuildIdempotencyKey(task.Id, item, clientRequestId)), cancellationToken);
+            return existing.Concat(replayed).GroupBy(item => item.Id).Select(group => group.First()).OrderBy(item => item.ReminderAtUtc).Select(Map).ToList();
+        }
+        catch
+        {
+            await DeleteJobsAsync(scheduledJobIds);
+            throw;
         }
         return existing.Concat(created).OrderBy(item => item.ReminderAtUtc).Select(Map).ToList();
     }
@@ -104,12 +120,20 @@ public sealed class ProjectManagementTaskReminderService(
         entity.VersionNo = nextVersion;
         entity.UpdatedBy = User();
         entity.UpdatedTime = DateTime.UtcNow;
-        await ProjectManagementMutationTransaction.RunAsync(databaseAccessor.GetCurrentDb(), async () =>
+        try
         {
-            await databaseAccessor.GetCurrentDb().Updateable(entity).ExecuteCommandAsync(cancellationToken);
-            await WriteActivityAsync(task, "修改任务提醒时间", "task.reminder.updated", CreateChanges(before, entity), entity.UpdatedTime ?? DateTime.UtcNow, null, cancellationToken);
-        });
-        await reminderScheduler.DeleteAsync(previousJobId, cancellationToken);
+            await ProjectManagementMutationTransaction.RunAsync(databaseAccessor.GetCurrentDb(), async () =>
+            {
+                await databaseAccessor.GetCurrentDb().Updateable(entity).ExecuteCommandAsync(cancellationToken);
+                await WriteActivityAsync(task, "修改任务提醒时间", "task.reminder.updated", CreateChanges(before, entity), entity.UpdatedTime ?? DateTime.UtcNow, null, cancellationToken);
+            });
+        }
+        catch
+        {
+            await DeleteJobsAsync([nextJobId]);
+            throw;
+        }
+        await DeleteJobsAsync([previousJobId]);
         await PublishInvalidationAsync(task, "task.reminder.updated", cancellationToken);
         return Map(entity);
     }
@@ -131,7 +155,7 @@ public sealed class ProjectManagementTaskReminderService(
             await databaseAccessor.GetCurrentDb().Updateable(entity).ExecuteCommandAsync(cancellationToken);
             await WriteActivityAsync(task, "取消任务提醒", "task.reminder.canceled", CreateChanges(before, entity), entity.UpdatedTime ?? DateTime.UtcNow, null, cancellationToken);
         });
-        await reminderScheduler.DeleteAsync(entity.HangfireJobId, cancellationToken);
+        await DeleteJobsAsync([entity.HangfireJobId]);
         await PublishInvalidationAsync(task, "task.reminder.canceled", cancellationToken);
     }
 
@@ -154,7 +178,7 @@ public sealed class ProjectManagementTaskReminderService(
             await databaseAccessor.GetCurrentDb().Updateable(entity).ExecuteCommandAsync(cancellationToken);
             await WriteActivityAsync(task, "删除任务提醒记录", "task.reminder.deleted", CreateChanges(before, entity), entity.UpdatedTime ?? DateTime.UtcNow, null, cancellationToken);
         });
-        await reminderScheduler.DeleteAsync(entity.HangfireJobId, cancellationToken);
+        await DeleteJobsAsync([entity.HangfireJobId]);
         await PublishInvalidationAsync(task, "task.reminder.deleted", cancellationToken);
     }
 
@@ -218,6 +242,34 @@ public sealed class ProjectManagementTaskReminderService(
         await realtimePublisher.PublishInvalidationAsync(new ProjectManagementDataInvalidationEvent(Tenant(), App(), "Task", task.Id, eventType, task.VersionNo, Activity.Current?.Id ?? Guid.NewGuid().ToString("N"), task.ProjectId), cancellationToken);
     }
 
+    private async Task<IReadOnlyList<ProjectManagementTaskReminderEntity>> FindByIdempotencyKeysAsync(
+        ISqlSugarClient db,
+        string taskId,
+        IEnumerable<string> keys,
+        CancellationToken cancellationToken)
+    {
+        var normalizedKeys = keys.Distinct(StringComparer.Ordinal).ToList();
+        if (normalizedKeys.Count == 0) return [];
+        return await db.Queryable<ProjectManagementTaskReminderEntity>()
+            .Where(item => item.TaskId == taskId && !item.IsDeleted && normalizedKeys.Contains(item.IdempotencyKey))
+            .ToListAsync(cancellationToken);
+    }
+
+    private async Task DeleteJobsAsync(IEnumerable<string?> jobIds)
+    {
+        foreach (var jobId in jobIds.Where(item => !string.IsNullOrWhiteSpace(item)).Distinct(StringComparer.Ordinal))
+        {
+            try
+            {
+                await reminderScheduler.DeleteAsync(jobId, CancellationToken.None);
+            }
+            catch
+            {
+                // The reminder row is the source of truth; stale jobs re-check status/version before delivery.
+            }
+        }
+    }
+
     private ProjectManagementAccessPolicy Policy() => accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser);
     private ProjectManagementReminderJobArgs ToJobArgs(ProjectManagementTaskReminderEntity entity, long? versionNo = null) => new(entity.Id, Tenant(), App(), entity.RecipientUserId, versionNo ?? entity.VersionNo);
     private string Tenant() => currentUser.GetAsterErpTenantId()?.Trim() ?? throw new ValidationException("当前会话缺少租户", ErrorCodes.PermissionDenied);
@@ -239,6 +291,9 @@ public sealed class ProjectManagementTaskReminderService(
     private static string? NormalizeNote(string? value) => string.IsNullOrWhiteSpace(value) ? null : Required(value, "提醒备注不能超过 1000 个字符", 1000);
     private static string Required(string? value, string error, int maximumLength) => !string.IsNullOrWhiteSpace(value) && value.Trim().Length <= maximumLength ? value.Trim() : throw new ValidationException(error);
     private static string BuildIdempotencyKey(string taskId, string recipientUserId, string clientRequestId) => $"reminder:{taskId}:{recipientUserId}:{clientRequestId}";
+    private static bool IsDuplicateReminder(Exception exception) =>
+        exception.Message.Contains("pm_task_reminders", StringComparison.OrdinalIgnoreCase)
+        && (exception.Message.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase) || exception.Message.Contains("constraint failed", StringComparison.OrdinalIgnoreCase));
     private static void EnsureVersion(long current, long requested) { if (requested <= 0 || current != requested) throw new ValidationException("提醒已被其他用户修改，请刷新后重试", ErrorCodes.ApplicationDevelopmentPageRevisionConflict); }
     private static IReadOnlyList<ProjectManagementActivityFieldChange> CreateChanges(IReadOnlyList<ProjectManagementTaskReminderEntity> reminders) =>
         ProjectManagementActivityChanges.Collect(
