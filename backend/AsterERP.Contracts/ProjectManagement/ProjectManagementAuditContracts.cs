@@ -10,7 +10,13 @@ public sealed record ProjectManagementAuditQuery(
     string? ActivityType = null,
     string? Keyword = null,
     DateTime? From = null,
-    DateTime? To = null);
+    DateTime? To = null,
+    string? ActorUserId = null,
+    string? ActorRole = null,
+    string? Source = null,
+    string? SourceDeviceId = null,
+    bool? IsSuccess = null,
+    List<GridSort>? Sorts = null);
 
 public sealed record ProjectManagementAuditItem(
     string Id,
@@ -21,7 +27,10 @@ public sealed record ProjectManagementAuditItem(
     string? Summary,
     string TraceId,
     string ActorUserId,
-    DateTime CreatedTime);
+    DateTime CreatedTime,
+    string Source = "Business",
+    string? SourceDeviceId = null,
+    bool IsSuccess = true);
 
 public sealed record ProjectManagementAuditExportResponse(
     string FileName,
