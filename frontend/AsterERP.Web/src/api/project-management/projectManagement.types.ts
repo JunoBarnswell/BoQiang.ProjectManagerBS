@@ -37,6 +37,20 @@ export interface ProjectManagementAuditQuery {
   sorts?: Array<{ field: 'createdTime' | 'projectId' | 'aggregateType' | 'activityType' | 'actorUserId'; order?: 'asc' | 'desc' }>;
 }
 
+export type ProjectManagementAuditExportField = 'Id' | 'ProjectId' | 'AggregateType' | 'AggregateId' | 'ActivityType' | 'Summary' | 'TraceId' | 'ActorUserId' | 'CreatedTime' | 'Source' | 'FieldChanges';
+
+export interface ProjectManagementAuditExportRequest {
+  query: ProjectManagementAuditQuery;
+  fields?: ProjectManagementAuditExportField[];
+  includeSensitive?: boolean;
+}
+
+export interface ProjectManagementAuditExportStartResponse {
+  operationId: string;
+  traceId: string;
+  expiresAt: string;
+}
+
 export interface ProjectManagementAuditItem {
   id: string;
   projectId: string;

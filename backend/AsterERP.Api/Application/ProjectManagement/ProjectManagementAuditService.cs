@@ -8,6 +8,7 @@ using AsterERP.Contracts.ProjectManagement;
 using AsterERP.Shared;
 using AsterERP.Shared.Exceptions;
 using SqlSugar;
+using Volo.Abp.BackgroundJobs;
 using Volo.Abp.Users;
 
 namespace AsterERP.Api.Application.ProjectManagement;
@@ -15,9 +16,18 @@ namespace AsterERP.Api.Application.ProjectManagement;
 public sealed class ProjectManagementAuditService(
     IWorkspaceDatabaseAccessor databaseAccessor,
     ICurrentUser currentUser,
-    ProjectManagementAccessPolicy accessPolicy) : IProjectManagementAuditService
+    ProjectManagementAccessPolicy accessPolicy,
+    IProjectManagementOperationWriter? operationWriter = null,
+    IBackgroundJobManager? backgroundJobManager = null,
+    IHostEnvironment? environment = null) : IProjectManagementAuditService
 {
     private const int MaximumTimeRangeDays = 92;
+    private const int MaximumExportRows = 100_000;
+    private static readonly string[] DefaultExportFields = ["Id", "ProjectId", "AggregateType", "AggregateId", "ActivityType", "Summary", "TraceId", "ActorUserId", "CreatedTime"];
+    private static readonly HashSet<string> ExportFields = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Id", "ProjectId", "AggregateType", "AggregateId", "ActivityType", "Summary", "TraceId", "ActorUserId", "CreatedTime", "Source", "FieldChanges"
+    };
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private static readonly IReadOnlyDictionary<string, Func<ISugarQueryable<ProjectManagementActivityEntity>, OrderByType, ISugarQueryable<ProjectManagementActivityEntity>>> Sorters =
         new Dictionary<string, Func<ISugarQueryable<ProjectManagementActivityEntity>, OrderByType, ISugarQueryable<ProjectManagementActivityEntity>>>(StringComparer.OrdinalIgnoreCase)
@@ -91,17 +101,97 @@ public sealed class ProjectManagementAuditService(
 
     public async Task<ProjectManagementAuditExportResponse> ExportAsync(ProjectManagementAuditQuery query, CancellationToken cancellationToken = default)
     {
-        var activityQuery = await BuildQueryAsync(query, cancellationToken);
-        var rows = await ApplySorting(activityQuery, query.Sorts).Take(10_000).ToListAsync(cancellationToken);
-        var builder = new StringBuilder();
-        builder.AppendLine("Id,ProjectId,AggregateType,AggregateId,ActivityType,Summary,TraceId,ActorUserId,CreatedTime");
-        foreach (var row in rows)
+        return await GenerateCsvAsync(query, DefaultExportFields, false, cancellationToken);
+    }
+
+    public async Task<ProjectManagementAuditExportStartResponse> StartExportAsync(ProjectManagementAuditExportRequest request, CancellationToken cancellationToken = default)
+    {
+        var query = request.Query ?? new ProjectManagementAuditQuery();
+        var fields = NormalizeExportFields(request.Fields);
+        var includeSensitive = request.IncludeSensitive;
+        if (includeSensitive && !currentUser.HasAsterErpPermission(PermissionCodes.SystemOperationLogQuery))
+            throw new ValidationException("包含敏感字段的审计导出需要操作日志查询权限", ErrorCodes.PermissionDenied);
+
+        // 先验证当前会话、时间范围和项目授权；实际数据读取在后台任务中再次经过同一 BuildQueryAsync。
+        await BuildQueryAsync(query, cancellationToken);
+        var operationId = Guid.NewGuid().ToString("N");
+        var traceId = global::System.Diagnostics.Activity.Current?.Id ?? operationId;
+        var expiresAt = DateTime.UtcNow.AddHours(24);
+        var impact = new AuditExportImpact(query, fields, includeSensitive, expiresAt, null, null, false, null);
+        var writer = operationWriter ?? throw new InvalidOperationException("审计导出任务写入器未注册");
+        var jobManager = backgroundJobManager ?? throw new InvalidOperationException("审计导出后台队列未注册");
+        await writer.CreatePendingAsync(operationId, "audit.export", JsonSerializer.Serialize(impact, JsonOptions), traceId, cancellationToken);
+        try
         {
-            builder.AppendLine(string.Join(',',
-                Escape(row.Id), Escape(row.ProjectId), Escape(row.AggregateType), Escape(row.AggregateId),
-                Escape(row.ActivityType), Escape(row.Summary), Escape(row.TraceId), Escape(row.ActorUserId), Escape(row.CreatedTime.ToString("O"))));
+            await jobManager.EnqueueAsync(new ProjectManagementOperationJobArgs(operationId, RequireTenant(), RequireApp(), RequireUser(), traceId));
         }
-        return new ProjectManagementAuditExportResponse($"project-management-audit-{DateTime.UtcNow:yyyyMMddHHmmss}.csv", Encoding.UTF8.GetBytes(builder.ToString()), rows.Count);
+        catch (Exception exception)
+        {
+            await writer.FailAsync(operationId, $"审计导出入队失败：{exception.Message}", CancellationToken.None);
+            throw;
+        }
+
+        return new ProjectManagementAuditExportStartResponse(operationId, traceId, expiresAt);
+    }
+
+    public async Task ExecuteExportAsync(string operationId, CancellationToken cancellationToken = default)
+    {
+        var writer = operationWriter ?? throw new InvalidOperationException("审计导出任务写入器未注册");
+        var operation = await GetOwnedExportOperationAsync(operationId, cancellationToken);
+        var impact = DeserializeExportImpact(operation.ImpactJson);
+        if (impact.IncludeSensitive && !currentUser.HasAsterErpPermission(PermissionCodes.SystemOperationLogQuery))
+            throw new ValidationException("包含敏感字段的审计导出需要操作日志查询权限", ErrorCodes.PermissionDenied);
+        var path = GetExportPath(operation.Id);
+        try
+        {
+            await writer.StartAsync(operation.Id, "audit.export", operation.ImpactJson, operation.TraceId, cancellationToken);
+            if (!await writer.ReportProgressAsync(operation.Id, "正在读取授权范围内的审计记录", 15, cancellationToken)) return;
+            if (DateTime.UtcNow >= impact.ExpiresAt) throw new ValidationException("审计导出已超过有效期，请重新生成");
+            var result = await GenerateCsvAsync(impact.Query, impact.Fields, impact.IncludeSensitive, cancellationToken,
+                async progress =>
+                {
+                    if (!await writer.ReportProgressAsync(operation.Id, progress, 60, cancellationToken))
+                        throw new OperationCanceledException("审计导出已取消", cancellationToken);
+                });
+            await writer.ReportProgressAsync(operation.Id, "正在写入导出文件", 80, cancellationToken);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            await File.WriteAllBytesAsync(path, result.Content, cancellationToken);
+            if (await writer.IsCancellationRequestedAsync(operation.Id, cancellationToken))
+            {
+                TryDelete(path);
+                await writer.CancelAsync(operation.Id, cancellationToken);
+                return;
+            }
+
+            var completed = impact with { FileName = result.FileName, RowCount = result.Count, DownloadReady = true, CompletedAt = DateTime.UtcNow };
+            await writer.CompleteWithImpactAsync(operation.Id, JsonSerializer.Serialize(completed, JsonOptions), cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            TryDelete(path);
+            throw;
+        }
+        catch (Exception exception)
+        {
+            TryDelete(path);
+            await writer.FailAsync(operation.Id, $"审计导出生成失败：{exception.Message}", CancellationToken.None);
+        }
+    }
+
+    public async Task<ProjectManagementAuditExportResponse> DownloadExportAsync(string operationId, CancellationToken cancellationToken = default)
+    {
+        var operation = await GetOwnedExportOperationAsync(operationId, cancellationToken);
+        if (!string.Equals(operation.Status, "Succeeded", StringComparison.Ordinal)) throw new ValidationException("审计导出尚未生成完成");
+        var impact = DeserializeExportImpact(operation.ImpactJson);
+        if (!impact.DownloadReady || string.IsNullOrWhiteSpace(impact.FileName)) throw new ValidationException("审计导出产物不可用");
+        if (DateTime.UtcNow >= impact.ExpiresAt)
+        {
+            TryDelete(GetExportPath(operation.Id));
+            throw new ValidationException("审计导出已过期，请重新生成");
+        }
+        var path = GetExportPath(operation.Id);
+        if (!File.Exists(path)) throw new NotFoundException("审计导出文件不存在", ErrorCodes.PlatformResourceNotFound);
+        return new ProjectManagementAuditExportResponse(impact.FileName, await File.ReadAllBytesAsync(path, cancellationToken), impact.RowCount ?? 0);
     }
 
     public async Task<GridPageResult<ProjectManagementOperationItem>> QueryOperationsAsync(ProjectManagementOperationQuery query, CancellationToken cancellationToken = default)
@@ -362,5 +452,99 @@ public sealed class ProjectManagementAuditService(
         return references.DistinctBy(item => (item.Kind, item.Id)).ToList();
     }
 
-    private static string Escape(string? value) => $"\"{(value ?? string.Empty).Replace("\"", "\"\"")}\"";
+    private async Task<ProjectManagementAuditExportResponse> GenerateCsvAsync(
+        ProjectManagementAuditQuery query,
+        IReadOnlyList<string> fields,
+        bool includeSensitive,
+        CancellationToken cancellationToken,
+        Func<string, Task>? reportProgress = null)
+    {
+        var activityQuery = await BuildQueryAsync(query, cancellationToken);
+        var rows = await ApplySorting(activityQuery, query.Sorts).Take(MaximumExportRows).ToListAsync(cancellationToken);
+        var builder = new StringBuilder();
+        AppendCsvRow(builder, fields);
+        for (var index = 0; index < rows.Count; index++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var row = rows[index];
+            var payload = DeserializePayload(row.Remark);
+            var values = fields.Select(field => field switch
+            {
+                "Id" => row.Id,
+                "ProjectId" => row.ProjectId,
+                "AggregateType" => row.AggregateType,
+                "AggregateId" => row.AggregateId,
+                "ActivityType" => row.ActivityType,
+                "Summary" => row.Summary,
+                "TraceId" => row.TraceId,
+                "ActorUserId" => row.ActorUserId,
+                "CreatedTime" => row.CreatedTime.ToString("O"),
+                "Source" => payload?.Source ?? "Business",
+                "FieldChanges" => JsonSerializer.Serialize(includeSensitive ? LimitFieldChanges(payload?.FieldChanges) : SanitizeFieldChanges(payload?.FieldChanges), JsonOptions),
+                _ => string.Empty
+            });
+            AppendCsvRow(builder, values);
+            if (reportProgress is not null && (index + 1) % 1_000 == 0) await reportProgress($"已处理 {index + 1} 条审计记录");
+        }
+        return new ProjectManagementAuditExportResponse(
+            $"project-management-audit-{DateTime.UtcNow:yyyyMMddHHmmss}.csv",
+            Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(builder.ToString())).ToArray(),
+            rows.Count);
+    }
+
+    private static IReadOnlyList<string> NormalizeExportFields(IReadOnlyList<string>? fields)
+    {
+        var selected = (fields ?? DefaultExportFields).Select(field => field.Trim()).Where(field => field.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        if (selected.Count == 0) selected.AddRange(DefaultExportFields);
+        if (selected.Any(field => !ExportFields.Contains(field))) throw new ValidationException("审计导出包含不支持的字段");
+        return selected.Select(field => ExportFields.First(allowed => allowed.Equals(field, StringComparison.OrdinalIgnoreCase))).ToList();
+    }
+
+    private static IReadOnlyList<ProjectManagementActivityFieldChange> LimitFieldChanges(IReadOnlyList<ProjectManagementActivityFieldChange>? changes) =>
+        (changes ?? []).Take(200).Select(change => change with { Before = LimitDetailValue(change.Before), After = LimitDetailValue(change.After) }).ToList();
+
+    private static void AppendCsvRow(StringBuilder builder, IEnumerable<string?> values) => builder.AppendLine(string.Join(',', values.Select(Escape)));
+
+    private static string Escape(string? value)
+    {
+        var normalized = value ?? string.Empty;
+        if (normalized.Length > 0 && normalized[0] is '=' or '+' or '-' or '@') normalized = $"'{normalized}";
+        return $"\"{normalized.Replace("\"", "\"\"")}\"";
+    }
+
+    private async Task<ProjectManagementOperationEntity> GetOwnedExportOperationAsync(string operationId, CancellationToken cancellationToken) =>
+        (await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementOperationEntity>()
+            .Where(item => item.Id == operationId.Trim() && item.TenantId == RequireTenant() && item.AppCode == RequireApp() && item.ActorUserId == RequireUser() && item.OperationType == "audit.export" && !item.IsDeleted)
+            .Take(1).ToListAsync(cancellationToken)).FirstOrDefault()
+        ?? throw new NotFoundException("审计导出任务不存在或无权访问", ErrorCodes.PlatformResourceNotFound);
+
+    private static AuditExportImpact DeserializeExportImpact(string json)
+    {
+        try { return JsonSerializer.Deserialize<AuditExportImpact>(json, JsonOptions) ?? throw new JsonException(); }
+        catch (JsonException) { throw new ValidationException("审计导出任务数据损坏"); }
+    }
+
+    private string GetExportPath(string operationId)
+    {
+        var root = Path.GetFullPath(Path.Combine((environment ?? throw new InvalidOperationException("审计导出宿主环境未注册")).ContentRootPath, "data", "project-management-audit-exports", RequireTenant(), RequireApp()));
+        var path = Path.GetFullPath(Path.Combine(root, $"{operationId}.csv"));
+        var relative = Path.GetRelativePath(root, path);
+        if (relative == ".." || relative.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal) || Path.IsPathRooted(relative)) throw new ValidationException("审计导出路径不合法");
+        return path;
+    }
+
+    private static void TryDelete(string path)
+    {
+        try { if (File.Exists(path)) File.Delete(path); } catch { }
+    }
+
+    private sealed record AuditExportImpact(
+        ProjectManagementAuditQuery Query,
+        IReadOnlyList<string> Fields,
+        bool IncludeSensitive,
+        DateTime ExpiresAt,
+        string? FileName,
+        int? RowCount,
+        bool DownloadReady,
+        DateTime? CompletedAt);
 }

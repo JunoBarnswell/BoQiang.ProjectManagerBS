@@ -1,4 +1,7 @@
 using System.Security.Claims;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.FileProviders;
+using Volo.Abp.BackgroundJobs;
 using AsterERP.Api.Application.ProjectManagement;
 using AsterERP.Api.Infrastructure.Abp.ProjectManagement;
 using AsterERP.Api.Infrastructure.Database;
@@ -151,6 +154,55 @@ public sealed class ProjectManagementAuditServiceTests
         Assert.Empty(page.Items);
     }
 
+    [Fact]
+    public async Task Audit_export_runs_as_background_operation_and_redacts_sensitive_values()
+    {
+        using var db = CreateDatabase();
+        await db.Insertable(new ProjectManagementProjectEntity
+        {
+            Id = "project-export", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "EXPORT", ProjectName = "Export", OwnerUserId = "operator"
+        }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementActivityEntity
+        {
+            Id = "export-activity", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-export", AggregateType = "Task", AggregateId = "task-export",
+            ActivityType = "task.updated", Summary = "=unsafe", TraceId = "trace-export", ActorUserId = "operator", CreatedBy = "operator", CreatedTime = DateTime.UtcNow,
+            Remark = "{\"fieldChanges\":[{\"field\":\"password\",\"displayName\":\"口令\",\"before\":\"old-secret\",\"after\":\"new-secret\",\"isSensitive\":false}]}"
+        }).ExecuteCommandAsync();
+
+        var accessor = new TestWorkspaceDatabaseAccessor(db);
+        var user = CreateUser("operator");
+        var queue = new RecordingBackgroundJobManager();
+        var service = new ProjectManagementAuditService(
+            accessor,
+            user,
+            new ProjectManagementAccessPolicy(accessor, user),
+            new ProjectManagementOperationWriter(accessor, user),
+            queue,
+            new TestHostEnvironment(Path.Combine(Path.GetTempPath(), $"pm-audit-{Guid.NewGuid():N}")));
+
+        await Assert.ThrowsAsync<ValidationException>(() => service.StartExportAsync(new ProjectManagementAuditExportRequest(
+            new ProjectManagementAuditQuery(ProjectId: "project-export"),
+            ["FieldChanges"],
+            IncludeSensitive: true)));
+
+        var started = await service.StartExportAsync(new ProjectManagementAuditExportRequest(
+            new ProjectManagementAuditQuery(ProjectId: "project-export"),
+            ["Summary", "FieldChanges"]));
+
+        Assert.Equal(started.OperationId, Assert.Single(queue.Args).OperationId);
+        await service.ExecuteExportAsync(started.OperationId);
+        var exported = await service.DownloadExportAsync(started.OperationId);
+        var csv = System.Text.Encoding.UTF8.GetString(exported.Content);
+
+        Assert.Contains("\"'=unsafe\"", csv, StringComparison.Ordinal);
+        Assert.Contains("password", csv, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("old-secret", csv, StringComparison.Ordinal);
+        var operation = await db.Queryable<ProjectManagementOperationEntity>().SingleAsync(item => item.Id == started.OperationId);
+        Assert.Equal("Succeeded", operation.Status);
+        Assert.Contains("DownloadReady", operation.ImpactJson, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(1, exported.Count);
+    }
+
     private static SqlSugarClient CreateDatabase()
     {
         var db = new SqlSugarClient(new ConnectionConfig
@@ -204,5 +256,24 @@ public sealed class ProjectManagementAuditServiceTests
         public Task<ISqlSugarClient> GetCurrentDbAsync(CancellationToken cancellationToken = default) => Task.FromResult(db);
         public Task<ISqlSugarClient> GetProjectManagementDbAsync(CancellationToken cancellationToken = default) => Task.FromResult(db);
         public Task<ISqlSugarClient> RequireApplicationDbAsync(CancellationToken cancellationToken = default) => Task.FromResult(db);
+    }
+
+    private sealed class RecordingBackgroundJobManager : IBackgroundJobManager
+    {
+        public List<ProjectManagementOperationJobArgs> Args { get; } = [];
+
+        public Task<string> EnqueueAsync<TArgs>(TArgs args, BackgroundJobPriority priority = BackgroundJobPriority.Normal, TimeSpan? delay = null)
+        {
+            if (args is ProjectManagementOperationJobArgs operationArgs) Args.Add(operationArgs);
+            return Task.FromResult(Guid.NewGuid().ToString("N"));
+        }
+    }
+
+    private sealed class TestHostEnvironment(string contentRootPath) : IHostEnvironment
+    {
+        public string ApplicationName { get; set; } = "AsterERP.Api.Tests";
+        public IFileProvider ContentRootFileProvider { get; set; } = null!;
+        public string ContentRootPath { get; set; } = contentRootPath;
+        public string EnvironmentName { get; set; } = Environments.Development;
     }
 }

@@ -2,8 +2,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 
-import { exportProjectManagementAudit, getProjectManagementAudit, getProjectManagementAuditDetail, getProjectManagementOperations, startProjectManagementWorkspaceValidation } from '../../api/project-management/projectManagement.api';
-import type { ProjectManagementAuditQuery, ProjectManagementOperationQuery } from '../../api/project-management/projectManagement.types';
+import { downloadProjectManagementAuditExport, getProjectManagementAudit, getProjectManagementAuditDetail, getProjectManagementOperations, startProjectManagementAuditExport, startProjectManagementWorkspaceValidation } from '../../api/project-management/projectManagement.api';
+import type { ProjectManagementAuditExportField, ProjectManagementAuditQuery, ProjectManagementOperation, ProjectManagementOperationQuery } from '../../api/project-management/projectManagement.types';
 import { isHttpError } from '../../core/http/httpError';
 import { projectManagementQueryKeys } from '../../core/query/projectManagementQueryKeys';
 import { useApiMutation } from '../../core/query/useApiMutation';
@@ -50,6 +50,10 @@ export function ProjectManagementAuditPage() {
   const [sort, setSort] = useState<{ field: 'createdTime' | 'projectId' | 'aggregateType' | 'activityType' | 'actorUserId'; order: 'asc' | 'desc' }>({ field: 'createdTime', order: 'desc' });
   const [pageIndex, setPageIndex] = useState(1);
   const [operationId, setOperationId] = useState<string | null>(null);
+  const [exportOperationId, setExportOperationId] = useState<string | null>(null);
+  const [exportReady, setExportReady] = useState(false);
+  const [exportFields, setExportFields] = useState<ProjectManagementAuditExportField[]>(['Id', 'ProjectId', 'AggregateType', 'AggregateId', 'ActivityType', 'Summary', 'TraceId', 'ActorUserId', 'CreatedTime']);
+  const [includeSensitive, setIncludeSensitive] = useState(false);
   const [selectedAuditId, setSelectedAuditId] = useState<string | null>(null);
   const operationStorageKey = useMemo(
     () => scope.isAvailable ? getProjectManagementOperationTrackingKey(scope.tenantId, scope.appCode, userId) : null,
@@ -98,8 +102,22 @@ export function ProjectManagementAuditPage() {
   }, [operationStorageKey]);
 
   const exportMutation = useApiMutation({
-    mutationFn: () => exportProjectManagementAudit(query),
+    mutationFn: () => startProjectManagementAuditExport({ query, fields: exportFields, includeSensitive }),
     onError: (error) => message.error(getErrorMessage(error, '审计记录导出失败')),
+    onSuccess: (result) => {
+      const operation = result.data;
+      if (!operation) return;
+      setOperationId(operation.operationId);
+      setExportOperationId(operation.operationId);
+      setExportReady(false);
+      writeProjectManagementOperationTracking(operationStorageKey, operation.operationId);
+      void queryClient.invalidateQueries({ queryKey: projectManagementQueryKeys.operations(scope, operationQuery) });
+      message.success('审计记录导出已启动，正在后台生成');
+    }
+  });
+  const downloadExportMutation = useApiMutation({
+    mutationFn: () => downloadProjectManagementAuditExport(exportOperationId!),
+    onError: (error) => message.error(getErrorMessage(error, '审计导出下载失败')),
     onSuccess: (result) => {
       const url = URL.createObjectURL(result.blob);
       const anchor = document.createElement('a');
@@ -107,7 +125,7 @@ export function ProjectManagementAuditPage() {
       anchor.download = result.fileName;
       anchor.click();
       URL.revokeObjectURL(url);
-      message.success('审计记录已导出');
+      message.success('审计记录已下载');
     }
   });
   const workspaceValidationMutation = useApiMutation({
@@ -136,7 +154,7 @@ export function ProjectManagementAuditPage() {
       title="项目审计中心"
       eyebrow="ProjectManagement / Audit"
       description="查看当前授权范围内的项目、里程碑和任务活动；导出结果沿用同一数据权限过滤。"
-      toolbar={<div className="flex flex-wrap items-center gap-3"><PermissionButton code="project-management:audit:export" disabled={exportMutation.isPending} onClick={() => exportMutation.mutate()}>{exportMutation.isPending ? '导出中…' : '导出 CSV'}</PermissionButton><Link className="text-sm" to={toProjectManagementPlatformRoute('project-search')}>项目搜索</Link><PermissionGuard code="project-management:sync:export" fallback={null}><Link className="text-sm" to={toProjectManagementPlatformRoute('project-sync')}>同步水位</Link></PermissionGuard></div>}
+       toolbar={<div className="flex flex-wrap items-center gap-3"><PermissionButton code="project-management:audit:export" disabled={exportMutation.isPending} onClick={() => exportMutation.mutate()}>{exportMutation.isPending ? '导出排队中…' : '导出 CSV'}</PermissionButton>{exportReady && exportOperationId ? <PermissionButton code="project-management:audit:export" disabled={downloadExportMutation.isPending} onClick={() => downloadExportMutation.mutate()}>{downloadExportMutation.isPending ? '下载中…' : '下载导出文件'}</PermissionButton> : null}<Link className="text-sm" to={toProjectManagementPlatformRoute('project-search')}>项目搜索</Link><PermissionGuard code="project-management:sync:export" fallback={null}><Link className="text-sm" to={toProjectManagementPlatformRoute('project-sync')}>同步水位</Link></PermissionGuard></div>}
     >
       <div className="mb-3 flex items-center gap-2">
         <form className="flex flex-wrap items-center gap-2" onSubmit={(event) => { event.preventDefault(); setPageIndex(1); setSubmittedFilters(filters); }}>
@@ -153,11 +171,16 @@ export function ProjectManagementAuditPage() {
           <label className="text-sm">至 <input className="rounded border border-gray-300 px-2 py-1" aria-label="结束时间" type="datetime-local" value={filters.to} onChange={(event) => setFilters((current) => ({ ...current, to: event.target.value }))} /></label>
           <select className="rounded border border-gray-300 px-3 py-2" aria-label="排序字段" value={sort.field} onChange={(event) => setSort((current) => ({ ...current, field: event.target.value as typeof current.field }))}><option value="createdTime">时间</option><option value="projectId">项目</option><option value="aggregateType">实体类型</option><option value="activityType">操作</option><option value="actorUserId">操作者</option></select>
           <select className="rounded border border-gray-300 px-3 py-2" aria-label="排序方向" value={sort.order} onChange={(event) => setSort((current) => ({ ...current, order: event.target.value as typeof current.order }))}><option value="desc">降序</option><option value="asc">升序</option></select>
-          <button type="submit">搜索</button>
+           <button type="submit">搜索</button>
           <button type="button" onClick={() => { const next = { keyword: '', projectId: '', aggregateType: '', activityType: '', actorUserId: '', actorRole: '', source: '', sourceDeviceId: '', from: '', to: '', result: '' }; setFilters(next); setSubmittedFilters(next); setPageIndex(1); }}>清空</button>
-        </form>
-        <span className="text-sm text-gray-500">共 {page.total} 条</span>
-      </div>
+         </form>
+         <span className="text-sm text-gray-500">共 {page.total} 条</span>
+       </div>
+       <div className="mb-3 flex flex-wrap items-center gap-3 rounded border border-gray-200 p-3 text-sm">
+         <span className="font-medium">导出字段</span>
+         {(['Id', 'ProjectId', 'AggregateType', 'AggregateId', 'ActivityType', 'Summary', 'TraceId', 'ActorUserId', 'CreatedTime', 'Source', 'FieldChanges'] as ProjectManagementAuditExportField[]).map((field) => <label key={field} className="inline-flex items-center gap-1"><input type="checkbox" checked={exportFields.includes(field)} onChange={(event) => setExportFields((current) => event.target.checked ? [...current, field] : current.filter((item) => item !== field))} />{field}</label>)}
+         <PermissionGuard code="system:operation-log:query" fallback={null}><label className="inline-flex items-center gap-1"><input type="checkbox" checked={includeSensitive} onChange={(event) => setIncludeSensitive(event.target.checked)} />包含敏感字段</label></PermissionGuard>
+       </div>
       <div className="overflow-x-auto rounded-lg border border-gray-200">
         <table className="min-w-full text-left text-sm">
           <thead className="bg-gray-50"><tr><th className="px-3 py-2">时间</th><th className="px-3 py-2">项目</th><th className="px-3 py-2">对象</th><th className="px-3 py-2">动作</th><th className="px-3 py-2">来源 / 设备</th><th className="px-3 py-2">结果</th><th className="px-3 py-2">摘要</th><th className="px-3 py-2">操作者</th><th className="px-3 py-2">TraceId</th><th className="px-3 py-2">详情</th></tr></thead>
@@ -167,7 +190,7 @@ export function ProjectManagementAuditPage() {
       <nav aria-label="审计记录分页" className="mt-3 flex items-center gap-2 text-sm"><button disabled={pageIndex === 1} type="button" onClick={() => setPageIndex((current) => current - 1)}>上一页</button><span>第 {pageIndex} 页</span><button disabled={page.total <= pageIndex * pageSize} type="button" onClick={() => setPageIndex((current) => current + 1)}>下一页</button></nav>
       <section className="mt-5">
         <div className="mb-3 flex flex-wrap items-center gap-2"><h2 className="font-semibold">高风险操作记录</h2><span className="text-sm text-gray-500">共 {operationsQuery.data?.data?.total ?? 0} 条</span><PermissionButton code="project-management:operation:manage" disabled={workspaceValidationMutation.isPending} onClick={() => workspaceValidationMutation.mutate()}>{workspaceValidationMutation.isPending ? '校验中…' : '运行工作区校验'}</PermissionButton></div>
-        {operationId ? <div className="mb-3"><ProjectManagementOperationProgress operationId={operationId} onChanged={() => void operationsQuery.refetch()} onTrackingEnded={() => { clearProjectManagementOperationTracking(operationStorageKey); setOperationId(null); void operationsQuery.refetch(); }} /></div> : null}
+         {operationId ? <div className="mb-3"><ProjectManagementOperationProgress operationId={operationId} clearOnTerminal={operationId !== exportOperationId} onTerminal={(operation: ProjectManagementOperation) => { if (operation.id === exportOperationId && operation.status === 'Succeeded') setExportReady(true); }} onChanged={() => void operationsQuery.refetch()} onTrackingEnded={() => { clearProjectManagementOperationTracking(operationStorageKey); setOperationId(null); void operationsQuery.refetch(); }} /></div> : null}
         {operationsQuery.isError ? <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">{isHttpError(operationsQuery.error) && operationsQuery.error.status === 403 ? '无权查看高风险操作记录' : '高风险操作记录暂时无法加载'} <button type="button" className="ml-2 underline" onClick={() => void operationsQuery.refetch()}>重试</button></div> : <div className="overflow-x-auto rounded-lg border border-gray-200"><table className="min-w-full text-left text-sm"><thead className="bg-gray-50"><tr><th className="px-3 py-2">开始时间</th><th className="px-3 py-2">操作</th><th className="px-3 py-2">状态</th><th className="px-3 py-2">失败原因</th><th className="px-3 py-2">操作者</th><th className="px-3 py-2">TraceId</th><th className="px-3 py-2">跟踪</th></tr></thead><tbody>{(operationsQuery.data?.data?.items ?? []).length === 0 ? <tr><td className="px-3 py-6 text-center text-gray-500" colSpan={7}>暂无高风险操作记录</td></tr> : (operationsQuery.data?.data?.items ?? []).map((item) => <tr className="border-t border-gray-100" key={item.id}><td className="whitespace-nowrap px-3 py-2">{new Date(item.startedTime).toLocaleString()}</td><td className="px-3 py-2">{item.operationType}</td><td className="px-3 py-2">{item.status}</td><td className="max-w-md px-3 py-2">{item.errorMessage ?? '-'}</td><td className="px-3 py-2">{item.actorUserId}</td><td className="px-3 py-2 font-mono text-xs">{item.traceId}</td><td className="px-3 py-2"><button type="button" className="underline" onClick={() => { setOperationId(item.id); writeProjectManagementOperationTracking(operationStorageKey, item.id); }}>继续跟踪</button></td></tr>)}</tbody></table></div>}
       </section>
       <ProjectManagementAuditDetailDrawer detail={auditDetailQuery.data?.data} error={auditDetailQuery.isError} loading={auditDetailQuery.isLoading} open={selectedAuditId !== null} onClose={() => setSelectedAuditId(null)} onRetry={() => void auditDetailQuery.refetch()} />

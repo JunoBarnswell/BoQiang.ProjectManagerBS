@@ -25,6 +25,8 @@ import type {
   ProjectManagementAuditPage,
   ProjectManagementAuditDetail,
   ProjectManagementAuditQuery,
+  ProjectManagementAuditExportRequest,
+  ProjectManagementAuditExportStartResponse,
   ProjectManagementOperationPage,
   ProjectManagementOperationQuery,
   ProjectManagementOperation,
@@ -901,10 +903,14 @@ export function redoProjectManagementReversibleCommand(
   );
 }
 
-export function exportProjectManagementAudit(
-  query: ProjectManagementAuditQuery,
-): Promise<{ blob: Blob; fileName: string }> {
-  return httpClient.downloadBlob(`/project-management/audit/export${buildQueryString(query)}`, { timeoutMs: 120_000 });
+export function startProjectManagementAuditExport(
+  request: ProjectManagementAuditExportRequest,
+): Promise<ApiEnvelope<ProjectManagementAuditExportStartResponse>> {
+  return httpClient.post<ProjectManagementAuditExportStartResponse, ProjectManagementAuditExportRequest>('/project-management/audit/exports', request);
+}
+
+export function downloadProjectManagementAuditExport(operationId: string): Promise<{ blob: Blob; fileName: string }> {
+  return httpClient.downloadBlob(`/project-management/audit/exports/${encodeURIComponent(operationId)}/download`, { timeoutMs: 120_000 });
 }
 
 export function getProjectManagementBackups(): Promise<ApiEnvelope<ProjectManagementBackup[]>> {

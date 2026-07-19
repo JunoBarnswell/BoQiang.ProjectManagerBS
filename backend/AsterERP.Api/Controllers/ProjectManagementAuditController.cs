@@ -22,11 +22,16 @@ public sealed class ProjectManagementAuditController(IProjectManagementAuditServ
     public async Task<IActionResult> OperationsAsync([FromQuery] ProjectManagementOperationQuery query, CancellationToken cancellationToken)
         => ApiOk(await service.QueryOperationsAsync(query, cancellationToken));
 
-    [HttpGet("export")]
+    [HttpPost("exports")]
     [Permission(PermissionCodes.ProjectManagementAuditExport)]
-    public async Task<IActionResult> ExportAsync([FromQuery] ProjectManagementAuditQuery query, CancellationToken cancellationToken)
+    public async Task<IActionResult> StartExportAsync([FromBody] ProjectManagementAuditExportRequest request, CancellationToken cancellationToken)
+        => ApiOk(await service.StartExportAsync(request, cancellationToken));
+
+    [HttpGet("exports/{operationId}/download")]
+    [Permission(PermissionCodes.ProjectManagementAuditExport)]
+    public async Task<IActionResult> DownloadExportAsync(string operationId, CancellationToken cancellationToken)
     {
-        var result = await service.ExportAsync(query, cancellationToken);
+        var result = await service.DownloadExportAsync(operationId, cancellationToken);
         return File(result.Content, "text/csv; charset=utf-8", result.FileName);
     }
 }

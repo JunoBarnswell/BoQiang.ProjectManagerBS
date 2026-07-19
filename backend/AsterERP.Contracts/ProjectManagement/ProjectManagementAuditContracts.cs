@@ -82,6 +82,16 @@ public sealed record ProjectManagementAuditExportResponse(
     byte[] Content,
     int Count);
 
+public sealed record ProjectManagementAuditExportRequest(
+    ProjectManagementAuditQuery Query,
+    IReadOnlyList<string>? Fields = null,
+    bool IncludeSensitive = false);
+
+public sealed record ProjectManagementAuditExportStartResponse(
+    string OperationId,
+    string TraceId,
+    DateTime ExpiresAt);
+
 public sealed record ProjectManagementOperationQuery(
     int PageIndex = 1,
     int PageSize = 50,
