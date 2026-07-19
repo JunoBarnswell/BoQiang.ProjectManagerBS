@@ -148,6 +148,24 @@ export function ProjectManagementDataSpacePage() {
         ].map(([label, value]) => <div className="rounded-lg border border-gray-200 p-4" key={label}><div className="text-sm text-gray-500">{label}</div><div className="mt-1 text-2xl font-semibold">{value}</div></div>)}
       </div>
       <section className="mt-4 rounded-lg border border-gray-200 p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="font-semibold">空间状态与授权范围</h2>
+            <p className="mt-1 text-sm text-gray-500">{summary.dataSpaceName} · 绑定方式：{summary.databaseBindingStatus} · 状态：{summary.databaseStatus}</p>
+            {summary.statusMessage ? <p className="mt-1 text-sm text-gray-600">{summary.statusMessage}</p> : null}
+            <p className="mt-1 text-sm text-gray-500">统计口径：{summary.isStatisticsScoped ? '仅统计你有权访问的项目域对象' : '平台管理员可查看当前租户全部项目域对象'}。{summary.lastBackupTime ? `最近备份：${new Date(summary.lastBackupTime).toLocaleString()}。` : '最近备份时间仅对具备备份管理权限的用户显示。'}</p>
+          </div>
+          {summary.handlingRoute ? <Link className="rounded border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50" to={summary.handlingRoute}>查看处理入口</Link> : null}
+        </div>
+        <div className="mt-3 grid gap-2 md:grid-cols-2">
+          {summary.availableDataSpaces.map((dataSpace) => <div className="rounded border border-gray-100 p-3 text-sm" key={dataSpace.workspaceId}>
+            <div className="font-medium">{dataSpace.tenantName} / {dataSpace.appName} {dataSpace.isCurrent ? <span className="ml-2 text-emerald-700">当前</span> : null}</div>
+            <div className="mt-1 text-gray-500">{dataSpace.tenantId} / {dataSpace.appCode} · {dataSpace.status} · {dataSpace.isAvailable ? '可切换' : dataSpace.disabledReason ?? '不可切换'} · {dataSpace.isDatabaseBound ? '已绑定数据库' : '未绑定数据库'}</div>
+            {!dataSpace.isDatabaseBound && dataSpace.handlingRoute ? <Link className="mt-2 inline-block underline" to={dataSpace.handlingRoute}>前往绑定数据库</Link> : null}
+          </div>)}
+        </div>
+      </section>
+      <section className="mt-4 rounded-lg border border-gray-200 p-4">
         <h2 className="font-semibold">整库导出</h2>
         <p className="mt-1 text-sm text-gray-500">后台使用 SQLite 在线一致性快照，不进入维护模式；生成的 .bqdbx 包已加密，包含架构清单、租户/应用、版本、时间和校验摘要。包默认 24 小时有效，最多下载 3 次。</p>
         <div className="mt-3 flex flex-wrap items-center gap-2">

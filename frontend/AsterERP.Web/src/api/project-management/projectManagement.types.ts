@@ -780,6 +780,27 @@ export interface ProjectManagementDataSpaceSummary {
   milestoneCount: number;
   attachmentCount: number;
   lastActivityTime?: string | null;
+  dataSpaceName: string;
+  databaseBindingStatus: string;
+  statusMessage?: string | null;
+  handlingRoute?: string | null;
+  isStatisticsScoped: boolean;
+  lastBackupTime?: string | null;
+  availableDataSpaces: ProjectManagementDataSpaceOption[];
+}
+
+export interface ProjectManagementDataSpaceOption {
+  workspaceId: string;
+  tenantId: string;
+  tenantName: string;
+  appCode: string;
+  appName: string;
+  status: string;
+  isAvailable: boolean;
+  isDatabaseBound: boolean;
+  isCurrent: boolean;
+  disabledReason?: string | null;
+  handlingRoute?: string | null;
 }
 
 export type ProjectManagementSearchScope = 'all' | 'projects' | 'tasks' | 'milestones' | 'labels' | 'members' | 'comments';

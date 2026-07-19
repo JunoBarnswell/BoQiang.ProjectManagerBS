@@ -10,4 +10,7 @@ public sealed class ProjectManagementDataSpaceController(IProjectManagementDataS
 {
     [HttpGet("summary")]
     public async Task<IActionResult> GetSummaryAsync(CancellationToken cancellationToken) => ApiOk(await service.GetSummaryAsync(cancellationToken));
+
+    [HttpGet("available")]
+    public async Task<IActionResult> GetAvailableDataSpacesAsync(CancellationToken cancellationToken) => ApiOk(await service.GetAvailableDataSpacesAsync(cancellationToken));
 }

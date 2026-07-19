@@ -48,6 +48,7 @@ import type {
   ProjectManagementNotificationPage,
   ProjectManagementNotificationOpenResult,
   ProjectManagementTaskAttachment,
+  ProjectManagementDataSpaceOption,
   ProjectManagementDataSpaceSummary,
   ProjectManagementSavedView,
   ProjectManagementSavedViewUpsertRequest,
@@ -653,6 +654,12 @@ export function getProjectManagementDataSpaceSummary(
   signal?: AbortSignal,
 ): Promise<ApiEnvelope<ProjectManagementDataSpaceSummary>> {
   return httpClient.get<ProjectManagementDataSpaceSummary>("/project-management/data-space/summary", undefined, signal);
+}
+
+export function getProjectManagementAvailableDataSpaces(
+  signal?: AbortSignal,
+): Promise<ApiEnvelope<ProjectManagementDataSpaceOption[]>> {
+  return httpClient.get<ProjectManagementDataSpaceOption[]>("/project-management/data-space/available", undefined, signal);
 }
 
 export function searchProjectManagement(
