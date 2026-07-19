@@ -39,7 +39,12 @@ public sealed class ProjectManagementAccessPolicy(IWorkspaceDatabaseAccessor dat
     public async Task EnsureCanManageMembersAsync(string projectId, CancellationToken cancellationToken = default)
         => await EnsureRoleAsync(projectId, ["Owner", "Manager"], "当前项目角色不能管理成员", cancellationToken);
 
-    public async Task EnsureCanManageTaskAsync(string projectId, string? assigneeUserId = null, CancellationToken cancellationToken = default)
+    public async Task EnsureCanManageTaskAsync(
+        string projectId,
+        string? assigneeUserId = null,
+        string? taskId = null,
+        string? parentTaskId = null,
+        CancellationToken cancellationToken = default)
     {
         if (currentUser.IsAsterErpPlatformAdmin() || currentUser.HasAsterErpPermission("*")) return;
         var userId = RequireUserId();
@@ -51,13 +56,23 @@ public sealed class ProjectManagementAccessPolicy(IWorkspaceDatabaseAccessor dat
         if (string.Equals(owner, userId, StringComparison.OrdinalIgnoreCase)) return;
         var member = await db.Queryable<ProjectManagementProjectMemberEntity>().Where(item => item.ProjectId == projectId && item.TenantId == tenantId && item.AppCode == appCode && item.UserId == userId && item.IsActive && !item.IsDeleted).Take(1).ToListAsync(cancellationToken);
         var role = member.FirstOrDefault()?.RoleCode;
-        if (role is "Owner" or "Manager" or "Lead") return;
+        if (role is "Owner" or "Manager") return;
+        if (role == "Lead")
+        {
+            await EnsureLeadTaskScopeAsync(projectId, member.FirstOrDefault()?.ScopeRootTaskId, taskId, parentTaskId, cancellationToken);
+            return;
+        }
         if (role == "Member" && string.Equals(assigneeUserId, userId, StringComparison.OrdinalIgnoreCase)) return;
         throw new ValidationException("当前项目角色不能修改该任务", ErrorCodes.PermissionDenied);
     }
 
-    public async Task EnsureCanManageDependenciesAsync(string projectId, CancellationToken cancellationToken = default)
-        => await EnsureRoleAsync(projectId, ["Owner", "Manager", "Lead"], "当前项目角色不能管理任务依赖", cancellationToken);
+    public async Task EnsureCanManageDependenciesAsync(string projectId, IReadOnlyList<string>? taskIds = null, CancellationToken cancellationToken = default)
+    {
+        await EnsureRoleAsync(projectId, ["Owner", "Manager", "Lead"], "当前项目角色不能管理任务依赖", cancellationToken);
+        if (taskIds is null || taskIds.Count == 0) return;
+        foreach (var taskId in taskIds.Distinct(StringComparer.Ordinal))
+            await EnsureCanManageTaskAsync(projectId, taskId: taskId, cancellationToken: cancellationToken);
+    }
 
     private async Task EnsureRoleAsync(string projectId, string[] roles, string message, CancellationToken cancellationToken, bool includeDeleted = false)
     {
@@ -75,7 +90,43 @@ public sealed class ProjectManagementAccessPolicy(IWorkspaceDatabaseAccessor dat
         if (!allowed) throw new ValidationException(message, ErrorCodes.PermissionDenied);
     }
 
+    private async Task EnsureLeadTaskScopeAsync(string projectId, string? scopeRootTaskId, string? taskId, string? parentTaskId, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(scopeRootTaskId)) return;
+        if (!string.IsNullOrWhiteSpace(taskId) && !await IsTaskWithinScopeAsync(projectId, taskId, scopeRootTaskId, cancellationToken))
+            throw new ValidationException("Lead 只能管理授权主题范围内的任务", ErrorCodes.PermissionDenied);
+        if (!string.IsNullOrWhiteSpace(parentTaskId) && !await IsTaskWithinScopeAsync(projectId, parentTaskId, scopeRootTaskId, cancellationToken))
+            throw new ValidationException("Lead 不能将任务移动或创建到授权主题范围外", ErrorCodes.PermissionDenied);
+        if (string.IsNullOrWhiteSpace(taskId) && string.IsNullOrWhiteSpace(parentTaskId))
+            throw new ValidationException("绑定主题范围的 Lead 必须指定目标任务或父任务", ErrorCodes.PermissionDenied);
+    }
+
+    private async Task<bool> IsTaskWithinScopeAsync(string projectId, string taskId, string scopeRootTaskId, CancellationToken cancellationToken)
+    {
+        var db = databaseAccessor.GetCurrentDb();
+        var tenantId = RequireTenantId();
+        var appCode = RequireAppCode();
+        var currentTaskId = taskId;
+        for (var depth = 0; depth <= ProjectManagementDomainRules.MaxTaskDepth; depth++)
+        {
+            var task = (await db.Queryable<ProjectManagementTaskEntity>()
+                .Where(item => item.Id == currentTaskId && item.ProjectId == projectId && item.TenantId == tenantId && item.AppCode == appCode && !item.IsDeleted)
+                .Take(1)
+                .ToListAsync(cancellationToken))
+                .FirstOrDefault();
+            if (task is null) return false;
+            if (string.Equals(task.Id, scopeRootTaskId, StringComparison.Ordinal)) return true;
+            if (string.IsNullOrWhiteSpace(task.ParentTaskId)) return false;
+            currentTaskId = task.ParentTaskId;
+        }
+        return false;
+    }
+
     private string RequireUserId() => currentUser.GetAsterErpUserId()?.Trim() ?? throw new ValidationException("当前会话缺少用户", ErrorCodes.PermissionDenied);
     private string RequireTenantId() => currentUser.GetAsterErpTenantId()?.Trim() ?? throw new ValidationException("当前会话缺少租户", ErrorCodes.PermissionDenied);
-    private string RequireAppCode() => currentUser.GetAsterErpAppCode()?.Trim().ToUpperInvariant() ?? throw new ValidationException("当前会话缺少应用", ErrorCodes.PermissionDenied);
+    private string RequireAppCode()
+    {
+        ProjectManagementPlatformScope.RequireSystemWorkspace(currentUser);
+        return ProjectManagementPlatformScope.AppCode;
+    }
 }

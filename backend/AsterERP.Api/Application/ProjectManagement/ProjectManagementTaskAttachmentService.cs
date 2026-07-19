@@ -28,7 +28,7 @@ public sealed class ProjectManagementTaskAttachmentService(
     public async Task<ProjectManagementTaskAttachmentResponse> UploadAsync(string taskId, IFormFile file, CancellationToken cancellationToken = default)
     {
         var task = await GetTaskAsync(taskId, cancellationToken);
-        await accessPolicy.EnsureCanManageTaskAsync(task.ProjectId, task.AssigneeUserId, cancellationToken);
+        await accessPolicy.EnsureCanManageTaskAsync(task.ProjectId, task.AssigneeUserId, task.Id, cancellationToken: cancellationToken);
         if (file is null || file.Length <= 0 || file.Length > 100 * 1024 * 1024) throw new ValidationException("附件大小必须在 1 字节到 100 MB 之间");
         var uploaded = await fileStore.StoreAsync(file, new ProjectManagementFileUploadContext(ProjectManagementFileWritePurpose.TaskAttachment, task.Id), cancellationToken);
         var entity = new ProjectManagementTaskAttachmentEntity
@@ -70,7 +70,7 @@ public sealed class ProjectManagementTaskAttachmentService(
     public async Task DeleteAsync(string taskId, string id, long versionNo, CancellationToken cancellationToken = default)
     {
         var task = await GetTaskAsync(taskId, cancellationToken);
-        await accessPolicy.EnsureCanManageTaskAsync(task.ProjectId, task.AssigneeUserId, cancellationToken);
+        await accessPolicy.EnsureCanManageTaskAsync(task.ProjectId, task.AssigneeUserId, task.Id, cancellationToken: cancellationToken);
         var entity = await FindAsync(task.Id, id, cancellationToken);
         if (entity.VersionNo != versionNo) throw new ValidationException("附件已被其他用户修改，请刷新后重试", ErrorCodes.ApplicationDevelopmentPageRevisionConflict);
         entity.IsDeleted = true; entity.DeletedBy = User(); entity.DeletedTime = DateTime.UtcNow; entity.UpdatedBy = User(); entity.UpdatedTime = entity.DeletedTime; entity.VersionNo++;

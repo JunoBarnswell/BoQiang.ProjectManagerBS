@@ -25,7 +25,7 @@ public sealed class ProjectManagementTaskParticipantService(
     public async Task<ProjectManagementTaskParticipantResponse> AddAsync(string taskId, ProjectManagementTaskParticipantUpsertRequest request, CancellationToken cancellationToken = default)
     {
         var task = await EnsureTaskAsync(taskId, cancellationToken);
-        await (accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser)).EnsureCanManageTaskAsync(task.ProjectId, task.AssigneeUserId, cancellationToken);
+        await (accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser)).EnsureCanManageTaskAsync(task.ProjectId, task.AssigneeUserId, task.Id, cancellationToken: cancellationToken);
         EnsureVersion(task.VersionNo, request.VersionNo);
         var userId = Required(request.UserId, "参与人不能为空");
         if (!await candidateService.IsSelectableAsync(userId, cancellationToken)) throw new ValidationException("参与人必须来自当前租户和应用的启用用户/任职");
@@ -45,7 +45,7 @@ public sealed class ProjectManagementTaskParticipantService(
     public async Task RemoveAsync(string taskId, string id, long versionNo, CancellationToken cancellationToken = default)
     {
         var task = await EnsureTaskAsync(taskId, cancellationToken);
-        await (accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser)).EnsureCanManageTaskAsync(task.ProjectId, task.AssigneeUserId, cancellationToken);
+        await (accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser)).EnsureCanManageTaskAsync(task.ProjectId, task.AssigneeUserId, task.Id, cancellationToken: cancellationToken);
         EnsureVersion(task.VersionNo, versionNo);
         var db = databaseAccessor.GetCurrentDb();
         var entity = (await db.Queryable<ProjectManagementTaskParticipantEntity>().Where(item => item.Id == id && item.TaskId == taskId && !item.IsDeleted).Take(1).ToListAsync(cancellationToken)).FirstOrDefault() ?? throw new NotFoundException("任务参与人不存在", ErrorCodes.PlatformResourceNotFound);

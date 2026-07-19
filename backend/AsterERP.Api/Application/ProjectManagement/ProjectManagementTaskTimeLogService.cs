@@ -19,7 +19,7 @@ public sealed class ProjectManagementTaskTimeLogService(IWorkspaceDatabaseAccess
     public async Task<ProjectManagementTaskTimeLogResponse> CreateAsync(string taskId, ProjectManagementTaskTimeLogUpsertRequest request, CancellationToken cancellationToken = default)
     {
         var task = await EnsureTaskAsync(taskId, cancellationToken);
-        await (accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser)).EnsureCanManageTaskAsync(task.ProjectId, task.AssigneeUserId, cancellationToken);
+        await (accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser)).EnsureCanManageTaskAsync(task.ProjectId, task.AssigneeUserId, task.Id, cancellationToken: cancellationToken);
         if (request.EndedAt <= request.StartedAt) throw new ValidationException("工时结束时间必须晚于开始时间");
         var minutes = (int)Math.Ceiling((request.EndedAt - request.StartedAt).TotalMinutes);
         if (minutes <= 0 || minutes > 24 * 60) throw new ValidationException("单次工时必须在 1 分钟到 24 小时之间");
@@ -45,7 +45,7 @@ public sealed class ProjectManagementTaskTimeLogService(IWorkspaceDatabaseAccess
     public async Task DeleteAsync(string taskId, string id, long versionNo, CancellationToken cancellationToken = default)
     {
         var task = await EnsureTaskAsync(taskId, cancellationToken);
-        await (accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser)).EnsureCanManageTaskAsync(task.ProjectId, task.AssigneeUserId, cancellationToken);
+        await (accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser)).EnsureCanManageTaskAsync(task.ProjectId, task.AssigneeUserId, task.Id, cancellationToken: cancellationToken);
         var db = databaseAccessor.GetCurrentDb();
         var log = (await db.Queryable<ProjectManagementTaskTimeLogEntity>().Where(item => item.Id == id && item.TaskId == taskId && !item.IsDeleted).Take(1).ToListAsync(cancellationToken)).FirstOrDefault() ?? throw new NotFoundException("工时记录不存在", ErrorCodes.PlatformResourceNotFound);
         EnsureVersion(log.VersionNo, versionNo);

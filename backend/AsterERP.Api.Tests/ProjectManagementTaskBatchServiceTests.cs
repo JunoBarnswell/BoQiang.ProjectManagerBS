@@ -17,11 +17,11 @@ public sealed class ProjectManagementTaskBatchServiceTests
     {
         using var db = new SqlSugarClient(new ConnectionConfig { ConnectionString = $"Data Source=file:project-management-batch-wip-{Guid.NewGuid():N};Mode=Memory;Cache=Shared", DbType = DbType.Sqlite, IsAutoCloseConnection = false });
         await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
-        await db.Insertable(new ProjectManagementProjectEntity { Id = "project-a", TenantId = "tenant-a", AppCode = "MES", ProjectCode = "A", ProjectName = "A", OwnerUserId = "operator", WipLimit = 1 }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementProjectEntity { Id = "project-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "A", ProjectName = "A", OwnerUserId = "operator", WipLimit = 1 }).ExecuteCommandAsync();
         await db.Insertable(new[]
         {
-            new ProjectManagementTaskEntity { Id = "task-a", TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-a", TaskCode = "A", Title = "A", CreatedBy = "operator", CreatedTime = DateTime.UtcNow },
-            new ProjectManagementTaskEntity { Id = "task-b", TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-a", TaskCode = "B", Title = "B", CreatedBy = "operator", CreatedTime = DateTime.UtcNow }
+            new ProjectManagementTaskEntity { Id = "task-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", TaskCode = "A", Title = "A", CreatedBy = "operator", CreatedTime = DateTime.UtcNow },
+            new ProjectManagementTaskEntity { Id = "task-b", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", TaskCode = "B", Title = "B", CreatedBy = "operator", CreatedTime = DateTime.UtcNow }
         }).ExecuteCommandAsync();
         var service = new ProjectManagementTaskBatchService(new TestWorkspaceDatabaseAccessor(db), CreateUser());
 
@@ -35,11 +35,11 @@ public sealed class ProjectManagementTaskBatchServiceTests
     {
         using var db = new SqlSugarClient(new ConnectionConfig { ConnectionString = $"Data Source=file:project-management-batch-{Guid.NewGuid():N};Mode=Memory;Cache=Shared", DbType = DbType.Sqlite, IsAutoCloseConnection = false });
         await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
-        await db.Insertable(new ProjectManagementProjectEntity { Id = "project-a", TenantId = "tenant-a", AppCode = "MES", ProjectCode = "A", ProjectName = "A", OwnerUserId = "operator" }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementProjectEntity { Id = "project-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "A", ProjectName = "A", OwnerUserId = "operator" }).ExecuteCommandAsync();
         await db.Insertable(new[]
         {
-            new ProjectManagementTaskEntity { Id = "task-a", TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-a", TaskCode = "A", Title = "A", CreatedBy = "operator", CreatedTime = DateTime.UtcNow },
-            new ProjectManagementTaskEntity { Id = "task-b", TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-a", TaskCode = "B", Title = "B", CreatedBy = "operator", CreatedTime = DateTime.UtcNow }
+            new ProjectManagementTaskEntity { Id = "task-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", TaskCode = "A", Title = "A", CreatedBy = "operator", CreatedTime = DateTime.UtcNow },
+            new ProjectManagementTaskEntity { Id = "task-b", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", TaskCode = "B", Title = "B", CreatedBy = "operator", CreatedTime = DateTime.UtcNow }
         }).ExecuteCommandAsync();
         var service = new ProjectManagementTaskBatchService(new TestWorkspaceDatabaseAccessor(db), CreateUser());
         var request = new ProjectManagementTaskBatchUpdateRequest("project-a", [new("task-a", 1), new("task-b", 1)], Priority: "High");
@@ -106,11 +106,11 @@ public sealed class ProjectManagementTaskBatchServiceTests
         await SeedTasksAsync(db);
         await db.Insertable(new ProjectManagementMilestoneEntity
         {
-            Id = "milestone-a", TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-a", MilestoneName = "Release", CreatedBy = "operator", CreatedTime = DateTime.UtcNow
+            Id = "milestone-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", MilestoneName = "Release", CreatedBy = "operator", CreatedTime = DateTime.UtcNow
         }).ExecuteCommandAsync();
         await db.Insertable(new ProjectManagementLabelEntity
         {
-            Id = "label-a", TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-a", LabelName = "Urgent", Color = "#EF4444", CreatedBy = "operator", CreatedTime = DateTime.UtcNow
+            Id = "label-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", LabelName = "Urgent", Color = "#EF4444", CreatedBy = "operator", CreatedTime = DateTime.UtcNow
         }).ExecuteCommandAsync();
         var service = new ProjectManagementTaskBatchService(new TestWorkspaceDatabaseAccessor(db), CreateUser());
         var startDate = new DateTime(2026, 7, 20);
@@ -149,11 +149,11 @@ public sealed class ProjectManagementTaskBatchServiceTests
         using var db = CreateDatabase("wip-override-permission");
         await db.Insertable(new ProjectManagementProjectEntity
         {
-            Id = "project-a", TenantId = "tenant-a", AppCode = "MES", ProjectCode = "A", ProjectName = "A", OwnerUserId = "operator", WipLimit = 0
+            Id = "project-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "A", ProjectName = "A", OwnerUserId = "operator", WipLimit = 0
         }).ExecuteCommandAsync();
         await db.Insertable(new ProjectManagementTaskEntity
         {
-            Id = "task-a", TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-a", TaskCode = "A", Title = "A", CreatedBy = "operator", CreatedTime = DateTime.UtcNow
+            Id = "task-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", TaskCode = "A", Title = "A", CreatedBy = "operator", CreatedTime = DateTime.UtcNow
         }).ExecuteCommandAsync();
         var service = new ProjectManagementTaskBatchService(new TestWorkspaceDatabaseAccessor(db), CreateUser());
 
@@ -179,18 +179,18 @@ public sealed class ProjectManagementTaskBatchServiceTests
     {
         await db.Insertable(new ProjectManagementProjectEntity
         {
-            Id = "project-a", TenantId = "tenant-a", AppCode = "MES", ProjectCode = "A", ProjectName = "A", OwnerUserId = "operator"
+            Id = "project-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "A", ProjectName = "A", OwnerUserId = "operator"
         }).ExecuteCommandAsync();
         await db.Insertable(new[]
         {
-            new ProjectManagementTaskEntity { Id = "task-a", TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-a", TaskCode = "A", Title = "A", CreatedBy = "operator", CreatedTime = DateTime.UtcNow },
-            new ProjectManagementTaskEntity { Id = "task-b", TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-a", TaskCode = "B", Title = "B", CreatedBy = "operator", CreatedTime = DateTime.UtcNow }
+            new ProjectManagementTaskEntity { Id = "task-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", TaskCode = "A", Title = "A", CreatedBy = "operator", CreatedTime = DateTime.UtcNow },
+            new ProjectManagementTaskEntity { Id = "task-b", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", TaskCode = "B", Title = "B", CreatedBy = "operator", CreatedTime = DateTime.UtcNow }
         }).ExecuteCommandAsync();
     }
 
     private static FixedAsterErpCurrentUser CreateUser() => new(new ClaimsPrincipal(new ClaimsIdentity(new[]
     {
-        new Claim(AsterErpClaimTypes.UserId, "operator"), new Claim(AsterErpClaimTypes.TenantId, "tenant-a"), new Claim(AsterErpClaimTypes.AppCode, "MES")
+        new Claim(AsterErpClaimTypes.UserId, "operator"), new Claim(AsterErpClaimTypes.TenantId, "tenant-a"), new Claim(AsterErpClaimTypes.AppCode, "SYSTEM")
     }, "test")));
     private sealed class TestWorkspaceDatabaseAccessor(ISqlSugarClient db) : IWorkspaceDatabaseAccessor
     {

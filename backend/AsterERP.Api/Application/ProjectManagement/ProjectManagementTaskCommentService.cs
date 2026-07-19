@@ -86,7 +86,7 @@ public sealed class ProjectManagementTaskCommentService(
     public async Task<ProjectManagementTaskCommentResponse> CreateAsync(string taskId, ProjectManagementTaskCommentUpsertRequest request, CancellationToken cancellationToken = default)
     {
         var task = await GetTaskAsync(taskId, cancellationToken);
-        await Policy(task.ProjectId, task.AssigneeUserId).EnsureCanManageTaskAsync(task.ProjectId, task.AssigneeUserId, cancellationToken);
+        await Policy(task.ProjectId, task.AssigneeUserId).EnsureCanManageTaskAsync(task.ProjectId, task.AssigneeUserId, task.Id, cancellationToken: cancellationToken);
         var markdown = NormalizeMarkdown(request.Markdown);
         await EnsureParentAsync(task, request.ParentCommentId, cancellationToken);
         var mentions = NormalizeMentions(request.MentionUserIds);
@@ -144,7 +144,7 @@ public sealed class ProjectManagementTaskCommentService(
         var db = databaseAccessor.GetCurrentDb();
         var entity = (await db.Queryable<ProjectManagementTaskCommentEntity>().Where(item => item.Id == id && item.TenantId == Tenant() && item.AppCode == App() && item.TaskId == task.Id && !item.IsDeleted).Take(1).ToListAsync(cancellationToken)).FirstOrDefault()
             ?? throw new NotFoundException("任务评论不存在", ErrorCodes.PlatformResourceNotFound);
-        await Policy(task.ProjectId, task.AssigneeUserId).EnsureCanManageTaskAsync(task.ProjectId, task.AssigneeUserId, cancellationToken);
+        await Policy(task.ProjectId, task.AssigneeUserId).EnsureCanManageTaskAsync(task.ProjectId, task.AssigneeUserId, task.Id, cancellationToken: cancellationToken);
         if (!string.Equals(entity.AuthorUserId, User(), StringComparison.OrdinalIgnoreCase))
             throw new ValidationException("只能删除自己发布的评论", ErrorCodes.PermissionDenied);
         EnsureVersion(entity.VersionNo, versionNo);

@@ -17,7 +17,7 @@ public sealed class ProjectManagementTaskTemplateServiceTests
     {
         using var db = CreateDb();
         await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
-        await db.Insertable(new ProjectManagementProjectEntity { Id = "project-a", TenantId = "tenant-a", AppCode = "MES", ProjectCode = "A", ProjectName = "A", OwnerUserId = "operator" }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementProjectEntity { Id = "project-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "A", ProjectName = "A", OwnerUserId = "operator" }).ExecuteCommandAsync();
         var service = new ProjectManagementTaskTemplateService(new TestWorkspaceDatabaseAccessor(db), CreateUser());
         var template = await service.CreateAsync("project-a", new ProjectManagementTaskTemplateUpsertRequest(
             "release", "Release", "[{\"TaskCode\":\"root\",\"Title\":\"Root\",\"Weight\":2},{\"TaskCode\":\"child\",\"Title\":\"Child\",\"ParentCode\":\"root\",\"DueDays\":1}]"));
@@ -37,7 +37,7 @@ public sealed class ProjectManagementTaskTemplateServiceTests
     {
         using var db = CreateDb();
         await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
-        await db.Insertable(new ProjectManagementProjectEntity { Id = "project-a", TenantId = "tenant-a", AppCode = "MES", ProjectCode = "A", ProjectName = "A", OwnerUserId = "operator" }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementProjectEntity { Id = "project-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "A", ProjectName = "A", OwnerUserId = "operator" }).ExecuteCommandAsync();
         var service = new ProjectManagementTaskTemplateService(new TestWorkspaceDatabaseAccessor(db), CreateUser());
 
         await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() => service.CreateAsync("project-a", new ProjectManagementTaskTemplateUpsertRequest("bad", "Bad", "[{\"TaskCode\":\"a\",\"Title\":\"A\"},{\"TaskCode\":\"a\",\"Title\":\"A2\"}]")));
@@ -47,7 +47,7 @@ public sealed class ProjectManagementTaskTemplateServiceTests
     private static SqlSugarClient CreateDb() => new(new ConnectionConfig { ConnectionString = $"Data Source=file:project-management-template-{Guid.NewGuid():N};Mode=Memory;Cache=Shared", DbType = DbType.Sqlite, IsAutoCloseConnection = false });
     private static FixedAsterErpCurrentUser CreateUser() => new(new ClaimsPrincipal(new ClaimsIdentity(new[]
     {
-        new Claim(AsterErpClaimTypes.UserId, "operator"), new Claim(AsterErpClaimTypes.TenantId, "tenant-a"), new Claim(AsterErpClaimTypes.AppCode, "MES")
+        new Claim(AsterErpClaimTypes.UserId, "operator"), new Claim(AsterErpClaimTypes.TenantId, "tenant-a"), new Claim(AsterErpClaimTypes.AppCode, "SYSTEM")
     }, "test")));
     private sealed class TestWorkspaceDatabaseAccessor(ISqlSugarClient db) : IWorkspaceDatabaseAccessor
     {

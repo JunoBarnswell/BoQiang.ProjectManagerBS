@@ -95,7 +95,7 @@ public sealed class ProjectManagementTaskService(
     public async Task<ProjectManagementTaskResponse> CreateAsync(string projectId, ProjectManagementTaskUpsertRequest request, CancellationToken cancellationToken = default)
     {
         await EnsureProjectAsync(projectId, cancellationToken);
-        await (accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser)).EnsureCanManageTaskAsync(projectId, request.AssigneeUserId, cancellationToken);
+        await (accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser)).EnsureCanManageTaskAsync(projectId, request.AssigneeUserId, parentTaskId: request.ParentTaskId, cancellationToken: cancellationToken);
         Validate(request);
         var db = databaseAccessor.GetCurrentDb();
         var taskCode = NormalizeRequired(request.TaskCode, "任务编码不能为空");
@@ -112,12 +112,14 @@ public sealed class ProjectManagementTaskService(
         {
             TenantId = RequireTenantId(), AppCode = RequireAppCode(), ProjectId = projectId,
             MilestoneId = NormalizeOptional(request.MilestoneId), ParentTaskId = parent?.Id,
+            TreePath = BuildTreePath(parent, null),
             TaskCode = taskCode, Title = NormalizeRequired(request.Title, "任务标题不能为空"), Description = NormalizeOptional(request.Description),
             Status = status, BlockedReason = status == ProjectManagementDomainRules.TaskBlocked ? "手工阻塞" : null, Priority = NormalizePriority(request.Priority), AssigneeUserId = NormalizeOptional(request.AssigneeUserId),
             AssigneeEmploymentId = NormalizeOptional(request.AssigneeEmploymentId), StartDate = request.StartDate, DueDate = request.DueDate,
             ProgressPercent = request.ProgressPercent, Weight = request.Weight, EstimateMinutes = request.EstimateMinutes,
             SortOrder = await GetNextSiblingSortOrderAsync(projectId, parent?.Id, cancellationToken), Depth = depth, VersionNo = 1, CreatedBy = RequireUserId(), CreatedTime = now
         };
+        entity.TreePath = BuildTreePath(parent, entity.Id);
         await ProjectManagementMutationTransaction.RunAsync(db, async () =>
         {
             await db.Insertable(entity).ExecuteCommandAsync(cancellationToken);
@@ -132,7 +134,7 @@ public sealed class ProjectManagementTaskService(
     public async Task<ProjectManagementTaskResponse> UpdateAsync(string id, ProjectManagementTaskUpsertRequest request, CancellationToken cancellationToken = default)
     {
         var entity = await GetRequiredAsync(id, cancellationToken);
-        await (accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser)).EnsureCanManageTaskAsync(entity.ProjectId, request.AssigneeUserId, cancellationToken);
+        await (accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser)).EnsureCanManageTaskAsync(entity.ProjectId, request.AssigneeUserId, entity.Id, request.ParentTaskId, cancellationToken);
         Validate(request);
         EnsureVersion(entity.VersionNo, request.VersionNo);
         var status = ProjectManagementDomainRules.RequireTaskStatus(request.Status);
@@ -141,6 +143,7 @@ public sealed class ProjectManagementTaskService(
         var parent = await ResolveParentAsync(entity.ProjectId, request.ParentTaskId, cancellationToken, entity.Id);
         var depth = parent is null ? 0 : parent.Depth + 1;
         var oldDepth = entity.Depth;
+        var oldTreePath = entity.TreePath;
         ProjectManagementDomainRules.EnsureTaskDepth(depth);
         if (parent is not null && await IsDescendantAsync(entity.ProjectId, parent.Id, entity.Id, cancellationToken))
             throw new ValidationException("任务不能移动到自己的子孙节点下");
@@ -150,6 +153,7 @@ public sealed class ProjectManagementTaskService(
             throw new ValidationException("项目内任务编码已存在");
         entity.MilestoneId = NormalizeOptional(request.MilestoneId);
         entity.ParentTaskId = parent?.Id;
+        entity.TreePath = BuildTreePath(parent, entity.Id);
         entity.Depth = depth;
         entity.TaskCode = taskCode;
         entity.Title = NormalizeRequired(request.Title, "任务标题不能为空");
@@ -178,6 +182,7 @@ public sealed class ProjectManagementTaskService(
                 entity.UpdatedTime ?? DateTime.UtcNow,
                 entity.UpdatedBy ?? RequireUserId(),
                 cancellationToken);
+            await UpdateSubtreeTreePathsAsync(entity.ProjectId, entity.Id, oldTreePath, entity.TreePath, entity.UpdatedTime ?? DateTime.UtcNow, entity.UpdatedBy ?? RequireUserId(), cancellationToken);
             await db.Updateable(entity).ExecuteCommandAsync(cancellationToken);
             if (dependencyService is not null) await dependencyService.RefreshBlockedStatesAsync(entity.ProjectId, cancellationToken);
             await RefreshProgressProjectionsAsync(entity.ProjectId, cancellationToken);
@@ -195,12 +200,13 @@ public sealed class ProjectManagementTaskService(
     public async Task<ProjectManagementTaskResponse> MoveAsync(string id, ProjectManagementTaskMoveRequest request, CancellationToken cancellationToken = default)
     {
         var entity = await GetRequiredAsync(id, cancellationToken);
-        await (accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser)).EnsureCanManageTaskAsync(entity.ProjectId, entity.AssigneeUserId, cancellationToken);
+        await (accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser)).EnsureCanManageTaskAsync(entity.ProjectId, entity.AssigneeUserId, entity.Id, request.ParentTaskId, cancellationToken);
         EnsureVersion(entity.VersionNo, request.VersionNo);
         var parent = await ResolveParentAsync(entity.ProjectId, request.ParentTaskId, cancellationToken, entity.Id);
         if (request.UpdateMilestone) await EnsureMilestoneAsync(entity.ProjectId, request.MilestoneId, cancellationToken);
         var depth = parent is null ? 0 : parent.Depth + 1;
         var oldDepth = entity.Depth;
+        var oldTreePath = entity.TreePath;
         ProjectManagementDomainRules.EnsureTaskDepth(depth);
         if (parent is not null && await IsDescendantAsync(entity.ProjectId, parent.Id, entity.Id, cancellationToken))
             throw new ValidationException("任务不能移动到自己的子孙节点下");
@@ -211,6 +217,7 @@ public sealed class ProjectManagementTaskService(
         var now = DateTime.UtcNow;
         var userId = RequireUserId();
         entity.ParentTaskId = parent?.Id;
+        entity.TreePath = BuildTreePath(parent, entity.Id);
         entity.Depth = depth;
         if (request.UpdateMilestone) entity.MilestoneId = NormalizeOptional(request.MilestoneId);
         entity.VersionNo++;
@@ -224,6 +231,7 @@ public sealed class ProjectManagementTaskService(
                     await RebalanceSiblingOrderingAsync(db, entity, orderedSiblings, parent?.Id, now, userId, cancellationToken);
 
                 await UpdateSubtreeDepthAsync(entity.ProjectId, entity.Id, oldDepth, depth, now, userId, cancellationToken);
+                await UpdateSubtreeTreePathsAsync(entity.ProjectId, entity.Id, oldTreePath, entity.TreePath, now, userId, cancellationToken);
                 await db.Updateable(entity).ExecuteCommandAsync(cancellationToken);
                 if (request.UpdateMilestone)
                     await UpdateSubtreeMilestoneAsync(entity.ProjectId, entity.Id, entity.MilestoneId, now, userId, cancellationToken);
@@ -243,7 +251,7 @@ public sealed class ProjectManagementTaskService(
     public async Task DeleteAsync(string id, long versionNo, CancellationToken cancellationToken = default)
     {
         var entity = await GetRequiredAsync(id, cancellationToken);
-        await (accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser)).EnsureCanManageTaskAsync(entity.ProjectId, entity.AssigneeUserId, cancellationToken);
+        await (accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser)).EnsureCanManageTaskAsync(entity.ProjectId, entity.AssigneeUserId, entity.Id, cancellationToken: cancellationToken);
         EnsureVersion(entity.VersionNo, versionNo);
         var db = databaseAccessor.GetCurrentDb();
         var now = DateTime.UtcNow;
@@ -307,7 +315,7 @@ public sealed class ProjectManagementTaskService(
             .Where(item => item.Id == id && item.IsDeleted)
             .Take(1).ToListAsync(cancellationToken);
         var entity = rows.FirstOrDefault() ?? throw new NotFoundException("已删除任务不存在", ErrorCodes.PlatformResourceNotFound);
-        await (accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser)).EnsureCanManageTaskAsync(entity.ProjectId, entity.AssigneeUserId, cancellationToken);
+        await (accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser)).EnsureCanManageTaskAsync(entity.ProjectId, entity.AssigneeUserId, entity.Id, cancellationToken: cancellationToken);
         EnsureVersion(entity.VersionNo, versionNo);
         if (await db.Queryable<ProjectManagementTaskEntity>().AnyAsync(item => item.ProjectId == entity.ProjectId && item.TaskCode == entity.TaskCode && !item.IsDeleted, cancellationToken))
             throw new ValidationException("任务编码已被其他任务占用，不能恢复");
@@ -471,6 +479,25 @@ public sealed class ProjectManagementTaskService(
                 .ExecuteCommandAsync(cancellationToken);
     }
 
+    private async Task UpdateSubtreeTreePathsAsync(string projectId, string rootId, string oldTreePath, string newTreePath, DateTime now, string userId, CancellationToken cancellationToken)
+    {
+        if (string.Equals(oldTreePath, newTreePath, StringComparison.Ordinal)) return;
+        var descendants = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskEntity>()
+            .Where(item => item.ProjectId == projectId && item.Id != rootId && !item.IsDeleted && item.TreePath.StartsWith(oldTreePath))
+            .ToListAsync(cancellationToken);
+        foreach (var descendant in descendants)
+        {
+            descendant.TreePath = newTreePath + descendant.TreePath[oldTreePath.Length..];
+            descendant.VersionNo++;
+            descendant.UpdatedBy = userId;
+            descendant.UpdatedTime = now;
+        }
+        if (descendants.Count > 0)
+            await databaseAccessor.GetCurrentDb().Updateable(descendants)
+                .UpdateColumns(item => new { item.TreePath, item.VersionNo, item.UpdatedBy, item.UpdatedTime })
+                .ExecuteCommandAsync(cancellationToken);
+    }
+
     private async Task<List<ProjectManagementTaskEntity>> LoadSiblingsAsync(string projectId, string? parentTaskId, string excludedTaskId, CancellationToken cancellationToken)
     {
         var rows = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskEntity>()
@@ -495,6 +522,9 @@ public sealed class ProjectManagementTaskService(
         ordered.Insert(index, entity);
         return ordered;
     }
+
+    private static string BuildTreePath(ProjectManagementTaskEntity? parent, string? taskId) =>
+        string.IsNullOrWhiteSpace(taskId) ? string.Empty : $"{(string.IsNullOrWhiteSpace(parent?.TreePath) ? "/" : parent.TreePath)}{taskId}/";
 
     private static bool TryAssignSparseSortOrder(ProjectManagementTaskEntity entity, IReadOnlyList<ProjectManagementTaskEntity> ordered)
     {

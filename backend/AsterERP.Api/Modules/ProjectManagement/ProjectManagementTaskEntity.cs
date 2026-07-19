@@ -11,6 +11,7 @@ public sealed class ProjectManagementTaskEntity : EntityBase
     public string ProjectId { get; set; } = string.Empty;
     [SugarColumn(IsNullable = true)] public string? MilestoneId { get; set; }
     [SugarColumn(IsNullable = true)] public string? ParentTaskId { get; set; }
+    public string TreePath { get; set; } = string.Empty;
     public string TaskCode { get; set; } = string.Empty;
     [SugarColumn(IsNullable = true)] public string? OccurrenceKey { get; set; }
     public string Title { get; set; } = string.Empty;

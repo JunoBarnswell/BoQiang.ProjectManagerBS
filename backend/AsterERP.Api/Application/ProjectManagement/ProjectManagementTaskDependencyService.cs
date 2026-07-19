@@ -17,7 +17,7 @@ public sealed class ProjectManagementTaskDependencyService(
     public async Task<IReadOnlyList<ProjectManagementTaskDependencyResponse>> QueryAsync(string projectId, CancellationToken cancellationToken = default)
     {
         await EnsureProjectAsync(projectId, cancellationToken);
-        await (accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser)).EnsureCanManageDependenciesAsync(projectId, cancellationToken);
+        await (accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser)).EnsureCanManageDependenciesAsync(projectId, cancellationToken: cancellationToken);
         var items = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskDependencyEntity>()
             .Where(item => item.ProjectId == projectId && !item.IsDeleted)
             .OrderBy(item => item.CreatedTime)
@@ -28,9 +28,9 @@ public sealed class ProjectManagementTaskDependencyService(
     public async Task<ProjectManagementTaskDependencyResponse> CreateAsync(string projectId, ProjectManagementTaskDependencyUpsertRequest request, CancellationToken cancellationToken = default)
     {
         await EnsureProjectAsync(projectId, cancellationToken);
-        await (accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser)).EnsureCanManageDependenciesAsync(projectId, cancellationToken);
         var predecessor = await EnsureTaskAsync(projectId, request.PredecessorTaskId, cancellationToken);
         var successor = await EnsureTaskAsync(projectId, request.SuccessorTaskId, cancellationToken);
+        await (accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser)).EnsureCanManageDependenciesAsync(projectId, [predecessor.Id, successor.Id], cancellationToken);
         if (predecessor.Id == successor.Id) throw new ValidationException("任务不能依赖自身");
         var type = NormalizeDependencyType(request.DependencyType);
         if (request.LagMinutes < 0) throw new ValidationException("依赖滞后时间不能为负数");
@@ -58,6 +58,7 @@ public sealed class ProjectManagementTaskDependencyService(
         var db = databaseAccessor.GetCurrentDb();
         var entity = (await db.Queryable<ProjectManagementTaskDependencyEntity>().Where(item => item.Id == id && item.ProjectId == projectId && !item.IsDeleted).Take(1).ToListAsync(cancellationToken)).FirstOrDefault()
             ?? throw new NotFoundException("任务依赖不存在", ErrorCodes.PlatformResourceNotFound);
+        await (accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser)).EnsureCanManageDependenciesAsync(projectId, [entity.PredecessorTaskId, entity.SuccessorTaskId], cancellationToken);
         if (entity.VersionNo != versionNo || versionNo <= 0) throw new ValidationException("任务依赖已被其他用户修改，请刷新后重试", ErrorCodes.ApplicationDevelopmentPageRevisionConflict);
         entity.IsDeleted = true; entity.DeletedBy = RequireUserId(); entity.DeletedTime = DateTime.UtcNow;
         entity.UpdatedBy = entity.DeletedBy; entity.UpdatedTime = entity.DeletedTime; entity.VersionNo++;

@@ -16,6 +16,7 @@ public interface IProjectManagementMemberCandidateService
         ProjectManagementMemberCandidateQuery query,
         CancellationToken cancellationToken = default);
     Task<bool> IsSelectableAsync(string userId, CancellationToken cancellationToken = default);
+    Task<bool> IsSelectableAsync(string userId, string? employmentId, CancellationToken cancellationToken = default);
 }
 
 public sealed class ProjectManagementMemberCandidateService(
@@ -23,6 +24,9 @@ public sealed class ProjectManagementMemberCandidateService(
     ICurrentUser currentUser) : IProjectManagementMemberCandidateService
 {
     public async Task<bool> IsSelectableAsync(string userId, CancellationToken cancellationToken = default)
+        => await IsSelectableAsync(userId, null, cancellationToken);
+
+    public async Task<bool> IsSelectableAsync(string userId, string? employmentId, CancellationToken cancellationToken = default)
     {
         var tenantId = RequireTenantId();
         var appCode = RequireAppCode();
@@ -34,11 +38,13 @@ public sealed class ProjectManagementMemberCandidateService(
         if (string.Equals(appCode, "SYSTEM", StringComparison.OrdinalIgnoreCase))
         {
             return await databaseAccessor.MainDb.Queryable<SystemUserTenantMembershipEntity>()
-                .Where(item => item.UserId == userId && item.TenantId == tenantId && !item.IsDeleted && item.Status == "Enabled")
+                .Where(item => item.UserId == userId && item.TenantId == tenantId && !item.IsDeleted && item.Status == "Enabled" &&
+                    (string.IsNullOrWhiteSpace(employmentId) || item.Id == employmentId))
                 .AnyAsync(cancellationToken);
         }
         return await db.Queryable<SystemUserEmploymentEntity>()
-            .Where(item => item.UserId == userId && item.TenantId == tenantId && item.AppCode == appCode && !item.IsDeleted && item.Status == "Enabled")
+            .Where(item => item.UserId == userId && item.TenantId == tenantId && item.AppCode == appCode && !item.IsDeleted && item.Status == "Enabled" &&
+                (string.IsNullOrWhiteSpace(employmentId) || item.Id == employmentId))
             .AnyAsync(cancellationToken);
     }
 
@@ -224,8 +230,11 @@ public sealed class ProjectManagementMemberCandidateService(
     private string RequireTenantId() =>
         currentUser.GetAsterErpTenantId() ?? throw new InvalidOperationException("当前会话缺少租户上下文");
 
-    private string RequireAppCode() =>
-        currentUser.GetAsterErpAppCode() ?? throw new InvalidOperationException("当前会话缺少应用上下文");
+    private string RequireAppCode()
+    {
+        ProjectManagementPlatformScope.RequireSystemWorkspace(currentUser);
+        return ProjectManagementPlatformScope.AppCode;
+    }
 
     private static string? Normalize(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();

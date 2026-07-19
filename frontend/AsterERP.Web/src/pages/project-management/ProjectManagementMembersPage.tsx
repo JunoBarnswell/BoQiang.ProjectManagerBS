@@ -7,6 +7,7 @@ import {
   deleteProjectManagementMember,
   getProjectManagementMemberCandidates,
   getProjectManagementMembers,
+  getProjectManagementTasks,
   updateProjectManagementMember,
 } from "../../api/project-management/projectManagement.api";
 import type {
@@ -27,6 +28,8 @@ import { PageLoading } from "../../shared/status/PageLoading";
 import { getErrorMessage } from "../../shared/utils/errorMessage";
 
 const emptyForm: ProjectManagementMemberUpsertRequest = { userId: "", roleCode: "Member", versionNo: 0 };
+const projectMemberRoles = ["Owner", "Manager", "Lead", "Member", "Viewer"] as const;
+
 export function ProjectManagementMembersPage() {
   const scope = useProjectManagementWorkspaceScope();
   const { projectId = "" } = useParams<{ projectId: string }>();
@@ -43,6 +46,33 @@ export function ProjectManagementMembersPage() {
   const candidatesQuery = useQuery({
     queryKey: projectManagementQueryKeys.memberCandidates(scope, { pageIndex: 1, pageSize: 100 }),
     queryFn: ({ signal }) => getProjectManagementMemberCandidates({ pageIndex: 1, pageSize: 100 }, signal),
+    enabled: scope.isAvailable && Boolean(projectId),
+  });
+  const topicRootsQuery = useQuery({
+    queryKey: projectManagementQueryKeys.tasks(scope, {
+      projectId,
+      pageIndex: 1,
+      pageSize: 200,
+      parentTaskId: "",
+      viewKey: "tree",
+      sortBy: "tree",
+      sortDirection: "asc",
+      includeCompleted: true,
+    }),
+    queryFn: ({ signal }) =>
+      getProjectManagementTasks(
+        {
+          projectId,
+          pageIndex: 1,
+          pageSize: 200,
+          parentTaskId: "",
+          viewKey: "tree",
+          sortBy: "tree",
+          sortDirection: "asc",
+          includeCompleted: true,
+        },
+        signal,
+      ),
     enabled: scope.isAvailable && Boolean(projectId),
   });
 
@@ -97,6 +127,7 @@ export function ProjectManagementMembersPage() {
   }
   const members = membersQuery.data?.data ?? [];
   const candidates = candidatesQuery.data?.data?.items ?? [];
+  const topicRoots = (topicRootsQuery.data?.data?.items ?? []).filter((task) => !task.parentTaskId && task.depth === 0);
   const updateForm = (next: ProjectManagementMemberUpsertRequest) => {
     setForm(next);
     setDirty(true);
@@ -112,7 +143,11 @@ export function ProjectManagementMembersPage() {
               aria-label="成员用户"
               value={form.userId}
               disabled={Boolean(editingId)}
-              onChange={(event) => updateForm({ ...form, userId: event.target.value })}
+              onChange={(event) => {
+                const userId = event.target.value;
+                const candidate = candidates.find((item) => item.userId === userId);
+                updateForm({ ...form, userId, employmentId: candidate?.employmentId });
+              }}
             >
               <option value="">选择用户</option>
               {candidates
@@ -123,18 +158,29 @@ export function ProjectManagementMembersPage() {
                   </option>
                 ))}
             </select>
-            <input
+            <select
               aria-label="成员角色"
               value={form.roleCode ?? ""}
-              onChange={(event) => updateForm({ ...form, roleCode: event.target.value })}
-              placeholder="角色编码"
-            />
-            <input
-              aria-label="任务范围根节点"
+              onChange={(event) => {
+                const roleCode = event.target.value;
+                updateForm({ ...form, roleCode, scopeRootTaskId: roleCode === "Lead" ? form.scopeRootTaskId : undefined });
+              }}
+            >
+              {projectMemberRoles.map((roleCode) => (
+                <option key={roleCode} value={roleCode}>{roleCode}</option>
+              ))}
+            </select>
+            <select
+              aria-label="主题父任务范围"
               value={form.scopeRootTaskId ?? ""}
+              disabled={form.roleCode !== "Lead" || topicRootsQuery.isLoading}
               onChange={(event) => updateForm({ ...form, scopeRootTaskId: event.target.value || undefined })}
-              placeholder="任务范围根节点（可选）"
-            />
+            >
+              <option value="">整个项目（可选）</option>
+              {topicRoots.map((task) => (
+                <option key={task.id} value={task.id}>{task.taskCode} · {task.title}</option>
+              ))}
+            </select>
           </div>
           <div className="mt-3 flex gap-2">
             <PermissionButton
@@ -159,6 +205,9 @@ export function ProjectManagementMembersPage() {
           </div>
           {candidatesQuery.isError ? (
             <p className="mt-2 text-sm text-amber-700">成员候选人加载失败，无法新增成员；现有成员仍可查看。</p>
+          ) : null}
+          {topicRootsQuery.isError ? (
+            <p className="mt-2 text-sm text-amber-700">主题父任务加载失败，Lead 仍可保存为整个项目范围。</p>
           ) : null}
         </section>
       </PermissionGuard>

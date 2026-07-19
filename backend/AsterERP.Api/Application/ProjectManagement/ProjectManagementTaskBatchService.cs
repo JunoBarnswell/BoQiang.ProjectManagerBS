@@ -29,11 +29,12 @@ public sealed class ProjectManagementTaskBatchService(
         var db = databaseAccessor.GetCurrentDb();
         var project = await db.Queryable<ProjectManagementProjectEntity>().Where(item => item.Id == request.ProjectId && !item.IsDeleted).Take(1).ToListAsync(cancellationToken);
         if (project.Count == 0) throw new NotFoundException("项目不存在", ErrorCodes.PlatformResourceNotFound);
-        await Policy().EnsureCanManageTaskAsync(request.ProjectId, request.AssigneeUserId, cancellationToken);
         var ids = request.Items.Select(item => item.TaskId).Distinct(StringComparer.Ordinal).ToList();
         if (ids.Count != request.Items.Count) throw new ValidationException("批量任务不能重复");
         var tasks = await db.Queryable<ProjectManagementTaskEntity>().Where(item => item.ProjectId == request.ProjectId && ids.Contains(item.Id) && !item.IsDeleted).ToListAsync(cancellationToken);
         if (tasks.Count != ids.Count) throw new ValidationException("存在不属于当前项目或已删除的任务");
+        foreach (var task in tasks)
+            await Policy().EnsureCanManageTaskAsync(request.ProjectId, request.AssigneeUserId, task.Id, cancellationToken: cancellationToken);
         var byId = tasks.ToDictionary(item => item.Id, StringComparer.Ordinal);
         var nextStatus = string.IsNullOrWhiteSpace(request.Status) ? null : ProjectManagementDomainRules.RequireTaskStatus(request.Status);
         var nextPriority = string.IsNullOrWhiteSpace(request.Priority) ? null : RequirePriority(request.Priority);
