@@ -58,6 +58,12 @@ public sealed class ProjectManagementReportTests
         var excel = await service.ExportExcelAsync(new ProjectManagementReportQuery(PageSize: 500));
         using var workbook = new ClosedXML.Excel.XLWorkbook(new MemoryStream(excel.Content));
         Assert.Equal("'=VISIBLE", workbook.Worksheet("ProjectReport").Cell(2, 1).GetString());
+        Assert.Equal("ProjectManagement.ExcelSnapshot", workbook.Worksheet("Schema").Cell(2, 2).GetString());
+        Assert.Equal("visible", workbook.Worksheet("Projects").Cell(2, 1).GetString());
+        Assert.Equal("Visible", workbook.Worksheet("Tasks").Cell(2, 3).GetString());
+        Assert.Equal("Task", workbook.Worksheet("Tasks").Cell(2, 9).GetString());
+        foreach (var worksheet in new[] { "Milestones", "Tasks", "ProjectMembers", "Participants", "Tags", "TaskTags", "Dependencies", "Comments", "ProgressLogs", "Attachments", "Reminders", "Activities", "ChangeJournal" })
+            Assert.NotNull(workbook.Worksheet(worksheet));
     }
 
     [Fact]
