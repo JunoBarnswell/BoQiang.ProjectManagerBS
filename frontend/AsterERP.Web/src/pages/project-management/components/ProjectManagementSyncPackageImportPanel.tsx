@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import {
   applyProjectManagementSync,
@@ -34,13 +34,16 @@ export function ProjectManagementSyncPackageImportPanel({ deviceId }: ProjectMan
   const [importResult, setImportResult] = useState<ProjectManagementSyncImportResponse | null>(null);
   const [failureMessage, setFailureMessage] = useState<string | null>(null);
   const [failedAction, setFailedAction] = useState<FailedAction>(null);
+  const previewAbortController = useRef<AbortController | null>(null);
 
   const previewMutation = useApiMutation({
     mutationFn: () => {
       if (!packageFile) throw new Error('请先选择同步包');
-      return previewProjectManagementSync(packageFile);
+      previewAbortController.current = new AbortController();
+      return previewProjectManagementSync(packageFile, previewAbortController.current.signal);
     },
     onError: (error) => {
+      if (error instanceof DOMException && error.name === 'AbortError') return;
       const messageText = getErrorMessage(error, '同步包预览失败');
       setFailureMessage(messageText);
       setFailedAction('preview');
@@ -52,6 +55,7 @@ export function ProjectManagementSyncPackageImportPanel({ deviceId }: ProjectMan
       setImportResult(null);
       setFailureMessage(null);
       setFailedAction(null);
+      previewAbortController.current = null;
       message.success(result.data?.isCompatible ? '同步包校验通过，请查看预览结果' : '同步包不兼容，无法导入');
     },
   });
@@ -85,6 +89,13 @@ export function ProjectManagementSyncPackageImportPanel({ deviceId }: ProjectMan
     previewMutation.mutate();
   };
 
+  const cancelPreview = () => {
+    previewAbortController.current?.abort();
+    previewAbortController.current = null;
+    setFailureMessage(null);
+    setFailedAction(null);
+  };
+
   const startImport = () => {
     setFailureMessage(null);
     setFailedAction(null);
@@ -116,6 +127,7 @@ export function ProjectManagementSyncPackageImportPanel({ deviceId }: ProjectMan
         >
           {previewMutation.isPending ? '正在校验同步包…' : '预览同步包'}
         </PermissionButton>
+        {previewMutation.isPending ? <button className="rounded border border-gray-300 px-3 py-2" type="button" onClick={cancelPreview}>取消校验</button> : null}
       </div>
       {packageFile ? <p className="text-sm text-gray-500">已选择：{packageFile.name}（{formatFileSize(packageFile.size)}）。服务端会校验包格式、工作区、校验和与冲突。</p> : null}
       {previewMutation.isPending ? <div className="rounded border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900" role="status">正在读取同步包并计算影响范围，请勿关闭页面。</div> : null}
@@ -131,6 +143,9 @@ export function ProjectManagementSyncPackageImportPanel({ deviceId }: ProjectMan
             <span>成员 {preview.memberCount}</span>
             <span>里程碑 {preview.milestoneCount}</span>
             <span>冲突 {preview.conflicts.length}</span>
+            <span>Journal {preview.journalCount}</span>
+            <span>签名 {preview.signatureValid ? '有效' : '无效'}</span>
+            <span>解压 {formatFileSize(preview.uncompressedSize)}</span>
             <span>模式 {preview.mode === 'Incremental' ? `增量（>${preview.sinceSequenceNo}）` : '全量'}</span>
           </div>
           {preview.conflicts.length ? (
@@ -148,6 +163,7 @@ export function ProjectManagementSyncPackageImportPanel({ deviceId }: ProjectMan
             </div>
           ) : null}
           {preview.alreadyImported ? <div className="mt-2 text-blue-700">该同步包已有成功导入记录；使用相同幂等键执行将直接返回原结果。</div> : null}
+          {preview.validationState !== 'Valid' ? <div className="mt-2 text-red-700">验证状态：{preview.validationState}，当前不可导入。</div> : null}
           {preview.warnings.length ? (
             <div className="mt-2 text-amber-700">提示：{preview.warnings.join('；')}</div>
           ) : null}

@@ -9,6 +9,8 @@ namespace AsterERP.Api.Controllers;
 [Route("api/project-management/sync")]
 public sealed class ProjectManagementSyncController(IProjectManagementSyncService service) : BaseApiController
 {
+    private const long MaxSyncPackageBytes = 200L * 1024 * 1024;
+
     [HttpGet("watermark")]
     [Permission(PermissionCodes.ProjectManagementSyncExport)]
     public async Task<IActionResult> WatermarkAsync([FromQuery] string deviceId, CancellationToken cancellationToken)
@@ -36,7 +38,8 @@ public sealed class ProjectManagementSyncController(IProjectManagementSyncServic
     [Permission(PermissionCodes.ProjectManagementSyncImport)]
     public async Task<IActionResult> PreviewAsync(IFormFile file, CancellationToken cancellationToken)
     {
-        if (file is null || file.Length <= 0) return BadRequest("同步包不能为空");
+        var validationError = ValidatePackageFile(file);
+        if (validationError is not null) return validationError;
         await using var stream = file.OpenReadStream();
         return ApiOk(await service.PreviewAsync(stream, cancellationToken));
     }
@@ -52,8 +55,18 @@ public sealed class ProjectManagementSyncController(IProjectManagementSyncServic
         [FromForm] string? deviceId,
         CancellationToken cancellationToken)
     {
-        if (file is null || file.Length <= 0) return BadRequest("同步包不能为空");
+        var validationError = ValidatePackageFile(file);
+        if (validationError is not null) return validationError;
         await using var stream = file.OpenReadStream();
         return ApiOk(await service.ImportAsync(stream, new ProjectManagementSyncImportRequest(currentPassword, confirmRisk, conflictStrategy, idempotencyKey, deviceId), cancellationToken));
+    }
+
+    private static IActionResult? ValidatePackageFile(IFormFile? file)
+    {
+        if (file is null || file.Length <= 0) return new BadRequestObjectResult("同步包不能为空");
+        if (file.Length > MaxSyncPackageBytes) return new BadRequestObjectResult("同步包超过 200 MB 限制");
+        if (!string.Equals(Path.GetExtension(file.FileName), ".bqsync", StringComparison.OrdinalIgnoreCase))
+            return new BadRequestObjectResult("只支持 .bqsync 同步包");
+        return null;
     }
 }

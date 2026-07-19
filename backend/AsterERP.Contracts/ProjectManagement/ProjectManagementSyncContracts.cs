@@ -46,7 +46,11 @@ public sealed record ProjectManagementSyncPreviewResponse(
     bool SignatureValid = false,
     int JournalCount = 0,
     bool HasChanges = true,
-    int AttachmentEntryCount = 0);
+    int AttachmentEntryCount = 0,
+    string ValidationState = "Valid",
+    long UncompressedSize = 0,
+    int ArchiveEntryCount = 0,
+    bool PreviewOnly = true);
 
 public sealed record ProjectManagementSyncImportRequest(
     string CurrentPassword,

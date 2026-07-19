@@ -888,6 +888,10 @@ export interface ProjectManagementSyncPreviewResponse {
   journalCount: number;
   hasChanges: boolean;
   attachmentEntryCount: number;
+  validationState: string;
+  uncompressedSize: number;
+  archiveEntryCount: number;
+  previewOnly: boolean;
 }
 
 export interface ProjectManagementSyncImportResponse {

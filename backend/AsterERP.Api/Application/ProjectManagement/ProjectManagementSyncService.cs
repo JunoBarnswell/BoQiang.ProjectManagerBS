@@ -27,6 +27,9 @@ public sealed class ProjectManagementSyncService(
     private const string Magic = "BQSYNC";
     private const string SchemaVersion = "3";
     private const int MaxPackageBytes = 200 * 1024 * 1024;
+    private const long MaxEntryUncompressedBytes = 200L * 1024 * 1024;
+    private const long MaxArchiveUncompressedBytes = 400L * 1024 * 1024;
+    private const long MaxManifestBytes = 1L * 1024 * 1024;
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private static readonly SemaphoreSlim DeviceWriteLock = new(1, 1);
 
@@ -179,8 +182,9 @@ public sealed class ProjectManagementSyncService(
         }
         using (archive)
         {
+        var uncompressedSize = ValidateArchiveResources(archive);
         ValidatePaths(archive);
-        var manifest = await ReadJsonAsync<SyncManifest>(archive, "manifest.json", cancellationToken);
+        var manifest = await ReadJsonAsync<SyncManifest>(archive, "manifest.json", MaxManifestBytes, cancellationToken);
         if (!string.Equals(manifest.Magic, Magic, StringComparison.Ordinal) || !string.Equals(manifest.SchemaVersion, SchemaVersion, StringComparison.Ordinal))
             throw new ValidationException("同步包格式或版本不兼容");
         if (!string.Equals(manifest.TenantId, Tenant(), StringComparison.Ordinal) || !string.Equals(manifest.AppCode, App(), StringComparison.OrdinalIgnoreCase))
@@ -188,10 +192,10 @@ public sealed class ProjectManagementSyncService(
 
         ValidateManifestEntries(manifest, archive);
         var signatureValid = VerifyManifestSignature(manifest);
-        var data = await ReadBytesAsync(archive, manifest.DataEntry, cancellationToken);
+        var data = await ReadBytesAsync(archive, manifest.DataEntry, MaxEntryUncompressedBytes, cancellationToken);
         if (!string.Equals(Sha256(data), manifest.DataSha256, StringComparison.OrdinalIgnoreCase))
             throw new ValidationException("同步包校验和不匹配");
-        var journalData = await ReadBytesAsync(archive, manifest.JournalEntry, cancellationToken);
+        var journalData = await ReadBytesAsync(archive, manifest.JournalEntry, MaxEntryUncompressedBytes, cancellationToken);
         if (!string.Equals(Sha256(journalData), manifest.JournalSha256, StringComparison.OrdinalIgnoreCase))
             throw new ValidationException("同步包 Journal 校验和不匹配");
         var snapshot = JsonSerializer.Deserialize<SyncSnapshot>(data, JsonOptions) ?? throw new ValidationException("同步包数据为空");
@@ -212,7 +216,8 @@ public sealed class ProjectManagementSyncService(
             packageBytes.LongLength, Sha256(packageBytes), manifest.JournalSequenceNo, signatureValid, warnings,
             conflicts.Select(FormatConflict).ToList(), manifest.Mode, manifest.SinceSequenceNo, conflicts, replay is not null,
             manifest.SignatureAlgorithm, manifest.SignatureKeyId, signatureValid, manifest.JournalCount,
-            manifest.JournalCount > 0 || manifest.Mode == "Full", manifest.AttachmentEntries.Count);
+            manifest.JournalCount > 0 || manifest.Mode == "Full", manifest.AttachmentEntries.Count,
+            signatureValid ? "Valid" : "InvalidSignature", uncompressedSize, archive.Entries.Count, true);
         }
     }
 
@@ -687,10 +692,7 @@ public sealed class ProjectManagementSyncService(
             var entryName = manifest.AttachmentEntries.GetValueOrDefault(source.FileId)
                 ?? throw new ValidationException($"同步包缺少附件 {source.FileId}");
             var entry = archive.GetEntry(entryName) ?? throw new ValidationException($"同步包缺少附件 {source.FileId}");
-            await using var stream = entry.Open();
-            await using var attachmentBytes = new MemoryStream();
-            await stream.CopyToAsync(attachmentBytes, cancellationToken);
-            var bytes = attachmentBytes.ToArray();
+            var bytes = await ReadBytesAsync(archive, entryName, MaxEntryUncompressedBytes, cancellationToken);
             if (!manifest.AttachmentSha256.TryGetValue(source.FileId, out var expectedChecksum) ||
                 !string.Equals(Sha256(bytes), expectedChecksum, StringComparison.OrdinalIgnoreCase))
                 throw new ValidationException($"附件 {source.FileId} 校验和不匹配");
@@ -739,8 +741,9 @@ public sealed class ProjectManagementSyncService(
         catch (InvalidDataException exception) { throw new ValidationException($"同步包压缩结构无效: {exception.Message}"); }
         using (archive)
         {
+            ValidateArchiveResources(archive);
             ValidatePaths(archive);
-            var manifest = await ReadJsonAsync<SyncManifest>(archive, "manifest.json", cancellationToken);
+            var manifest = await ReadJsonAsync<SyncManifest>(archive, "manifest.json", MaxManifestBytes, cancellationToken);
             if (!string.Equals(manifest.Magic, Magic, StringComparison.Ordinal) || !string.Equals(manifest.SchemaVersion, SchemaVersion, StringComparison.Ordinal))
                 throw new ValidationException("同步包格式或版本不兼容");
             manifest.Mode = NormalizeMode(manifest.Mode);
@@ -749,9 +752,9 @@ public sealed class ProjectManagementSyncService(
                 throw new ValidationException("同步包工作区与当前工作区不匹配", ErrorCodes.PermissionDenied);
             ValidateManifestEntries(manifest, archive);
             if (!VerifyManifestSignature(manifest)) throw new ValidationException("同步包签名校验失败");
-            var data = await ReadBytesAsync(archive, manifest.DataEntry, cancellationToken);
+            var data = await ReadBytesAsync(archive, manifest.DataEntry, MaxEntryUncompressedBytes, cancellationToken);
             if (!string.Equals(Sha256(data), manifest.DataSha256, StringComparison.OrdinalIgnoreCase)) throw new ValidationException("同步包校验和不匹配");
-            var journalData = await ReadBytesAsync(archive, manifest.JournalEntry, cancellationToken);
+            var journalData = await ReadBytesAsync(archive, manifest.JournalEntry, MaxEntryUncompressedBytes, cancellationToken);
             if (!string.Equals(Sha256(journalData), manifest.JournalSha256, StringComparison.OrdinalIgnoreCase)) throw new ValidationException("同步包 Journal 校验和不匹配");
             var snapshot = JsonSerializer.Deserialize<SyncSnapshot>(data, JsonOptions) ?? throw new ValidationException("同步包数据为空");
             var journalRecords = JsonSerializer.Deserialize<List<ProjectManagementSyncJournalItem>>(journalData, JsonOptions) ?? [];
@@ -760,13 +763,28 @@ public sealed class ProjectManagementSyncService(
         }
     }
 
-    private static void ValidatePaths(ZipArchive archive)
+    private static long ValidateArchiveResources(ZipArchive archive)
     {
         if (archive.Entries.Count > 10000) throw new ValidationException("同步包条目过多");
+        long total = 0;
+        foreach (var entry in archive.Entries)
+        {
+            if (entry.Length < 0 || entry.Length > MaxEntryUncompressedBytes)
+                throw new ValidationException("同步包单项解压大小超过限制", ErrorCodes.SchemaOrPayloadTooLarge);
+            total = checked(total + entry.Length);
+            if (total > MaxArchiveUncompressedBytes)
+                throw new ValidationException("同步包解压总大小超过限制", ErrorCodes.SchemaOrPayloadTooLarge);
+        }
+        return total;
+    }
+
+    private static void ValidatePaths(ZipArchive archive)
+    {
+        var paths = new HashSet<string>(StringComparer.Ordinal);
         foreach (var entry in archive.Entries)
         {
             var path = entry.FullName.Replace('\\', '/');
-            if (path.StartsWith('/') || path.Contains(":", StringComparison.Ordinal) || path.Contains("../", StringComparison.Ordinal) || path.Contains("..\\", StringComparison.Ordinal) || path.Split('/').Any(string.IsNullOrWhiteSpace))
+            if (!paths.Add(path) || path.StartsWith('/') || path.Contains(":", StringComparison.Ordinal) || path.Contains("../", StringComparison.Ordinal) || path.Contains("..\\", StringComparison.Ordinal) || path.Split('/').Any(string.IsNullOrWhiteSpace))
                 throw new ValidationException("同步包包含非法路径");
         }
     }
@@ -775,7 +793,7 @@ public sealed class ProjectManagementSyncService(
     {
         if (!string.Equals(manifest.DataEntry, "data.json", StringComparison.Ordinal) || !string.Equals(manifest.JournalEntry, "journal.json", StringComparison.Ordinal))
             throw new ValidationException("同步包 Manifest 数据入口无效");
-        if (manifest.AttachmentSha256.Count != manifest.AttachmentEntries.Count)
+        if (manifest.AttachmentCount < 0 || manifest.JournalCount < 0 || manifest.AttachmentSha256 is null || manifest.AttachmentEntries is null || manifest.AttachmentSha256.Count != manifest.AttachmentEntries.Count || manifest.AttachmentCount != manifest.AttachmentSha256.Count)
             throw new ValidationException("同步包附件校验和与归档入口数量不一致");
         var paths = new HashSet<string>(StringComparer.Ordinal);
         foreach (var mapping in manifest.AttachmentEntries)
@@ -786,18 +804,29 @@ public sealed class ProjectManagementSyncService(
                 throw new ValidationException("同步包附件入口或校验和无效");
             if (!paths.Add(entry) || archive.GetEntry(entry) is null) throw new ValidationException("同步包附件入口重复或缺失");
         }
+        var expected = new HashSet<string>(StringComparer.Ordinal) { "manifest.json", "data.json", "journal.json" };
+        expected.UnionWith(paths);
+        if (archive.Entries.Any(item => !expected.Contains(item.FullName.Replace('\\', '/'))))
+            throw new ValidationException("同步包包含 Manifest 未声明的归档入口");
     }
 
-    private static async Task<T> ReadJsonAsync<T>(ZipArchive archive, string name, CancellationToken cancellationToken)
-        => JsonSerializer.Deserialize<T>(await ReadBytesAsync(archive, name, cancellationToken), JsonOptions)
+    private static async Task<T> ReadJsonAsync<T>(ZipArchive archive, string name, long maxBytes, CancellationToken cancellationToken)
+        => JsonSerializer.Deserialize<T>(await ReadBytesAsync(archive, name, maxBytes, cancellationToken), JsonOptions)
             ?? throw new ValidationException($"同步包缺少 {name}");
 
-    private static async Task<byte[]> ReadBytesAsync(ZipArchive archive, string name, CancellationToken cancellationToken)
+    private static async Task<byte[]> ReadBytesAsync(ZipArchive archive, string name, long maxBytes, CancellationToken cancellationToken)
     {
         var entry = archive.GetEntry(name) ?? throw new ValidationException($"同步包缺少 {name}");
         await using var stream = entry.Open();
         await using var memory = new MemoryStream();
-        await stream.CopyToAsync(memory, cancellationToken);
+        var buffer = new byte[64 * 1024];
+        while (true)
+        {
+            var read = await stream.ReadAsync(buffer.AsMemory(), cancellationToken);
+            if (read == 0) break;
+            if (memory.Length + read > maxBytes) throw new ValidationException($"同步包入口 {name} 解压大小超过限制", ErrorCodes.SchemaOrPayloadTooLarge);
+            await memory.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
+        }
         return memory.ToArray();
     }
 

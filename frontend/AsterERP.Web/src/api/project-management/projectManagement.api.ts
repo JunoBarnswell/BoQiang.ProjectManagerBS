@@ -754,11 +754,12 @@ export function exportProjectManagementSync(request: {
   return httpClient.postDownloadBlob("/project-management/sync/export", request, { timeoutMs: 120_000 });
 }
 
-export function previewProjectManagementSync(file: File): Promise<ApiEnvelope<ProjectManagementSyncPreviewResponse>> {
+export function previewProjectManagementSync(file: File, signal?: AbortSignal): Promise<ApiEnvelope<ProjectManagementSyncPreviewResponse>> {
   const formData = new FormData();
   formData.append("file", file);
   return httpClient.postForm<ProjectManagementSyncPreviewResponse>("/project-management/sync/preview", formData, {
     timeoutMs: 120_000,
+    signal,
   });
 }
 
