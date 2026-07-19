@@ -8,4 +8,6 @@ public interface IProjectManagementExcelImportService
     Task<ProjectManagementExcelTemplateFile> DownloadTemplateAsync(CancellationToken cancellationToken = default);
 
     Task<ProjectManagementExcelImportPreviewResponse> PreviewAsync(IFormFile file, CancellationToken cancellationToken = default);
+
+    Task<ProjectManagementExcelImportSnapshot> CreateSnapshotAsync(IFormFile file, CancellationToken cancellationToken = default);
 }

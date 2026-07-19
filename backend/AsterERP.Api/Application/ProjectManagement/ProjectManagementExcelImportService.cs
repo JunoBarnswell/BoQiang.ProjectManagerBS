@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Security.Cryptography;
 using System.Text;
 using AsterERP.Api.Infrastructure.Database;
 using AsterERP.Api.Modules.ProjectManagement;
@@ -62,6 +63,9 @@ public sealed class ProjectManagementExcelImportService(
     }
 
     public async Task<ProjectManagementExcelImportPreviewResponse> PreviewAsync(IFormFile file, CancellationToken cancellationToken = default)
+        => (await CreateSnapshotAsync(file, cancellationToken)).Preview;
+
+    public async Task<ProjectManagementExcelImportSnapshot> CreateSnapshotAsync(IFormFile file, CancellationToken cancellationToken = default)
     {
         ValidateFile(file);
         await using var uploadStream = file.OpenReadStream();
@@ -72,7 +76,7 @@ public sealed class ProjectManagementExcelImportService(
         return await ParseWorkbookAsync(workbookStream, cancellationToken);
     }
 
-    private async Task<ProjectManagementExcelImportPreviewResponse> ParseWorkbookAsync(Stream stream, CancellationToken cancellationToken)
+    private async Task<ProjectManagementExcelImportSnapshot> ParseWorkbookAsync(Stream stream, CancellationToken cancellationToken)
     {
         var stopwatch = Stopwatch.StartNew();
         XLWorkbook workbook;
@@ -128,8 +132,8 @@ public sealed class ProjectManagementExcelImportService(
                 .Select(item => new ProjectManagementExcelImportRowError(item.SheetName, item.RowNumber, item.StableId, item.Code, item.Message, item.Severity))
                 .ToList();
 
-            return new ProjectManagementExcelImportPreviewResponse(
-                Guid.NewGuid().ToString("N"),
+            var preview = new ProjectManagementExcelImportPreviewResponse(
+                CreateSnapshotId(rows, errors),
                 errors.Count == 0 ? ProjectManagementExcelImportPreviewStatuses.Completed : ProjectManagementExcelImportPreviewStatuses.CompletedWithErrors,
                 ProjectManagementExcelImportTemplate.Version,
                 DateTime.UtcNow,
@@ -143,7 +147,31 @@ public sealed class ProjectManagementExcelImportService(
                 skippedRows,
                 limitedErrors,
                 errors.Count > limitedErrors.Count);
+            var snapshotRows = rows.Select(row => new ProjectManagementExcelImportSnapshotRow(
+                row.SheetName,
+                row.RowNumber,
+                row.StableId,
+                new Dictionary<string, string>(row.Values, StringComparer.OrdinalIgnoreCase),
+                row.Issues.Select(issue => new ProjectManagementExcelImportRowError(issue.SheetName, issue.RowNumber, issue.StableId, issue.Code, issue.Message, issue.Severity)).ToList())).ToList();
+            return new ProjectManagementExcelImportSnapshot(preview, snapshotRows);
         }
+    }
+
+    private static string CreateSnapshotId(IReadOnlyList<ImportRow> rows, IReadOnlyList<RowIssue> issues)
+    {
+        var builder = new StringBuilder();
+        foreach (var row in rows.OrderBy(item => item.SheetName, StringComparer.Ordinal).ThenBy(item => item.RowNumber))
+        {
+            builder.Append(row.SheetName).Append('\u001f').Append(row.RowNumber).Append('\u001f').Append(row.StableId).Append('\u001f');
+            foreach (var value in row.Values.OrderBy(item => item.Key, StringComparer.OrdinalIgnoreCase))
+                builder.Append(value.Key).Append('=').Append(value.Value).Append('\u001e');
+            foreach (var issue in row.Issues.OrderBy(item => item.Code, StringComparer.Ordinal))
+                builder.Append(issue.Code).Append('=').Append(issue.Message).Append('\u001e');
+            builder.Append('\n');
+        }
+        foreach (var issue in issues.OrderBy(item => item.SheetName, StringComparer.Ordinal).ThenBy(item => item.RowNumber).ThenBy(item => item.Code, StringComparer.Ordinal))
+            builder.Append(issue.SheetName).Append('\u001f').Append(issue.RowNumber).Append('\u001f').Append(issue.Code).Append('=').Append(issue.Message).Append('\n');
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(builder.ToString()))).ToLowerInvariant();
     }
 
     private async Task<ExistingData> LoadExistingDataAsync(IReadOnlyList<ImportRow> rows, CancellationToken cancellationToken)

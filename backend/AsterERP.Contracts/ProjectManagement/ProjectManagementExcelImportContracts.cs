@@ -51,3 +51,59 @@ public sealed record ProjectManagementExcelImportPreviewResponse(
     int SkippedRows,
     IReadOnlyList<ProjectManagementExcelImportRowError> Errors,
     bool ErrorsTruncated);
+
+public sealed record ProjectManagementExcelImportSnapshotRow(
+    string SheetName,
+    int RowNumber,
+    string? StableId,
+    IReadOnlyDictionary<string, string> Values,
+    IReadOnlyList<ProjectManagementExcelImportRowError> Issues);
+
+public sealed record ProjectManagementExcelImportSnapshot(
+    ProjectManagementExcelImportPreviewResponse Preview,
+    IReadOnlyList<ProjectManagementExcelImportSnapshotRow> Rows);
+
+public sealed record ProjectManagementExcelImportConfirmRequest(
+    string PreviewId,
+    string IdempotencyKey);
+
+public static class ProjectManagementExcelImportResultStatuses
+{
+    public const string Succeeded = "Succeeded";
+    public const string Failed = "Failed";
+    public const string Replayed = "Replayed";
+}
+
+public static class ProjectManagementExcelImportRowStatuses
+{
+    public const string Added = "Added";
+    public const string Updated = "Updated";
+    public const string Skipped = "Skipped";
+    public const string Failed = "Failed";
+    public const string Conflict = "Conflict";
+    public const string Warning = "Warning";
+}
+
+public sealed record ProjectManagementExcelImportRowResult(
+    string SheetName,
+    int RowNumber,
+    string? StableId,
+    string Status,
+    string? Message,
+    long? VersionNo);
+
+public sealed record ProjectManagementExcelImportResultResponse(
+    string ImportId,
+    string PreviewId,
+    string IdempotencyKey,
+    string Status,
+    string TraceId,
+    DateTime CompletedAt,
+    int AddedRows,
+    int UpdatedRows,
+    int SkippedRows,
+    int FailedRows,
+    int ConflictRows,
+    int WarningRows,
+    IReadOnlyList<ProjectManagementExcelImportRowResult> Rows,
+    bool Replayed);
