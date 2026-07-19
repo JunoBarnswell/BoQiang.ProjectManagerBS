@@ -25,12 +25,14 @@ import {
   getProjectManagementTaskAttachments,
   getProjectManagementTaskComments,
   getProjectManagementTask,
+  getProjectManagementTaskLabels,
   getProjectManagementTaskDependencies,
   getProjectManagementTaskReminders,
   getProjectManagementTasks,
   exportProjectManagementTasksCsv,
   previewProjectManagementTaskAttachment,
   moveProjectManagementTask,
+  setProjectManagementTaskLabels,
   updateProjectManagementTask,
   updateProjectManagementTaskComment,
   updateProjectManagementSavedView,
@@ -61,7 +63,7 @@ import { useTaskWorkspaceUrlState } from '../../features/project-management/hook
 import { useProjectManagementWorkspaceScope } from '../../features/project-management/state/projectManagementWorkspaceScope';
 import { taskWorkspaceStateToQuery, taskWorkspaceStateToSavedView } from '../../features/project-management/state/taskWorkspaceState';
 import { SavedViewManager } from '../../features/project-management/task-workspace/SavedViewManager';
-import { createTaskMoveRequest } from '../../features/project-management/task-workspace/taskMoveIntent';
+import { createTaskMoveRequest, type TaskGroupDropTarget } from '../../features/project-management/task-workspace/taskMoveIntent';
 import { TaskWorkspaceBatchCommandPanel } from '../../features/project-management/task-workspace/TaskWorkspaceBatchCommandPanel';
 import { TaskWorkspaceBatchResultPanel } from '../../features/project-management/task-workspace/TaskWorkspaceBatchResultPanel';
 import { taskBatchResultToCsv } from '../../features/project-management/task-workspace/taskBatchExecutionModel';
@@ -542,6 +544,81 @@ export function ProjectManagementTaskWorkspacePage() {
       await invalidateProjectTaskViews();
     },
   });
+  const groupMutation = useApiMutation({
+    mutationFn: async ({ task, target }: { task: ProjectManagementTaskListItem; target: TaskGroupDropTarget }) => {
+      const original = (await getProjectManagementTask(task.id)).data;
+      if (!original) throw new Error('任务不存在或已被删除');
+      const originalLabelIds = (await getProjectManagementTaskLabels(task.id)).data?.map((label) => label.labelId) ?? [];
+      let groupChanged = false;
+      let current = original;
+      try {
+        if (target.groupBy === 'label') {
+          const desiredLabelIds = target.groupValue === 'unassigned'
+            ? []
+            : [...new Set([...originalLabelIds, target.groupValue])];
+          if (!sameStringSet(originalLabelIds, desiredLabelIds)) {
+            await setProjectManagementTaskLabels(task.id, { labelIds: desiredLabelIds, versionNo: current.versionNo });
+            groupChanged = true;
+            current = (await getProjectManagementTask(task.id)).data ?? current;
+          }
+        } else {
+          const request = taskDetailToForm(original);
+          const requestedValue = target.groupValue === 'unassigned' || target.groupValue === 'root' ? undefined : target.groupValue;
+          if (target.groupBy === 'assignee') request.assigneeUserId = requestedValue;
+          if (target.groupBy === 'milestone') request.milestoneId = requestedValue;
+          if (target.groupBy === 'parent') request.parentTaskId = requestedValue;
+          const currentValue = target.groupBy === 'assignee'
+            ? original.assigneeUserId
+            : target.groupBy === 'milestone'
+              ? original.milestoneId
+              : original.parentTaskId;
+          if ((currentValue ?? undefined) !== requestedValue) {
+            const result = await updateProjectManagementTask(task.id, request);
+            if (!result.data) throw new Error('分组字段更新没有返回最新任务');
+            groupChanged = true;
+            current = result.data;
+          }
+        }
+
+        if (target.status && target.status !== current.status) {
+          const result = await changeProjectManagementTaskStatus(task.id, { status: target.status, versionNo: current.versionNo });
+          if (!result.data) throw new Error('状态更新没有返回最新任务');
+          groupChanged = true;
+          current = result.data;
+        }
+        return current;
+      } catch (error) {
+        if (!groupChanged) throw error;
+        try {
+          let latest = (await getProjectManagementTask(task.id)).data;
+          if (!latest) throw new Error('回滚时任务已不存在');
+          if (target.groupBy === 'label') {
+            const latestLabelIds = (await getProjectManagementTaskLabels(task.id)).data?.map((label) => label.labelId) ?? [];
+            if (!sameStringSet(latestLabelIds, originalLabelIds)) {
+              await setProjectManagementTaskLabels(task.id, { labelIds: originalLabelIds, versionNo: latest.versionNo });
+              latest = (await getProjectManagementTask(task.id)).data ?? latest;
+            }
+            if (!target.status || latest.status === original.status) throw error;
+          }
+          const rollback = await updateProjectManagementTask(task.id, taskDetailToForm(original, latest.versionNo));
+          if (!rollback.data) throw new Error('回滚没有返回最新任务');
+        } catch (rollbackError) {
+          throw new Error(`${getErrorMessage(error, '分组移动失败')}；自动回滚失败：${getErrorMessage(rollbackError, '请刷新任务确认当前值')}`);
+        }
+        throw error;
+      }
+    },
+    onError: async (error, variables) => {
+      message.error(getErrorMessage(error, `任务“${variables.task.title}”分组移动失败，已回滚`));
+      await queryClient.invalidateQueries({ queryKey: queryKeys.projectManagement.task(scope, projectId, variables.task.id) });
+      await invalidateProjectTaskViews();
+    },
+    onSuccess: async (_result, variables) => {
+      message.success(`任务“${variables.task.title}”已移动到分组`);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.projectManagement.task(scope, projectId, variables.task.id) });
+      await invalidateProjectTaskViews();
+    },
+  });
   const boardStatusMutation = useApiMutation({
     mutationFn: ({ task, status }: { previousProgress: number; previousStatus: string; task: ProjectManagementTaskListItem; status: string }) => {
       return changeProjectManagementTaskStatus(task.id, { status, versionNo: task.versionNo });
@@ -833,16 +910,23 @@ export function ProjectManagementTaskWorkspacePage() {
           pendingTaskId={quickActionTaskId}
           projectId={projectId}
           onMoveTask={(task, target) => {
-            if (moveMutation.isPending) {
+            if (moveMutation.isPending || groupMutation.isPending || boardStatusMutation.isPending) {
               message.error('正在提交上一项任务移动，请稍候');
               return;
             }
             const request = createTaskMoveRequest(task, target);
             if (request) moveMutation.mutate({ taskId: task.id, request });
           }}
+          onMoveTaskGroup={(task, target) => {
+            if (moveMutation.isPending || groupMutation.isPending || boardStatusMutation.isPending) {
+              message.error('正在提交上一项任务移动，请稍候');
+              return;
+            }
+            groupMutation.mutate({ task, target });
+          }}
           onChangeTaskStatus={(task, status) => {
             if (task.status === status) return;
-            if (boardStatusMutation.isPending) {
+            if (boardStatusMutation.isPending || groupMutation.isPending || moveMutation.isPending) {
               message.error('正在提交上一项状态变更，请稍候');
               return;
             }
@@ -867,4 +951,10 @@ export function ProjectManagementTaskWorkspacePage() {
       </section>
     </ResponsivePage>
   );
+}
+
+function sameStringSet(left: readonly string[], right: readonly string[]): boolean {
+  if (left.length !== right.length) return false;
+  const rightSet = new Set(right);
+  return left.every((value) => rightSet.has(value));
 }
