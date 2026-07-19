@@ -10,6 +10,7 @@ using AsterERP.Api.Modules.ProjectManagement;
 using AsterERP.Api.Modules.Workflows;
 using AsterERP.Contracts.ProjectManagement;
 using AsterERP.Contracts.Workflows;
+using AsterERP.Shared;
 using AsterERP.Shared.Exceptions;
 using Microsoft.Extensions.Logging;
 using SqlSugar;
@@ -31,6 +32,8 @@ public sealed class ProjectManagementAutomationService(
 {
     private const string MenuCode = "project-management";
     private const string AutomationRulesProperty = "automationRules";
+    private const int MaxRulesPerBinding = 32;
+    private const int MaxAutomationDepth = 3;
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     public async Task<ProjectManagementAutomationRulesResponse> GetRulesAsync(string entityType, CancellationToken cancellationToken = default)
@@ -46,12 +49,14 @@ public sealed class ProjectManagementAutomationService(
         ArgumentNullException.ThrowIfNull(request);
         var entityType = NormalizeEntityType(request.EntityType);
         ValidateRule(request);
+        await ValidateWebhookEndpointAsync(request, cancellationToken);
         var binding = await FindBindingAsync(entityType, cancellationToken)
             ?? throw new ValidationException("项目审批未配置 BPMN 绑定");
         var root = ParseRoot(binding.BindingConfigJson);
         var rules = ReadRules(root);
         var ruleId = string.IsNullOrWhiteSpace(request.RuleId) ? Guid.NewGuid().ToString("N") : request.RuleId.Trim();
         var existing = rules.FindIndex(rule => string.Equals(rule.RuleId, ruleId, StringComparison.Ordinal));
+        if (existing < 0 && rules.Count >= MaxRulesPerBinding) throw new ValidationException($"每个审批绑定最多配置 {MaxRulesPerBinding} 条自动化规则");
         var stored = new StoredRule(
             ruleId, request.Enabled, entityType, request.Trigger.Trim(), Normalize(request.Status),
             Normalize(request.AssigneeUserId), Normalize(request.MilestoneId), request.DueWithinDays,
@@ -67,6 +72,31 @@ public sealed class ProjectManagementAutomationService(
         binding.UpdatedTime = DateTime.UtcNow;
         await databaseAccessor.GetCurrentDb().Updateable(binding).UpdateColumns(item => new { item.BindingConfigJson, item.UpdatedBy, item.UpdatedTime }).ExecuteCommandAsync(cancellationToken);
         return MapRules(entityType, binding);
+    }
+
+    public async Task<ProjectManagementAutomationRuleRunResponse> RunRuleAsync(string entityType, string entityId, string ruleId, CancellationToken cancellationToken = default)
+    {
+        RequireWorkspace();
+        var target = await LoadTargetAsync(entityType, entityId, cancellationToken);
+        await accessPolicy.EnsureCanManageProjectAsync(target.ProjectId, cancellationToken);
+        var binding = await FindBindingAsync(NormalizeEntityType(entityType), cancellationToken) ?? throw new ValidationException("自动化规则绑定不存在");
+        var rule = ReadRules(ParseRoot(binding.BindingConfigJson)).FirstOrDefault(item => item.RuleId == ruleId) ?? throw new ValidationException("自动化规则不存在");
+        var traceId = $"automation:manual:{Guid.NewGuid():N}";
+        if (!rule.Enabled) return await WriteRuleLogAsync(rule, target, "skipped", "规则已停用", traceId, cancellationToken);
+        if (!Matches(rule, entityType, target.Status, target.AssigneeUserId, target.MilestoneId, target.DueDate))
+            return await WriteRuleLogAsync(rule, target, "skipped", "当前实体不满足规则条件", traceId, cancellationToken);
+        return await ExecuteRuleAsync(rule, target, "manual", traceId, 0, cancellationToken);
+    }
+
+    public async Task<GridPageResult<ProjectManagementAutomationExecutionLogResponse>> GetExecutionLogsAsync(string entityType, string entityId, GridQuery query, CancellationToken cancellationToken = default)
+    {
+        var target = await LoadTargetAsync(entityType, entityId, cancellationToken);
+        await accessPolicy.EnsureCanViewProjectAsync(target.ProjectId, cancellationToken);
+        var db = databaseAccessor.GetProjectManagementDb();
+        var logQuery = db.Queryable<ProjectManagementActivityEntity>().Where(item => item.TenantId == Tenant() && item.AppCode == App() && item.AggregateType == target.EntityType && item.AggregateId == target.Id && item.ActivityType.StartsWith("automation.rule."));
+        var total = new RefAsync<int>();
+        var rows = await logQuery.OrderBy(item => item.CreatedTime, OrderByType.Desc).ToPageListAsync(Math.Max(1, query.PageIndex), Math.Clamp(query.PageSize, 1, 100), total, cancellationToken);
+        return new GridPageResult<ProjectManagementAutomationExecutionLogResponse> { Total = total.Value, Items = rows.Select(item => new ProjectManagementAutomationExecutionLogResponse(item.Id, item.ActivityType, item.Summary, item.TraceId, item.ActorUserId, item.CreatedTime)).ToList() };
     }
 
     public async Task<ProjectManagementApprovalResponse> StartApprovalAsync(string entityType, string entityId, ProjectManagementApprovalStartRequest request, CancellationToken cancellationToken = default)
@@ -101,7 +131,7 @@ public sealed class ProjectManagementAutomationService(
         return new(started.ProcessInstanceId, entityType, businessKey, started.Status, started.ProcessDefinitionKey, binding.DetailRoute, false);
     }
 
-    public async Task HandleEntityChangedAsync(string entityType, string entityId, string projectId, string? status, string? assigneeUserId, string? milestoneId, DateTime? dueDate, long versionNo, string eventType, string traceId, CancellationToken cancellationToken = default)
+    public async Task HandleEntityChangedAsync(string entityType, string entityId, string projectId, string? status, string? assigneeUserId, string? milestoneId, DateTime? dueDate, long versionNo, string eventType, string traceId, int automationDepth = 0, CancellationToken cancellationToken = default)
     {
         RequireWorkspace();
         var binding = await FindBindingAsync(NormalizeEntityType(entityType), cancellationToken);
@@ -109,14 +139,8 @@ public sealed class ProjectManagementAutomationService(
         var rules = ReadRules(ParseRoot(binding.BindingConfigJson));
         foreach (var rule in rules.Where(item => item.Enabled && Matches(item, entityType, status, assigneeUserId, milestoneId, dueDate)))
         {
-            if (rule.ActionType == ProjectManagementAutomationActionTypes.StartApproval)
-            {
-                await StartApprovalAsync(entityType, entityId, new ProjectManagementApprovalStartRequest($"{rule.RuleId}:{versionNo}", null, new Dictionary<string, object?> { ["trigger"] = eventType }), cancellationToken);
-            }
-            else if (rule.ActionType == ProjectManagementAutomationActionTypes.Webhook)
-            {
-                await EnqueueWebhookAsync(rule, entityType, entityId, projectId, status, assigneeUserId, milestoneId, dueDate, versionNo, eventType, traceId, cancellationToken);
-            }
+            var target = new Target(entityType, entityId, projectId, entityId, status ?? string.Empty, assigneeUserId, milestoneId, dueDate, versionNo);
+            await ExecuteRuleAsync(rule, target, eventType, traceId, automationDepth, cancellationToken);
         }
     }
 
@@ -194,6 +218,50 @@ public sealed class ProjectManagementAutomationService(
         }
     }
 
+    private async Task<ProjectManagementAutomationRuleRunResponse> ExecuteRuleAsync(StoredRule rule, Target target, string eventType, string traceId, int automationDepth, CancellationToken cancellationToken)
+    {
+        if (automationDepth >= MaxAutomationDepth)
+            return await WriteRuleLogAsync(rule, target, "blocked", $"自动化递归深度超过 {MaxAutomationDepth}", traceId, cancellationToken);
+        try
+        {
+            if (rule.ActionType == ProjectManagementAutomationActionTypes.StartApproval)
+            {
+                await StartApprovalAsync(target.EntityType, target.Id, new ProjectManagementApprovalStartRequest($"{rule.RuleId}:{target.VersionNo}", null, new Dictionary<string, object?> { ["trigger"] = eventType, ["automationDepth"] = automationDepth + 1 }), cancellationToken);
+            }
+            else if (rule.ActionType == ProjectManagementAutomationActionTypes.Webhook)
+            {
+                await EnqueueWebhookAsync(rule, target.EntityType, target.Id, target.ProjectId, string.IsNullOrWhiteSpace(target.Status) ? null : target.Status, target.AssigneeUserId, target.MilestoneId, target.DueDate, target.VersionNo, eventType, traceId, cancellationToken);
+            }
+            else
+            {
+                return await WriteRuleLogAsync(rule, target, "blocked", "动作不在白名单内", traceId, cancellationToken);
+            }
+            return await WriteRuleLogAsync(rule, target, "succeeded", null, traceId, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            return await WriteRuleLogAsync(rule, target, "failed", Trim(exception.Message), traceId, cancellationToken);
+        }
+    }
+
+    private async Task<ProjectManagementAutomationRuleRunResponse> WriteRuleLogAsync(StoredRule rule, Target target, string status, string? errorMessage, string traceId, CancellationToken cancellationToken)
+    {
+        var activityType = $"automation.rule.{status}";
+        try
+        {
+            var exists = await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementActivityEntity>().AnyAsync(item => item.TenantId == Tenant() && item.AppCode == App() && item.AggregateType == target.EntityType && item.AggregateId == target.Id && item.ActivityType == activityType && item.TraceId == traceId, cancellationToken);
+            if (!exists)
+            {
+                await activityWriter.AppendAsync(new ProjectManagementActivityEvent(Tenant(), App(), target.EntityType, target.Id, activityType, $"规则 {rule.RuleId}{(errorMessage is null ? "执行完成" : $"执行失败：{errorMessage}")}", traceId, User(), target.ProjectId), cancellationToken);
+            }
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(exception, "自动化执行日志写入失败，rule={RuleId}, entity={EntityId}", rule.RuleId, target.Id);
+        }
+        return new(rule.RuleId, target.EntityType, target.Id, status, traceId, errorMessage, DateTime.UtcNow);
+    }
+
     private async Task<WorkflowBindingEntity?> FindBindingAsync(string entityType, CancellationToken cancellationToken) =>
         (await databaseAccessor.GetCurrentDb().Queryable<WorkflowBindingEntity>().Where(item => item.TenantId == Tenant() && item.AppCode == App() && item.MenuCode == MenuCode && item.BusinessType == entityType && !item.IsDeleted).OrderBy(item => item.UpdatedTime, OrderByType.Desc).Take(1).ToListAsync(cancellationToken)).FirstOrDefault();
 
@@ -206,15 +274,15 @@ public sealed class ProjectManagementAutomationService(
         if (entityType == ProjectManagementAutomationEntityTypes.Project)
         {
             var row = await db.Queryable<ProjectManagementProjectEntity>().FirstAsync(item => item.Id == id && !item.IsDeleted, cancellationToken) ?? throw new ValidationException("项目不存在");
-            return new(row.Id, row.Id, row.ProjectName, row.Status, null, null, row.DueDate, row.VersionNo);
+            return new(entityType, row.Id, row.Id, row.ProjectName, row.Status, null, null, row.DueDate, row.VersionNo);
         }
         if (entityType == ProjectManagementAutomationEntityTypes.Task)
         {
             var row = await db.Queryable<ProjectManagementTaskEntity>().FirstAsync(item => item.Id == id && !item.IsDeleted, cancellationToken) ?? throw new ValidationException("任务不存在");
-            return new(row.Id, row.ProjectId, row.Title, row.Status, row.AssigneeUserId, row.MilestoneId, row.DueDate, row.VersionNo);
+            return new(entityType, row.Id, row.ProjectId, row.Title, row.Status, row.AssigneeUserId, row.MilestoneId, row.DueDate, row.VersionNo);
         }
         var milestone = await db.Queryable<ProjectManagementMilestoneEntity>().FirstAsync(item => item.Id == id && !item.IsDeleted, cancellationToken) ?? throw new ValidationException("里程碑不存在");
-        return new(milestone.Id, milestone.ProjectId, milestone.MilestoneName, milestone.Status, milestone.OwnerUserId, milestone.Id, milestone.DueDate, milestone.VersionNo);
+        return new(entityType, milestone.Id, milestone.ProjectId, milestone.MilestoneName, milestone.Status, milestone.OwnerUserId, milestone.Id, milestone.DueDate, milestone.VersionNo);
     }
 
     private static bool Matches(StoredRule rule, string entityType, string? status, string? assignee, string? milestone, DateTime? dueDate) =>
@@ -247,6 +315,20 @@ public sealed class ProjectManagementAutomationService(
             if (request.WebhookSecret is not null && request.WebhookSecret.Length is < 16 or > 512) throw new ValidationException("Webhook 密钥长度必须在 16 到 512 个字符之间");
         }
     }
+
+    private async Task ValidateWebhookEndpointAsync(ProjectManagementAutomationRuleUpsertRequest request, CancellationToken cancellationToken)
+    {
+        if (request.ActionType != ProjectManagementAutomationActionTypes.Webhook) return;
+        if (request.WebhookHeaders is { Count: > 16 }) throw new ValidationException("Webhook 自定义请求头不能超过 16 个");
+        foreach (var header in request.WebhookHeaders ?? [])
+        {
+            if (header.Key.Length is < 1 or > 64 || header.Value.Length > 512 || header.Key.Equals("Host", StringComparison.OrdinalIgnoreCase) || header.Key.Equals("Content-Length", StringComparison.OrdinalIgnoreCase) || header.Key.Equals("Proxy-Authorization", StringComparison.OrdinalIgnoreCase))
+                throw new ValidationException("Webhook 请求头不受支持");
+        }
+        var uri = new Uri(request.WebhookUrl!, UriKind.Absolute);
+        ApplicationDataOutboundHttpClient.EnsureAllowedUri(uri);
+        await ApplicationDataOutboundHttpClient.ResolvePublicAddressesAsync(uri.DnsSafeHost, cancellationToken);
+    }
     private static bool EnumLike(string? actual, params string[] allowed) => allowed.Contains(actual?.Trim(), StringComparer.OrdinalIgnoreCase);
     private void RequireWorkspace() => ProjectManagementPlatformScope.RequireSystemWorkspace(currentUser);
     private string Tenant() => currentUser.GetAsterErpTenantId()?.Trim() ?? throw new ValidationException("当前会话缺少租户");
@@ -256,7 +338,7 @@ public sealed class ProjectManagementAutomationService(
     private static string Trim(string value) => value.Length <= 2_000 ? value : value[..2_000];
     private static ProjectManagementAutomationDeliveryResponse MapDelivery(ProjectManagementOperationEntity entity, string eventType) => new(entity.Id, entity.Status, eventType, entity.ErrorMessage, entity.StartedTime, entity.CompletedTime, entity.ProgressPercent);
     private static WebhookEnvelope DeserializeEnvelope(string json) => JsonSerializer.Deserialize<WebhookEnvelope>(json, JsonOptions) ?? throw new ValidationException("Webhook 投递载荷已损坏");
-    private sealed record Target(string Id, string ProjectId, string Title, string Status, string? AssigneeUserId, string? MilestoneId, DateTime? DueDate, long VersionNo);
+    private sealed record Target(string EntityType, string Id, string ProjectId, string Title, string Status, string? AssigneeUserId, string? MilestoneId, DateTime? DueDate, long VersionNo);
     private sealed record StoredRule(string RuleId, bool Enabled, string EntityType, string Trigger, string? Status, string? AssigneeUserId, string? MilestoneId, int? DueWithinDays, string ActionType, string? WebhookUrl, string? WebhookSecretCipher, Dictionary<string, string> WebhookHeaders);
     private sealed record WebhookEnvelope(ProjectManagementAutomationWebhookPayload Payload, StoredRule Rule, string BodyJson, DateTime Timestamp, string Signature);
 }

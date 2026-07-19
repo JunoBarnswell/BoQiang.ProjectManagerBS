@@ -59,6 +59,23 @@ public sealed record ProjectManagementAutomationRulesResponse(
     string? ProcessDefinitionKey,
     IReadOnlyList<ProjectManagementAutomationRuleResponse> Rules);
 
+public sealed record ProjectManagementAutomationRuleRunResponse(
+    string RuleId,
+    string EntityType,
+    string EntityId,
+    string Status,
+    string TraceId,
+    string? ErrorMessage,
+    DateTime ExecutedAt);
+
+public sealed record ProjectManagementAutomationExecutionLogResponse(
+    string Id,
+    string ActivityType,
+    string? Summary,
+    string TraceId,
+    string ActorUserId,
+    DateTime CreatedTime);
+
 public sealed record ProjectManagementApprovalStartRequest(
     string? IdempotencyKey,
     string? Title,
