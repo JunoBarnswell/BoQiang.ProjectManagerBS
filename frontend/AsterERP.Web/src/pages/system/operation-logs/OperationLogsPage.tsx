@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
 import {
   systemOperationLogApi,
@@ -33,13 +34,22 @@ const requestMethods = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'];
 
 export function OperationLogsPage() {
   const { translate } = useI18n();
+  const [searchParams] = useSearchParams();
+  const requestedTraceId = searchParams.get('traceId')?.trim() || undefined;
   const [pageIndex, setPageIndex] = useState(1);
   const [pageSize, setPageSize] = useState(defaultPageSize);
-  const [searchDraft, setSearchDraft] = useState<OperationLogSearchState>({});
-  const [searchState, setSearchState] = useState<OperationLogSearchState>({});
+  const [searchDraft, setSearchDraft] = useState<OperationLogSearchState>(() => ({ traceId: requestedTraceId }));
+  const [searchState, setSearchState] = useState<OperationLogSearchState>(() => ({ traceId: requestedTraceId }));
   const [selectedLogId, setSelectedLogId] = useState<string | null>(null);
   const [sorts, setSorts] = useState<DataTableSortRule[]>([]);
   const [tableQuery, setTableQueryState] = useState<DataTableQueryState>(defaultTableQuery);
+
+  useEffect(() => {
+    if (!requestedTraceId) return;
+    setSearchDraft((current) => current.traceId === requestedTraceId ? current : { ...current, traceId: requestedTraceId });
+    setSearchState((current) => current.traceId === requestedTraceId ? current : { ...current, traceId: requestedTraceId });
+    setPageIndex(1);
+  }, [requestedTraceId]);
 
   const listQueryParams = useMemo<OperationLogQuery>(
     () => ({

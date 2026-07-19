@@ -42,6 +42,7 @@ export const projectManagementQueryKeys = {
     query.from ?? '',
     query.to ?? '',
   ] as const,
+  auditDetail: (scope: ProjectManagementWorkspaceScope, id: string) => [...root(scope), 'audit', 'detail', id] as const,
   backups: (scope: ProjectManagementWorkspaceScope) => [...root(scope), 'backups'] as const,
   dataSpaceSummary: (scope: ProjectManagementWorkspaceScope) => [...root(scope), 'data-space-summary'] as const,
   imConversation: (scope: ProjectManagementWorkspaceScope, projectId: string, taskId?: string) => [

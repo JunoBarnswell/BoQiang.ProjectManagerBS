@@ -57,6 +57,66 @@ export interface ProjectManagementAuditPage {
   items: ProjectManagementAuditItem[];
 }
 
+export interface ProjectManagementAuditFieldChange {
+  field: string;
+  displayName?: string;
+  before?: string;
+  after?: string;
+  isSensitive: boolean;
+}
+
+export interface ProjectManagementAuditBatchItem {
+  aggregateType: string;
+  aggregateId: string;
+  summary?: string;
+  fieldChanges?: ProjectManagementAuditFieldChange[];
+}
+
+export interface ProjectManagementAuditBatch {
+  operationId: string;
+  totalCount: number;
+  successCount: number;
+  failureCount: number;
+  details?: ProjectManagementAuditBatchItem[];
+}
+
+export interface ProjectManagementAuditEntitySnapshot {
+  projectId: string;
+  aggregateType: string;
+  aggregateId: string;
+  summary?: string;
+  isDeleted: boolean;
+}
+
+export interface ProjectManagementAuditRelatedEvent {
+  id: string;
+  kind: string;
+  causality: 'Current' | 'Preceded' | 'Followed' | string;
+  aggregateType?: string;
+  aggregateId?: string;
+  activityType?: string;
+  summary?: string;
+  status?: string;
+  occurredAt: string;
+}
+
+export interface ProjectManagementAuditReference {
+  kind: string;
+  id: string;
+  displayName?: string;
+}
+
+export interface ProjectManagementAuditDetail {
+  audit: ProjectManagementAuditItem;
+  fieldChanges: ProjectManagementAuditFieldChange[];
+  batch?: ProjectManagementAuditBatch;
+  entitySnapshot: ProjectManagementAuditEntitySnapshot;
+  failureReason?: string;
+  relatedEvents: ProjectManagementAuditRelatedEvent[];
+  references: ProjectManagementAuditReference[];
+  traceDiagnosticsRoute?: string;
+}
+
 export interface ProjectManagementOperationQuery {
   pageIndex?: number;
   pageSize?: number;

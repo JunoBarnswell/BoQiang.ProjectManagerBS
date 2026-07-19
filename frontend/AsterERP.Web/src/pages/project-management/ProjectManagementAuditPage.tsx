@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 
-import { exportProjectManagementAudit, getProjectManagementAudit, getProjectManagementOperations, startProjectManagementWorkspaceValidation } from '../../api/project-management/projectManagement.api';
+import { exportProjectManagementAudit, getProjectManagementAudit, getProjectManagementAuditDetail, getProjectManagementOperations, startProjectManagementWorkspaceValidation } from '../../api/project-management/projectManagement.api';
 import type { ProjectManagementAuditQuery, ProjectManagementOperationQuery } from '../../api/project-management/projectManagement.types';
 import { isHttpError } from '../../core/http/httpError';
 import { projectManagementQueryKeys } from '../../core/query/projectManagementQueryKeys';
@@ -20,6 +20,7 @@ import { Page403 } from '../../shared/status/Page403';
 import { PageError } from '../../shared/status/PageError';
 import { PageLoading } from '../../shared/status/PageLoading';
 import { getErrorMessage } from '../../shared/utils/errorMessage';
+import { ProjectManagementAuditDetailDrawer } from './components/ProjectManagementAuditDetailDrawer';
 
 function optional(value: string): string | undefined {
   const normalized = value.trim();
@@ -48,6 +49,7 @@ export function ProjectManagementAuditPage() {
   const [sort, setSort] = useState<{ field: 'createdTime' | 'projectId' | 'aggregateType' | 'activityType' | 'actorUserId'; order: 'asc' | 'desc' }>({ field: 'createdTime', order: 'desc' });
   const [pageIndex, setPageIndex] = useState(1);
   const [operationId, setOperationId] = useState<string | null>(null);
+  const [selectedAuditId, setSelectedAuditId] = useState<string | null>(null);
   const operationStorageKey = useMemo(
     () => scope.isAvailable ? getProjectManagementOperationTrackingKey(scope.tenantId, scope.appCode, userId) : null,
     [scope.appCode, scope.isAvailable, scope.tenantId, userId],
@@ -79,6 +81,11 @@ export function ProjectManagementAuditPage() {
     enabled: scope.isAvailable,
     queryKey: projectManagementQueryKeys.operations(scope, operationQuery),
     queryFn: () => getProjectManagementOperations(operationQuery),
+  });
+  const auditDetailQuery = useQuery({
+    enabled: scope.isAvailable && selectedAuditId !== null,
+    queryKey: projectManagementQueryKeys.auditDetail(scope, selectedAuditId ?? 'none'),
+    queryFn: () => getProjectManagementAuditDetail(selectedAuditId!),
   });
 
   useEffect(() => {
@@ -152,8 +159,8 @@ export function ProjectManagementAuditPage() {
       </div>
       <div className="overflow-x-auto rounded-lg border border-gray-200">
         <table className="min-w-full text-left text-sm">
-          <thead className="bg-gray-50"><tr><th className="px-3 py-2">时间</th><th className="px-3 py-2">项目</th><th className="px-3 py-2">对象</th><th className="px-3 py-2">动作</th><th className="px-3 py-2">来源 / 设备</th><th className="px-3 py-2">结果</th><th className="px-3 py-2">摘要</th><th className="px-3 py-2">操作者</th><th className="px-3 py-2">TraceId</th></tr></thead>
-          <tbody>{page.items.length === 0 ? <tr><td className="px-3 py-6 text-center text-gray-500" colSpan={9}>{hasAuditFilters(submittedFilters) ? '没有匹配的审计记录' : '暂无审计记录'}</td></tr> : page.items.map((item) => <tr className="border-t border-gray-100" key={item.id}><td className="whitespace-nowrap px-3 py-2">{new Date(item.createdTime).toLocaleString()}</td><td className="px-3 py-2 font-mono text-xs">{item.projectId}</td><td className="px-3 py-2">{item.aggregateType} / {item.aggregateId}</td><td className="px-3 py-2">{item.activityType}</td><td className="px-3 py-2">{item.source}{item.sourceDeviceId ? ` / ${item.sourceDeviceId}` : ''}</td><td className="px-3 py-2">{item.isSuccess ? '成功' : '失败'}</td><td className="max-w-md px-3 py-2">{item.summary ?? '-'}</td><td className="px-3 py-2">{item.actorUserId}</td><td className="px-3 py-2 font-mono text-xs">{item.traceId}</td></tr>)}</tbody>
+          <thead className="bg-gray-50"><tr><th className="px-3 py-2">时间</th><th className="px-3 py-2">项目</th><th className="px-3 py-2">对象</th><th className="px-3 py-2">动作</th><th className="px-3 py-2">来源 / 设备</th><th className="px-3 py-2">结果</th><th className="px-3 py-2">摘要</th><th className="px-3 py-2">操作者</th><th className="px-3 py-2">TraceId</th><th className="px-3 py-2">详情</th></tr></thead>
+          <tbody>{page.items.length === 0 ? <tr><td className="px-3 py-6 text-center text-gray-500" colSpan={10}>{hasAuditFilters(submittedFilters) ? '没有匹配的审计记录' : '暂无审计记录'}</td></tr> : page.items.map((item) => <tr className="border-t border-gray-100" key={item.id}><td className="whitespace-nowrap px-3 py-2">{new Date(item.createdTime).toLocaleString()}</td><td className="px-3 py-2 font-mono text-xs">{item.projectId}</td><td className="px-3 py-2">{item.aggregateType} / {item.aggregateId}</td><td className="px-3 py-2">{item.activityType}</td><td className="px-3 py-2">{item.source}{item.sourceDeviceId ? ` / ${item.sourceDeviceId}` : ''}</td><td className="px-3 py-2">{item.isSuccess ? '成功' : '失败'}</td><td className="max-w-md px-3 py-2">{item.summary ?? '-'}</td><td className="px-3 py-2">{item.actorUserId}</td><td className="px-3 py-2 font-mono text-xs">{item.traceId}</td><td className="px-3 py-2"><button className="underline" type="button" onClick={() => setSelectedAuditId(item.id)}>查看</button></td></tr>)}</tbody>
         </table>
       </div>
       <nav aria-label="审计记录分页" className="mt-3 flex items-center gap-2 text-sm"><button disabled={pageIndex === 1} type="button" onClick={() => setPageIndex((current) => current - 1)}>上一页</button><span>第 {pageIndex} 页</span><button disabled={page.total <= pageIndex * pageSize} type="button" onClick={() => setPageIndex((current) => current + 1)}>下一页</button></nav>
@@ -162,6 +169,7 @@ export function ProjectManagementAuditPage() {
         {operationId ? <div className="mb-3"><ProjectManagementOperationProgress operationId={operationId} onChanged={() => void operationsQuery.refetch()} onTrackingEnded={() => { clearProjectManagementOperationTracking(operationStorageKey); setOperationId(null); void operationsQuery.refetch(); }} /></div> : null}
         {operationsQuery.isError ? <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">{isHttpError(operationsQuery.error) && operationsQuery.error.status === 403 ? '无权查看高风险操作记录' : '高风险操作记录暂时无法加载'} <button type="button" className="ml-2 underline" onClick={() => void operationsQuery.refetch()}>重试</button></div> : <div className="overflow-x-auto rounded-lg border border-gray-200"><table className="min-w-full text-left text-sm"><thead className="bg-gray-50"><tr><th className="px-3 py-2">开始时间</th><th className="px-3 py-2">操作</th><th className="px-3 py-2">状态</th><th className="px-3 py-2">失败原因</th><th className="px-3 py-2">操作者</th><th className="px-3 py-2">TraceId</th><th className="px-3 py-2">跟踪</th></tr></thead><tbody>{(operationsQuery.data?.data?.items ?? []).length === 0 ? <tr><td className="px-3 py-6 text-center text-gray-500" colSpan={7}>暂无高风险操作记录</td></tr> : (operationsQuery.data?.data?.items ?? []).map((item) => <tr className="border-t border-gray-100" key={item.id}><td className="whitespace-nowrap px-3 py-2">{new Date(item.startedTime).toLocaleString()}</td><td className="px-3 py-2">{item.operationType}</td><td className="px-3 py-2">{item.status}</td><td className="max-w-md px-3 py-2">{item.errorMessage ?? '-'}</td><td className="px-3 py-2">{item.actorUserId}</td><td className="px-3 py-2 font-mono text-xs">{item.traceId}</td><td className="px-3 py-2"><button type="button" className="underline" onClick={() => { setOperationId(item.id); writeProjectManagementOperationTracking(operationStorageKey, item.id); }}>继续跟踪</button></td></tr>)}</tbody></table></div>}
       </section>
+      <ProjectManagementAuditDetailDrawer detail={auditDetailQuery.data?.data} error={auditDetailQuery.isError} loading={auditDetailQuery.isLoading} open={selectedAuditId !== null} onClose={() => setSelectedAuditId(null)} onRetry={() => void auditDetailQuery.refetch()} />
     </ResponsivePage>
   );
 }

@@ -23,6 +23,7 @@ import type {
   ProjectManagementTaskBatchExecutionResult,
   ProjectManagementTaskQuery,
   ProjectManagementAuditPage,
+  ProjectManagementAuditDetail,
   ProjectManagementAuditQuery,
   ProjectManagementOperationPage,
   ProjectManagementOperationQuery,
@@ -836,6 +837,13 @@ export function getProjectManagementAudit(
   query: ProjectManagementAuditQuery,
 ): Promise<ApiEnvelope<ProjectManagementAuditPage>> {
   return httpClient.get<ProjectManagementAuditPage>(`/project-management/audit${buildQueryString(query)}`);
+}
+
+export function getProjectManagementAuditDetail(
+  id: string,
+  signal?: AbortSignal,
+): Promise<ApiEnvelope<ProjectManagementAuditDetail>> {
+  return httpClient.get<ProjectManagementAuditDetail>(`/project-management/audit/${encodeURIComponent(id)}`, undefined, signal);
 }
 
 export function getProjectManagementOperations(

@@ -89,6 +89,54 @@ public sealed class ProjectManagementAuditServiceTests
     }
 
     [Fact]
+    public async Task Audit_detail_redacts_legacy_sensitive_values_and_returns_trace_context_for_deleted_target()
+    {
+        using var db = CreateDatabase();
+        var now = DateTime.UtcNow;
+        await db.Insertable(new ProjectManagementProjectEntity
+        {
+            Id = "project-detail", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "DETAIL", ProjectName = "Detail", OwnerUserId = "operator"
+        }).ExecuteCommandAsync();
+        var payload = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            source = "Import",
+            fieldChanges = new[]
+            {
+                new { field = "password", displayName = "口令", before = "legacy-secret", after = "new-secret", isSensitive = false },
+                new { field = "config", displayName = "配置", before = "{\"enabled\":false}", after = "{\"enabled\":true}", isSensitive = false }
+            },
+            batch = new { operationId = "import-1", totalCount = 1, successCount = 1, failureCount = 0, details = Array.Empty<object>() }
+        });
+        await db.Insertable(new ProjectManagementActivityEntity
+        {
+            Id = "detail-activity", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-detail", AggregateType = "Task", AggregateId = "deleted-task",
+            ActivityType = "import.completed", Summary = "导入完成", TraceId = "trace-detail", ActorUserId = "operator", CreatedBy = "operator", CreatedTime = now, Remark = payload
+        }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementOperationEntity
+        {
+            Id = "operation-detail", TenantId = "tenant-a", AppCode = "SYSTEM", OperationType = "import.excel", Status = "Succeeded", Phase = "Completed", ImpactJson = "{}", TraceId = "trace-detail", ActorUserId = "operator", StartedTime = now.AddSeconds(1), CreatedBy = "operator", CreatedTime = now.AddSeconds(1)
+        }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementSyncJournalEntity
+        {
+            Id = "journal-detail", TenantId = "tenant-a", AppCode = "SYSTEM", SequenceNo = 1, ProjectId = "project-detail", AggregateType = "Task", AggregateId = "deleted-task", Operation = "updated", VersionNo = 1, PayloadJson = "{}", ActorUserId = "operator", TraceId = "trace-detail", CreatedBy = "operator", CreatedTime = now.AddSeconds(2)
+        }).ExecuteCommandAsync();
+        var accessor = new TestWorkspaceDatabaseAccessor(db);
+        var user = CreateUser("operator");
+        var service = new ProjectManagementAuditService(accessor, user, new ProjectManagementAccessPolicy(accessor, user));
+
+        var detail = await service.GetDetailAsync("detail-activity");
+
+        Assert.True(detail.EntitySnapshot.IsDeleted);
+        Assert.Equal("[已脱敏]", detail.FieldChanges.Single(item => item.Field == "password").Before);
+        Assert.Equal("[已脱敏]", detail.FieldChanges.Single(item => item.Field == "password").After);
+        Assert.Contains(detail.RelatedEvents, item => item.Kind == "Operation" && item.Causality == "Followed");
+        Assert.Contains(detail.RelatedEvents, item => item.Kind == "SyncJournal" && item.Causality == "Followed");
+        Assert.Contains(detail.References, item => item.Kind == "BatchOperation" && item.Id == "import-1");
+        Assert.Contains(detail.References, item => item.Kind == "Import" && item.Id == "deleted-task");
+        Assert.Null(detail.TraceDiagnosticsRoute);
+    }
+
+    [Fact]
     public async Task Audit_query_never_returns_activities_after_project_membership_is_revoked()
     {
         using var db = CreateDatabase();
