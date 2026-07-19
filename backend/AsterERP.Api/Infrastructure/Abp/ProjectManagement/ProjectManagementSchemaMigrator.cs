@@ -304,6 +304,14 @@ CREATE TABLE IF NOT EXISTS pm_task_attachments (
     VersionNo INTEGER NOT NULL DEFAULT 1, CreatedBy TEXT NULL, CreatedTime TEXT NOT NULL, UpdatedBy TEXT NULL, UpdatedTime TEXT NULL,
     DeletedBy TEXT NULL, DeletedTime TEXT NULL, IsDeleted INTEGER NOT NULL DEFAULT 0, Remark TEXT NULL
 );
+CREATE TABLE IF NOT EXISTS pm_external_api_requests (
+    Id TEXT NOT NULL PRIMARY KEY, TenantId TEXT NOT NULL, AppCode TEXT NOT NULL, CallerUserId TEXT NOT NULL,
+    Source TEXT NOT NULL, Operation TEXT NOT NULL, IdempotencyKey TEXT NOT NULL, RequestHash TEXT NOT NULL,
+    Status TEXT NOT NULL, TraceId TEXT NOT NULL, ProjectId TEXT NULL, AggregateType TEXT NULL, AggregateId TEXT NULL,
+    ResultJson TEXT NULL, ErrorCode INTEGER NULL, ErrorMessage TEXT NULL, CompletedTime TEXT NULL,
+    CreatedBy TEXT NULL, CreatedTime TEXT NOT NULL, UpdatedBy TEXT NULL, UpdatedTime TEXT NULL,
+    DeletedBy TEXT NULL, DeletedTime TEXT NULL, IsDeleted INTEGER NOT NULL DEFAULT 0, Remark TEXT NULL
+);
 CREATE TABLE IF NOT EXISTS pm_im_conversation_links (
     Id TEXT NOT NULL PRIMARY KEY, TenantId TEXT NOT NULL, AppCode TEXT NOT NULL, ProjectId TEXT NOT NULL, TaskId TEXT NULL,
     ConversationKey TEXT NOT NULL, ConversationId TEXT NULL, MemberSource TEXT NOT NULL, Status TEXT NOT NULL, LastSyncError TEXT NULL,
@@ -424,6 +432,8 @@ CREATE TABLE IF NOT EXISTS pm_reversible_commands (
         schema.Execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_pm_saved_views_owner_name ON pm_saved_views(TenantId, AppCode, ProjectId, OwnerUserId, ViewName) WHERE IsDeleted = 0;");
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_saved_views_project ON pm_saved_views(TenantId, AppCode, ProjectId, IsShared, IsDefault, IsDeleted);");
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_task_attachments_task ON pm_task_attachments(TenantId, AppCode, ProjectId, TaskId, CreatedTime, IsDeleted);");
+        schema.Execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_pm_external_api_requests_idempotency ON pm_external_api_requests(TenantId, AppCode, CallerUserId, Operation, IdempotencyKey) WHERE IsDeleted = 0;");
+        schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_external_api_requests_audit ON pm_external_api_requests(TenantId, AppCode, ProjectId, CreatedTime, IsDeleted);");
         schema.Execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_pm_im_conversation_link_scope ON pm_im_conversation_links(TenantId, AppCode, ProjectId, COALESCE(TaskId, '')) WHERE IsDeleted = 0;");
         schema.Execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_pm_im_conversation_link_conversation ON pm_im_conversation_links(TenantId, AppCode, ConversationId) WHERE IsDeleted = 0 AND ConversationId IS NOT NULL;");
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_im_conversation_link_project ON pm_im_conversation_links(TenantId, AppCode, ProjectId, Status, IsDeleted);");
@@ -469,7 +479,7 @@ WHERE Id IN (SELECT Id FROM ordered);
     {
         schema.Execute("""
 INSERT INTO pm_schema_versions (ModuleKey, VersionNo, AppliedAt, AppliedBy)
-VALUES ('project-management', 3, CURRENT_TIMESTAMP, 'schema-migrator')
+VALUES ('project-management', 4, CURRENT_TIMESTAMP, 'schema-migrator')
 ON CONFLICT(ModuleKey) DO UPDATE SET VersionNo = excluded.VersionNo, AppliedAt = excluded.AppliedAt, AppliedBy = excluded.AppliedBy;
 """);
     }

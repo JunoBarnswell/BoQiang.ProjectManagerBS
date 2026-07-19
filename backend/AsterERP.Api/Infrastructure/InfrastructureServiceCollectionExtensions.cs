@@ -141,10 +141,12 @@ public static class InfrastructureServiceCollectionExtensions
 internal static class AuthenticationRateLimitPolicy
 {
     public const string Name = "authentication-login";
+    public const string ProjectManagementExternalApiName = "project-management-external-api";
 
     public static void Register(IServiceCollection services, IConfiguration configuration)
     {
         var settings = ResolveSettings(configuration);
+        var externalApiSettings = ResolveProjectManagementExternalApiSettings(configuration);
         services.AddRateLimiter(options =>
         {
             options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -160,6 +162,17 @@ internal static class AuthenticationRateLimitPolicy
                         QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                         AutoReplenishment = true
                     }));
+            options.AddPolicy(ProjectManagementExternalApiName, httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    ResolveExternalApiPartitionKey(httpContext),
+                    _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = externalApiSettings.PermitLimit,
+                        Window = TimeSpan.FromSeconds(externalApiSettings.WindowSeconds),
+                        QueueLimit = 0,
+                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                        AutoReplenishment = true
+                    }));
         });
     }
 
@@ -167,6 +180,11 @@ internal static class AuthenticationRateLimitPolicy
         new(
             Math.Clamp(configuration.GetValue("Auth:LoginRateLimitPermitCount", 10), 1, 100),
             Math.Clamp(configuration.GetValue("Auth:LoginRateLimitWindowSeconds", 60), 10, 3600));
+
+    internal static AuthenticationRateLimitSettings ResolveProjectManagementExternalApiSettings(IConfiguration configuration) =>
+        new(
+            Math.Clamp(configuration.GetValue("ProjectManagement:ExternalApiRateLimitPermitCount", 60), 1, 600),
+            Math.Clamp(configuration.GetValue("ProjectManagement:ExternalApiRateLimitWindowSeconds", 60), 10, 3600));
 
     internal static string ResolvePartitionKey(HttpContext context)
     {
@@ -177,6 +195,14 @@ internal static class AuthenticationRateLimitPolicy
         }
 
         return address?.ToString() ?? "unknown-client";
+    }
+
+    internal static string ResolveExternalApiPartitionKey(HttpContext context)
+    {
+        var userId = context.User.FindFirst(AsterErpClaimTypes.UserId)?.Value;
+        return string.IsNullOrWhiteSpace(userId)
+            ? $"anonymous:{ResolvePartitionKey(context)}"
+            : $"user:{userId.Trim()}";
     }
 
     private static async ValueTask OnRejectedAsync(

@@ -86,6 +86,7 @@ public static class ErrorCodes
     public const int ApplicationDevelopmentPageRevisionConflict = 42065;
     public const int DesignerSchemaInvalid = 42066;
     public const int SchemaOrPayloadTooLarge = 42067;
+    public const int ProjectManagementIdempotencyConflict = 42068;
     public const int AiProviderNotFound = 42100;
     public const int AiProviderMissing = 42101;
     public const int AiModelNotFound = 42102;
