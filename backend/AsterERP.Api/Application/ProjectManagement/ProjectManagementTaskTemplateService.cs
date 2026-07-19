@@ -58,7 +58,8 @@ public sealed class ProjectManagementTaskTemplateService(IWorkspaceDatabaseAcces
         {
             var parent = string.IsNullOrWhiteSpace(node.ParentCode) ? null : byCode.GetValueOrDefault(node.ParentCode!);
             if (!string.IsNullOrWhiteSpace(node.ParentCode) && parent is null) throw new ValidationException("模板父任务编码不存在");
-            var task = new ProjectManagementTaskEntity { TenantId = Tenant(), AppCode = App(), ProjectId = request.ProjectId, ParentTaskId = parent?.Id, TaskCode = $"{node.TaskCode}-{occurrenceKey}", OccurrenceKey = occurrenceKey, Title = node.Title, Status = ProjectManagementDomainRules.TaskTodo, Priority = node.Priority, DueDate = request.OccurrenceDate.AddDays(node.DueDays), ProgressPercent = 0, Weight = node.Weight, Depth = parent is null ? 0 : parent.Depth + 1, CreatedBy = User(), CreatedTime = DateTime.UtcNow };
+            var task = new ProjectManagementTaskEntity { TenantId = Tenant(), AppCode = App(), ProjectId = request.ProjectId, ParentTaskId = parent?.Id, TreePath = string.IsNullOrWhiteSpace(parent?.TreePath) ? "/" : parent.TreePath, TaskCode = $"{node.TaskCode}-{occurrenceKey}", OccurrenceKey = occurrenceKey, Title = node.Title, Status = ProjectManagementDomainRules.TaskTodo, Priority = node.Priority, DueDate = request.OccurrenceDate.AddDays(node.DueDays), ProgressPercent = 0, Weight = node.Weight, Depth = parent is null ? 0 : parent.Depth + 1, CreatedBy = User(), CreatedTime = DateTime.UtcNow };
+            task.TreePath = $"{task.TreePath}{task.Id}/";
             ProjectManagementDomainRules.EnsureTaskDepth(task.Depth);
             created.Add(task); byCode.Add(node.TaskCode, task);
         }

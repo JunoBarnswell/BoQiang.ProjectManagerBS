@@ -1,20 +1,21 @@
 using AsterERP.Api.Infrastructure.Database;
+using AsterERP.Api.Modules.ProjectManagement;
 using SqlSugar;
 
 namespace AsterERP.Api.Infrastructure.Abp.ProjectManagement;
 
 public sealed class ProjectManagementSchemaMigrator
 {
-    public Task MigrateAsync(ISqlSugarClient db, CancellationToken cancellationToken = default)
+    public async Task MigrateAsync(ISqlSugarClient db, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var schema = new SqliteSchemaExecutor(db);
         CreateVersionTable(schema);
         CreateTables(schema);
+        await BackfillTaskTreePathsAsync(db, cancellationToken);
         NormalizeTaskSiblingOrdering(schema);
         CreateIndexes(schema);
         SetVersion(schema);
-        return Task.CompletedTask;
     }
 
     private static void CreateVersionTable(SqliteSchemaExecutor schema)
@@ -114,6 +115,7 @@ CREATE TABLE IF NOT EXISTS pm_tasks (
     ProjectId TEXT NOT NULL,
     MilestoneId TEXT NULL,
     ParentTaskId TEXT NULL,
+    TreePath TEXT NOT NULL DEFAULT '',
     TaskCode TEXT NOT NULL,
     Title TEXT NOT NULL,
     Description TEXT NULL,
@@ -189,6 +191,7 @@ CREATE TABLE IF NOT EXISTS pm_task_participants (
         schema.EnsureColumn("pm_milestones", "HealthStatus", "TEXT NOT NULL DEFAULT 'OnTrack'");
         schema.EnsureColumn("pm_tasks", "BlockedReason", "TEXT NULL");
         schema.EnsureColumn("pm_tasks", "OccurrenceKey", "TEXT NULL");
+        schema.EnsureColumn("pm_tasks", "TreePath", "TEXT NOT NULL DEFAULT ''");
         schema.Execute("""
 CREATE TABLE IF NOT EXISTS pm_labels (
     Id TEXT NOT NULL PRIMARY KEY,
@@ -359,6 +362,7 @@ CREATE TABLE IF NOT EXISTS pm_operation_events (
         schema.Execute("DROP INDEX IF EXISTS ux_pm_tasks_sibling_sort;");
         schema.Execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_pm_tasks_sibling_sort_v2 ON pm_tasks(TenantId, AppCode, ProjectId, COALESCE(ParentTaskId, ''), CASE WHEN SortOrder = 0 THEN Id ELSE SortOrder END) WHERE IsDeleted = 0;");
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_tasks_tree ON pm_tasks(TenantId, AppCode, ProjectId, ParentTaskId, SortOrder, IsDeleted);");
+        schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_tasks_tree_path ON pm_tasks(TenantId, AppCode, ProjectId, TreePath, IsDeleted);");
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_tasks_query ON pm_tasks(TenantId, AppCode, ProjectId, Status, AssigneeUserId, DueDate, IsDeleted);");
         schema.Execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_pm_task_dependencies_pair ON pm_task_dependencies(TenantId, AppCode, ProjectId, PredecessorTaskId, SuccessorTaskId) WHERE IsDeleted = 0;");
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_task_dependencies_successor ON pm_task_dependencies(TenantId, AppCode, SuccessorTaskId, IsDeleted);");
@@ -391,6 +395,30 @@ CREATE TABLE IF NOT EXISTS pm_operation_events (
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_backups_created ON pm_backups(TenantId, AppCode, CreatedTime, IsDeleted);");
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_operations_status_time ON pm_operations(TenantId, AppCode, Status, StartedTime, IsDeleted);");
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_operation_events_operation_time ON pm_operation_events(TenantId, AppCode, OperationId, CreatedTime, IsDeleted);");
+    }
+
+    private static async Task BackfillTaskTreePathsAsync(ISqlSugarClient db, CancellationToken cancellationToken)
+    {
+        var tasks = await db.Queryable<ProjectManagementTaskEntity>().ToListAsync(cancellationToken);
+        var byId = tasks.ToDictionary(task => task.Id, StringComparer.Ordinal);
+        var resolved = new Dictionary<string, string>(StringComparer.Ordinal);
+        string Resolve(ProjectManagementTaskEntity task, HashSet<string> trail)
+        {
+            if (resolved.TryGetValue(task.Id, out var path)) return path;
+            if (!trail.Add(task.Id)) return $"/{task.Id}/";
+            path = !string.IsNullOrWhiteSpace(task.ParentTaskId) && byId.TryGetValue(task.ParentTaskId, out var parent) && parent.ProjectId == task.ProjectId
+                ? Resolve(parent, trail) + task.Id + "/"
+                : $"/{task.Id}/";
+            trail.Remove(task.Id); resolved[task.Id] = path; return path;
+        }
+        var changed = new List<ProjectManagementTaskEntity>();
+        foreach (var task in tasks)
+        {
+            var path = Resolve(task, []);
+            if (task.TreePath == path) continue;
+            task.TreePath = path; changed.Add(task);
+        }
+        if (changed.Count > 0) await db.Updateable(changed).UpdateColumns(task => new { task.TreePath }).ExecuteCommandAsync(cancellationToken);
     }
 
     private static void NormalizeTaskSiblingOrdering(SqliteSchemaExecutor schema)

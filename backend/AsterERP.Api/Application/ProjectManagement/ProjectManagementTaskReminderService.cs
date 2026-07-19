@@ -36,7 +36,7 @@ public sealed class ProjectManagementTaskReminderService(
     public async Task<IReadOnlyList<ProjectManagementTaskReminderResponse>> CreateAsync(string taskId, ProjectManagementTaskReminderCreateRequest request, CancellationToken cancellationToken = default)
     {
         var task = await GetTaskAsync(taskId, cancellationToken);
-        await Policy().EnsureCanManageTaskAsync(task.ProjectId, task.AssigneeUserId, cancellationToken);
+        await Policy().EnsureCanManageTaskAsync(task.ProjectId, task.AssigneeUserId, task.Id, cancellationToken: cancellationToken);
         var dueAt = NormalizeReminderAt(request.ReminderAt);
         var timeZoneId = NormalizeTimeZone(request.TimeZoneId);
         var clientRequestId = Required(request.ClientRequestId, "客户端请求标识不能为空", 128);
