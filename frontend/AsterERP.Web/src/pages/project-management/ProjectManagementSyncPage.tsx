@@ -17,6 +17,7 @@ import { PageLoading } from '../../shared/status/PageLoading';
 import { getErrorMessage } from '../../shared/utils/errorMessage';
 
 import { ProjectManagementSyncPackageImportPanel } from './components/ProjectManagementSyncPackageImportPanel';
+import { ProjectManagementSyncPackageExportPanel } from './components/ProjectManagementSyncPackageExportPanel';
 
 export function ProjectManagementSyncPage() {
   const scope = useProjectManagementWorkspaceScope();
@@ -72,6 +73,11 @@ export function ProjectManagementSyncPage() {
       </form>
       {watermark ? <dl className="mt-4 grid gap-3 sm:grid-cols-3"><div><dt className="text-sm text-gray-500">当前水位</dt><dd className="text-xl font-semibold">{watermark.currentSequenceNo}</dd></div><div><dt className="text-sm text-gray-500">已确认水位</dt><dd className="text-xl font-semibold">{watermark.acknowledgedSequenceNo}</dd></div><div><dt className="text-sm text-gray-500">最近活动</dt><dd>{watermark.lastSeenAt ? new Date(watermark.lastSeenAt).toLocaleString() : '尚未记录'}</dd></div></dl> : <p className="mt-3 text-sm text-gray-500">未返回设备水位。</p>}
       {canImport ? <div className="mt-4 flex flex-wrap gap-2"><PermissionButton code="project-management:sync:import" disabled={!watermark || acknowledgeMutation.isPending} onClick={() => acknowledgeMutation.mutate(watermark?.currentSequenceNo ?? 0)}>确认当前水位</PermissionButton>{newestSequenceNo > 0 ? <PermissionButton code="project-management:sync:import" disabled={acknowledgeMutation.isPending} onClick={() => acknowledgeMutation.mutate(newestSequenceNo)}>确认已加载变更（{newestSequenceNo}）</PermissionButton> : null}</div> : null}
+    </section>
+    <section className="mt-5 rounded-lg border border-gray-200 p-4">
+      <h2 className="font-semibold">导出同步包</h2>
+      <p className="mt-1 text-sm text-gray-500">以设备 {submittedDeviceId} 记录导出活动；导出的包仅包含当前服务端授权范围内的项目数据。</p>
+      <ProjectManagementSyncPackageExportPanel deviceId={submittedDeviceId} />
     </section>
     <section className="mt-5">
       <div className="mb-2 flex items-center justify-between gap-2"><h2 className="font-semibold">变更记录</h2><span className="text-sm text-gray-500">{changes.length} 条（最多 200 条）</span></div>

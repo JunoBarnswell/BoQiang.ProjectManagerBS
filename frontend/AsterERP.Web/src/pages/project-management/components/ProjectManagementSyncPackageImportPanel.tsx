@@ -1,59 +1,89 @@
-import { useState } from "react";
+import { useState } from 'react';
 
 import {
   applyProjectManagementSync,
   previewProjectManagementSync,
-} from "../../../api/project-management/projectManagement.api";
+} from '../../../api/project-management/projectManagement.api';
 import type {
   ProjectManagementSyncImportResponse,
   ProjectManagementSyncPreviewResponse,
-} from "../../../api/project-management/projectManagement.types";
-import { usePermission } from "../../../core/auth/usePermission";
-import { useApiMutation } from "../../../core/query/useApiMutation";
-import { PermissionButton } from "../../../shared/auth/PermissionButton";
-import { useMessage } from "../../../shared/feedback/useMessage";
-import { getErrorMessage } from "../../../shared/utils/errorMessage";
+} from '../../../api/project-management/projectManagement.types';
+import { usePermission } from '../../../core/auth/usePermission';
+import { useApiMutation } from '../../../core/query/useApiMutation';
+import { PermissionButton } from '../../../shared/auth/PermissionButton';
+import { useMessage } from '../../../shared/feedback/useMessage';
+import { formatFileSize } from '../../../shared/file-preview/filePreviewUtils';
+import { getErrorMessage } from '../../../shared/utils/errorMessage';
 
-type ConflictStrategy = "Skip" | "Overwrite" | "Reject";
+type ConflictStrategy = 'Skip' | 'Overwrite' | 'Reject';
+type FailedAction = 'preview' | 'apply' | null;
 
 export function ProjectManagementSyncPackageImportPanel() {
   const { hasPermission: canImport } = usePermission("project-management:sync:import");
   const message = useMessage();
   const [packageFile, setPackageFile] = useState<File | null>(null);
-  const [password, setPassword] = useState("");
+  const [password, setPassword] = useState('');
   const [confirmRisk, setConfirmRisk] = useState(false);
-  const [conflictStrategy, setConflictStrategy] = useState<ConflictStrategy>("Skip");
+  const [conflictStrategy, setConflictStrategy] = useState<ConflictStrategy>('Skip');
   const [preview, setPreview] = useState<ProjectManagementSyncPreviewResponse | null>(null);
   const [importResult, setImportResult] = useState<ProjectManagementSyncImportResponse | null>(null);
+  const [failureMessage, setFailureMessage] = useState<string | null>(null);
+  const [failedAction, setFailedAction] = useState<FailedAction>(null);
 
   const previewMutation = useApiMutation({
     mutationFn: () => {
-      if (!packageFile) throw new Error("请先选择同步包");
+      if (!packageFile) throw new Error('请先选择同步包');
       return previewProjectManagementSync(packageFile);
     },
-    onError: (error) => message.error(getErrorMessage(error, "同步包预览失败")),
+    onError: (error) => {
+      const messageText = getErrorMessage(error, '同步包预览失败');
+      setFailureMessage(messageText);
+      setFailedAction('preview');
+      message.error(messageText);
+    },
     onSuccess: (result) => {
       setPreview(result.data);
       setImportResult(null);
-      message.success(result.data?.isCompatible ? "同步包校验通过，请查看预览结果" : "同步包不兼容，无法导入");
+      setFailureMessage(null);
+      setFailedAction(null);
+      message.success(result.data?.isCompatible ? '同步包校验通过，请查看预览结果' : '同步包不兼容，无法导入');
     },
   });
   const applyMutation = useApiMutation({
     mutationFn: () => {
-      if (!packageFile) throw new Error("请先选择同步包");
+      if (!packageFile) throw new Error('请先选择同步包');
       return applyProjectManagementSync(packageFile, { currentPassword: password, confirmRisk, conflictStrategy });
     },
-    onError: (error) => message.error(getErrorMessage(error, "同步包导入失败")),
+    onError: (error) => {
+      const messageText = getErrorMessage(error, '同步包导入失败');
+      setFailureMessage(messageText);
+      setFailedAction('apply');
+      message.error(messageText);
+    },
     onSuccess: (result) => {
       const imported = result.data;
       message.success(
         `同步包已导入：新增 ${imported?.inserted ?? 0}，更新 ${imported?.updated ?? 0}，跳过 ${imported?.skipped ?? 0}`,
       );
-      setImportResult(imported?.warnings.length ? imported : null);
+      setImportResult(imported);
       setPreview(null);
-      setPackageFile(null);
+      setPassword('');
+      setFailureMessage(null);
+      setFailedAction(null);
     },
   });
+
+  const startPreview = () => {
+    setFailureMessage(null);
+    setFailedAction(null);
+    previewMutation.mutate();
+  };
+
+  const startImport = () => {
+    setFailureMessage(null);
+    setFailedAction(null);
+    applyMutation.mutate();
+  };
 
   if (!canImport) return null;
 
@@ -68,16 +98,20 @@ export function ProjectManagementSyncPackageImportPanel() {
             setPackageFile(event.target.files?.[0] ?? null);
             setPreview(null);
             setImportResult(null);
+            setFailureMessage(null);
+            setFailedAction(null);
           }}
         />
         <PermissionButton
           code="project-management:sync:import"
           disabled={!packageFile || previewMutation.isPending || applyMutation.isPending}
-          onClick={() => previewMutation.mutate()}
+          onClick={startPreview}
         >
-          {previewMutation.isPending ? "校验中…" : "预览同步包"}
+          {previewMutation.isPending ? '正在校验同步包…' : '预览同步包'}
         </PermissionButton>
       </div>
+      {packageFile ? <p className="text-sm text-gray-500">已选择：{packageFile.name}（{formatFileSize(packageFile.size)}）。服务端会校验包格式、工作区、校验和与冲突。</p> : null}
+      {previewMutation.isPending ? <div className="rounded border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900" role="status">正在读取同步包并计算影响范围，请勿关闭页面。</div> : null}
       {preview ? (
         <div className="rounded bg-slate-50 p-3 text-sm">
           <div className="font-medium">
@@ -95,8 +129,12 @@ export function ProjectManagementSyncPackageImportPanel() {
             <div className="mt-2 text-amber-700">冲突：{preview.conflicts.join("；")}</div>
           ) : null}
           {preview.warnings.length ? (
-            <div className="mt-2 text-amber-700">提示：{preview.warnings.join("；")}</div>
+            <div className="mt-2 text-amber-700">提示：{preview.warnings.join('；')}</div>
           ) : null}
+          <div className="mt-3 rounded border border-amber-200 bg-amber-50 p-3 text-amber-900">
+            <p className="font-medium">高风险导入影响与回滚</p>
+            <p className="mt-1">将按所选策略写入上述项目、任务及关联数据。服务端使用事务提交；失败时会回滚数据库写入，并尝试补偿本次已写入的附件。</p>
+          </div>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <select
               aria-label="冲突处理策略"
@@ -122,27 +160,26 @@ export function ProjectManagementSyncPackageImportPanel() {
             <PermissionButton
               code="project-management:sync:import"
               disabled={!preview.isCompatible || !password || !confirmRisk || applyMutation.isPending}
-              onClick={() => applyMutation.mutate()}
+              onClick={startImport}
             >
-              {applyMutation.isPending ? "导入中…" : "执行导入"}
+              {applyMutation.isPending ? '正在导入…' : '执行导入'}
             </PermissionButton>
           </div>
+          {applyMutation.isPending ? <p className="mt-3 text-sm text-blue-800" role="status">导入已提交到服务端，正在执行事务写入和附件校验。完成后会显示结果报告。</p> : null}
         </div>
       ) : null}
       {importResult ? (
-        <section className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900" aria-live="polite">
-          <h3 className="font-medium">导入完成，但有需要关注的结果</h3>
+        <section className={`rounded border p-3 text-sm ${importResult.warnings.length || importResult.skipped ? 'border-amber-300 bg-amber-50 text-amber-900' : 'border-emerald-300 bg-emerald-50 text-emerald-900'}`} aria-live="polite">
+          <h3 className="font-medium">{importResult.warnings.length || importResult.skipped ? '导入完成，但有需要关注的结果' : '导入完成'}</h3>
           <div className="mt-1">
-            包 {importResult.packageId} · 策略 {importResult.strategy} · 新增 {importResult.inserted} · 更新{" "}
+            包 {importResult.packageId} · 策略 {importResult.strategy} · 新增 {importResult.inserted} · 更新{' '}
             {importResult.updated} · 跳过 {importResult.skipped} · 已导入附件 {importResult.attachmentsImported}
           </div>
-          <ul className="mt-2 list-disc space-y-1 pl-5">
-            {importResult.warnings.map((warning) => (
-              <li key={warning}>{warning}</li>
-            ))}
-          </ul>
+          {importResult.warnings.length ? <ul className="mt-2 list-disc space-y-1 pl-5">{importResult.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul> : null}
+          {importResult.skipped ? <p className="mt-2">部分记录已按策略跳过；如需重新处理，请重新预览该包并选择适合的冲突策略。</p> : null}
         </section>
       ) : null}
+      {failureMessage ? <section className="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-900" role="alert"><p>{failedAction === 'apply' ? '导入失败' : '预览失败'}：{failureMessage}</p><button className="mt-2" disabled={!packageFile || previewMutation.isPending || applyMutation.isPending} type="button" onClick={failedAction === 'apply' ? startImport : startPreview}>{failedAction === 'apply' ? '重试导入' : '重试预览'}</button></section> : null}
     </div>
   );
 }
