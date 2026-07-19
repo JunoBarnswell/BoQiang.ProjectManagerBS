@@ -10,7 +10,7 @@ export interface TaskCardDragHandlers {
   onDragEnd: () => void;
   onDragOver: (event: DragEvent<HTMLElement>) => void;
   onDragStart: (event: DragEvent<HTMLElement>, task: ProjectManagementTaskListItem) => void;
-  onDrop: (event: DragEvent<HTMLElement>, target: { kind: 'before' | 'child'; task: ProjectManagementTaskListItem }) => void;
+  onDrop: (event: DragEvent<HTMLElement>, target: { kind: 'before' | 'child'; task: ProjectManagementTaskListItem } | { kind: 'root' } | { kind: 'status'; status: string }) => void;
 }
 
 interface TaskCardActions {

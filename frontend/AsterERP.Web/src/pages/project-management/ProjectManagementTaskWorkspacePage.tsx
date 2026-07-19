@@ -149,6 +149,7 @@ export function ProjectManagementTaskWorkspacePage() {
   const [taskConflict, setTaskConflict] = useState<ReturnType<typeof readProjectManagementTaskConflict>>(null);
   const [batchOpen, setBatchOpen] = useState(false);
   const [batchResult, setBatchResult] = useState<ProjectManagementTaskBatchExecutionResult | null>(null);
+  const [optimisticBoardStatuses, setOptimisticBoardStatuses] = useState<Record<string, string>>({});
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(() => new Set());
   const [openingConversationScope, setOpeningConversationScope] = useState<'project' | 'task' | null>(null);
   const [form, setForm] = useState<ProjectManagementTaskUpsertRequest>(emptyForm);
@@ -275,7 +276,8 @@ export function ProjectManagementTaskWorkspacePage() {
     queryFn: ({ signal }) => getProjectManagementTaskDependencies(projectId, signal),
     queryKey: ['project-management-task-dependencies', scope.tenantId, scope.appCode, projectId],
   });
-  const rows = useMemo(() => tasksQuery.data?.data?.items ?? [], [tasksQuery.data?.data?.items]);
+  const serverRows = useMemo(() => tasksQuery.data?.data?.items ?? [], [tasksQuery.data?.data?.items]);
+  const rows = useMemo(() => serverRows.map((task) => optimisticBoardStatuses[task.id] ? { ...task, status: optimisticBoardStatuses[task.id] } : task), [optimisticBoardStatuses, serverRows]);
   const participantLabels = useMemo(() => Object.fromEntries((memberCandidatesQuery.data?.data?.items ?? []).map((candidate) => [candidate.userId, candidate.displayName || candidate.userName])), [memberCandidatesQuery.data?.data?.items]);
   const milestoneLabels = useMemo(() => Object.fromEntries((milestonesQuery.data?.data ?? []).map((milestone) => [milestone.id, milestone.milestoneName])), [milestonesQuery.data?.data]);
   const selectedListTask = rows.find((task) => task.id === selectedTaskId);
@@ -516,6 +518,23 @@ export function ProjectManagementTaskWorkspacePage() {
     },
     onSuccess: async () => {
       message.success('任务位置已更新');
+      await invalidateProjectTaskViews();
+    },
+  });
+  const boardStatusMutation = useApiMutation({
+    mutationFn: async ({ task, status }: { task: ProjectManagementTaskListItem; status: string }) => {
+      const detail = (await getProjectManagementTask(task.id)).data;
+      if (!detail) throw new Error('任务详情不存在，无法移动看板状态');
+      return updateProjectManagementTask(task.id, { ...taskDetailToForm(detail), status });
+    },
+    onError: async (error) => {
+      setOptimisticBoardStatuses({});
+      message.error(getErrorMessage(error, '看板状态更新失败，已回滚显示'));
+      await invalidateProjectTaskViews();
+    },
+    onSuccess: async () => {
+      setOptimisticBoardStatuses({});
+      message.success('任务状态已更新');
       await invalidateProjectTaskViews();
     },
   });
@@ -790,6 +809,15 @@ export function ProjectManagementTaskWorkspacePage() {
             }
             const request = createTaskMoveRequest(task, target);
             if (request) moveMutation.mutate({ taskId: task.id, request });
+          }}
+          onChangeTaskStatus={(task, status) => {
+            if (task.status === status) return;
+            if (boardStatusMutation.isPending) {
+              message.error('正在提交上一项状态变更，请稍候');
+              return;
+            }
+            setOptimisticBoardStatuses((current) => ({ ...current, [task.id]: status }));
+            boardStatusMutation.mutate({ task, status });
           }}
           onSelectTask={(taskId) => {
             setCreating(false);

@@ -527,6 +527,31 @@
   gap: 8px;
 }
 
+.pm-board-column {
+  min-width: 260px;
+}
+
+.pm-board-column[aria-dropeffect] {
+  outline: 2px dashed var(--pm-accent);
+}
+
+.pm-board-lane {
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--pm-border);
+  border-radius: var(--app-radius-md);
+}
+
+.pm-board-lane__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--pm-muted);
+  font-size: var(--app-text-xs);
+}
+
 .pm-board-column__body > p,
 .pm-projection-empty {
   margin: 0;
