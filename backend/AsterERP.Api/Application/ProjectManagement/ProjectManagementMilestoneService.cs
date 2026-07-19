@@ -16,7 +16,8 @@ public sealed class ProjectManagementMilestoneService(
     ICurrentUser currentUser,
     IProjectManagementActivityWriter? activityWriter = null,
     IProjectManagementSyncJournalWriter? syncJournalWriter = null,
-    ProjectManagementAccessPolicy? accessPolicy = null) : IProjectManagementMilestoneService
+    ProjectManagementAccessPolicy? accessPolicy = null,
+    IProjectManagementNotificationPublisher? notificationPublisher = null) : IProjectManagementMilestoneService
 {
     public async Task<GridPageResult<ProjectManagementMilestoneResponse>> QueryAsync(string projectId, CancellationToken cancellationToken = default)
     {
@@ -64,6 +65,7 @@ public sealed class ProjectManagementMilestoneService(
         var project = await EnsureProjectAsync(projectId, cancellationToken);
         await AccessPolicy.EnsureCanManageProjectAsync(projectId, cancellationToken);
         var entity = await GetRequiredAsync(projectId, id, cancellationToken);
+        var beforeResponse = await MapAsync(entity, cancellationToken);
         EnsureVersion(entity.VersionNo, request.VersionNo);
         var before = MilestoneActivitySnapshot.From(entity);
         Validate(request);
@@ -89,7 +91,9 @@ public sealed class ProjectManagementMilestoneService(
             await WriteActivityAsync(entity, "updated", $"更新里程碑 {entity.MilestoneName}", CreateChanges(before, entity), entity.UpdatedTime ?? DateTime.UtcNow, cancellationToken);
             await WriteSyncJournalAsync(entity, "updated", cancellationToken);
         });
-        return await MapAsync(entity, cancellationToken);
+        var response = await MapAsync(entity, cancellationToken);
+        await PublishRiskNotificationAsync(entity, beforeResponse.HealthStatus, response.HealthStatus, cancellationToken);
+        return response;
     }
 
     public async Task DeleteAsync(string projectId, string id, long versionNo, CancellationToken cancellationToken = default)
@@ -174,6 +178,22 @@ public sealed class ProjectManagementMilestoneService(
     {
         if (syncJournalWriter is null) return;
         await syncJournalWriter.AppendAsync(new ProjectManagementSyncJournalEvent(RequireTenantId(), RequireAppCode(), "Milestone", entity.Id, entity.ProjectId, operation, entity.VersionNo, JsonSerializer.Serialize(entity), RequireUserId(), null, Activity.Current?.Id ?? Guid.NewGuid().ToString("N")), cancellationToken);
+    }
+
+    private Task PublishRiskNotificationAsync(ProjectManagementMilestoneEntity entity, string previousHealth, string currentHealth, CancellationToken cancellationToken)
+    {
+        if (notificationPublisher is null || currentHealth != "AtRisk" || previousHealth == "AtRisk" || string.IsNullOrWhiteSpace(entity.OwnerUserId) || string.Equals(entity.OwnerUserId, RequireUserId(), StringComparison.OrdinalIgnoreCase))
+            return Task.CompletedTask;
+        return notificationPublisher.PublishAsync(new ProjectManagementNotification(
+            entity.TenantId,
+            entity.AppCode,
+            ProjectManagementNotificationTypes.MilestoneRiskDetected,
+            entity.OwnerUserId,
+            "里程碑存在延期风险",
+            $"里程碑 {entity.MilestoneName} 将在七天内到期且进度不足 80%",
+            $"/projects/{entity.ProjectId}/tasks",
+            $"notification:{ProjectManagementNotificationTypes.MilestoneRiskDetected}:{entity.Id}:{entity.VersionNo}:{entity.OwnerUserId}",
+            entity.ProjectId), cancellationToken);
     }
     private static string NormalizeRequired(string value, string message) => string.IsNullOrWhiteSpace(value) ? throw new ValidationException(message) : value.Trim();
     private static string? NormalizeOptional(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

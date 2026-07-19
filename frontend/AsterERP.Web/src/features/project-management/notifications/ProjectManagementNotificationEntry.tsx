@@ -9,7 +9,6 @@ import {
   openProjectManagementNotification,
 } from '../../../api/project-management/projectManagement.api';
 import type { ProjectManagementNotification } from '../../../api/project-management/projectManagement.types';
-import { normalizeProjectManagementTargetRoute } from '../state/projectManagementPlatformRoutes';
 import { projectManagementQueryKeys } from '../../../core/query/projectManagementQueryKeys';
 import { useApiMutation } from '../../../core/query/useApiMutation';
 import { useAuthStore } from '../../../core/state';
@@ -17,10 +16,27 @@ import { PermissionGuard } from '../../../shared/auth/PermissionGuard';
 import { useMessage } from '../../../shared/feedback/useMessage';
 import { AppIcon } from '../../../shared/icons/AppIcon';
 import { getErrorMessage } from '../../../shared/utils/errorMessage';
+import { normalizeProjectManagementTargetRoute } from '../state/projectManagementPlatformRoutes';
 import { useProjectManagementWorkspaceScope } from '../state/projectManagementWorkspaceScope';
 
 import { useProjectManagementBrowserNotifications } from './useProjectManagementBrowserNotifications';
 import { useProjectManagementNotificationRealtime } from './useProjectManagementNotificationRealtime';
+
+const notificationTypeOptions = [
+  { label: '全部类型', value: '' },
+  { label: '任务提醒', value: 'task.reminder' },
+  { label: '@ 提及', value: 'task.comment.mentioned' },
+  { label: '任务分配', value: 'task.assigned' },
+  { label: '加入参与人', value: 'task.participant.added' },
+  { label: '移出参与人', value: 'task.participant.removed' },
+  { label: '任务状态', value: 'task.status.changed' },
+  { label: '截止日期', value: 'task.due-date.changed' },
+  { label: '里程碑风险', value: 'milestone.risk.detected' },
+  { label: 'Excel 导入', value: 'project.excel-import' },
+  { label: '同步导入', value: 'sync.import' },
+  { label: '操作完成', value: 'operation.succeeded' },
+  { label: '操作失败', value: 'operation.failed' },
+] as const;
 
 export function ProjectManagementNotificationEntry() {
   return (
@@ -38,7 +54,8 @@ function ProjectManagementNotificationEntryContent() {
   const message = useMessage();
   const [open, setOpen] = useState(false);
   const [unreadOnly, setUnreadOnly] = useState(false);
-  const notificationQuery = useMemo(() => ({ pageIndex: 1, pageSize: 20, unreadOnly }), [unreadOnly]);
+  const [notificationType, setNotificationType] = useState('');
+  const notificationQuery = useMemo(() => ({ pageIndex: 1, pageSize: 20, unreadOnly, ...(notificationType ? { notificationType } : {}) }), [notificationType, unreadOnly]);
   const notifications = useQuery({
     enabled: scope.isAvailable,
     queryFn: ({ signal }) => getProjectManagementNotifications(notificationQuery, signal),
@@ -46,7 +63,7 @@ function ProjectManagementNotificationEntryContent() {
   });
   const refresh = useCallback(
     () => queryClient.invalidateQueries({ queryKey: projectManagementQueryKeys.notifications(scope, notificationQuery) }),
-    [queryClient, scope],
+    [notificationQuery, queryClient, scope],
   );
   const openNotificationById = useCallback(
     async (notificationId: string) => {
@@ -100,6 +117,9 @@ function ProjectManagementNotificationEntryContent() {
             <div className="flex items-center gap-2 text-xs">
               <button className={!unreadOnly ? 'font-semibold text-blue-700' : ''} onClick={() => setUnreadOnly(false)} type="button">全部</button>
               <button className={unreadOnly ? 'font-semibold text-blue-700' : ''} onClick={() => setUnreadOnly(true)} type="button">未读</button>
+              <select aria-label="通知类型" className="max-w-24 rounded border border-gray-300 bg-white px-1 py-0.5" onChange={(event) => setNotificationType(event.target.value)} value={notificationType}>
+                {notificationTypeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
               <button disabled={markAll.isPending || unread === 0} onClick={() => markAll.mutate()} type="button">全部已读</button>
             </div>
           </div>

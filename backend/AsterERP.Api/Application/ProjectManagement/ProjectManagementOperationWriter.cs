@@ -11,7 +11,8 @@ public sealed class ProjectManagementOperationWriter(
     IWorkspaceDatabaseAccessor databaseAccessor,
     ICurrentUser currentUser,
     IProjectManagementOperationProgressPublisher? progressPublisher = null,
-    IProjectManagementOperationTransitionObserver? transitionObserver = null) : IProjectManagementOperationWriter
+    IProjectManagementOperationTransitionObserver? transitionObserver = null,
+    IProjectManagementNotificationPublisher? notificationPublisher = null) : IProjectManagementOperationWriter
 {
     public async Task CreatePendingAsync(string operationId, string operationType, string impactJson, string traceId, CancellationToken cancellationToken = default)
     {
@@ -220,6 +221,7 @@ public sealed class ProjectManagementOperationWriter(
         }
 
         await PublishBestEffortAsync(entity, cancellationToken);
+        await PublishTerminalNotificationBestEffortAsync(entity, cancellationToken);
         return true;
     }
 
@@ -232,6 +234,30 @@ public sealed class ProjectManagementOperationWriter(
             await InsertEventAsync(db, entity, cancellationToken);
         });
         await PublishBestEffortAsync(entity, cancellationToken);
+    }
+
+    private async Task PublishTerminalNotificationBestEffortAsync(ProjectManagementOperationEntity operation, CancellationToken cancellationToken)
+    {
+        if (notificationPublisher is null || operation.Status is not ("Succeeded" or "Failed")) return;
+        try
+        {
+            var isSucceeded = operation.Status == "Succeeded";
+            await notificationPublisher.PublishAsync(new ProjectManagementNotification(
+                operation.TenantId,
+                operation.AppCode,
+                isSucceeded ? ProjectManagementNotificationTypes.OperationSucceeded : ProjectManagementNotificationTypes.OperationFailed,
+                operation.ActorUserId,
+                isSucceeded ? "项目操作已完成" : "项目操作失败",
+                isSucceeded
+                    ? $"项目操作 {operation.OperationType} 已完成"
+                    : $"项目操作 {operation.OperationType} 失败：{operation.ErrorMessage ?? "未知错误"}",
+                "/project-audit-center",
+                $"notification:operation:{operation.Id}:{operation.Status}"), cancellationToken);
+        }
+        catch (Exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            // 操作状态已持久化；通知失败不得把已完成的长任务反向标记为失败。
+        }
     }
 
     private Task InsertEventAsync(ISqlSugarClient db, ProjectManagementOperationEntity entity, CancellationToken cancellationToken) =>

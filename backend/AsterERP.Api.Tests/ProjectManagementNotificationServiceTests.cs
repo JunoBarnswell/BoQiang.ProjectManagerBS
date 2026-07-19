@@ -5,6 +5,7 @@ using AsterERP.Api.Infrastructure.Database;
 using AsterERP.Api.Infrastructure.Security;
 using AsterERP.Api.Modules.ProjectManagement;
 using AsterERP.Contracts.ProjectManagement;
+using AsterERP.Shared;
 using SqlSugar;
 using Xunit;
 
@@ -83,10 +84,51 @@ public sealed class ProjectManagementNotificationServiceTests
         await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.NotFoundException>(() => service.OpenAsync("foreign-notification"));
     }
 
-    private static FixedAsterErpCurrentUser CreateUser(string userId) => new(new ClaimsPrincipal(new ClaimsIdentity(new[]
+    [Fact]
+    public async Task Notification_idempotency_is_isolated_by_tenant_and_application()
     {
-        new Claim(AsterErpClaimTypes.UserId, userId), new Claim(AsterErpClaimTypes.TenantId, "tenant-a"), new Claim(AsterErpClaimTypes.AppCode, "SYSTEM")
-    }, "test")));
+        using var db = new SqlSugarClient(new ConnectionConfig { ConnectionString = $"Data Source=file:project-management-notification-idempotency-scope-{Guid.NewGuid():N};Mode=Memory;Cache=Shared", DbType = DbType.Sqlite, IsAutoCloseConnection = false });
+        await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
+        var tenantA = new ProjectManagementNotificationService(new TestWorkspaceDatabaseAccessor(db), CreateUser("user-a", "tenant-a", "SYSTEM"));
+        var tenantB = new ProjectManagementNotificationService(new TestWorkspaceDatabaseAccessor(db), CreateUser("user-a", "tenant-b", "MES"));
+        var notificationA = new ProjectManagementNotification("tenant-a", "SYSTEM", ProjectManagementNotificationTypes.TaskAssigned, "user-a", "Assignment", "Message", "/projects/project-a/tasks", "same-business-event", "project-a");
+        var notificationB = notificationA with { TenantId = "tenant-b", AppCode = "MES" };
+
+        await tenantA.PublishAsync(notificationA);
+        await tenantB.PublishAsync(notificationB);
+
+        Assert.Single((await tenantA.QueryAsync(new ProjectManagementNotificationQuery())).Items);
+        Assert.Single((await tenantB.QueryAsync(new ProjectManagementNotificationQuery())).Items);
+        Assert.Equal(2, await db.Queryable<ProjectManagementNotificationEntity>().CountAsync());
+    }
+
+    [Fact]
+    public async Task Terminal_operation_writes_a_safe_notification_that_opens_the_authorized_audit_center()
+    {
+        using var db = new SqlSugarClient(new ConnectionConfig { ConnectionString = $"Data Source=file:project-management-notification-operation-{Guid.NewGuid():N};Mode=Memory;Cache=Shared", DbType = DbType.Sqlite, IsAutoCloseConnection = false });
+        await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
+        var currentUser = CreateUser("user-a", permissions: [PermissionCodes.ProjectManagementOperationView]);
+        var accessor = new TestWorkspaceDatabaseAccessor(db);
+        var notifications = new ProjectManagementNotificationService(accessor, currentUser);
+        await db.Insertable(new ProjectManagementOperationEntity
+        {
+            Id = "operation-a", TenantId = "tenant-a", AppCode = "SYSTEM", OperationType = "sync.import", Status = "Running", Phase = "Importing",
+            TraceId = "trace-a", ActorUserId = "user-a", StartedTime = DateTime.UtcNow, CreatedBy = "user-a", CreatedTime = DateTime.UtcNow, VersionNo = 1
+        }).ExecuteCommandAsync();
+        var writer = new ProjectManagementOperationWriter(accessor, currentUser, notificationPublisher: notifications);
+
+        await writer.SucceedAsync("operation-a");
+
+        var notification = Assert.Single((await notifications.QueryAsync(new ProjectManagementNotificationQuery())).Items);
+        Assert.Equal(ProjectManagementNotificationTypes.OperationSucceeded, notification.NotificationType);
+        Assert.Equal("/project-audit-center", (await notifications.OpenAsync(notification.Id)).TargetRoute);
+    }
+
+    private static FixedAsterErpCurrentUser CreateUser(string userId, string tenantId = "tenant-a", string appCode = "SYSTEM", params string[] permissions) => new(new ClaimsPrincipal(new ClaimsIdentity(
+        new[]
+        {
+            new Claim(AsterErpClaimTypes.UserId, userId), new Claim(AsterErpClaimTypes.TenantId, tenantId), new Claim(AsterErpClaimTypes.AppCode, appCode)
+        }.Concat(permissions.Select(permission => new Claim(AsterErpClaimTypes.PermissionCode, permission))), "test")));
     private sealed class TestWorkspaceDatabaseAccessor(ISqlSugarClient db) : IWorkspaceDatabaseAccessor
     {
         public ISqlSugarClient MainDb => db;

@@ -27,7 +27,8 @@ public sealed class ProjectManagementTaskService(
     IProjectManagementTaskTemplateDependencyCommandService? templateDependencyCommand = null,
     ProjectManagementTaskStateMachine? taskStateMachine = null,
     IProjectManagementReversibleCommandWriter? reversibleCommandWriter = null,
-    ProjectManagementWipCoordinator? wipCoordinator = null) : IProjectManagementTaskService, IProjectManagementTaskOccurrenceCommandService, IProjectManagementTaskTemplateCommandService
+    ProjectManagementWipCoordinator? wipCoordinator = null,
+    IProjectManagementNotificationPublisher? notificationPublisher = null) : IProjectManagementTaskService, IProjectManagementTaskOccurrenceCommandService, IProjectManagementTaskTemplateCommandService
 {
     private static readonly string[] Priorities = ["Low", "Medium", "High", "Urgent"];
 
@@ -219,6 +220,7 @@ public sealed class ProjectManagementTaskService(
             await WriteWipOverrideActivityAsync(entity, wipOverride, cancellationToken);
             await WriteSyncJournalAsync(entity, "created", cancellationToken);
         });
+        await PublishTaskChangeNotificationsAsync(entity, null, cancellationToken);
         await PublishInvalidationAsync(entity, "task.created", cancellationToken);
         return await MapDetailAsync(entity, cancellationToken);
     }
@@ -397,6 +399,7 @@ public sealed class ProjectManagementTaskService(
         {
             await imConversationService.SynchronizeTaskLinksAsync(entity.Id, cancellationToken);
         }
+        await PublishTaskChangeNotificationsAsync(entity, before, cancellationToken);
         await PublishInvalidationAsync(entity, "task.updated", cancellationToken);
         var result = await MapDetailAsync(entity, cancellationToken);
         var commandType = request.AssigneeUserId != before.AssigneeUserId
@@ -1015,4 +1018,57 @@ public sealed class ProjectManagementTaskService(
 
     private static ProjectManagementTaskDetailResponse MapDetail(ProjectManagementTaskEntity entity, int blockedByCount, bool canStart, string? blockedReason) => new(entity.Id, entity.ProjectId, entity.MilestoneId, entity.ParentTaskId, entity.TaskCode, entity.Title, entity.Description, entity.Status, entity.Priority, entity.AssigneeUserId, entity.AssigneeEmploymentId, entity.StartDate, entity.DueDate, entity.ProgressPercent, entity.Weight, entity.EstimateMinutes, entity.ActualMinutes, entity.SortOrder, entity.Depth, entity.VersionNo, entity.CreatedTime, entity.UpdatedTime, blockedByCount, canStart, blockedReason, ProjectManagementDomainRules.IsTaskOverdue(entity.Status, entity.DueDate, DateTime.UtcNow), entity.ActualStartAt, entity.ActualEndAt, Summary: entity.Summary, Markdown: entity.Description);
     private static ProjectManagementTaskResponse ToTemplateResponse(ProjectManagementTaskEntity entity) => new(entity.Id, entity.ProjectId, entity.MilestoneId, entity.ParentTaskId, entity.TaskCode, entity.Title, entity.Description, entity.Status, entity.Priority, entity.AssigneeUserId, entity.AssigneeEmploymentId, entity.StartDate, entity.DueDate, entity.ProgressPercent, entity.Weight, entity.EstimateMinutes, entity.ActualMinutes, entity.SortOrder, entity.Depth, entity.VersionNo, entity.CreatedTime, entity.UpdatedTime, IsOverdue: ProjectManagementDomainRules.IsTaskOverdue(entity.Status, entity.DueDate, DateTime.UtcNow), Summary: entity.Summary, Markdown: entity.Description);
+
+    private async Task PublishTaskChangeNotificationsAsync(ProjectManagementTaskEntity task, ProjectManagementTaskUpsertRequest? before, CancellationToken cancellationToken)
+    {
+        if (notificationPublisher is null) return;
+
+        var actorUserId = RequireUserId();
+        var assigneeChanged = before is null || !string.Equals(NormalizeOptional(before.AssigneeUserId), task.AssigneeUserId, StringComparison.Ordinal);
+        if (assigneeChanged && !string.IsNullOrWhiteSpace(task.AssigneeUserId) && !string.Equals(task.AssigneeUserId, actorUserId, StringComparison.OrdinalIgnoreCase))
+            await PublishNotificationAsync(task, task.AssigneeUserId, ProjectManagementNotificationTypes.TaskAssigned, "任务已分配给你", $"你已被分配处理任务 {task.Title}", cancellationToken);
+
+        if (before is null) return;
+        var recipients = await LoadTaskNotificationRecipientsAsync(task, actorUserId, cancellationToken);
+        if (!string.Equals(before.Status, task.Status, StringComparison.Ordinal))
+        {
+            foreach (var recipient in recipients)
+                await PublishNotificationAsync(task, recipient, ProjectManagementNotificationTypes.TaskStatusChanged, "任务状态已变更", $"任务 {task.Title} 的状态已变更为 {task.Status}", cancellationToken);
+        }
+        if (before.DueDate != task.DueDate)
+        {
+            var dueDate = task.DueDate?.ToString("yyyy-MM-dd") ?? "未设置";
+            foreach (var recipient in recipients)
+                await PublishNotificationAsync(task, recipient, ProjectManagementNotificationTypes.TaskDueDateChanged, "任务截止日期已变更", $"任务 {task.Title} 的截止日期已变更为 {dueDate}", cancellationToken);
+        }
+    }
+
+    private async Task<IReadOnlyList<string>> LoadTaskNotificationRecipientsAsync(ProjectManagementTaskEntity task, string actorUserId, CancellationToken cancellationToken)
+    {
+        var recipients = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (!string.IsNullOrWhiteSpace(task.AssigneeUserId)) recipients.Add(task.AssigneeUserId);
+        var participants = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskParticipantEntity>()
+            .Where(item => item.TenantId == task.TenantId && item.AppCode == task.AppCode && item.ProjectId == task.ProjectId && item.TaskId == task.Id && !item.IsDeleted)
+            .Select(item => item.UserId)
+            .ToListAsync(cancellationToken);
+        recipients.UnionWith(participants);
+        recipients.Remove(actorUserId);
+        return recipients.OrderBy(item => item, StringComparer.Ordinal).ToList();
+    }
+
+    private Task PublishNotificationAsync(ProjectManagementTaskEntity task, string recipientUserId, string notificationType, string title, string message, CancellationToken cancellationToken)
+    {
+        var traceId = $"notification:{notificationType}:{task.Id}:{task.VersionNo}:{recipientUserId}";
+        return notificationPublisher!.PublishAsync(new ProjectManagementNotification(
+            task.TenantId,
+            task.AppCode,
+            notificationType,
+            recipientUserId,
+            title,
+            message,
+            $"/projects/{task.ProjectId}/tasks?selectedTaskId={task.Id}",
+            traceId,
+            task.ProjectId,
+            task.Id), cancellationToken);
+    }
 }

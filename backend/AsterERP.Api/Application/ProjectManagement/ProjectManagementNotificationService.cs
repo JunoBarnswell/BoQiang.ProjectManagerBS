@@ -20,7 +20,7 @@ public sealed class ProjectManagementNotificationService(
         EnsureWorkspace(notification);
         var recipient = Required(notification.RecipientUserId);
         var targetRoute = Required(notification.TargetRoute);
-        var key = BuildIdempotencyKey(Required(notification.NotificationType), recipient, targetRoute, Required(notification.TraceId));
+        var key = BuildIdempotencyKey(Tenant(), App(), Required(notification.NotificationType), recipient, targetRoute, Required(notification.TraceId));
         var db = databaseAccessor.GetCurrentDb();
         if (await db.Queryable<ProjectManagementNotificationEntity>().AnyAsync(item => item.IdempotencyKey == key && !item.IsDeleted, cancellationToken)) return;
         try
@@ -93,7 +93,14 @@ public sealed class ProjectManagementNotificationService(
     {
         var notification = await GetOwnedAsync(id, cancellationToken);
         await MarkReadAsync(id, cancellationToken);
-        if (string.IsNullOrWhiteSpace(notification.ProjectId)) return new ProjectManagementNotificationOpenResponse(false, null, "通知未关联可打开的项目对象");
+        if (string.IsNullOrWhiteSpace(notification.ProjectId))
+        {
+            if (!string.Equals(notification.TargetRoute, "/project-audit-center", StringComparison.Ordinal))
+                return new ProjectManagementNotificationOpenResponse(false, null, "通知未关联可打开的项目对象");
+            return currentUser.HasAsterErpPermission(PermissionCodes.ProjectManagementOperationView)
+                ? new ProjectManagementNotificationOpenResponse(true, notification.TargetRoute, null)
+                : new ProjectManagementNotificationOpenResponse(false, null, "无权访问关联操作记录");
+        }
         try
         {
             await (accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser)).EnsureCanViewProjectAsync(notification.ProjectId, cancellationToken);
@@ -119,7 +126,8 @@ public sealed class ProjectManagementNotificationService(
     {
         if (!string.Equals(notification.TenantId?.Trim(), Tenant(), StringComparison.Ordinal) || !string.Equals(notification.AppCode?.Trim(), App(), StringComparison.OrdinalIgnoreCase)) throw new ValidationException("通知上下文与当前会话不一致", ErrorCodes.PermissionDenied);
     }
-    private static string BuildIdempotencyKey(string type, string recipient, string route, string traceId) => string.Join('\u001f', type, recipient, route, traceId);
+    private static string BuildIdempotencyKey(string tenantId, string appCode, string type, string recipient, string route, string traceId) =>
+        string.Join('\u001f', tenantId, appCode, type, recipient, route, traceId);
     private static bool IsDuplicateNotification(Exception exception) =>
         exception.Message.Contains("pm_notifications", StringComparison.OrdinalIgnoreCase)
         && exception.Message.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase);
