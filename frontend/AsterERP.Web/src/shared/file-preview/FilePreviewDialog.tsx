@@ -11,6 +11,7 @@ const PptxPreviewSurface = lazy(() => import('./PptxPreviewSurface').then((modul
 
 interface FilePreviewDialogProps {
   error?: string | null;
+  closeOnEscape?: boolean;
   file?: SystemFileRecordDto | null;
   loading?: boolean;
   open: boolean;
@@ -20,6 +21,7 @@ interface FilePreviewDialogProps {
 
 export function FilePreviewDialog({
   error,
+  closeOnEscape = true,
   file,
   loading = false,
   open,
@@ -32,6 +34,7 @@ export function FilePreviewDialog({
 
   return (
     <ResponsiveModal
+      closeOnEscape={closeOnEscape}
       mode="modal"
       open={open}
       title={file?.fileName ? formatMessage(translate('filePreview.titleWithName'), { name: file.fileName }) : translate('filePreview.title')}

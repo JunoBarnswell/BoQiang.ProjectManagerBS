@@ -2,6 +2,7 @@ import type { SystemFileRecordDto } from '../../../api/system/files.types';
 import type { ProjectManagementTaskAttachment } from '../../../api/project-management/projectManagement.types';
 import { FilePreviewDialog } from '../../../shared/file-preview/FilePreviewDialog';
 import { getFileExtension } from '../../../shared/file-preview/filePreviewUtils';
+import { useProjectManagementEscapeLayer } from '../interactions/ProjectManagementEscapeStack';
 
 interface ProjectManagementTaskAttachmentPreviewDialogProps {
   attachment: ProjectManagementTaskAttachment | null;
@@ -20,7 +21,9 @@ export function ProjectManagementTaskAttachmentPreviewDialog({
   previewFile,
   onClose
 }: ProjectManagementTaskAttachmentPreviewDialogProps) {
+  useProjectManagementEscapeLayer(open, onClose);
   return <FilePreviewDialog
+    closeOnEscape={false}
     error={error}
     file={attachment ? toPreviewFile(attachment) : null}
     loading={loading}

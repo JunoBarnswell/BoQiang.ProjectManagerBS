@@ -7,6 +7,7 @@ import type {
   ProjectManagementTaskVersionConflictResponse,
 } from '../../../api/project-management/projectManagement.types';
 import { PermissionButton } from '../../../shared/auth/PermissionButton';
+import { useProjectManagementEscapeLayer } from '../interactions/ProjectManagementEscapeStack';
 
 import { taskDetailSections, type TaskDetailSection } from './taskDetailDrawerModel';
 
@@ -47,20 +48,13 @@ export function TaskDetailDrawer({
 }: TaskDetailDrawerProps) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  useProjectManagementEscapeLayer(open, onClose);
 
   useEffect(() => {
     if (!open) return;
     previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     closeButtonRef.current?.focus();
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        onClose();
-      }
-    };
-    document.addEventListener('keydown', onKeyDown);
     return () => {
-      document.removeEventListener('keydown', onKeyDown);
       previousFocusRef.current?.focus();
     };
   }, [onClose, open]);

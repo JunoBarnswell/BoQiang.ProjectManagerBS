@@ -6,6 +6,7 @@ import { searchProjectManagement } from '../../api/project-management/projectMan
 import type { ProjectManagementSearchItem, ProjectManagementSearchScope } from '../../api/project-management/projectManagement.types';
 import { isHttpError } from '../../core/http/httpError';
 import { ProjectManagementGlobalSearch } from '../../features/project-management/search/ProjectManagementGlobalSearch';
+import { ProjectManagementEscapeStack } from '../../features/project-management/interactions/ProjectManagementEscapeStack';
 import { normalizeProjectManagementTargetRoute } from '../../features/project-management/state/projectManagementPlatformRoutes';
 import { useProjectManagementWorkspaceScope } from '../../features/project-management/state/projectManagementWorkspaceScope';
 import { ResponsivePage } from '../../shared/responsive/ResponsivePage';
@@ -59,6 +60,7 @@ export function ProjectManagementSearchPage() {
   const result = searchQuery.data?.data;
   const total = (result?.projects.length ?? 0) + (result?.tasks.length ?? 0) + (result?.milestones.length ?? 0) + (result?.labels.length ?? 0) + (result?.members.length ?? 0) + (result?.comments.length ?? 0);
   return (
+    <ProjectManagementEscapeStack>
     <ResponsivePage
       title="项目域搜索"
       eyebrow="ProjectManagement / Search"
@@ -89,6 +91,7 @@ export function ProjectManagementSearchPage() {
         <SearchResultGroup title="评论" emptyText="没有匹配的评论" items={result?.comments ?? []} onOpen={(item) => navigate(normalizeProjectManagementTargetRoute(item.targetRoute))} />
       </div>}
     </ResponsivePage>
+    </ProjectManagementEscapeStack>
   );
 }
 

@@ -14,6 +14,8 @@ import type {
 import { isHttpError } from '../../../core/http/httpError';
 import { normalizeProjectManagementTargetRoute } from '../state/projectManagementPlatformRoutes';
 import { useProjectManagementWorkspaceScope } from '../state/projectManagementWorkspaceScope';
+import { ProjectManagementEscapeStack, useProjectManagementEscapeLayer } from '../interactions/ProjectManagementEscapeStack';
+import { useProjectManagementGlobalShortcuts } from '../interactions/useProjectManagementGlobalShortcuts';
 
 const DEBOUNCE_MS = 280;
 
@@ -35,6 +37,10 @@ interface SearchResultRow {
 }
 
 export function ProjectManagementGlobalSearch() {
+  return <ProjectManagementEscapeStack><ProjectManagementGlobalSearchContent /></ProjectManagementEscapeStack>;
+}
+
+function ProjectManagementGlobalSearchContent() {
   const scope = useProjectManagementWorkspaceScope();
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -73,20 +79,8 @@ export function ProjectManagementGlobalSearch() {
     setActiveIndex((current) => Math.min(current, Math.max(resultRows.length - 1, 0)));
   }, [resultRows.length]);
 
-  useEffect(() => {
-    const handleGlobalShortcut = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f') {
-        event.preventDefault();
-        setOpen(true);
-      }
-      if (open && event.key === 'Escape') {
-        event.preventDefault();
-        setOpen(false);
-      }
-    };
-    window.addEventListener('keydown', handleGlobalShortcut);
-    return () => window.removeEventListener('keydown', handleGlobalShortcut);
-  }, [open]);
+  useProjectManagementEscapeLayer(open, () => setOpen(false));
+  useProjectManagementGlobalShortcuts({ search: () => setOpen(true) }, { canExecute: (shortcut) => shortcut === 'search', enabled: scope.isAvailable });
 
   const openResult = (item: ProjectManagementSearchItem) => {
     // The destination page performs its own authenticated API load and permission check.

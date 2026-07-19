@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 
 import {
   createProjectManagementSavedView,
@@ -36,6 +36,8 @@ import {
   updateProjectManagementTask,
   updateProjectManagementTaskComment,
   updateProjectManagementSavedView,
+  redoProjectManagementReversibleCommand,
+  undoProjectManagementReversibleCommand,
 } from '../../api/project-management/projectManagement.api';
 import type {
   ProjectManagementTaskAttachment,
@@ -61,7 +63,14 @@ import '../../features/project-management/projectManagement.css';
 import { useProjectManagementRealtimeConnection } from '../../features/project-management/hooks/useProjectManagementRealtimeConnection';
 import { useTaskWorkspaceUrlState } from '../../features/project-management/hooks/useTaskWorkspaceUrlState';
 import { useProjectManagementWorkspaceScope } from '../../features/project-management/state/projectManagementWorkspaceScope';
+import { toProjectManagementPlatformRoute } from '../../features/project-management/state/projectManagementPlatformRoutes';
 import { taskWorkspaceStateToQuery, taskWorkspaceStateToSavedView } from '../../features/project-management/state/taskWorkspaceState';
+import { ProjectManagementEscapeStack } from '../../features/project-management/interactions/ProjectManagementEscapeStack';
+import { ProjectManagementShortcutHelp } from '../../features/project-management/interactions/ProjectManagementShortcutHelp';
+import { ProjectManagementUnsavedChangesDialog } from '../../features/project-management/interactions/ProjectManagementUnsavedChangesDialog';
+import { useProjectManagementGlobalShortcuts } from '../../features/project-management/interactions/useProjectManagementGlobalShortcuts';
+import { useProjectManagementUnsavedChangesGuard } from '../../features/project-management/interactions/useProjectManagementUnsavedChangesGuard';
+import { useProjectManagementInteractionPreferences } from '../../features/project-management/state/projectManagementInteractionPreferences';
 import { SavedViewManager } from '../../features/project-management/task-workspace/SavedViewManager';
 import { createTaskMoveRequest, type TaskGroupDropTarget } from '../../features/project-management/task-workspace/taskMoveIntent';
 import { TaskWorkspaceBatchCommandPanel } from '../../features/project-management/task-workspace/TaskWorkspaceBatchCommandPanel';
@@ -141,13 +150,19 @@ const taskViewMeta: Record<ProjectManagementTaskView, { description: string; lab
 export function ProjectManagementTaskWorkspacePage() {
   const scope = useProjectManagementWorkspaceScope();
   const { projectId = '' } = useParams<{ projectId: string }>();
-  const { pathname } = useLocation();
+  const { hash, pathname, search } = useLocation();
+  const navigate = useNavigate();
   const viewKey = resolveView(pathname);
   const { state, setState } = useTaskWorkspaceUrlState(viewKey);
   const message = useMessage();
   const confirm = useConfirm();
   const queryClient = useQueryClient();
   const { hasPermission: canViewTaskActivities } = usePermission('project-management:audit:view');
+  const { hasPermission: canAddTask } = usePermission('project-management:task:add');
+  const { hasPermission: canEditTask } = usePermission('project-management:task:edit');
+  const { hasPermission: canSearchProjectManagement } = usePermission('project-management:search:view');
+  const { hasPermission: canManageReversibleCommands } = usePermission('project-management:reversible-command:manage');
+  const interactionPreferences = useProjectManagementInteractionPreferences();
   const openImConversation = useOpenImConversation();
   const [creating, setCreating] = useState(false);
   const [detailSection, setDetailSection] = useState<TaskDetailSection>('basic');
@@ -180,6 +195,8 @@ export function ProjectManagementTaskWorkspacePage() {
     previewFile: File | null;
   }>({ attachment: null, loading: false, previewFile: null });
   const attachmentPreviewAbortController = useRef<AbortController | null>(null);
+  const taskFormBaseline = useRef('');
+  const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
   const [labelFilter, setLabelFilter] = useState<ProjectManagementTaskLabelFilter>({ labelIds: [], matchMode: 'Any' });
   const query = useMemo(() => ({
     ...taskWorkspaceStateToQuery(projectId, state),
@@ -187,6 +204,7 @@ export function ProjectManagementTaskWorkspacePage() {
     labelFilter: labelFilter.labelIds.length > 0 ? labelFilter : undefined,
   }), [labelFilter, projectId, state]);
   const activeView = taskViewMeta[state.viewKey];
+  const isTaskFormDirty = Boolean(creating || state.selectedTaskId) && JSON.stringify(form) !== taskFormBaseline.current;
   const clearOptimisticBoardState = useCallback(() => {
     setOptimisticBoardRows({});
     setOptimisticBoardStatuses({});
@@ -388,6 +406,7 @@ export function ProjectManagementTaskWorkspacePage() {
       setTaskConflict(null);
       setCreating(false);
       setForm(taskDetailToForm(task));
+      taskFormBaseline.current = JSON.stringify(taskDetailToForm(task));
       setState({ selectedTaskId: task?.id }, { replace: true });
       await queryClient.invalidateQueries({ queryKey: queryKeys.projectManagement.task(scope, projectId, task.id) });
       await invalidateProjectTaskViews();
@@ -568,6 +587,22 @@ export function ProjectManagementTaskWorkspacePage() {
       await invalidateProjectTaskViews();
     },
   });
+  const undoMutation = useApiMutation({
+    mutationFn: () => undoProjectManagementReversibleCommand({ requestId: createInteractionRequestId() }),
+    onError: (error) => message.error(getErrorMessage(error, '撤销失败，请刷新后重试')),
+    onSuccess: async () => {
+      message.success('已撤销最近一次业务操作');
+      await invalidateProjectTaskViews();
+    },
+  });
+  const redoMutation = useApiMutation({
+    mutationFn: () => redoProjectManagementReversibleCommand({ requestId: createInteractionRequestId() }),
+    onError: (error) => message.error(getErrorMessage(error, '重做失败，请刷新后重试')),
+    onSuccess: async () => {
+      message.success('已重做最近一次业务操作');
+      await invalidateProjectTaskViews();
+    },
+  });
   const groupMutation = useApiMutation({
     mutationFn: async ({ task, target }: { task: ProjectManagementTaskListItem; target: TaskGroupDropTarget }) => {
       const original = (await getProjectManagementTask(task.id)).data;
@@ -701,11 +736,62 @@ export function ProjectManagementTaskWorkspacePage() {
     onError: (error) => message.error(getErrorMessage(error, '保存视图删除失败')),
     onSuccess: async () => { message.success('保存视图已删除'); await savedViewsQuery.refetch(); },
   });
-  const closeTaskDetail = useCallback(() => {
+  const dismissTaskDetail = useCallback(() => {
     setCreating(false);
     setTaskConflict(null);
+    setForm(emptyForm);
+    taskFormBaseline.current = JSON.stringify(emptyForm);
     setState({ selectedTaskId: undefined });
   }, [setState]);
+  const unsavedChangesGuard = useProjectManagementUnsavedChangesGuard({
+    isDirty: isTaskFormDirty,
+    onDiscard: dismissTaskDetail,
+    onSave: async () => { await saveMutation.mutateAsync({}); },
+  });
+  const closeTaskDetail = useCallback(() => unsavedChangesGuard.requestLeave(dismissTaskDetail), [dismissTaskDetail, unsavedChangesGuard]);
+  useEffect(() => {
+    if (creating) {
+      taskFormBaseline.current = JSON.stringify(emptyForm);
+      return;
+    }
+    if (selectedTask) taskFormBaseline.current = JSON.stringify(taskDetailToForm(selectedTask));
+  }, [creating, selectedTask]);
+  useEffect(() => {
+    if (interactionPreferences.isAvailable) interactionPreferences.rememberPosition({ hash, pathname, search });
+  }, [hash, interactionPreferences.isAvailable, interactionPreferences.rememberPosition, pathname, search]);
+  useProjectManagementGlobalShortcuts({
+    newChildTask: selectedTask && canAddTask ? () => {
+      setCreating(true);
+      setForm({ ...emptyForm, milestoneId: selectedTask.milestoneId, parentTaskId: selectedTask.id });
+      taskFormBaseline.current = JSON.stringify(emptyForm);
+      setState({ selectedTaskId: undefined });
+    } : undefined,
+    newTask: canAddTask ? () => {
+      setCreating(true);
+      setForm(emptyForm);
+      taskFormBaseline.current = JSON.stringify(emptyForm);
+      setState({ selectedTaskId: undefined });
+    } : undefined,
+    search: canSearchProjectManagement ? () => navigate(toProjectManagementPlatformRoute('project-search')) : undefined,
+    undo: canManageReversibleCommands && !undoMutation.isPending && !redoMutation.isPending ? () => undoMutation.mutate() : undefined,
+    redo: canManageReversibleCommands && !undoMutation.isPending && !redoMutation.isPending ? () => redoMutation.mutate() : undefined,
+    switchView: (view) => {
+      const path = view === 'tree' ? 'tasks' : view;
+      interactionPreferences.setPreferredView(view);
+      navigate(toProjectManagementPlatformRoute(`projects/${projectId}/${path}`));
+    },
+  }, {
+    canExecute: (shortcut) => shortcut === 'newTask' || shortcut === 'newChildTask'
+      ? canAddTask
+      : shortcut === 'search'
+        ? canSearchProjectManagement
+        : shortcut === 'switchView'
+          ? canEditTask || canAddTask || scope.isAvailable
+          : shortcut === 'undo' || shortcut === 'redo'
+            ? canManageReversibleCommands && !undoMutation.isPending && !redoMutation.isPending
+            : false,
+    enabled: scope.isAvailable && Boolean(projectId),
+  });
   const reloadTaskDetail = useCallback(async () => {
     const result = await taskDetailQuery.refetch();
     if (result.data?.data) setForm(taskDetailToForm(result.data.data));
@@ -727,6 +813,7 @@ export function ProjectManagementTaskWorkspacePage() {
   }
 
   return (
+    <ProjectManagementEscapeStack>
     <ResponsivePage
       className="pm-page"
       description={activeView.description}
@@ -746,6 +833,7 @@ export function ProjectManagementTaskWorkspacePage() {
           onCreateTask={() => {
             setCreating(true);
             setForm(emptyForm);
+            taskFormBaseline.current = JSON.stringify(emptyForm);
             setState({ selectedTaskId: undefined });
           }}
           onSaveView={(viewName) => savedViewMutation.mutate(viewName)}
@@ -757,7 +845,10 @@ export function ProjectManagementTaskWorkspacePage() {
               message.error('保存视图内容无效');
             }
           }}
-          onStateChange={(next) => setState(next)}
+          onStateChange={(next) => {
+            if (next.viewKey) interactionPreferences.setPreferredView(next.viewKey);
+            setState(next);
+          }}
           projectConversation={
             <TaskWorkspaceImConversationPanel
               conversation={projectConversationQuery.data?.data}
@@ -821,10 +912,7 @@ export function ProjectManagementTaskWorkspacePage() {
           commentEditSubmitting={commentUpdateMutation.isPending}
           creating={creating}
           form={form}
-          onCancel={() => {
-            closeTaskDetail();
-            setForm(emptyForm);
-          }}
+          onCancel={closeTaskDetail}
           onCommentChange={setCommentForm}
           onCommentSubmit={() => commentMutation.mutate()}
           onCommentEditChange={setCommentEditForm}
@@ -930,6 +1018,7 @@ export function ProjectManagementTaskWorkspacePage() {
           onAddChildTask={(task) => {
             setCreating(true);
             setForm({ ...emptyForm, milestoneId: task.milestoneId, parentTaskId: task.id });
+            taskFormBaseline.current = JSON.stringify(emptyForm);
             setState({ selectedTaskId: undefined });
           }}
           onChangeTaskSchedule={(task, startDate, dueDate) => {
@@ -980,10 +1069,10 @@ export function ProjectManagementTaskWorkspacePage() {
             setOptimisticBoardRows(optimistic.rows);
             boardStatusMutation.mutate({ previousProgress: task.progressPercent, previousStatus: task.status, snapshot: optimistic.snapshot, task, status });
           }}
-          onSelectTask={(taskId) => {
-            setCreating(false);
+          onSelectTask={(taskId) => unsavedChangesGuard.requestLeave(() => {
+            dismissTaskDetail();
             setState({ selectedTaskId: taskId });
-          }}
+          })}
           onToggleTaskSelection={(taskId) => setSelectedTaskIds((current) => {
             const next = new Set(current);
             if (next.has(taskId)) next.delete(taskId);
@@ -999,6 +1088,10 @@ export function ProjectManagementTaskWorkspacePage() {
         />
       </section>
     </ResponsivePage>
+    <ProjectManagementUnsavedChangesDialog guard={unsavedChangesGuard} />
+    <button aria-label="打开项目管理快捷键帮助" className="fixed bottom-4 right-4 rounded bg-slate-800 px-3 py-2 text-sm text-white shadow" type="button" onClick={() => setShortcutHelpOpen(true)}>快捷键</button>
+    <ProjectManagementShortcutHelp open={shortcutHelpOpen} onClose={() => setShortcutHelpOpen(false)} />
+    </ProjectManagementEscapeStack>
   );
 }
 
@@ -1006,4 +1099,8 @@ function sameStringSet(left: readonly string[], right: readonly string[]): boole
   if (left.length !== right.length) return false;
   const rightSet = new Set(right);
   return left.every((value) => rightSet.has(value));
+}
+
+function createInteractionRequestId(): string {
+  return globalThis.crypto?.randomUUID?.() ?? `project-management-shortcut-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }

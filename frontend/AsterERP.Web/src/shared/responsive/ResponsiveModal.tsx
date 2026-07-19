@@ -9,6 +9,7 @@ interface ResponsiveModalProps {
   bodyClassName?: string;
   children: ReactNode;
   className?: string;
+  closeOnEscape?: boolean;
   description?: ReactNode;
   mode?: ResponsiveModalMode;
   onClose: () => void;
@@ -23,6 +24,7 @@ export function ResponsiveModal({
   bodyClassName,
   children,
   className,
+  closeOnEscape = true,
   description,
   footer,
   fullscreenOnSmall = false,
@@ -43,7 +45,7 @@ export function ResponsiveModal({
   const availableModalWidth = `calc(${rawWidth}px - calc(48px * var(--app-ui-scale)))`;
 
   useEffect(() => {
-    if (!open) {
+    if (!open || !closeOnEscape) {
       return;
     }
 
@@ -55,7 +57,7 @@ export function ResponsiveModal({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose, open]);
+  }, [closeOnEscape, onClose, open]);
 
   if (!open) {
     return null;

@@ -9,6 +9,7 @@ import type {
 } from '../../../api/project-management/projectManagement.types';
 import { PermissionButton } from '../../../shared/auth/PermissionButton';
 import { ResponsiveModal } from '../../../shared/responsive/ResponsiveModal';
+import { useProjectManagementEscapeLayer } from '../interactions/ProjectManagementEscapeStack';
 
 interface TaskWorkspaceBatchCommandPanelProps {
   candidates: ProjectManagementMemberCandidate[];
@@ -79,6 +80,7 @@ export function TaskWorkspaceBatchCommandPanel({
     setForm(initialForm);
     onClose();
   };
+  useProjectManagementEscapeLayer(open, close);
   const submit = () => {
     if (!hasChanges || pending || tasks.length === 0) return;
     onSubmit({
@@ -107,6 +109,7 @@ export function TaskWorkspaceBatchCommandPanel({
 
   return (
     <ResponsiveModal
+      closeOnEscape={false}
       description={`将对 ${tasks.length} 个任务逐项执行；每项都会重新校验权限、版本、WIP、依赖和数据规则，部分失败会保留并展示明细。`}
       footer={<><button type="button" disabled={pending} onClick={close}>取消</button><PermissionButton code="project-management:task:edit" disabled={!hasChanges || pending || tasks.length === 0} onClick={submit}>{pending ? '批量更新中…' : `更新 ${tasks.length} 个任务`}</PermissionButton></>}
       onClose={close}
