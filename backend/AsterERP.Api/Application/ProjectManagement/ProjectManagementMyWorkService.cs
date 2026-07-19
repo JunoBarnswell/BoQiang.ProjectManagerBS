@@ -20,7 +20,7 @@ public sealed class ProjectManagementMyWorkService(
     {
         var userId = RequireUserId();
         var category = NormalizeCategory(query.Category);
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         var tasks = db.Queryable<ProjectManagementTaskEntity>().Where(task => !task.IsDeleted);
         if (!string.IsNullOrWhiteSpace(query.ProjectId)) tasks = tasks.Where(task => task.ProjectId == query.ProjectId.Trim());
         if (!query.IncludeCompleted) tasks = tasks.Where(task => task.Status != "Completed" && task.Status != "Cancelled");

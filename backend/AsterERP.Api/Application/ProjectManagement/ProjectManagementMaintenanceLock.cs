@@ -22,7 +22,7 @@ public sealed class ProjectManagementMaintenanceLock(
         await Gate.WaitAsync(cancellationToken);
         try
         {
-            var db = databaseAccessor.GetCurrentDb();
+            var db = databaseAccessor.GetProjectManagementDb();
             var now = DateTime.UtcNow;
             var existing = await db.Queryable<ProjectManagementMaintenanceLockEntity>()
                 .Where(item => item.TenantId == tenantId && item.AppCode == appCode && item.LockKey == normalizedKey && !item.IsDeleted && item.ExpiresAt > now)
@@ -57,7 +57,7 @@ public sealed class ProjectManagementMaintenanceLock(
     public async Task ReleaseAsync(string operationId, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(operationId)) return;
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         var rows = await db.Queryable<ProjectManagementMaintenanceLockEntity>()
             .Where(item => item.OperationId == operationId && !item.IsDeleted).Take(1).ToListAsync(cancellationToken);
         var entity = rows.FirstOrDefault();
@@ -71,6 +71,6 @@ public sealed class ProjectManagementMaintenanceLock(
     }
 
     private string Tenant() => currentUser.GetAsterErpTenantId()?.Trim() ?? throw new ValidationException("当前会话缺少租户");
-    private string App() => currentUser.GetAsterErpAppCode()?.Trim().ToUpperInvariant() ?? throw new ValidationException("当前会话缺少应用");
+    private static string App() => ProjectManagementPlatformScope.AppCode;
     private string UserId() => currentUser.GetAsterErpUserId()?.Trim() ?? throw new ValidationException("当前会话缺少用户");
 }

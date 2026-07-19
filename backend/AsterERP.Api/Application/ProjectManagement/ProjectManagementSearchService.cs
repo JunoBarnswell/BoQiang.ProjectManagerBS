@@ -19,7 +19,7 @@ public sealed class ProjectManagementSearchService(IWorkspaceDatabaseAccessor da
         var scope = query.Scope.Trim().ToLowerInvariant();
         if (scope is not ("all" or "projects" or "tasks" or "comments")) throw new ValidationException("搜索范围不受支持");
         RequireTenant(); RequireApp();
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         var projects = new List<ProjectManagementSearchItem>();
         var tasks = new List<ProjectManagementSearchItem>();
         var comments = new List<ProjectManagementSearchItem>();
@@ -41,5 +41,5 @@ public sealed class ProjectManagementSearchService(IWorkspaceDatabaseAccessor da
     private static string Required(string? value, string message) => string.IsNullOrWhiteSpace(value) ? throw new ValidationException(message) : value.Trim();
     private static string Snippet(string value, string keyword) { var index = value.IndexOf(keyword, StringComparison.OrdinalIgnoreCase); if (index < 0) return value.Length > 180 ? value[..180] : value; var start = Math.Max(0, index - 60); var length = Math.Min(value.Length - start, 180); return (start > 0 ? "…" : string.Empty) + value.Substring(start, length) + (start + length < value.Length ? "…" : string.Empty); }
     private string RequireTenant() => currentUser.GetAsterErpTenantId()?.Trim() ?? throw new ValidationException("当前会话缺少租户", ErrorCodes.PermissionDenied);
-    private string RequireApp() => currentUser.GetAsterErpAppCode()?.Trim().ToUpperInvariant() ?? throw new ValidationException("当前会话缺少应用", ErrorCodes.PermissionDenied);
+    private static string RequireApp() => ProjectManagementPlatformScope.AppCode;
 }

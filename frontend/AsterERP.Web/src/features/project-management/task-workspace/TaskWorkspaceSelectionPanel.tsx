@@ -85,6 +85,8 @@ export function TaskWorkspaceSelectionPanel({
             {['Low', 'Medium', 'High', 'Urgent'].map((priority) => <option key={priority}>{priority}</option>)}
           </select>
           <input aria-label="任务进度" max={100} min={0} onChange={(event) => onFormChange({ ...form, progressPercent: Number(event.target.value) })} type="number" value={form.progressPercent ?? 0} />
+          <input aria-label="开始日期" onChange={(event) => onFormChange({ ...form, startDate: event.target.value || undefined })} type="date" value={toDateInputValue(form.startDate)} />
+          <input aria-label="截止日期" onChange={(event) => onFormChange({ ...form, dueDate: event.target.value || undefined })} type="date" value={toDateInputValue(form.dueDate)} />
         </div>
         <textarea className="mt-2 min-h-24 w-full rounded border border-gray-200 p-2" aria-label="任务描述" onChange={(event) => onFormChange({ ...form, description: event.target.value || undefined })} placeholder="任务描述" value={form.description ?? ''} />
         <div className="mt-3 flex gap-2">
@@ -114,6 +116,10 @@ export function TaskWorkspaceSelectionPanel({
       /> : null}
     </aside>
   );
+}
+
+function toDateInputValue(value?: string): string {
+  return value?.slice(0, 10) ?? '';
 }
 
 function TaskCollaborationPanel({

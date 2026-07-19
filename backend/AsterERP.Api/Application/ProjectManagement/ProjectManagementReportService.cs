@@ -93,7 +93,7 @@ public sealed class ProjectManagementReportService(
         var pageSize = Math.Clamp(query.PageSize, 1, MaxPageSize);
         var keyword = NormalizeOptional(query.Keyword);
         var status = NormalizeOptional(query.Status);
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
 
         var projects = db.Queryable<ProjectManagementProjectEntity>()
             .Where(item => !item.IsDeleted);
@@ -142,7 +142,7 @@ public sealed class ProjectManagementReportService(
 
     private string RequireTenantId() => currentUser.GetAsterErpTenantId()?.Trim() ?? throw new ValidationException("当前会话缺少租户");
 
-    private string RequireAppCode() => currentUser.GetAsterErpAppCode()?.Trim().ToUpperInvariant() ?? throw new ValidationException("当前会话缺少应用");
+    private static string RequireAppCode() => ProjectManagementPlatformScope.AppCode;
 
     private static string? NormalizeOptional(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 

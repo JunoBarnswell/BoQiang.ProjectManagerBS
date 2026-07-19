@@ -25,7 +25,7 @@ public sealed class ProjectManagementProjectService(
     {
         RequireTenantId();
         RequireAppCode();
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         var keyword = NormalizeOptional(query.Keyword);
         var status = NormalizeOptional(query.Status);
         var projectQuery = db.Queryable<ProjectManagementProjectEntity>()
@@ -63,7 +63,7 @@ public sealed class ProjectManagementProjectService(
     {
         var tenantId = RequireTenantId();
         var appCode = RequireAppCode();
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         ValidateRequest(request);
         var projectCode = NormalizeRequired(request.ProjectCode, "项目编码不能为空");
         if (await db.Queryable<ProjectManagementProjectEntity>().AnyAsync(item =>
@@ -130,7 +130,7 @@ public sealed class ProjectManagementProjectService(
         await (accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser)).EnsureCanManageProjectAsync(id, cancellationToken);
         ValidateRequest(request);
         var projectCode = NormalizeRequired(request.ProjectCode, "项目编码不能为空");
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         if (await db.Queryable<ProjectManagementProjectEntity>().AnyAsync(item =>
                 item.ProjectCode == projectCode && item.Id != entity.Id && !item.IsDeleted, cancellationToken))
         {
@@ -178,7 +178,7 @@ public sealed class ProjectManagementProjectService(
         entity.VersionNo++;
         entity.UpdatedBy = RequireUserId();
         entity.UpdatedTime = DateTime.UtcNow;
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         await ProjectManagementMutationTransaction.RunAsync(db, async () =>
         {
             await db.Updateable(entity).ExecuteCommandAsync(cancellationToken);
@@ -203,7 +203,7 @@ public sealed class ProjectManagementProjectService(
         entity.VersionNo++;
         entity.UpdatedBy = entity.DeletedBy;
         entity.UpdatedTime = entity.DeletedTime;
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         if (imConversationService is not null)
         {
             await imConversationService.ArchiveProjectLinksAsync(entity.Id, cancellationToken);
@@ -220,7 +220,7 @@ public sealed class ProjectManagementProjectService(
     {
         RequireTenantId();
         RequireAppCode();
-        var entity = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementProjectEntity>()
+        var entity = await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementProjectEntity>()
             .Where(item => item.Id == id && item.TenantId == RequireTenantId() && item.AppCode == RequireAppCode() && (includeDeleted || !item.IsDeleted))
             .Take(1)
             .ToListAsync(cancellationToken);
@@ -229,7 +229,7 @@ public sealed class ProjectManagementProjectService(
 
     private string RequireTenantId() => currentUser.GetAsterErpTenantId()?.Trim() ?? throw new ValidationException("当前会话缺少租户");
 
-    private string RequireAppCode() => currentUser.GetAsterErpAppCode()?.Trim().ToUpperInvariant() ?? throw new ValidationException("当前会话缺少应用");
+    private static string RequireAppCode() => ProjectManagementPlatformScope.AppCode;
 
     private string RequireUserId() => currentUser.GetAsterErpUserId()?.Trim() ?? throw new ValidationException("当前会话缺少用户");
 

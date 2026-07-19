@@ -33,7 +33,7 @@ public sealed class ProjectManagementBackupService(
                 operationStarted = true;
             }
             var backup = await CreatePhysicalBackupAsync(operationId, request.Reason, cancellationToken);
-            var db = databaseAccessor.GetCurrentDb();
+            var db = databaseAccessor.GetProjectManagementDb();
             await db.Insertable(backup).ExecuteCommandAsync(cancellationToken);
             if (operationWriter is not null) await operationWriter.SucceedAsync(operationId, cancellationToken);
             return Map(backup);
@@ -55,7 +55,7 @@ public sealed class ProjectManagementBackupService(
     public async Task<IReadOnlyList<ProjectManagementBackupResponse>> ListAsync(CancellationToken cancellationToken = default)
     {
         RequireWorkspace();
-        var rows = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementBackupEntity>()
+        var rows = await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementBackupEntity>()
             .Where(item => !item.IsDeleted && item.Status == "Ready")
             .OrderBy(item => item.CreatedTime, OrderByType.Desc)
             .Take(200).ToListAsync(cancellationToken);
@@ -82,13 +82,14 @@ public sealed class ProjectManagementBackupService(
     public async Task<ProjectManagementBackupResponse> RestoreAsync(string id, ProjectManagementRestoreRequest request, CancellationToken cancellationToken = default)
     {
         await riskConfirmation.EnsureConfirmedAsync(request.CurrentPassword, request.ConfirmRisk, cancellationToken);
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         var target = await GetReadyBackupAsync(id, cancellationToken);
         var backupPath = GetAbsoluteBackupPath(target.RelativePath);
         await VerifyFileAsync(backupPath, target.Sha256, target.FileSize, cancellationToken);
         var operationId = await maintenanceLock.AcquireAsync("project-management-restore", TimeSpan.FromMinutes(30), cancellationToken);
         var operationStarted = false;
-        string? safetyPath = null;
+        ProjectManagementBackupEntity? safetyCheckpoint = null;
+        var preserveSafetyCheckpoint = false;
         try
         {
             if (operationWriter is not null)
@@ -96,7 +97,7 @@ public sealed class ProjectManagementBackupService(
                 await operationWriter.StartAsync(operationId, "backup.restore", $"{{\"backupId\":\"{target.Id}\"}}", Activity.Current?.Id ?? operationId, cancellationToken);
                 operationStarted = true;
             }
-            safetyPath = await CreateSafetyBackupAsync(operationId, cancellationToken);
+            safetyCheckpoint = await CreateSafetyBackupAsync(operationId, target.Id, cancellationToken);
             await RestoreSqliteAsync(backupPath, cancellationToken);
             if (operationWriter is not null)
             {
@@ -105,16 +106,18 @@ public sealed class ProjectManagementBackupService(
             }
             await EnsureIntegrityAsync(cancellationToken);
             await PersistRestoredMetadataAsync(target, cancellationToken);
+            await PersistRestoredMetadataAsync(safetyCheckpoint, cancellationToken);
             if (operationWriter is not null) await operationWriter.SucceedAsync(operationId, cancellationToken);
+            preserveSafetyCheckpoint = true;
             return Map(target);
         }
         catch (Exception exception)
         {
-            if (safetyPath is not null)
+            if (safetyCheckpoint is not null)
             {
                 try
                 {
-                    await RestoreSqliteAsync(safetyPath, CancellationToken.None);
+                    await RestoreSqliteAsync(GetAbsoluteBackupPath(safetyCheckpoint.RelativePath), CancellationToken.None);
                     await EnsureIntegrityAsync(CancellationToken.None);
                 }
                 catch (Exception rollbackException)
@@ -131,7 +134,8 @@ public sealed class ProjectManagementBackupService(
         finally
         {
             await maintenanceLock.ReleaseAsync(operationId, CancellationToken.None);
-            if (safetyPath is not null) TryDelete(safetyPath);
+            if (safetyCheckpoint is not null && !preserveSafetyCheckpoint)
+                TryDelete(GetAbsoluteBackupPath(safetyCheckpoint.RelativePath));
         }
     }
 
@@ -164,13 +168,39 @@ public sealed class ProjectManagementBackupService(
         }
     }
 
-    private async Task<string> CreateSafetyBackupAsync(string operationId, CancellationToken cancellationToken)
+    private async Task<ProjectManagementBackupEntity> CreateSafetyBackupAsync(string operationId, string restoredBackupId, CancellationToken cancellationToken)
     {
         var source = RequireSqliteConnection();
-        var path = Path.Combine(environment.ContentRootPath, "data", "project-management-backups", Tenant(), App(), $"safety-{operationId}.db");
+        var backupId = Guid.NewGuid().ToString("N");
+        var relativePath = Path.Combine("data", "project-management-backups", Tenant(), App(), $"pre-restore-{backupId}.db");
+        var path = GetAbsoluteBackupPath(relativePath);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        await BackupToFileAsync(source, path, cancellationToken);
-        return path;
+        try
+        {
+            await BackupToFileAsync(source, path, cancellationToken);
+            var info = new FileInfo(path);
+            return new ProjectManagementBackupEntity
+            {
+                Id = backupId,
+                TenantId = Tenant(),
+                AppCode = App(),
+                BackupName = $"恢复前安全检查点-{DateTime.UtcNow:yyyyMMddHHmmss}",
+                RelativePath = relativePath.Replace('\\', '/'),
+                Sha256 = await ComputeSha256Async(path, cancellationToken),
+                FileSize = info.Length,
+                Status = "Ready",
+                CreatedByUserId = UserId(),
+                CreatedBy = UserId(),
+                CreatedTime = DateTime.UtcNow,
+                CompletedAt = DateTime.UtcNow,
+                Remark = $"恢复前安全检查点；目标备份={restoredBackupId}；操作={operationId}"
+            };
+        }
+        catch
+        {
+            TryDelete(path);
+            throw;
+        }
     }
 
     private async Task RestoreSqliteAsync(string backupPath, CancellationToken cancellationToken)
@@ -184,26 +214,26 @@ public sealed class ProjectManagementBackupService(
 
     private async Task EnsureIntegrityAsync(CancellationToken cancellationToken)
     {
-        var result = databaseAccessor.GetCurrentDb().Ado.GetString("PRAGMA integrity_check;");
+        var result = databaseAccessor.GetProjectManagementDb().Ado.GetString("PRAGMA integrity_check;");
         if (!string.Equals(result, "ok", StringComparison.OrdinalIgnoreCase)) throw new ValidationException("恢复后数据库完整性检查失败");
         cancellationToken.ThrowIfCancellationRequested();
     }
 
     private async Task PersistRestoredMetadataAsync(ProjectManagementBackupEntity backup, CancellationToken cancellationToken)
     {
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         var existing = await db.Queryable<ProjectManagementBackupEntity>().Where(item => item.Id == backup.Id).Take(1).ToListAsync(cancellationToken);
         if (existing.Count == 0) await db.Insertable(backup).ExecuteCommandAsync(cancellationToken);
         else await db.Updateable(backup).ExecuteCommandAsync(cancellationToken);
     }
 
     private async Task<ProjectManagementBackupEntity> GetReadyBackupAsync(string id, CancellationToken cancellationToken) =>
-        (await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementBackupEntity>().Where(item => item.Id == id && !item.IsDeleted && item.Status == "Ready").Take(1).ToListAsync(cancellationToken)).FirstOrDefault()
+        (await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementBackupEntity>().Where(item => item.Id == id && !item.IsDeleted && item.Status == "Ready").Take(1).ToListAsync(cancellationToken)).FirstOrDefault()
         ?? throw new ValidationException("备份不存在或不可恢复");
 
     private async Task<ProjectManagementDataSpaceImpact> ReadCurrentImpactAsync(CancellationToken cancellationToken)
     {
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         return new ProjectManagementDataSpaceImpact(Tenant(), App(),
             await db.Queryable<ProjectManagementProjectEntity>().CountAsync(cancellationToken),
             await db.Queryable<ProjectManagementTaskEntity>().CountAsync(cancellationToken),
@@ -227,7 +257,7 @@ public sealed class ProjectManagementBackupService(
     private SqliteConnection RequireSqliteConnection()
     {
         RequireWorkspace();
-        if (databaseAccessor.GetCurrentDb().Ado.Connection is not SqliteConnection connection) throw new ValidationException("当前数据空间不是 SQLite，暂不支持文件级备份恢复");
+        if (databaseAccessor.GetProjectManagementDb().Ado.Connection is not SqliteConnection connection) throw new ValidationException("当前数据空间不是 SQLite，暂不支持文件级备份恢复");
         if (string.IsNullOrWhiteSpace(connection.DataSource) || connection.DataSource.StartsWith(":memory:", StringComparison.OrdinalIgnoreCase)) throw new ValidationException("内存数据库不支持持久化备份恢复");
         return connection;
     }
@@ -269,7 +299,7 @@ public sealed class ProjectManagementBackupService(
     private ProjectManagementBackupResponse Map(ProjectManagementBackupEntity entity) => new(entity.Id, entity.BackupName, entity.Sha256, entity.FileSize, entity.Status, entity.CreatedByUserId, entity.CreatedTime, entity.CompletedAt);
     private void RequireWorkspace() { Tenant(); App(); }
     private string Tenant() => currentUser.GetAsterErpTenantId()?.Trim() ?? throw new ValidationException("当前会话缺少租户");
-    private string App() => currentUser.GetAsterErpAppCode()?.Trim().ToUpperInvariant() ?? throw new ValidationException("当前会话缺少应用");
+    private static string App() => ProjectManagementPlatformScope.AppCode;
     private string UserId() => currentUser.GetAsterErpUserId()?.Trim() ?? throw new ValidationException("当前会话缺少用户");
     private static void TryDelete(string path) { try { if (File.Exists(path)) File.Delete(path); } catch { } }
 }

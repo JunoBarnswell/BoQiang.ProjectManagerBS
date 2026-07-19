@@ -21,12 +21,12 @@ public sealed class ProjectManagementMilestoneService(
     {
         await EnsureProjectAsync(projectId, cancellationToken);
         var total = new RefAsync<int>();
-        var items = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementMilestoneEntity>()
+        var items = await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementMilestoneEntity>()
             .Where(item => item.ProjectId == projectId && !item.IsDeleted)
             .OrderBy(item => item.SortOrder, OrderByType.Asc)
             .OrderBy(item => item.DueDate, OrderByType.Asc)
             .ToPageListAsync(1, 500, total, cancellationToken);
-        var taskRows = items.Count == 0 ? [] : await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskEntity>()
+        var taskRows = items.Count == 0 ? [] : await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementTaskEntity>()
             .Where(task => task.ProjectId == projectId && task.MilestoneId != null && !task.IsDeleted)
             .ToListAsync(cancellationToken);
         return new GridPageResult<ProjectManagementMilestoneResponse> { Total = total.Value, Items = items.Select(item => Map(item, taskRows.Where(task => task.MilestoneId == item.Id).ToList())).ToList() };
@@ -45,7 +45,7 @@ public sealed class ProjectManagementMilestoneService(
             StartDate = request.StartDate, DueDate = request.DueDate, ProgressPercent = request.ProgressPercent,
             SortOrder = request.SortOrder, CreatedBy = RequireUserId(), CreatedTime = now, VersionNo = 1
         };
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         await ProjectManagementMutationTransaction.RunAsync(db, async () =>
         {
             await db.Insertable(entity).ExecuteCommandAsync(cancellationToken);
@@ -74,7 +74,7 @@ public sealed class ProjectManagementMilestoneService(
         entity.VersionNo++;
         entity.UpdatedBy = RequireUserId();
         entity.UpdatedTime = DateTime.UtcNow;
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         await ProjectManagementMutationTransaction.RunAsync(db, async () =>
         {
             await db.Updateable(entity).ExecuteCommandAsync(cancellationToken);
@@ -94,7 +94,7 @@ public sealed class ProjectManagementMilestoneService(
         entity.UpdatedBy = entity.DeletedBy;
         entity.UpdatedTime = entity.DeletedTime;
         entity.VersionNo++;
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         await ProjectManagementMutationTransaction.RunAsync(db, async () =>
         {
             await db.Updateable(entity).ExecuteCommandAsync(cancellationToken);
@@ -106,14 +106,14 @@ public sealed class ProjectManagementMilestoneService(
     private async Task EnsureProjectAsync(string projectId, CancellationToken cancellationToken)
     {
         RequireTenantId(); RequireAppCode();
-        if (!await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementProjectEntity>().Where(item => item.Id == projectId && !item.IsDeleted).AnyAsync(cancellationToken))
+        if (!await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementProjectEntity>().Where(item => item.Id == projectId && !item.IsDeleted).AnyAsync(cancellationToken))
             throw new NotFoundException("项目不存在", ErrorCodes.PlatformResourceNotFound);
     }
 
     private async Task<ProjectManagementMilestoneEntity> GetRequiredAsync(string projectId, string id, CancellationToken cancellationToken)
     {
         await EnsureProjectAsync(projectId, cancellationToken);
-        var entity = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementMilestoneEntity>().Where(item => item.Id == id && item.ProjectId == projectId && !item.IsDeleted).Take(1).ToListAsync(cancellationToken);
+        var entity = await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementMilestoneEntity>().Where(item => item.Id == id && item.ProjectId == projectId && !item.IsDeleted).Take(1).ToListAsync(cancellationToken);
         return entity.FirstOrDefault() ?? throw new NotFoundException("里程碑不存在", ErrorCodes.PlatformResourceNotFound);
     }
 
@@ -124,7 +124,7 @@ public sealed class ProjectManagementMilestoneService(
     }
 
     private string RequireTenantId() => currentUser.GetAsterErpTenantId()?.Trim() ?? throw new ValidationException("当前会话缺少租户");
-    private string RequireAppCode() => currentUser.GetAsterErpAppCode()?.Trim().ToUpperInvariant() ?? throw new ValidationException("当前会话缺少应用");
+    private static string RequireAppCode() => ProjectManagementPlatformScope.AppCode;
     private string RequireUserId() => currentUser.GetAsterErpUserId()?.Trim() ?? throw new ValidationException("当前会话缺少用户");
 
     private async Task WriteActivityAsync(ProjectManagementMilestoneEntity entity, string activityType, string summary, CancellationToken cancellationToken)

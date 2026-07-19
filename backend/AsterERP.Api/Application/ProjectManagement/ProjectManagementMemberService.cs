@@ -22,7 +22,7 @@ public sealed class ProjectManagementMemberService(
     {
         await EnsureProjectAsync(projectId, cancellationToken);
         var total = new RefAsync<int>();
-        var items = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementProjectMemberEntity>()
+        var items = await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementProjectMemberEntity>()
             .Where(item => item.ProjectId == projectId && !item.IsDeleted && item.IsActive)
             .OrderBy(item => item.JoinedAt, OrderByType.Asc)
             .ToPageListAsync(1, 500, total, cancellationToken);
@@ -37,7 +37,7 @@ public sealed class ProjectManagementMemberService(
         var roleCode = NormalizeRole(request.RoleCode);
         if (!await candidateService.IsSelectableAsync(userId, cancellationToken))
             throw new ValidationException("成员必须来自当前租户和应用的启用用户/任职");
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         var existing = await db.Queryable<ProjectManagementProjectMemberEntity>()
             .Where(item => item.ProjectId == projectId && item.UserId == userId)
             .Take(1)
@@ -101,7 +101,7 @@ public sealed class ProjectManagementMemberService(
         entity.VersionNo++;
         entity.UpdatedBy = RequireUserId();
         entity.UpdatedTime = DateTime.UtcNow;
-        await databaseAccessor.GetCurrentDb().Updateable(entity).ExecuteCommandAsync(cancellationToken);
+        await databaseAccessor.GetProjectManagementDb().Updateable(entity).ExecuteCommandAsync(cancellationToken);
         await PublishInvalidationAsync(entity, "project.member.updated", cancellationToken);
         if (imConversationService is not null)
         {
@@ -128,7 +128,7 @@ public sealed class ProjectManagementMemberService(
         entity.UpdatedBy = entity.DeletedBy;
         entity.UpdatedTime = entity.LeftAt;
         entity.VersionNo++;
-        await databaseAccessor.GetCurrentDb().Updateable(entity).ExecuteCommandAsync(cancellationToken);
+        await databaseAccessor.GetProjectManagementDb().Updateable(entity).ExecuteCommandAsync(cancellationToken);
         if (realtimePublisher is not null)
         {
             await realtimePublisher.RevokeProjectAccessAsync(RequireTenantId(), RequireAppCode(), projectId, entity.UserId, cancellationToken);
@@ -140,7 +140,7 @@ public sealed class ProjectManagementMemberService(
     {
         RequireTenantId();
         RequireAppCode();
-        var exists = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementProjectEntity>()
+        var exists = await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementProjectEntity>()
             .Where(item => item.Id == projectId && !item.IsDeleted)
             .AnyAsync(cancellationToken);
         if (!exists) throw new NotFoundException("项目不存在", ErrorCodes.PlatformResourceNotFound);
@@ -149,7 +149,7 @@ public sealed class ProjectManagementMemberService(
     private async Task<ProjectManagementProjectMemberEntity> GetRequiredAsync(string projectId, string id, CancellationToken cancellationToken)
     {
         await EnsureProjectAsync(projectId, cancellationToken);
-        var entity = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementProjectMemberEntity>()
+        var entity = await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementProjectMemberEntity>()
             .Where(item => item.Id == id && item.ProjectId == projectId && !item.IsDeleted)
             .Take(1).ToListAsync(cancellationToken);
         return entity.FirstOrDefault() ?? throw new NotFoundException("项目成员不存在", ErrorCodes.PlatformResourceNotFound);
@@ -158,14 +158,14 @@ public sealed class ProjectManagementMemberService(
     private async Task EnsureOwnerWillRemainAsync(ProjectManagementProjectMemberEntity entity, string? nextRole, CancellationToken cancellationToken)
     {
         if (!string.Equals(entity.RoleCode, "Owner", StringComparison.Ordinal) || string.Equals(nextRole, "Owner", StringComparison.Ordinal)) return;
-        var ownerCount = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementProjectMemberEntity>()
+        var ownerCount = await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementProjectMemberEntity>()
             .Where(item => item.ProjectId == entity.ProjectId && item.RoleCode == "Owner" && item.IsActive && !item.IsDeleted && item.Id != entity.Id)
             .CountAsync(cancellationToken);
         if (ownerCount == 0) throw new ValidationException("项目至少需要保留一个有效 Owner");
     }
 
     private string RequireTenantId() => currentUser.GetAsterErpTenantId()?.Trim() ?? throw new ValidationException("当前会话缺少租户");
-    private string RequireAppCode() => currentUser.GetAsterErpAppCode()?.Trim().ToUpperInvariant() ?? throw new ValidationException("当前会话缺少应用");
+    private static string RequireAppCode() => ProjectManagementPlatformScope.AppCode;
     private string RequireUserId() => currentUser.GetAsterErpUserId()?.Trim() ?? throw new ValidationException("当前会话缺少用户");
     private static string NormalizeRequired(string value, string message) => string.IsNullOrWhiteSpace(value) ? throw new ValidationException(message) : value.Trim();
     private static string? NormalizeOptional(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

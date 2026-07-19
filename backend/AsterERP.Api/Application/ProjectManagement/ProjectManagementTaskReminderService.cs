@@ -26,7 +26,7 @@ public sealed class ProjectManagementTaskReminderService(
         var task = await GetTaskAsync(taskId, cancellationToken);
         await Policy().EnsureCanViewProjectAsync(task.ProjectId, cancellationToken);
         var userId = User();
-        var rows = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskReminderEntity>()
+        var rows = await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementTaskReminderEntity>()
             .Where(item => item.TaskId == task.Id && !item.IsDeleted && (item.RecipientUserId == userId || item.CreatedBy == userId))
             .OrderBy(item => item.ReminderAtUtc, OrderByType.Asc)
             .ToListAsync(cancellationToken);
@@ -41,7 +41,7 @@ public sealed class ProjectManagementTaskReminderService(
         var timeZoneId = NormalizeTimeZone(request.TimeZoneId);
         var clientRequestId = Required(request.ClientRequestId, "客户端请求标识不能为空", 128);
         var recipients = await ResolveRecipientsAsync(task, request.RecipientScope, request.RecipientUserIds, cancellationToken);
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         var existing = await db.Queryable<ProjectManagementTaskReminderEntity>()
             .Where(item => item.TaskId == task.Id && !item.IsDeleted && recipients.Select(value => BuildIdempotencyKey(task.Id, value, clientRequestId)).Contains(item.IdempotencyKey))
             .ToListAsync(cancellationToken);
@@ -96,9 +96,9 @@ public sealed class ProjectManagementTaskReminderService(
         entity.VersionNo = nextVersion;
         entity.UpdatedBy = User();
         entity.UpdatedTime = DateTime.UtcNow;
-        await ProjectManagementMutationTransaction.RunAsync(databaseAccessor.GetCurrentDb(), async () =>
+        await ProjectManagementMutationTransaction.RunAsync(databaseAccessor.GetProjectManagementDb(), async () =>
         {
-            await databaseAccessor.GetCurrentDb().Updateable(entity).ExecuteCommandAsync(cancellationToken);
+            await databaseAccessor.GetProjectManagementDb().Updateable(entity).ExecuteCommandAsync(cancellationToken);
             await WriteActivityAsync(task, "修改任务提醒时间", "task.reminder.updated", cancellationToken);
         });
         await reminderScheduler.DeleteAsync(previousJobId, cancellationToken);
@@ -117,9 +117,9 @@ public sealed class ProjectManagementTaskReminderService(
         entity.VersionNo++;
         entity.UpdatedBy = User();
         entity.UpdatedTime = DateTime.UtcNow;
-        await ProjectManagementMutationTransaction.RunAsync(databaseAccessor.GetCurrentDb(), async () =>
+        await ProjectManagementMutationTransaction.RunAsync(databaseAccessor.GetProjectManagementDb(), async () =>
         {
-            await databaseAccessor.GetCurrentDb().Updateable(entity).ExecuteCommandAsync(cancellationToken);
+            await databaseAccessor.GetProjectManagementDb().Updateable(entity).ExecuteCommandAsync(cancellationToken);
             await WriteActivityAsync(task, "取消任务提醒", "task.reminder.canceled", cancellationToken);
         });
         await reminderScheduler.DeleteAsync(entity.HangfireJobId, cancellationToken);
@@ -139,9 +139,9 @@ public sealed class ProjectManagementTaskReminderService(
         entity.UpdatedBy = User();
         entity.UpdatedTime = entity.DeletedTime;
         entity.VersionNo++;
-        await ProjectManagementMutationTransaction.RunAsync(databaseAccessor.GetCurrentDb(), async () =>
+        await ProjectManagementMutationTransaction.RunAsync(databaseAccessor.GetProjectManagementDb(), async () =>
         {
-            await databaseAccessor.GetCurrentDb().Updateable(entity).ExecuteCommandAsync(cancellationToken);
+            await databaseAccessor.GetProjectManagementDb().Updateable(entity).ExecuteCommandAsync(cancellationToken);
             await WriteActivityAsync(task, "删除任务提醒记录", "task.reminder.deleted", cancellationToken);
         });
         await reminderScheduler.DeleteAsync(entity.HangfireJobId, cancellationToken);
@@ -149,11 +149,11 @@ public sealed class ProjectManagementTaskReminderService(
     }
 
     private async Task<ProjectManagementTaskEntity> GetTaskAsync(string taskId, CancellationToken cancellationToken) =>
-        (await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskEntity>().Where(item => item.Id == taskId && !item.IsDeleted).Take(1).ToListAsync(cancellationToken)).FirstOrDefault()
+        (await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementTaskEntity>().Where(item => item.Id == taskId && !item.IsDeleted).Take(1).ToListAsync(cancellationToken)).FirstOrDefault()
         ?? throw new NotFoundException("任务不存在", ErrorCodes.PlatformResourceNotFound);
 
     private async Task<ProjectManagementTaskReminderEntity> GetReminderAsync(ProjectManagementTaskEntity task, string id, CancellationToken cancellationToken) =>
-        (await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskReminderEntity>().Where(item => item.Id == id && item.TaskId == task.Id && !item.IsDeleted).Take(1).ToListAsync(cancellationToken)).FirstOrDefault()
+        (await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementTaskReminderEntity>().Where(item => item.Id == id && item.TaskId == task.Id && !item.IsDeleted).Take(1).ToListAsync(cancellationToken)).FirstOrDefault()
         ?? throw new NotFoundException("任务提醒不存在", ErrorCodes.PlatformResourceNotFound);
 
     private async Task<IReadOnlyList<string>> ResolveRecipientsAsync(ProjectManagementTaskEntity task, string? recipientScope, IReadOnlyList<string>? requestedUsers, CancellationToken cancellationToken)
@@ -163,7 +163,7 @@ public sealed class ProjectManagementTaskReminderService(
         {
             "self" => [User()],
             "assignee" when !string.IsNullOrWhiteSpace(task.AssigneeUserId) => [task.AssigneeUserId],
-            "participants" => await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskParticipantEntity>().Where(item => item.TaskId == task.Id && !item.IsDeleted).Select(item => item.UserId).ToListAsync(cancellationToken),
+            "participants" => await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementTaskParticipantEntity>().Where(item => item.TaskId == task.Id && !item.IsDeleted).Select(item => item.UserId).ToListAsync(cancellationToken),
             "members" => (requestedUsers ?? []).Where(item => !string.IsNullOrWhiteSpace(item)).Select(item => item.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).Take(MaximumRecipients + 1).ToList(),
             "assignee" => throw new ValidationException("当前任务没有负责人，不能创建负责人提醒"),
             _ => throw new ValidationException("提醒对象只支持 Self、Assignee、Participants 或 Members")
@@ -171,10 +171,10 @@ public sealed class ProjectManagementTaskReminderService(
         recipients = recipients.Where(item => !string.IsNullOrWhiteSpace(item)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         if (recipients.Count == 0) throw new ValidationException("未找到有效提醒接收人");
         if (recipients.Count > MaximumRecipients) throw new ValidationException($"单次最多设置 {MaximumRecipients} 位提醒接收人");
-        var activeMemberIds = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementProjectMemberEntity>()
+        var activeMemberIds = await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementProjectMemberEntity>()
             .Where(item => item.ProjectId == task.ProjectId && item.IsActive && !item.IsDeleted && recipients.Contains(item.UserId))
             .Select(item => item.UserId).ToListAsync(cancellationToken);
-        var owner = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementProjectEntity>().Where(item => item.Id == task.ProjectId && !item.IsDeleted).Select(item => item.OwnerUserId).ToListAsync(cancellationToken);
+        var owner = await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementProjectEntity>().Where(item => item.Id == task.ProjectId && !item.IsDeleted).Select(item => item.OwnerUserId).ToListAsync(cancellationToken);
         if (!string.IsNullOrWhiteSpace(owner.FirstOrDefault()) && recipients.Contains(owner[0], StringComparer.OrdinalIgnoreCase)) activeMemberIds.Add(owner[0]);
         if (activeMemberIds.Distinct(StringComparer.OrdinalIgnoreCase).Count() != recipients.Count) throw new ValidationException("提醒接收人必须是当前项目的有效成员");
         return recipients;
@@ -201,7 +201,7 @@ public sealed class ProjectManagementTaskReminderService(
     private ProjectManagementAccessPolicy Policy() => accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser);
     private ProjectManagementReminderJobArgs ToJobArgs(ProjectManagementTaskReminderEntity entity, long? versionNo = null) => new(entity.Id, Tenant(), App(), entity.RecipientUserId, versionNo ?? entity.VersionNo);
     private string Tenant() => currentUser.GetAsterErpTenantId()?.Trim() ?? throw new ValidationException("当前会话缺少租户", ErrorCodes.PermissionDenied);
-    private string App() => currentUser.GetAsterErpAppCode()?.Trim().ToUpperInvariant() ?? throw new ValidationException("当前会话缺少应用", ErrorCodes.PermissionDenied);
+    private static string App() => ProjectManagementPlatformScope.AppCode;
     private string User() => currentUser.GetAsterErpUserId()?.Trim() ?? throw new ValidationException("当前会话缺少用户", ErrorCodes.PermissionDenied);
     private static DateTime NormalizeReminderAt(DateTimeOffset value)
     {

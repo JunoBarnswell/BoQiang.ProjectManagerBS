@@ -21,7 +21,7 @@ public sealed class ProjectManagementTaskAttachmentService(
     {
         var task = await GetTaskAsync(taskId, cancellationToken);
         await accessPolicy.EnsureCanViewProjectAsync(task.ProjectId, cancellationToken);
-        var rows = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskAttachmentEntity>()
+        var rows = await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementTaskAttachmentEntity>()
             .Where(item => item.TenantId == Tenant() && item.AppCode == App() && item.TaskId == task.Id && !item.IsDeleted).OrderBy(item => item.CreatedTime).ToListAsync(cancellationToken);
         return rows.Select(Map).ToList();
     }
@@ -40,7 +40,7 @@ public sealed class ProjectManagementTaskAttachmentService(
         };
         try
         {
-            await databaseAccessor.GetCurrentDb().Insertable(entity).ExecuteCommandAsync(cancellationToken);
+            await databaseAccessor.GetProjectManagementDb().Insertable(entity).ExecuteCommandAsync(cancellationToken);
         }
         catch
         {
@@ -76,16 +76,16 @@ public sealed class ProjectManagementTaskAttachmentService(
         var entity = await FindAsync(task.Id, id, cancellationToken);
         if (entity.VersionNo != versionNo) throw new ValidationException("附件已被其他用户修改，请刷新后重试", ErrorCodes.ApplicationDevelopmentPageRevisionConflict);
         entity.IsDeleted = true; entity.DeletedBy = User(); entity.DeletedTime = DateTime.UtcNow; entity.UpdatedBy = User(); entity.UpdatedTime = entity.DeletedTime; entity.VersionNo++;
-        await databaseAccessor.GetCurrentDb().Updateable(entity).ExecuteCommandAsync(cancellationToken);
+        await databaseAccessor.GetProjectManagementDb().Updateable(entity).ExecuteCommandAsync(cancellationToken);
         await PublishInvalidationAsync(task, entity, "attachment.deleted", cancellationToken);
         // 附件是可恢复的业务对象；物理文件交由回收站/垃圾清理作业处理，避免数据库更新成功后文件删除失败导致状态不一致。
     }
 
     private async Task<ProjectManagementTaskEntity> GetTaskAsync(string taskId, CancellationToken cancellationToken)
-        => (await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskEntity>().Where(item => item.Id == taskId && item.TenantId == Tenant() && item.AppCode == App() && !item.IsDeleted).Take(1).ToListAsync(cancellationToken)).FirstOrDefault()
+        => (await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementTaskEntity>().Where(item => item.Id == taskId && item.TenantId == Tenant() && item.AppCode == App() && !item.IsDeleted).Take(1).ToListAsync(cancellationToken)).FirstOrDefault()
             ?? throw new NotFoundException("任务不存在", ErrorCodes.PlatformResourceNotFound);
     private async Task<ProjectManagementTaskAttachmentEntity> FindAsync(string taskId, string id, CancellationToken cancellationToken)
-        => (await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskAttachmentEntity>().Where(item => item.Id == id && item.TenantId == Tenant() && item.AppCode == App() && item.TaskId == taskId && !item.IsDeleted).Take(1).ToListAsync(cancellationToken)).FirstOrDefault()
+        => (await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementTaskAttachmentEntity>().Where(item => item.Id == id && item.TenantId == Tenant() && item.AppCode == App() && item.TaskId == taskId && !item.IsDeleted).Take(1).ToListAsync(cancellationToken)).FirstOrDefault()
             ?? throw new NotFoundException("任务附件不存在", ErrorCodes.PlatformResourceNotFound);
 
     private async Task PublishInvalidationAsync(ProjectManagementTaskEntity task, ProjectManagementTaskAttachmentEntity attachment, string eventType, CancellationToken cancellationToken)
@@ -95,6 +95,6 @@ public sealed class ProjectManagementTaskAttachmentService(
     }
     private ProjectManagementTaskAttachmentResponse Map(ProjectManagementTaskAttachmentEntity item) => new(item.Id, item.ProjectId, item.TaskId, item.FileId, item.FileName, item.ContentType, item.FileSize, $"/api/project-management/tasks/{item.TaskId}/attachments/{item.Id}/download", $"/api/system/files/{Uri.EscapeDataString(item.FileId)}/preview", item.UploadedByUserId, item.CreatedTime, item.VersionNo);
     private string Tenant() => currentUser.GetAsterErpTenantId()?.Trim() ?? throw new ValidationException("当前会话缺少租户", ErrorCodes.PermissionDenied);
-    private string App() => currentUser.GetAsterErpAppCode()?.Trim().ToUpperInvariant() ?? throw new ValidationException("当前会话缺少应用", ErrorCodes.PermissionDenied);
+    private static string App() => ProjectManagementPlatformScope.AppCode;
     private string User() => currentUser.GetAsterErpUserId()?.Trim() ?? throw new ValidationException("当前会话缺少用户", ErrorCodes.PermissionDenied);
 }

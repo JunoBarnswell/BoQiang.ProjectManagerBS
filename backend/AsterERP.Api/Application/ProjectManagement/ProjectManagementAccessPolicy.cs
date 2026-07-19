@@ -18,7 +18,7 @@ public sealed class ProjectManagementAccessPolicy(IWorkspaceDatabaseAccessor dat
         var userId = RequireUserId();
         var tenantId = RequireTenantId();
         var appCode = RequireAppCode();
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         var visible = await db.Queryable<ProjectManagementProjectEntity>()
             .Where(project => project.Id == projectId && project.TenantId == tenantId && project.AppCode == appCode && !project.IsDeleted &&
                 (project.OwnerUserId == userId || SqlSugar.SqlFunc.Subqueryable<ProjectManagementProjectMemberEntity>()
@@ -45,7 +45,7 @@ public sealed class ProjectManagementAccessPolicy(IWorkspaceDatabaseAccessor dat
         var userId = RequireUserId();
         var tenantId = RequireTenantId();
         var appCode = RequireAppCode();
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         var project = await db.Queryable<ProjectManagementProjectEntity>().Where(item => item.Id == projectId && item.TenantId == tenantId && item.AppCode == appCode && !item.IsDeleted).Take(1).ToListAsync(cancellationToken);
         var owner = project.FirstOrDefault()?.OwnerUserId;
         if (string.Equals(owner, userId, StringComparison.OrdinalIgnoreCase)) return;
@@ -65,7 +65,7 @@ public sealed class ProjectManagementAccessPolicy(IWorkspaceDatabaseAccessor dat
         var userId = RequireUserId();
         var tenantId = RequireTenantId();
         var appCode = RequireAppCode();
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         var project = await db.Queryable<ProjectManagementProjectEntity>()
             .Where(item => item.Id == projectId && item.TenantId == tenantId && item.AppCode == appCode && (includeDeleted || !item.IsDeleted))
             .Take(1)
@@ -77,5 +77,5 @@ public sealed class ProjectManagementAccessPolicy(IWorkspaceDatabaseAccessor dat
 
     private string RequireUserId() => currentUser.GetAsterErpUserId()?.Trim() ?? throw new ValidationException("当前会话缺少用户", ErrorCodes.PermissionDenied);
     private string RequireTenantId() => currentUser.GetAsterErpTenantId()?.Trim() ?? throw new ValidationException("当前会话缺少租户", ErrorCodes.PermissionDenied);
-    private string RequireAppCode() => currentUser.GetAsterErpAppCode()?.Trim().ToUpperInvariant() ?? throw new ValidationException("当前会话缺少应用", ErrorCodes.PermissionDenied);
+    private static string RequireAppCode() => ProjectManagementPlatformScope.AppCode;
 }

@@ -61,7 +61,7 @@ public sealed class ProjectManagementImConversationService(
     public async Task<ProjectManagementImConversationTargetResponse> ResolveTargetAsync(string conversationId, CancellationToken cancellationToken = default)
     {
         var normalizedConversationId = NormalizeRequired(conversationId, "会话不能为空");
-        var link = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementImConversationLinkEntity>()
+        var link = await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementImConversationLinkEntity>()
             .Where(item => item.ConversationId == normalizedConversationId && !item.IsDeleted)
             .Take(1)
             .ToListAsync(cancellationToken);
@@ -99,7 +99,7 @@ public sealed class ProjectManagementImConversationService(
     {
         var normalizedTaskId = NormalizeRequired(taskId, "任务不能为空");
         var normalizedUserId = NormalizeRequired(userId, "参与人不能为空");
-        var links = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementImConversationLinkEntity>()
+        var links = await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementImConversationLinkEntity>()
             .Where(item => item.TaskId == normalizedTaskId && item.Status == "Active" && !item.IsDeleted)
             .ToListAsync(cancellationToken);
         foreach (var link in links)
@@ -111,7 +111,7 @@ public sealed class ProjectManagementImConversationService(
     public async Task SynchronizeTaskLinksAsync(string taskId, CancellationToken cancellationToken = default)
     {
         var normalizedTaskId = NormalizeRequired(taskId, "任务不能为空");
-        var links = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementImConversationLinkEntity>()
+        var links = await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementImConversationLinkEntity>()
             .Where(item => item.TaskId == normalizedTaskId && item.Status == "Active" && !item.IsDeleted)
             .ToListAsync(cancellationToken);
         foreach (var link in links)
@@ -137,7 +137,7 @@ public sealed class ProjectManagementImConversationService(
             return;
         }
 
-        var links = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementImConversationLinkEntity>()
+        var links = await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementImConversationLinkEntity>()
             .Where(item => ids.Contains(item.TaskId!) && item.Status == "Active" && !item.IsDeleted)
             .ToListAsync(cancellationToken);
         foreach (var link in links)
@@ -148,7 +148,7 @@ public sealed class ProjectManagementImConversationService(
 
     public async Task ReactivateProjectLinksAsync(string projectId, CancellationToken cancellationToken = default)
     {
-        var links = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementImConversationLinkEntity>()
+        var links = await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementImConversationLinkEntity>()
             .Where(item => item.ProjectId == projectId && item.TaskId == null && item.Status == "Archived" && !item.IsDeleted)
             .ToListAsync(cancellationToken);
         foreach (var link in links)
@@ -165,7 +165,7 @@ public sealed class ProjectManagementImConversationService(
             return;
         }
 
-        var links = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementImConversationLinkEntity>()
+        var links = await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementImConversationLinkEntity>()
             .Where(item => ids.Contains(item.TaskId!) && item.Status == "Archived" && !item.IsDeleted)
             .ToListAsync(cancellationToken);
         foreach (var link in links)
@@ -188,7 +188,7 @@ public sealed class ProjectManagementImConversationService(
             link.LastSyncError = null;
             link.UpdatedBy = RequireUserId();
             link.UpdatedTime = DateTime.UtcNow;
-            await databaseAccessor.GetCurrentDb().Updateable(link)
+            await databaseAccessor.GetProjectManagementDb().Updateable(link)
                 .UpdateColumns(item => new { item.LastSyncError, item.UpdatedBy, item.UpdatedTime })
                 .ExecuteCommandAsync(cancellationToken);
         }
@@ -212,9 +212,9 @@ public sealed class ProjectManagementImConversationService(
         link.VersionNo++;
         link.UpdatedBy = RequireUserId();
         link.UpdatedTime = DateTime.UtcNow;
-        await ProjectManagementMutationTransaction.RunAsync(databaseAccessor.GetCurrentDb(), async () =>
+        await ProjectManagementMutationTransaction.RunAsync(databaseAccessor.GetProjectManagementDb(), async () =>
         {
-            await databaseAccessor.GetCurrentDb().Updateable(link).ExecuteCommandAsync(cancellationToken);
+            await databaseAccessor.GetProjectManagementDb().Updateable(link).ExecuteCommandAsync(cancellationToken);
             await WriteActivityAsync(link, "im-conversation.archived", "归档关联 IM 会话", cancellationToken);
             await WriteSyncJournalAsync(link, "im-conversation.archived", cancellationToken);
         });
@@ -235,9 +235,9 @@ public sealed class ProjectManagementImConversationService(
         link.VersionNo++;
         link.UpdatedBy = RequireUserId();
         link.UpdatedTime = DateTime.UtcNow;
-        await ProjectManagementMutationTransaction.RunAsync(databaseAccessor.GetCurrentDb(), async () =>
+        await ProjectManagementMutationTransaction.RunAsync(databaseAccessor.GetProjectManagementDb(), async () =>
         {
-            await databaseAccessor.GetCurrentDb().Updateable(link).ExecuteCommandAsync(cancellationToken);
+            await databaseAccessor.GetProjectManagementDb().Updateable(link).ExecuteCommandAsync(cancellationToken);
             await WriteActivityAsync(link, "im-conversation.reactivated", "恢复关联 IM 会话", cancellationToken);
             await WriteSyncJournalAsync(link, "im-conversation.reactivated", cancellationToken);
         });
@@ -245,7 +245,7 @@ public sealed class ProjectManagementImConversationService(
 
     private async Task<ProjectManagementImConversationLinkEntity?> FindLinkAsync(string projectId, string? taskId, CancellationToken cancellationToken)
     {
-        var rows = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementImConversationLinkEntity>()
+        var rows = await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementImConversationLinkEntity>()
             .Where(item => item.ProjectId == projectId && !item.IsDeleted &&
                 (taskId == null ? item.TaskId == null : item.TaskId == taskId))
             .Take(1)
@@ -270,7 +270,7 @@ public sealed class ProjectManagementImConversationService(
         };
         try
         {
-            await databaseAccessor.GetCurrentDb().Insertable(entity).ExecuteCommandAsync(cancellationToken);
+            await databaseAccessor.GetProjectManagementDb().Insertable(entity).ExecuteCommandAsync(cancellationToken);
             return entity;
         }
         catch
@@ -293,9 +293,9 @@ public sealed class ProjectManagementImConversationService(
         link.VersionNo++;
         link.UpdatedBy = RequireUserId();
         link.UpdatedTime = DateTime.UtcNow;
-        await ProjectManagementMutationTransaction.RunAsync(databaseAccessor.GetCurrentDb(), async () =>
+        await ProjectManagementMutationTransaction.RunAsync(databaseAccessor.GetProjectManagementDb(), async () =>
         {
-            await databaseAccessor.GetCurrentDb().Updateable(link).ExecuteCommandAsync(cancellationToken);
+            await databaseAccessor.GetProjectManagementDb().Updateable(link).ExecuteCommandAsync(cancellationToken);
             await WriteActivityAsync(link, "im-conversation.linked", "关联 IM 会话", cancellationToken);
             await WriteSyncJournalAsync(link, "im-conversation.linked", cancellationToken);
         });
@@ -307,20 +307,20 @@ public sealed class ProjectManagementImConversationService(
         link.Status = string.IsNullOrWhiteSpace(link.ConversationId) ? "ProvisioningFailed" : "Active";
         link.UpdatedBy = RequireUserId();
         link.UpdatedTime = DateTime.UtcNow;
-        await databaseAccessor.GetCurrentDb().Updateable(link)
+        await databaseAccessor.GetProjectManagementDb().Updateable(link)
             .UpdateColumns(item => new { item.Status, item.LastSyncError, item.UpdatedBy, item.UpdatedTime })
             .ExecuteCommandAsync(cancellationToken);
     }
 
     private async Task<List<ProjectManagementImConversationLinkEntity>> LoadActiveLinksAsync(string projectId, string? taskId, CancellationToken cancellationToken) =>
-        await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementImConversationLinkEntity>()
+        await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementImConversationLinkEntity>()
             .Where(item => item.ProjectId == projectId && item.Status == "Active" && !item.IsDeleted &&
                 (taskId == null || item.TaskId == taskId))
             .ToListAsync(cancellationToken);
 
     private async Task<LinkContext> LoadContextAsync(string projectId, string? taskId, CancellationToken cancellationToken, string? excludedUserId = null)
     {
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         var project = (await db.Queryable<ProjectManagementProjectEntity>()
             .Where(item => item.Id == projectId && !item.IsDeleted)
             .Take(1)
@@ -420,7 +420,7 @@ public sealed class ProjectManagementImConversationService(
         new(entity.Id, entity.ProjectId, entity.TaskId, entity.ConversationId ?? string.Empty, "Group", entity.TaskId is null ? "项目协作" : "任务协作", entity.Status, BuildTargetRoute(entity.ProjectId, entity.TaskId), entity.VersionNo);
 
     private string RequireTenantId() => currentUser.GetAsterErpTenantId()?.Trim() ?? throw new ValidationException("当前会话缺少租户", ErrorCodes.PermissionDenied);
-    private string RequireAppCode() => currentUser.GetAsterErpAppCode()?.Trim().ToUpperInvariant() ?? throw new ValidationException("当前会话缺少应用", ErrorCodes.PermissionDenied);
+    private static string RequireAppCode() => ProjectManagementPlatformScope.AppCode;
     private string RequireUserId() => currentUser.GetAsterErpUserId()?.Trim() ?? throw new ValidationException("当前会话缺少用户", ErrorCodes.PermissionDenied);
     private static string NormalizeRequired(string? value, string message) => string.IsNullOrWhiteSpace(value) ? throw new ValidationException(message, ErrorCodes.ParameterInvalid) : value.Trim();
     private static string? NormalizeOptional(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

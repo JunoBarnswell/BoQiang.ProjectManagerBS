@@ -26,7 +26,7 @@ public sealed class ProjectManagementTaskBatchService(
     {
         if (string.IsNullOrWhiteSpace(request.ProjectId)) throw new ValidationException("项目不能为空");
         if (request.Items is null || request.Items.Count == 0 || request.Items.Count > 200) throw new ValidationException("批量任务数量必须在 1 到 200 之间");
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         var project = await db.Queryable<ProjectManagementProjectEntity>().Where(item => item.Id == request.ProjectId && !item.IsDeleted).Take(1).ToListAsync(cancellationToken);
         if (project.Count == 0) throw new NotFoundException("项目不存在", ErrorCodes.PlatformResourceNotFound);
         await Policy().EnsureCanManageTaskAsync(request.ProjectId, request.AssigneeUserId, cancellationToken);
@@ -102,11 +102,11 @@ public sealed class ProjectManagementTaskBatchService(
     private ProjectManagementAccessPolicy Policy() => accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser);
     private string User() => currentUser.GetAsterErpUserId()?.Trim() ?? throw new ValidationException("当前会话缺少用户", ErrorCodes.PermissionDenied);
     private string Tenant() => currentUser.GetAsterErpTenantId()?.Trim() ?? throw new ValidationException("当前会话缺少租户", ErrorCodes.PermissionDenied);
-    private string App() => currentUser.GetAsterErpAppCode()?.Trim().ToUpperInvariant() ?? throw new ValidationException("当前会话缺少应用", ErrorCodes.PermissionDenied);
+    private static string App() => ProjectManagementPlatformScope.AppCode;
     private async Task EnsureMilestoneAsync(string projectId, string? milestoneId, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(milestoneId)) return;
-        if (!await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementMilestoneEntity>()
+        if (!await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementMilestoneEntity>()
             .AnyAsync(item => item.Id == milestoneId.Trim() && item.ProjectId == projectId && !item.IsDeleted, cancellationToken))
             throw new ValidationException("里程碑不存在或不属于当前项目");
     }

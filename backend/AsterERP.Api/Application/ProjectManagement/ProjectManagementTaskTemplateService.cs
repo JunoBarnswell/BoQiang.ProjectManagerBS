@@ -14,7 +14,7 @@ public sealed class ProjectManagementTaskTemplateService(IWorkspaceDatabaseAcces
     public async Task<IReadOnlyList<ProjectManagementTaskTemplateResponse>> QueryAsync(string projectId, CancellationToken cancellationToken = default)
     {
         await EnsureProjectAsync(projectId, cancellationToken);
-        return (await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskTemplateEntity>().Where(item => !item.IsDeleted && (item.ProjectId == null || item.ProjectId == projectId)).OrderBy(item => item.TemplateName).ToListAsync(cancellationToken)).Select(Map).ToList();
+        return (await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementTaskTemplateEntity>().Where(item => !item.IsDeleted && (item.ProjectId == null || item.ProjectId == projectId)).OrderBy(item => item.TemplateName).ToListAsync(cancellationToken)).Select(Map).ToList();
     }
 
     public async Task<ProjectManagementTaskTemplateResponse> CreateAsync(string projectId, ProjectManagementTaskTemplateUpsertRequest request, CancellationToken cancellationToken = default)
@@ -22,7 +22,7 @@ public sealed class ProjectManagementTaskTemplateService(IWorkspaceDatabaseAcces
         await EnsureProjectAsync(projectId, cancellationToken);
         await (accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser)).EnsureCanManageTaskAsync(projectId, cancellationToken: cancellationToken);
         ValidateDefinition(request.DefinitionJson);
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         var code = Required(request.TemplateCode, "模板编码不能为空");
         if (await db.Queryable<ProjectManagementTaskTemplateEntity>().AnyAsync(item => item.ProjectId == projectId && item.TemplateCode == code && !item.IsDeleted, cancellationToken)) throw new ValidationException("模板编码已存在");
         var entity = new ProjectManagementTaskTemplateEntity { TenantId = Tenant(), AppCode = App(), ProjectId = projectId, TemplateCode = code, TemplateName = Required(request.TemplateName, "模板名称不能为空"), DefinitionJson = request.DefinitionJson, RecurrenceExpression = Optional(request.RecurrenceExpression), CreatedBy = User(), CreatedTime = DateTime.UtcNow };
@@ -34,7 +34,7 @@ public sealed class ProjectManagementTaskTemplateService(IWorkspaceDatabaseAcces
     {
         await EnsureProjectAsync(projectId, cancellationToken);
         await (accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser)).EnsureCanManageTaskAsync(projectId, cancellationToken: cancellationToken);
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         var entity = (await db.Queryable<ProjectManagementTaskTemplateEntity>().Where(item => item.Id == id && item.ProjectId == projectId && !item.IsDeleted).Take(1).ToListAsync(cancellationToken)).FirstOrDefault() ?? throw new NotFoundException("任务模板不存在", ErrorCodes.PlatformResourceNotFound);
         EnsureVersion(entity.VersionNo, request.VersionNo); ValidateDefinition(request.DefinitionJson);
         entity.TemplateCode = Required(request.TemplateCode, "模板编码不能为空"); entity.TemplateName = Required(request.TemplateName, "模板名称不能为空"); entity.DefinitionJson = request.DefinitionJson; entity.RecurrenceExpression = Optional(request.RecurrenceExpression); entity.VersionNo++; entity.UpdatedBy = User(); entity.UpdatedTime = DateTime.UtcNow;
@@ -44,7 +44,7 @@ public sealed class ProjectManagementTaskTemplateService(IWorkspaceDatabaseAcces
 
     public async Task<IReadOnlyList<ProjectManagementTaskResponse>> ApplyAsync(string templateId, ProjectManagementTaskTemplateApplyRequest request, CancellationToken cancellationToken = default)
     {
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         var template = (await db.Queryable<ProjectManagementTaskTemplateEntity>().Where(item => item.Id == templateId && !item.IsDeleted).Take(1).ToListAsync(cancellationToken)).FirstOrDefault() ?? throw new NotFoundException("任务模板不存在", ErrorCodes.PlatformResourceNotFound);
         await EnsureProjectAsync(request.ProjectId, cancellationToken);
         await (accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser)).EnsureCanManageTaskAsync(request.ProjectId, cancellationToken: cancellationToken);
@@ -76,8 +76,8 @@ public sealed class ProjectManagementTaskTemplateService(IWorkspaceDatabaseAcces
 
     private async Task<IReadOnlyList<ProjectManagementTaskResponse>> FindOccurrenceTasksAsync(string templateId, string projectId, string occurrenceKey, CancellationToken cancellationToken)
     {
-        _ = (await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskOccurrenceEntity>().Where(item => item.TemplateId == templateId && item.ProjectId == projectId && item.OccurrenceKey == occurrenceKey && !item.IsDeleted).Take(1).ToListAsync(cancellationToken)).First();
-        var tasks = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskEntity>().Where(item => item.ProjectId == projectId && item.OccurrenceKey == occurrenceKey && !item.IsDeleted).ToListAsync(cancellationToken);
+        _ = (await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementTaskOccurrenceEntity>().Where(item => item.TemplateId == templateId && item.ProjectId == projectId && item.OccurrenceKey == occurrenceKey && !item.IsDeleted).Take(1).ToListAsync(cancellationToken)).First();
+        var tasks = await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementTaskEntity>().Where(item => item.ProjectId == projectId && item.OccurrenceKey == occurrenceKey && !item.IsDeleted).ToListAsync(cancellationToken);
         return tasks.Select(Map).ToList();
     }
 
@@ -93,9 +93,9 @@ public sealed class ProjectManagementTaskTemplateService(IWorkspaceDatabaseAcces
     }
 
     private sealed record TemplateNode(string TaskCode, string Title, string? ParentCode = null, string Priority = "Medium", int DueDays = 0, decimal Weight = 1);
-    private async Task EnsureProjectAsync(string id, CancellationToken token) { if (!await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementProjectEntity>().Where(item => item.Id == id && !item.IsDeleted).AnyAsync(token)) throw new NotFoundException("项目不存在", ErrorCodes.PlatformResourceNotFound); Tenant(); App(); }
+    private async Task EnsureProjectAsync(string id, CancellationToken token) { if (!await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementProjectEntity>().Where(item => item.Id == id && !item.IsDeleted).AnyAsync(token)) throw new NotFoundException("项目不存在", ErrorCodes.PlatformResourceNotFound); Tenant(); App(); }
     private string Tenant() => currentUser.GetAsterErpTenantId()?.Trim() ?? throw new ValidationException("当前会话缺少租户");
-    private string App() => currentUser.GetAsterErpAppCode()?.Trim().ToUpperInvariant() ?? throw new ValidationException("当前会话缺少应用");
+    private static string App() => ProjectManagementPlatformScope.AppCode;
     private string User() => currentUser.GetAsterErpUserId()?.Trim() ?? throw new ValidationException("当前会话缺少用户");
     private static string Required(string value, string message) => string.IsNullOrWhiteSpace(value) ? throw new ValidationException(message) : value.Trim();
     private static string? Optional(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

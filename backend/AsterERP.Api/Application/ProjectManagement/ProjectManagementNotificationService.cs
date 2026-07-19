@@ -23,7 +23,7 @@ public sealed class ProjectManagementNotificationService(
         var recipient = Required(notification.RecipientUserId);
         var targetRoute = Required(notification.TargetRoute);
         var key = BuildIdempotencyKey(Required(notification.NotificationType), recipient, targetRoute, Required(notification.TraceId));
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         if (await db.Queryable<ProjectManagementNotificationEntity>().AnyAsync(item => item.IdempotencyKey == key && !item.IsDeleted, cancellationToken)) return;
         try
         {
@@ -51,7 +51,7 @@ public sealed class ProjectManagementNotificationService(
         var pageSize = Math.Clamp(query.PageSize, 1, 100);
         var notificationType = Optional(query.NotificationType);
         var userId = User();
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         var itemsQuery = db.Queryable<ProjectManagementNotificationEntity>().Where(item => item.RecipientUserId == userId && !item.IsDeleted);
         if (query.UnreadOnly) itemsQuery = itemsQuery.Where(item => !item.IsRead);
         if (!string.IsNullOrWhiteSpace(notificationType)) itemsQuery = itemsQuery.Where(item => item.NotificationType == notificationType);
@@ -66,14 +66,14 @@ public sealed class ProjectManagementNotificationService(
         var entity = await GetOwnedAsync(id, cancellationToken);
         if (entity.IsRead) return;
         entity.IsRead = true; entity.ReadTime = DateTime.UtcNow; entity.UpdatedBy = User(); entity.UpdatedTime = entity.ReadTime;
-        await databaseAccessor.GetCurrentDb().Updateable(entity).ExecuteCommandAsync(cancellationToken);
+        await databaseAccessor.GetProjectManagementDb().Updateable(entity).ExecuteCommandAsync(cancellationToken);
     }
 
     public async Task MarkAllReadAsync(CancellationToken cancellationToken = default)
     {
         var now = DateTime.UtcNow;
         var userId = User();
-        await databaseAccessor.GetCurrentDb().Updateable<ProjectManagementNotificationEntity>()
+        await databaseAccessor.GetProjectManagementDb().Updateable<ProjectManagementNotificationEntity>()
             .SetColumns(item => new ProjectManagementNotificationEntity { IsRead = true, ReadTime = now, UpdatedBy = userId, UpdatedTime = now })
             .Where(item => item.RecipientUserId == userId && !item.IsRead && !item.IsDeleted)
             .ExecuteCommandAsync(cancellationToken);
@@ -87,7 +87,7 @@ public sealed class ProjectManagementNotificationService(
         try
         {
             await (accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser)).EnsureCanViewProjectAsync(notification.ProjectId, cancellationToken);
-            if (!string.IsNullOrWhiteSpace(notification.TaskId) && !await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskEntity>().AnyAsync(item => item.Id == notification.TaskId && item.ProjectId == notification.ProjectId && !item.IsDeleted, cancellationToken))
+            if (!string.IsNullOrWhiteSpace(notification.TaskId) && !await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementTaskEntity>().AnyAsync(item => item.Id == notification.TaskId && item.ProjectId == notification.ProjectId && !item.IsDeleted, cancellationToken))
                 return new ProjectManagementNotificationOpenResponse(false, null, "关联任务已删除或你已无权访问");
             var route = string.IsNullOrWhiteSpace(notification.TaskId) ? $"/projects/{notification.ProjectId}/tasks" : $"/projects/{notification.ProjectId}/tasks?selectedTaskId={notification.TaskId}";
             return new ProjectManagementNotificationOpenResponse(true, route, null);
@@ -103,7 +103,7 @@ public sealed class ProjectManagementNotificationService(
     }
 
     private async Task<ProjectManagementNotificationEntity> GetOwnedAsync(string id, CancellationToken cancellationToken) =>
-        (await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementNotificationEntity>().Where(item => item.Id == id && item.RecipientUserId == User() && !item.IsDeleted).Take(1).ToListAsync(cancellationToken)).FirstOrDefault()
+        (await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementNotificationEntity>().Where(item => item.Id == id && item.RecipientUserId == User() && !item.IsDeleted).Take(1).ToListAsync(cancellationToken)).FirstOrDefault()
         ?? throw new NotFoundException("通知不存在", ErrorCodes.PlatformResourceNotFound);
     private void EnsureWorkspace(ProjectManagementNotification notification)
     {
@@ -115,7 +115,7 @@ public sealed class ProjectManagementNotificationService(
         && exception.Message.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase);
     private static ProjectManagementNotificationResponse Map(ProjectManagementNotificationEntity item) => new(item.Id, item.NotificationType, item.Title, item.Message, item.TargetRoute, item.TraceId, item.ProjectId, item.TaskId, item.IsRead, item.CreatedTime, item.ReadTime);
     private string Tenant() => currentUser.GetAsterErpTenantId()?.Trim() ?? throw new ValidationException("当前会话缺少租户", ErrorCodes.PermissionDenied);
-    private string App() => currentUser.GetAsterErpAppCode()?.Trim().ToUpperInvariant() ?? throw new ValidationException("当前会话缺少应用", ErrorCodes.PermissionDenied);
+    private static string App() => ProjectManagementPlatformScope.AppCode;
     private string User() => currentUser.GetAsterErpUserId()?.Trim() ?? throw new ValidationException("当前会话缺少用户", ErrorCodes.PermissionDenied);
     private static string Required(string? value) => string.IsNullOrWhiteSpace(value) ? throw new ValidationException("通知字段不能为空") : value.Trim();
     private static string? Optional(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

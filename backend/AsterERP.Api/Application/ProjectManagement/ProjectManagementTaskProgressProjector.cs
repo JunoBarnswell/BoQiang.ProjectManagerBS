@@ -10,7 +10,7 @@ public sealed class ProjectManagementTaskProgressProjector(IWorkspaceDatabaseAcc
 {
     public async Task RefreshAsync(string projectId, CancellationToken cancellationToken = default)
     {
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         var tasks = await db.Queryable<ProjectManagementTaskEntity>().Where(item => item.ProjectId == projectId && !item.IsDeleted).ToListAsync(cancellationToken);
         var leaves = tasks.Where(task => !tasks.Any(child => child.ParentTaskId == task.Id)).ToList();
         var progress = Calculate(leaves);

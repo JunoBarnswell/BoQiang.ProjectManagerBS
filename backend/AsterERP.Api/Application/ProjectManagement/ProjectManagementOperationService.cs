@@ -43,7 +43,7 @@ public sealed class ProjectManagementOperationService(
     }
 
     private async Task<ProjectManagementOperationEntity> GetOwnedAsync(string operationId, CancellationToken cancellationToken) =>
-        (await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementOperationEntity>()
+        (await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementOperationEntity>()
             .Where(item => item.Id == Required(operationId) && item.TenantId == Tenant() && item.AppCode == App() && item.ActorUserId == UserId() && !item.IsDeleted)
             .Take(1).ToListAsync(cancellationToken)).FirstOrDefault()
         ?? throw new NotFoundException("长任务不存在或无权访问", ErrorCodes.PlatformResourceNotFound);
@@ -53,7 +53,7 @@ public sealed class ProjectManagementOperationService(
         entity.ImpactJson, entity.ErrorMessage, entity.TraceId, entity.StartedTime, entity.CompletedTime);
 
     private string Tenant() => currentUser.GetAsterErpTenantId()?.Trim() ?? throw new ValidationException("当前会话缺少租户", ErrorCodes.PermissionDenied);
-    private string App() => currentUser.GetAsterErpAppCode()?.Trim().ToUpperInvariant() ?? throw new ValidationException("当前会话缺少应用", ErrorCodes.PermissionDenied);
+    private static string App() => ProjectManagementPlatformScope.AppCode;
     private string UserId() => currentUser.GetAsterErpUserId()?.Trim() ?? throw new ValidationException("当前会话缺少用户", ErrorCodes.PermissionDenied);
     private static string Required(string? value) => string.IsNullOrWhiteSpace(value) ? throw new ValidationException("长任务标识不能为空") : value.Trim();
 }

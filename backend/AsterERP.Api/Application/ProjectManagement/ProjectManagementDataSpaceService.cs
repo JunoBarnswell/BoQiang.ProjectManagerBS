@@ -15,11 +15,11 @@ public sealed class ProjectManagementDataSpaceService(
     public async Task<ProjectManagementDataSpaceSummaryResponse> GetSummaryAsync(CancellationToken cancellationToken = default)
     {
         var tenantId = currentUser.GetAsterErpTenantId()?.Trim();
-        var appCode = currentUser.GetAsterErpAppCode()?.Trim().ToUpperInvariant();
-        if (string.IsNullOrWhiteSpace(tenantId) || string.IsNullOrWhiteSpace(appCode))
+        var appCode = ProjectManagementPlatformScope.AppCode;
+        if (string.IsNullOrWhiteSpace(tenantId))
             throw new ValidationException("当前会话缺少数据空间", ErrorCodes.PermissionDenied);
 
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         try
         {
             var projectCount = await db.Queryable<ProjectManagementProjectEntity>().Where(item => !item.IsDeleted).CountAsync(cancellationToken);

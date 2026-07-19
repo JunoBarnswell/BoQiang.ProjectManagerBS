@@ -24,7 +24,7 @@ public sealed class ProjectManagementTaskCommentService(
     {
         var task = await GetTaskAsync(taskId, cancellationToken);
         await Policy(task.ProjectId, task.AssigneeUserId).EnsureCanViewProjectAsync(task.ProjectId, cancellationToken);
-        var rows = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskCommentEntity>()
+        var rows = await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementTaskCommentEntity>()
             .Where(item => item.TenantId == Tenant() && item.AppCode == App() && item.TaskId == task.Id && !item.IsDeleted)
             .OrderBy(item => item.CreatedTime, OrderByType.Asc)
             .ToListAsync(cancellationToken);
@@ -42,7 +42,7 @@ public sealed class ProjectManagementTaskCommentService(
         var keyword = Optional(query.Keyword);
         var tenantId = Tenant();
         var appCode = App();
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         var candidates = db.Queryable<SystemUserEntity>()
             .Where(user =>
                 !user.IsDeleted &&
@@ -99,9 +99,9 @@ public sealed class ProjectManagementTaskCommentService(
             MentionUserIdsJson = JsonSerializer.Serialize(mentions), AuthorUserId = User(),
             CreatedBy = User(), CreatedTime = now, VersionNo = 1
         };
-        await ProjectManagementMutationTransaction.RunAsync(databaseAccessor.GetCurrentDb(), async () =>
+        await ProjectManagementMutationTransaction.RunAsync(databaseAccessor.GetProjectManagementDb(), async () =>
         {
-            await databaseAccessor.GetCurrentDb().Insertable(entity).ExecuteCommandAsync(cancellationToken);
+            await databaseAccessor.GetProjectManagementDb().Insertable(entity).ExecuteCommandAsync(cancellationToken);
             await PublishMentionsAsync(task, entity, mentions, cancellationToken);
             await WriteActivityAsync(task, entity, "comment.created", "新增任务评论", cancellationToken);
         });
@@ -112,7 +112,7 @@ public sealed class ProjectManagementTaskCommentService(
     public async Task<ProjectManagementTaskCommentResponse> UpdateAsync(string taskId, string id, ProjectManagementTaskCommentUpsertRequest request, CancellationToken cancellationToken = default)
     {
         var task = await GetTaskAsync(taskId, cancellationToken);
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         var entity = (await db.Queryable<ProjectManagementTaskCommentEntity>().Where(item => item.Id == id && item.TenantId == Tenant() && item.AppCode == App() && item.TaskId == task.Id && !item.IsDeleted).Take(1).ToListAsync(cancellationToken)).FirstOrDefault()
             ?? throw new NotFoundException("任务评论不存在", ErrorCodes.PlatformResourceNotFound);
         if (!string.Equals(entity.AuthorUserId, User(), StringComparison.OrdinalIgnoreCase))
@@ -141,7 +141,7 @@ public sealed class ProjectManagementTaskCommentService(
     public async Task DeleteAsync(string taskId, string id, long versionNo, CancellationToken cancellationToken = default)
     {
         var task = await GetTaskAsync(taskId, cancellationToken);
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         var entity = (await db.Queryable<ProjectManagementTaskCommentEntity>().Where(item => item.Id == id && item.TenantId == Tenant() && item.AppCode == App() && item.TaskId == task.Id && !item.IsDeleted).Take(1).ToListAsync(cancellationToken)).FirstOrDefault()
             ?? throw new NotFoundException("任务评论不存在", ErrorCodes.PlatformResourceNotFound);
         await Policy(task.ProjectId, task.AssigneeUserId).EnsureCanManageTaskAsync(task.ProjectId, task.AssigneeUserId, cancellationToken);
@@ -165,7 +165,7 @@ public sealed class ProjectManagementTaskCommentService(
     private async Task<ProjectManagementTaskEntity> GetTaskAsync(string taskId, CancellationToken cancellationToken)
     {
         RequireTenant(); RequireApp();
-        return (await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskEntity>().Where(item => item.Id == taskId && item.TenantId == Tenant() && item.AppCode == App() && !item.IsDeleted).Take(1).ToListAsync(cancellationToken)).FirstOrDefault()
+        return (await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementTaskEntity>().Where(item => item.Id == taskId && item.TenantId == Tenant() && item.AppCode == App() && !item.IsDeleted).Take(1).ToListAsync(cancellationToken)).FirstOrDefault()
             ?? throw new NotFoundException("任务不存在", ErrorCodes.PlatformResourceNotFound);
     }
 
@@ -173,14 +173,14 @@ public sealed class ProjectManagementTaskCommentService(
     {
         if (string.IsNullOrWhiteSpace(parentId)) return;
         if (string.Equals(parentId, currentId, StringComparison.Ordinal)) throw new ValidationException("评论不能引用自身");
-        if (!await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskCommentEntity>().Where(item => item.Id == parentId && item.TenantId == Tenant() && item.AppCode == App() && item.TaskId == task.Id && !item.IsDeleted).AnyAsync(cancellationToken))
+        if (!await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementTaskCommentEntity>().Where(item => item.Id == parentId && item.TenantId == Tenant() && item.AppCode == App() && item.TaskId == task.Id && !item.IsDeleted).AnyAsync(cancellationToken))
             throw new ValidationException("父评论不存在或不属于当前任务");
     }
 
     private async Task EnsureMentionsAsync(string projectId, IReadOnlyList<string> mentions, CancellationToken cancellationToken)
     {
         if (mentions.Count == 0) return;
-        var activeMembers = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementProjectMemberEntity>()
+        var activeMembers = await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementProjectMemberEntity>()
             .Where(item => item.ProjectId == projectId && item.IsActive && !item.IsDeleted && mentions.Contains(item.UserId))
             .Select(item => item.UserId)
             .ToListAsync(cancellationToken);
@@ -211,7 +211,7 @@ public sealed class ProjectManagementTaskCommentService(
 
     private ProjectManagementAccessPolicy Policy(string projectId, string? assignee) => accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser);
     private string Tenant() => currentUser.GetAsterErpTenantId()?.Trim() ?? throw new ValidationException("当前会话缺少租户", ErrorCodes.PermissionDenied);
-    private string App() => currentUser.GetAsterErpAppCode()?.Trim().ToUpperInvariant() ?? throw new ValidationException("当前会话缺少应用", ErrorCodes.PermissionDenied);
+    private static string App() => ProjectManagementPlatformScope.AppCode;
     private string User() => currentUser.GetAsterErpUserId()?.Trim() ?? throw new ValidationException("当前会话缺少用户", ErrorCodes.PermissionDenied);
     private void RequireTenant() => _ = Tenant();
     private void RequireApp() => _ = App();
@@ -243,7 +243,7 @@ public sealed class ProjectManagementTaskCommentService(
             return comments.Select(comment => Map(comment, [])).ToList();
         }
 
-        var users = await databaseAccessor.GetCurrentDb().Queryable<SystemUserEntity>()
+        var users = await databaseAccessor.GetProjectManagementDb().Queryable<SystemUserEntity>()
             .Where(user => mentionedUserIds.Contains(user.Id) && !user.IsDeleted)
             .ToListAsync(cancellationToken);
         var displayNames = users.ToDictionary(user => user.Id, user => user.DisplayName, StringComparer.OrdinalIgnoreCase);

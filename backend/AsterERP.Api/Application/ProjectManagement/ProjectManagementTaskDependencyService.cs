@@ -18,7 +18,7 @@ public sealed class ProjectManagementTaskDependencyService(
     {
         await EnsureProjectAsync(projectId, cancellationToken);
         await (accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser)).EnsureCanManageDependenciesAsync(projectId, cancellationToken);
-        var items = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskDependencyEntity>()
+        var items = await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementTaskDependencyEntity>()
             .Where(item => item.ProjectId == projectId && !item.IsDeleted)
             .OrderBy(item => item.CreatedTime)
             .ToListAsync(cancellationToken);
@@ -34,7 +34,7 @@ public sealed class ProjectManagementTaskDependencyService(
         if (predecessor.Id == successor.Id) throw new ValidationException("任务不能依赖自身");
         var type = NormalizeDependencyType(request.DependencyType);
         if (request.LagMinutes < 0) throw new ValidationException("依赖滞后时间不能为负数");
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         if (await db.Queryable<ProjectManagementTaskDependencyEntity>().AnyAsync(item => item.ProjectId == projectId && item.PredecessorTaskId == predecessor.Id && item.SuccessorTaskId == successor.Id && !item.IsDeleted, cancellationToken))
             throw new ValidationException("任务依赖已存在");
         var links = await db.Queryable<ProjectManagementTaskDependencyEntity>().Where(item => item.ProjectId == projectId && !item.IsDeleted).ToListAsync(cancellationToken);
@@ -55,7 +55,7 @@ public sealed class ProjectManagementTaskDependencyService(
     public async Task DeleteAsync(string projectId, string id, long versionNo, CancellationToken cancellationToken = default)
     {
         await EnsureProjectAsync(projectId, cancellationToken);
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         var entity = (await db.Queryable<ProjectManagementTaskDependencyEntity>().Where(item => item.Id == id && item.ProjectId == projectId && !item.IsDeleted).Take(1).ToListAsync(cancellationToken)).FirstOrDefault()
             ?? throw new NotFoundException("任务依赖不存在", ErrorCodes.PlatformResourceNotFound);
         if (entity.VersionNo != versionNo || versionNo <= 0) throw new ValidationException("任务依赖已被其他用户修改，请刷新后重试", ErrorCodes.ApplicationDevelopmentPageRevisionConflict);
@@ -68,7 +68,7 @@ public sealed class ProjectManagementTaskDependencyService(
     public async Task RefreshBlockedStatesAsync(string projectId, CancellationToken cancellationToken = default)
     {
         await EnsureProjectAsync(projectId, cancellationToken);
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         var tasks = await db.Queryable<ProjectManagementTaskEntity>().Where(item => item.ProjectId == projectId && !item.IsDeleted).ToListAsync(cancellationToken);
         var dependencies = await db.Queryable<ProjectManagementTaskDependencyEntity>().Where(item => item.ProjectId == projectId && !item.IsDeleted).ToListAsync(cancellationToken);
         var statusById = tasks.ToDictionary(item => item.Id, item => item.Status, StringComparer.Ordinal);
@@ -102,13 +102,13 @@ public sealed class ProjectManagementTaskDependencyService(
     private async Task EnsureProjectAsync(string projectId, CancellationToken cancellationToken)
     {
         RequireTenantId(); RequireAppCode();
-        if (!await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementProjectEntity>().Where(item => item.Id == projectId && !item.IsDeleted).AnyAsync(cancellationToken))
+        if (!await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementProjectEntity>().Where(item => item.Id == projectId && !item.IsDeleted).AnyAsync(cancellationToken))
             throw new NotFoundException("项目不存在", ErrorCodes.PlatformResourceNotFound);
     }
 
     private async Task<ProjectManagementTaskEntity> EnsureTaskAsync(string projectId, string id, CancellationToken cancellationToken)
     {
-        var task = (await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskEntity>().Where(item => item.Id == id && item.ProjectId == projectId && !item.IsDeleted).Take(1).ToListAsync(cancellationToken)).FirstOrDefault();
+        var task = (await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementTaskEntity>().Where(item => item.Id == id && item.ProjectId == projectId && !item.IsDeleted).Take(1).ToListAsync(cancellationToken)).FirstOrDefault();
         return task ?? throw new ValidationException("依赖任务不存在或不属于当前项目");
     }
 
@@ -128,7 +128,7 @@ public sealed class ProjectManagementTaskDependencyService(
 
     private static string NormalizeDependencyType(string value) => ProjectManagementDomainRules.RequireDependencyType(value);
     private string RequireTenantId() => currentUser.GetAsterErpTenantId()?.Trim() ?? throw new ValidationException("当前会话缺少租户");
-    private string RequireAppCode() => currentUser.GetAsterErpAppCode()?.Trim().ToUpperInvariant() ?? throw new ValidationException("当前会话缺少应用");
+    private static string RequireAppCode() => ProjectManagementPlatformScope.AppCode;
     private string RequireUserId() => currentUser.GetAsterErpUserId()?.Trim() ?? throw new ValidationException("当前会话缺少用户");
     private static ProjectManagementTaskDependencyResponse Map(ProjectManagementTaskDependencyEntity entity) => new(entity.Id, entity.ProjectId, entity.PredecessorTaskId, entity.SuccessorTaskId, entity.DependencyType, entity.LagMinutes, entity.VersionNo);
 }

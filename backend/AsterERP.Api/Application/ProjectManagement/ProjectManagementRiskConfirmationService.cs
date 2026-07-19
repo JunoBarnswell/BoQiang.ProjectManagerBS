@@ -16,7 +16,7 @@ public sealed class ProjectManagementRiskConfirmationService(
     {
         if (!confirmRisk) throw new ValidationException("必须确认高风险数据操作");
         var userId = currentUser.GetAsterErpUserId()?.Trim() ?? throw new ValidationException("当前会话缺少用户");
-        var user = (await databaseAccessor.GetCurrentDb().Queryable<SystemUserEntity>()
+        var user = (await databaseAccessor.GetProjectManagementDb().Queryable<SystemUserEntity>()
             .Where(item => item.Id == userId && !item.IsDeleted).Take(1).ToListAsync(cancellationToken)).FirstOrDefault()
             ?? throw new ValidationException("当前用户不存在");
         if (!passwordHashService.Verify(user.PasswordHash, currentPassword).Success) throw new ValidationException("当前密码不正确");

@@ -19,7 +19,7 @@ public sealed class ProjectManagementOverviewService(
     {
         var tenantId = RequireTenantId();
         var appCode = RequireAppCode();
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         if (!string.IsNullOrWhiteSpace(query.ProjectId))
             await accessPolicy.EnsureCanViewProjectAsync(query.ProjectId, cancellationToken);
 
@@ -71,5 +71,5 @@ public sealed class ProjectManagementOverviewService(
     }
 
     private string RequireTenantId() => currentUser.GetAsterErpTenantId()?.Trim() ?? throw new ValidationException("当前会话缺少租户", ErrorCodes.PermissionDenied);
-    private string RequireAppCode() => currentUser.GetAsterErpAppCode()?.Trim().ToUpperInvariant() ?? throw new ValidationException("当前会话缺少应用", ErrorCodes.PermissionDenied);
+    private static string RequireAppCode() => ProjectManagementPlatformScope.AppCode;
 }

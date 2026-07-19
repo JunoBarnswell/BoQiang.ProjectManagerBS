@@ -13,7 +13,7 @@ public sealed class ProjectManagementWorkspaceValidationExecutor(
         try
         {
             await operationWriter.StartAsync(args.OperationId, "maintenance.workspace-validation", "{}", args.TraceId, cancellationToken);
-            var db = databaseAccessor.GetCurrentDb();
+            var db = databaseAccessor.GetProjectManagementDb();
             if (!await operationWriter.ReportProgressAsync(args.OperationId, "ValidatingProjects", 10, cancellationToken)) return;
             var projectCount = await db.Queryable<ProjectManagementProjectEntity>().Where(item => !item.IsDeleted).CountAsync(cancellationToken);
 

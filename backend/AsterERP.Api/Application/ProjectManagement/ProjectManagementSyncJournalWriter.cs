@@ -14,7 +14,7 @@ public sealed class ProjectManagementSyncJournalWriter(IWorkspaceDatabaseAccesso
         await WriteLock.WaitAsync(cancellationToken);
         try
         {
-            var db = databaseAccessor.GetCurrentDb();
+            var db = databaseAccessor.GetProjectManagementDb();
             var current = await db.Queryable<ProjectManagementSyncJournalEntity>()
                 .Where(item => item.TenantId == entry.TenantId && item.AppCode == entry.AppCode)
                 .OrderBy(item => item.SequenceNo, OrderByType.Desc)

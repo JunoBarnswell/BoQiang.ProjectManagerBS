@@ -18,7 +18,7 @@ public sealed class ProjectManagementReminderExecutionService(
     public async Task ExecuteAsync(ProjectManagementReminderJobArgs args, CancellationToken cancellationToken = default)
     {
         EnsureContext(args);
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         var reminder = (await db.Queryable<ProjectManagementTaskReminderEntity>()
             .Where(item => item.Id == args.ReminderId && item.RecipientUserId == args.RecipientUserId && !item.IsDeleted)
             .Take(1).ToListAsync(cancellationToken)).FirstOrDefault();
@@ -95,6 +95,6 @@ public sealed class ProjectManagementReminderExecutionService(
         string.IsNullOrWhiteSpace(reminder.Note) ? $"任务「{task.Title}」提醒" : $"任务「{task.Title}」提醒：{reminder.Note}";
     private static string TrimError(string? value) => string.IsNullOrWhiteSpace(value) ? "提醒投递失败" : value.Length <= 1000 ? value : value[..1000];
     private string Tenant() => currentUser.GetAsterErpTenantId()?.Trim() ?? throw new InvalidOperationException("提醒作业缺少租户");
-    private string App() => currentUser.GetAsterErpAppCode()?.Trim().ToUpperInvariant() ?? throw new InvalidOperationException("提醒作业缺少应用");
+    private static string App() => ProjectManagementPlatformScope.AppCode;
     private string User() => currentUser.GetAsterErpUserId()?.Trim() ?? throw new InvalidOperationException("提醒作业缺少接收人");
 }

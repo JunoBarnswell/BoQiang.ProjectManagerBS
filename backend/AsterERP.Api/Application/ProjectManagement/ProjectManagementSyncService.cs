@@ -87,7 +87,7 @@ public sealed class ProjectManagementSyncService(
     {
         var normalized = NormalizeRequiredDevice(deviceId);
         var current = await GetJournalSequenceNoAsync(await ResolveScopeAsync(null, cancellationToken), cancellationToken);
-        var device = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementSyncDeviceEntity>()
+        var device = await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementSyncDeviceEntity>()
             .Where(item => item.TenantId == Tenant() && item.AppCode == App() && item.DeviceId == normalized && !item.IsDeleted)
             .Take(1).ToListAsync(cancellationToken);
         var row = device.FirstOrDefault();
@@ -98,7 +98,7 @@ public sealed class ProjectManagementSyncService(
     {
         if (sinceSequenceNo < 0) throw new ValidationException("同步起始水位不能为负数");
         var projectIds = await ResolveScopeAsync(projectId, cancellationToken);
-        var rows = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementSyncJournalEntity>()
+        var rows = await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementSyncJournalEntity>()
             .Where(item => item.SequenceNo > sinceSequenceNo && (item.ProjectId == null || projectIds.Contains(item.ProjectId)) && !item.IsDeleted)
             .OrderBy(item => item.SequenceNo, OrderByType.Asc)
             .Take(Math.Clamp(limit, 1, 1000))
@@ -112,7 +112,7 @@ public sealed class ProjectManagementSyncService(
         if (request.SequenceNo < 0) throw new ValidationException("同步水位不能为负数");
         var current = await GetJournalSequenceNoAsync(await ResolveScopeAsync(null, cancellationToken), cancellationToken);
         if (request.SequenceNo > current) throw new ValidationException("不能确认尚未存在的同步水位");
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         var rows = await db.Queryable<ProjectManagementSyncDeviceEntity>().Where(item => item.TenantId == Tenant() && item.AppCode == App() && item.DeviceId == deviceId && !item.IsDeleted).Take(1).ToListAsync(cancellationToken);
         var row = rows.FirstOrDefault() ?? new ProjectManagementSyncDeviceEntity { TenantId = Tenant(), AppCode = App(), DeviceId = deviceId, CreatedBy = UserId(), CreatedTime = DateTime.UtcNow };
         row.LastAcknowledgedSequenceNo = Math.Max(row.LastAcknowledgedSequenceNo, request.SequenceNo);
@@ -181,7 +181,7 @@ public sealed class ProjectManagementSyncService(
         var operationId = maintenanceLock is null ? null : await maintenanceLock.AcquireAsync("project-management-sync-import", TimeSpan.FromMinutes(30), cancellationToken);
         var operationStarted = false;
 
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         var inserted = 0;
         var updated = 0;
         var skipped = 0;
@@ -237,7 +237,7 @@ public sealed class ProjectManagementSyncService(
 
     private async Task<SyncSnapshot> LoadSnapshotAsync(IReadOnlyList<string> projectIds, CancellationToken cancellationToken)
     {
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         var projects = await db.Queryable<ProjectManagementProjectEntity>().Where(item => projectIds.Contains(item.Id) && !item.IsDeleted).ToListAsync(cancellationToken);
         var members = await db.Queryable<ProjectManagementProjectMemberEntity>().Where(item => projectIds.Contains(item.ProjectId) && !item.IsDeleted).ToListAsync(cancellationToken);
         var milestones = await db.Queryable<ProjectManagementMilestoneEntity>().Where(item => projectIds.Contains(item.ProjectId) && !item.IsDeleted).ToListAsync(cancellationToken);
@@ -263,7 +263,7 @@ public sealed class ProjectManagementSyncService(
 
     private async Task<IReadOnlyList<string>> ResolveScopeAsync(string? projectId, CancellationToken cancellationToken)
     {
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         if (!string.IsNullOrWhiteSpace(projectId))
         {
             var id = projectId.Trim();
@@ -280,7 +280,7 @@ public sealed class ProjectManagementSyncService(
 
     private async Task<long> GetJournalSequenceNoAsync(IReadOnlyList<string> projectIds, CancellationToken cancellationToken)
     {
-        var rows = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementSyncJournalEntity>()
+        var rows = await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementSyncJournalEntity>()
             .Where(item => item.ProjectId == null || projectIds.Contains(item.ProjectId))
             .OrderBy(item => item.SequenceNo, OrderByType.Desc)
             .Select(item => item.SequenceNo)
@@ -292,7 +292,7 @@ public sealed class ProjectManagementSyncService(
     private async Task TouchDeviceAsync(string deviceId, long sequenceNo, CancellationToken cancellationToken)
     {
         var normalized = NormalizeRequiredDevice(deviceId);
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         var rows = await db.Queryable<ProjectManagementSyncDeviceEntity>().Where(item => item.TenantId == Tenant() && item.AppCode == App() && item.DeviceId == normalized && !item.IsDeleted).Take(1).ToListAsync(cancellationToken);
         var now = DateTime.UtcNow;
         var row = rows.FirstOrDefault() ?? new ProjectManagementSyncDeviceEntity { TenantId = Tenant(), AppCode = App(), DeviceId = normalized, CreatedBy = UserId(), CreatedTime = now };
@@ -308,7 +308,7 @@ public sealed class ProjectManagementSyncService(
 
     private async Task<IReadOnlyList<string>> DetectConflictsAsync(SyncSnapshot snapshot, IReadOnlyList<string> projectIds, CancellationToken cancellationToken)
     {
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         var conflicts = new List<string>();
         var projectIdsInPackage = snapshot.Projects.Select(item => item.Id).ToList();
         var existingProjects = await db.Queryable<ProjectManagementProjectEntity>()
@@ -424,7 +424,7 @@ public sealed class ProjectManagementSyncService(
     {
         if (string.IsNullOrWhiteSpace(password)) throw new ValidationException("高风险导入必须验证当前密码", ErrorCodes.AuthenticationRequired);
         var userId = currentUser.GetAsterErpUserId()?.Trim();
-        var user = (await databaseAccessor.GetCurrentDb().Queryable<SystemUserEntity>()
+        var user = (await databaseAccessor.GetProjectManagementDb().Queryable<SystemUserEntity>()
             .Where(item => item.Id == userId && !item.IsDeleted && item.Status == "Enabled").Take(1).ToListAsync(cancellationToken)).FirstOrDefault();
         if (user is null || !passwordHashService.Verify(user.PasswordHash, password).Success)
             throw new ValidationException("当前密码验证失败", ErrorCodes.AuthenticationRequired);
@@ -486,7 +486,7 @@ public sealed class ProjectManagementSyncService(
 
     private static string Sha256(byte[] content) => Convert.ToHexString(SHA256.HashData(content));
     private string Tenant() => currentUser.GetAsterErpTenantId()?.Trim() ?? throw new ValidationException("当前会话缺少租户", ErrorCodes.PermissionDenied);
-    private string App() => currentUser.GetAsterErpAppCode()?.Trim().ToUpperInvariant() ?? throw new ValidationException("当前会话缺少应用", ErrorCodes.PermissionDenied);
+    private static string App() => ProjectManagementPlatformScope.AppCode;
     private static string? Normalize(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private sealed class SyncManifest

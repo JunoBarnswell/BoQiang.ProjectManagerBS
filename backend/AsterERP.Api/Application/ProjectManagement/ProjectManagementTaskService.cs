@@ -33,7 +33,7 @@ public sealed class ProjectManagementTaskService(
         var status = NormalizeOptional(query.Status);
         var assignee = NormalizeOptional(query.AssigneeUserId);
         EnsureViewProtocol(query);
-        var taskQuery = databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskEntity>()
+        var taskQuery = databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementTaskEntity>()
             .Where(item => item.ProjectId == query.ProjectId && !item.IsDeleted);
         if (!string.IsNullOrWhiteSpace(keyword))
             taskQuery = taskQuery.Where(item => item.TaskCode.Contains(keyword) || item.Title.Contains(keyword) || (item.Description != null && item.Description.Contains(keyword)));
@@ -73,11 +73,11 @@ public sealed class ProjectManagementTaskService(
         var items = await orderedQuery
             .ToPageListAsync(Math.Max(query.PageIndex, 1), Math.Clamp(query.PageSize, 1, 200), total, cancellationToken);
         var ids = items.Select(item => item.Id).ToList();
-        var dependencyRows = ids.Count == 0 ? [] : await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskDependencyEntity>()
+        var dependencyRows = ids.Count == 0 ? [] : await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementTaskDependencyEntity>()
             .Where(item => item.ProjectId == query.ProjectId && ids.Contains(item.SuccessorTaskId) && !item.IsDeleted)
             .ToListAsync(cancellationToken);
         var predecessorIds = dependencyRows.Select(item => item.PredecessorTaskId).Distinct(StringComparer.Ordinal).ToList();
-        var predecessorRows = predecessorIds.Count == 0 ? [] : await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskEntity>()
+        var predecessorRows = predecessorIds.Count == 0 ? [] : await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementTaskEntity>()
             .Where(item => predecessorIds.Contains(item.Id) && !item.IsDeleted)
             .ToListAsync(cancellationToken);
         var predecessorStatus = predecessorRows.ToDictionary(item => item.Id, item => item.Status, StringComparer.Ordinal);
@@ -97,7 +97,7 @@ public sealed class ProjectManagementTaskService(
         await EnsureProjectAsync(projectId, cancellationToken);
         await (accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser)).EnsureCanManageTaskAsync(projectId, request.AssigneeUserId, cancellationToken);
         Validate(request);
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         var taskCode = NormalizeRequired(request.TaskCode, "任务编码不能为空");
         if (await db.Queryable<ProjectManagementTaskEntity>().AnyAsync(item => item.ProjectId == projectId && item.TaskCode == taskCode && !item.IsDeleted, cancellationToken))
             throw new ValidationException("项目内任务编码已存在");
@@ -146,7 +146,7 @@ public sealed class ProjectManagementTaskService(
             throw new ValidationException("任务不能移动到自己的子孙节点下");
         await EnsureMilestoneAsync(entity.ProjectId, request.MilestoneId, cancellationToken);
         var taskCode = NormalizeRequired(request.TaskCode, "任务编码不能为空");
-        if (await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskEntity>().AnyAsync(item => item.ProjectId == entity.ProjectId && item.TaskCode == taskCode && item.Id != entity.Id && !item.IsDeleted, cancellationToken))
+        if (await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementTaskEntity>().AnyAsync(item => item.ProjectId == entity.ProjectId && item.TaskCode == taskCode && item.Id != entity.Id && !item.IsDeleted, cancellationToken))
             throw new ValidationException("项目内任务编码已存在");
         entity.MilestoneId = NormalizeOptional(request.MilestoneId);
         entity.ParentTaskId = parent?.Id;
@@ -167,7 +167,7 @@ public sealed class ProjectManagementTaskService(
         entity.VersionNo++;
         entity.UpdatedBy = RequireUserId();
         entity.UpdatedTime = DateTime.UtcNow;
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         await ProjectManagementMutationTransaction.RunAsync(db, async () =>
         {
             await UpdateSubtreeDepthAsync(
@@ -204,7 +204,7 @@ public sealed class ProjectManagementTaskService(
         ProjectManagementDomainRules.EnsureTaskDepth(depth);
         if (parent is not null && await IsDescendantAsync(entity.ProjectId, parent.Id, entity.Id, cancellationToken))
             throw new ValidationException("任务不能移动到自己的子孙节点下");
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         var siblings = await LoadSiblingsAsync(entity.ProjectId, parent?.Id, entity.Id, cancellationToken);
         var orderedSiblings = InsertAtRequestedPosition(entity, siblings, request);
         var requiresRebalance = !TryAssignSparseSortOrder(entity, orderedSiblings);
@@ -245,7 +245,7 @@ public sealed class ProjectManagementTaskService(
         var entity = await GetRequiredAsync(id, cancellationToken);
         await (accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser)).EnsureCanManageTaskAsync(entity.ProjectId, entity.AssigneeUserId, cancellationToken);
         EnsureVersion(entity.VersionNo, versionNo);
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         var now = DateTime.UtcNow;
         var userId = RequireUserId();
         var subtree = (await (taskHierarchy ?? new ProjectManagementTaskHierarchy()).LoadSubtreeAsync(db, entity.ProjectId, entity.Id, cancellationToken))
@@ -302,7 +302,7 @@ public sealed class ProjectManagementTaskService(
     public async Task<ProjectManagementTaskResponse> RestoreAsync(string id, long versionNo, CancellationToken cancellationToken = default)
     {
         RequireTenantId(); RequireAppCode();
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         var rows = await db.Queryable<ProjectManagementTaskEntity>()
             .Where(item => item.Id == id && item.IsDeleted)
             .Take(1).ToListAsync(cancellationToken);
@@ -359,14 +359,14 @@ public sealed class ProjectManagementTaskService(
     private async Task EnsureProjectAsync(string projectId, CancellationToken cancellationToken)
     {
         RequireTenantId(); RequireAppCode();
-        if (!await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementProjectEntity>().Where(item => item.Id == projectId && !item.IsDeleted).AnyAsync(cancellationToken))
+        if (!await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementProjectEntity>().Where(item => item.Id == projectId && !item.IsDeleted).AnyAsync(cancellationToken))
             throw new NotFoundException("项目不存在", ErrorCodes.PlatformResourceNotFound);
     }
 
     private async Task<ProjectManagementTaskEntity> GetRequiredAsync(string id, CancellationToken cancellationToken)
     {
         RequireTenantId(); RequireAppCode();
-        var entity = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskEntity>().Where(item => item.Id == id && !item.IsDeleted).Take(1).ToListAsync(cancellationToken);
+        var entity = await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementTaskEntity>().Where(item => item.Id == id && !item.IsDeleted).Take(1).ToListAsync(cancellationToken);
         return entity.FirstOrDefault() ?? throw new NotFoundException("任务不存在", ErrorCodes.PlatformResourceNotFound);
     }
 
@@ -374,13 +374,13 @@ public sealed class ProjectManagementTaskService(
     {
         if (string.IsNullOrWhiteSpace(parentId)) return null;
         if (string.Equals(parentId, currentId, StringComparison.Ordinal)) throw new ValidationException("任务不能成为自己的父任务");
-        var parent = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskEntity>().Where(item => item.Id == parentId && item.ProjectId == projectId && !item.IsDeleted).Take(1).ToListAsync(cancellationToken);
+        var parent = await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementTaskEntity>().Where(item => item.Id == parentId && item.ProjectId == projectId && !item.IsDeleted).Take(1).ToListAsync(cancellationToken);
         return parent.FirstOrDefault() ?? throw new ValidationException("父任务不存在或不属于当前项目");
     }
 
     private async Task<bool> IsDescendantAsync(string projectId, string candidateParentId, string taskId, CancellationToken cancellationToken)
     {
-        var links = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskEntity>()
+        var links = await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementTaskEntity>()
             .Where(item => item.ProjectId == projectId && !item.IsDeleted)
             .ToListAsync(cancellationToken);
         var parents = links.ToDictionary(item => item.Id, item => item.ParentTaskId, StringComparer.Ordinal);
@@ -396,7 +396,7 @@ public sealed class ProjectManagementTaskService(
     private async Task EnsureMilestoneAsync(string projectId, string? milestoneId, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(milestoneId)) return;
-        if (!await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementMilestoneEntity>()
+        if (!await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementMilestoneEntity>()
             .Where(item => item.Id == milestoneId && item.ProjectId == projectId && !item.IsDeleted)
             .AnyAsync(cancellationToken))
             throw new ValidationException("里程碑不存在或不属于当前项目");
@@ -411,7 +411,7 @@ public sealed class ProjectManagementTaskService(
     {
         var delta = newDepth - oldDepth;
         if (delta == 0) return;
-        var tasks = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskEntity>()
+        var tasks = await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementTaskEntity>()
             .Where(item => item.ProjectId == projectId && !item.IsDeleted)
             .ToListAsync(cancellationToken);
         var children = tasks.GroupBy(item => item.ParentTaskId ?? string.Empty)
@@ -435,14 +435,14 @@ public sealed class ProjectManagementTaskService(
         }
         var descendants = tasks.Where(item => visited.Contains(item.Id) && item.Id != rootId).ToList();
         if (descendants.Count > 0)
-            await databaseAccessor.GetCurrentDb().Updateable(descendants)
+            await databaseAccessor.GetProjectManagementDb().Updateable(descendants)
                 .UpdateColumns(item => new { item.Depth, item.VersionNo, item.UpdatedBy, item.UpdatedTime })
                 .ExecuteCommandAsync(cancellationToken);
     }
 
     private async Task UpdateSubtreeMilestoneAsync(string projectId, string rootId, string? milestoneId, DateTime now, string userId, CancellationToken cancellationToken)
     {
-        var tasks = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskEntity>()
+        var tasks = await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementTaskEntity>()
             .Where(item => item.ProjectId == projectId && !item.IsDeleted)
             .ToListAsync(cancellationToken);
         var children = tasks.GroupBy(item => item.ParentTaskId ?? string.Empty)
@@ -466,14 +466,14 @@ public sealed class ProjectManagementTaskService(
             descendant.UpdatedTime = now;
         }
         if (descendants.Count > 0)
-            await databaseAccessor.GetCurrentDb().Updateable(descendants)
+            await databaseAccessor.GetProjectManagementDb().Updateable(descendants)
                 .UpdateColumns(item => new { item.MilestoneId, item.VersionNo, item.UpdatedBy, item.UpdatedTime })
                 .ExecuteCommandAsync(cancellationToken);
     }
 
     private async Task<List<ProjectManagementTaskEntity>> LoadSiblingsAsync(string projectId, string? parentTaskId, string excludedTaskId, CancellationToken cancellationToken)
     {
-        var rows = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskEntity>()
+        var rows = await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementTaskEntity>()
             .Where(item => item.ProjectId == projectId && !item.IsDeleted && item.Id != excludedTaskId &&
                 (parentTaskId == null ? item.ParentTaskId == null : item.ParentTaskId == parentTaskId))
             .OrderBy(item => item.SortOrder, OrderByType.Asc)
@@ -576,10 +576,10 @@ public sealed class ProjectManagementTaskService(
     private async Task EnsureWipAsync(string projectId, string status, bool overrideWip, CancellationToken cancellationToken, string? currentTaskId = null)
     {
         if (!string.Equals(status, "InProgress", StringComparison.Ordinal)) return;
-        var project = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementProjectEntity>().Where(item => item.Id == projectId && !item.IsDeleted).Take(1).ToListAsync(cancellationToken);
+        var project = await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementProjectEntity>().Where(item => item.Id == projectId && !item.IsDeleted).Take(1).ToListAsync(cancellationToken);
         var limit = project.FirstOrDefault()?.WipLimit;
         if (!limit.HasValue || overrideWip && currentUser.HasAsterErpPermission(PermissionCodes.ProjectManagementTaskOverrideWip)) return;
-        var count = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskEntity>().CountAsync(item => item.ProjectId == projectId && item.Status == "InProgress" && !item.IsDeleted && item.Id != (currentTaskId ?? string.Empty), cancellationToken);
+        var count = await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementTaskEntity>().CountAsync(item => item.ProjectId == projectId && item.Status == "InProgress" && !item.IsDeleted && item.Id != (currentTaskId ?? string.Empty), cancellationToken);
         if (count >= limit.Value) throw new ValidationException("项目 WIP 上限已达到，需要 WIP 强制绕过权限");
     }
 
@@ -593,7 +593,7 @@ public sealed class ProjectManagementTaskService(
 
     private static string NormalizePriority(string value) => Priorities.Contains(value.Trim(), StringComparer.Ordinal) ? value.Trim() : throw new ValidationException("任务优先级不受支持");
     private string RequireTenantId() => currentUser.GetAsterErpTenantId()?.Trim() ?? throw new ValidationException("当前会话缺少租户");
-    private string RequireAppCode() => currentUser.GetAsterErpAppCode()?.Trim().ToUpperInvariant() ?? throw new ValidationException("当前会话缺少应用");
+    private static string RequireAppCode() => ProjectManagementPlatformScope.AppCode;
     private string RequireUserId() => currentUser.GetAsterErpUserId()?.Trim() ?? throw new ValidationException("当前会话缺少用户");
     private static string NormalizeRequired(string value, string message) => string.IsNullOrWhiteSpace(value) ? throw new ValidationException(message) : value.Trim();
     private static string? NormalizeOptional(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

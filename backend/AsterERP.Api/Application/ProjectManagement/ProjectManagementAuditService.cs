@@ -48,7 +48,7 @@ public sealed class ProjectManagementAuditService(
     {
         RequireTenant();
         RequireApp();
-        var operationQuery = databaseAccessor.GetCurrentDb().Queryable<ProjectManagementOperationEntity>()
+        var operationQuery = databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementOperationEntity>()
             .Where(item => item.ActorUserId == RequireUser() && !item.IsDeleted);
         if (!string.IsNullOrWhiteSpace(query.OperationType)) operationQuery = operationQuery.Where(item => item.OperationType == query.OperationType.Trim());
         if (!string.IsNullOrWhiteSpace(query.Status)) operationQuery = operationQuery.Where(item => item.Status == query.Status.Trim());
@@ -68,7 +68,7 @@ public sealed class ProjectManagementAuditService(
         RequireApp();
         if (query.From.HasValue && query.To.HasValue && query.From > query.To) throw new ValidationException("审计时间范围无效");
         if (!string.IsNullOrWhiteSpace(query.ProjectId)) await accessPolicy.EnsureCanViewProjectAsync(query.ProjectId, cancellationToken);
-        var activityQuery = databaseAccessor.GetCurrentDb().Queryable<ProjectManagementActivityEntity>()
+        var activityQuery = databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementActivityEntity>()
             .Where(item => !item.IsDeleted);
         if (!string.IsNullOrWhiteSpace(query.ProjectId)) activityQuery = activityQuery.Where(item => item.ProjectId == query.ProjectId);
         if (!string.IsNullOrWhiteSpace(query.AggregateType)) activityQuery = activityQuery.Where(item => item.AggregateType == query.AggregateType.Trim());
@@ -85,7 +85,7 @@ public sealed class ProjectManagementAuditService(
     }
 
     private string RequireTenant() => currentUser.GetAsterErpTenantId()?.Trim() ?? throw new ValidationException("当前会话缺少租户", ErrorCodes.PermissionDenied);
-    private string RequireApp() => currentUser.GetAsterErpAppCode()?.Trim() ?? throw new ValidationException("当前会话缺少应用", ErrorCodes.PermissionDenied);
+    private static string RequireApp() => ProjectManagementPlatformScope.AppCode;
     private string RequireUser() => currentUser.GetAsterErpUserId()?.Trim() ?? throw new ValidationException("当前会话缺少用户", ErrorCodes.PermissionDenied);
     private static ProjectManagementAuditItem Map(ProjectManagementActivityEntity entity) => new(entity.Id, entity.ProjectId, entity.AggregateType, entity.AggregateId, entity.ActivityType, entity.Summary, entity.TraceId, entity.ActorUserId, entity.CreatedTime);
     private static string Escape(string? value) => $"\"{(value ?? string.Empty).Replace("\"", "\"\"")}\"";

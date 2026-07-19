@@ -13,7 +13,7 @@ public sealed class ProjectManagementTaskTimeLogService(IWorkspaceDatabaseAccess
     public async Task<IReadOnlyList<ProjectManagementTaskTimeLogResponse>> QueryAsync(string taskId, CancellationToken cancellationToken = default)
     {
         await EnsureTaskAsync(taskId, cancellationToken);
-        return (await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskTimeLogEntity>().Where(item => item.TaskId == taskId && !item.IsDeleted).OrderBy(item => item.StartedAt, SqlSugar.OrderByType.Desc).ToListAsync(cancellationToken)).Select(Map).ToList();
+        return (await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementTaskTimeLogEntity>().Where(item => item.TaskId == taskId && !item.IsDeleted).OrderBy(item => item.StartedAt, SqlSugar.OrderByType.Desc).ToListAsync(cancellationToken)).Select(Map).ToList();
     }
 
     public async Task<ProjectManagementTaskTimeLogResponse> CreateAsync(string taskId, ProjectManagementTaskTimeLogUpsertRequest request, CancellationToken cancellationToken = default)
@@ -26,7 +26,7 @@ public sealed class ProjectManagementTaskTimeLogService(IWorkspaceDatabaseAccess
         EnsureVersion(task.VersionNo, request.VersionNo);
         var now = DateTime.UtcNow;
         var log = new ProjectManagementTaskTimeLogEntity { TenantId = Tenant(), AppCode = App(), ProjectId = task.ProjectId, TaskId = taskId, UserId = User(), StartedAt = request.StartedAt, EndedAt = request.EndedAt, Minutes = minutes, Note = Optional(request.Note), CreatedBy = User(), CreatedTime = now };
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         db.Ado.BeginTran();
         try
         {
@@ -46,7 +46,7 @@ public sealed class ProjectManagementTaskTimeLogService(IWorkspaceDatabaseAccess
     {
         var task = await EnsureTaskAsync(taskId, cancellationToken);
         await (accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser)).EnsureCanManageTaskAsync(task.ProjectId, task.AssigneeUserId, cancellationToken);
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         var log = (await db.Queryable<ProjectManagementTaskTimeLogEntity>().Where(item => item.Id == id && item.TaskId == taskId && !item.IsDeleted).Take(1).ToListAsync(cancellationToken)).FirstOrDefault() ?? throw new NotFoundException("工时记录不存在", ErrorCodes.PlatformResourceNotFound);
         EnsureVersion(log.VersionNo, versionNo);
         log.IsDeleted = true; log.DeletedBy = User(); log.DeletedTime = DateTime.UtcNow; log.VersionNo++;
@@ -61,9 +61,9 @@ public sealed class ProjectManagementTaskTimeLogService(IWorkspaceDatabaseAccess
         catch { db.Ado.RollbackTran(); throw; }
     }
 
-    private async Task<ProjectManagementTaskEntity> EnsureTaskAsync(string id, CancellationToken cancellationToken) => (await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskEntity>().Where(item => item.Id == id && !item.IsDeleted).Take(1).ToListAsync(cancellationToken)).FirstOrDefault() ?? throw new NotFoundException("任务不存在", ErrorCodes.PlatformResourceNotFound);
+    private async Task<ProjectManagementTaskEntity> EnsureTaskAsync(string id, CancellationToken cancellationToken) => (await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementTaskEntity>().Where(item => item.Id == id && !item.IsDeleted).Take(1).ToListAsync(cancellationToken)).FirstOrDefault() ?? throw new NotFoundException("任务不存在", ErrorCodes.PlatformResourceNotFound);
     private string Tenant() => currentUser.GetAsterErpTenantId()?.Trim() ?? throw new ValidationException("当前会话缺少租户");
-    private string App() => currentUser.GetAsterErpAppCode()?.Trim().ToUpperInvariant() ?? throw new ValidationException("当前会话缺少应用");
+    private static string App() => ProjectManagementPlatformScope.AppCode;
     private string User() => currentUser.GetAsterErpUserId()?.Trim() ?? throw new ValidationException("当前会话缺少用户");
     private static string? Optional(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     private static void EnsureVersion(long current, long request) { if (request <= 0 || current != request) throw new ValidationException("任务或工时已被其他用户修改，请刷新后重试", ErrorCodes.ApplicationDevelopmentPageRevisionConflict); }

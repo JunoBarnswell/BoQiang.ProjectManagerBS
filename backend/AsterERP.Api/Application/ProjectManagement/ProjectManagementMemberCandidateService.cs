@@ -26,7 +26,7 @@ public sealed class ProjectManagementMemberCandidateService(
     {
         var tenantId = RequireTenantId();
         var appCode = RequireAppCode();
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         var userExists = await db.Queryable<SystemUserEntity>()
             .Where(user => user.Id == userId && !user.IsDeleted && user.Status == "Enabled")
             .AnyAsync(cancellationToken);
@@ -48,7 +48,7 @@ public sealed class ProjectManagementMemberCandidateService(
     {
         var tenantId = RequireTenantId();
         var appCode = RequireAppCode();
-        var db = databaseAccessor.GetCurrentDb();
+        var db = databaseAccessor.GetProjectManagementDb();
         var normalizedKeyword = Normalize(query.Keyword);
         var normalizedDeptId = Normalize(query.DeptId);
         var normalizedPositionId = Normalize(query.PositionId);
@@ -224,8 +224,7 @@ public sealed class ProjectManagementMemberCandidateService(
     private string RequireTenantId() =>
         currentUser.GetAsterErpTenantId() ?? throw new InvalidOperationException("当前会话缺少租户上下文");
 
-    private string RequireAppCode() =>
-        currentUser.GetAsterErpAppCode() ?? throw new InvalidOperationException("当前会话缺少应用上下文");
+    private static string RequireAppCode() => ProjectManagementPlatformScope.AppCode;
 
     private static string? Normalize(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();

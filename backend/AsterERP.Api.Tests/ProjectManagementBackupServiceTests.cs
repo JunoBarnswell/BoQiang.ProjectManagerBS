@@ -50,11 +50,15 @@ public sealed class ProjectManagementBackupServiceTests
             db.Ado.ExecuteCommand("UPDATE backup_marker SET Value = 'after' WHERE Id = 1;");
             await service.RestoreAsync(backup.Id, new ProjectManagementRestoreRequest("secret", true));
             Assert.Equal("before", db.Ado.GetString("SELECT Value FROM backup_marker WHERE Id = 1"));
-            Assert.Contains(await service.ListAsync(), item => item.Id == backup.Id);
+            var backups = await service.ListAsync();
+            Assert.Contains(backups, item => item.Id == backup.Id);
+            var safetyCheckpoint = Assert.Single(backups, item => item.Id != backup.Id);
+            Assert.StartsWith("恢复前安全检查点-", safetyCheckpoint.BackupName, StringComparison.Ordinal);
+
+            await service.RestoreAsync(safetyCheckpoint.Id, new ProjectManagementRestoreRequest("secret", true));
+            Assert.Equal("after", db.Ado.GetString("SELECT Value FROM backup_marker WHERE Id = 1"));
             var operations = await db.Queryable<ProjectManagementOperationEntity>().Where(item => !item.IsDeleted).ToListAsync();
-            Assert.Equal(2, operations.Count);
             Assert.Contains(operations, item => item.OperationType == "backup.restore" && item.Status == "Succeeded");
-            Assert.Contains(operations, item => item.OperationType == "backup.create" && item.Status == "Failed");
         }
         finally
         {
