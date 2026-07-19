@@ -5,7 +5,8 @@ namespace AsterERP.Api.Application.ProjectManagement;
 
 public sealed class ProjectManagementPurgeFileDeletionExecutor(
     IWorkspaceDatabaseAccessor databaseAccessor,
-    IProjectManagementPurgeFileDeletionService deletionService)
+    IProjectManagementPurgeFileDeletionService deletionService,
+    IProjectManagementOperationWriter? operationWriter = null)
 {
     public async Task<bool> TryExecuteAsync(ProjectManagementOperationJobArgs args, CancellationToken cancellationToken = default)
     {
@@ -14,8 +15,10 @@ public sealed class ProjectManagementPurgeFileDeletionExecutor(
             .Take(1)
             .ToListAsync(cancellationToken))
             .FirstOrDefault();
-        if (operation?.OperationType is not ("task.purge" or "project.purge")) return false;
+        if (operation?.OperationType is not ("task.purge" or "project.purge" or "attachment.orphan-cleanup")) return false;
         await deletionService.TryProcessAsync(args.OperationId, cancellationToken);
+        if (operation.OperationType == "attachment.orphan-cleanup" && operationWriter is not null)
+            await operationWriter.CompleteWithImpactAsync(args.OperationId, operation.ImpactJson, cancellationToken);
         return true;
     }
 }

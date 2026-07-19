@@ -12,6 +12,7 @@ using AsterERP.Shared;
 using AsterERP.Shared.Exceptions;
 using Microsoft.AspNetCore.Http;
 using SqlSugar;
+using Volo.Abp.BackgroundJobs;
 using Volo.Abp.Users;
 using Xunit;
 
@@ -139,6 +140,26 @@ public sealed class ProjectManagementTaskAttachmentServiceTests
     }
 
     [Fact]
+    public async Task Attachment_upload_cleanup_failure_schedules_audited_orphan_retry()
+    {
+        using var db = CreateDb("upload-orphan");
+        await SeedTaskAsync(db);
+        var fileStore = new RecordingFileStore { FailDelete = true };
+        var activityWriter = new RecordingActivityWriter { Fail = true };
+        var orphanWriter = new RecordingOperationWriter();
+        var orphanDeletes = new RecordingPurgeFileDeletionService();
+        var jobs = new RecordingBackgroundJobManager();
+        var service = CreateService(db, CreateUser(), new RecordingFileAppService(null), fileStore, activityWriter, orphanDeletes, orphanWriter, jobs);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.UploadAsync("task-a", CreateFormFile("孤儿.txt")));
+
+        Assert.Equal("attachment.orphan-cleanup", orphanWriter.OperationType);
+        Assert.Contains("file-upload", orphanDeletes.FileIds);
+        Assert.Single(jobs.Args);
+        Assert.Equal(orphanWriter.OperationId, jobs.Args[0].OperationId);
+    }
+
+    [Fact]
     public async Task Attachment_access_is_revoked_after_member_removal_and_file_id_cannot_cross_task_boundary()
     {
         using var db = CreateDb("access-revocation");
@@ -182,8 +203,11 @@ public sealed class ProjectManagementTaskAttachmentServiceTests
         ICurrentUser user,
         RecordingFileAppService fileApp,
         RecordingFileStore? fileStore = null,
-        RecordingActivityWriter? activityWriter = null) =>
-        new(new TestWorkspaceDatabaseAccessor(db), user, fileStore ?? new RecordingFileStore(), new ProjectManagementAccessPolicy(new TestWorkspaceDatabaseAccessor(db), user), fileApp, null, activityWriter);
+        RecordingActivityWriter? activityWriter = null,
+        IProjectManagementPurgeFileDeletionService? purgeFileDeletionService = null,
+        IProjectManagementOperationWriter? operationWriter = null,
+        IBackgroundJobManager? backgroundJobManager = null) =>
+        new(new TestWorkspaceDatabaseAccessor(db), user, fileStore ?? new RecordingFileStore(), new ProjectManagementAccessPolicy(new TestWorkspaceDatabaseAccessor(db), user), fileApp, null, activityWriter, purgeFileDeletionService, operationWriter, backgroundJobManager);
 
     private static ProjectManagementTaskAttachmentEntity Attachment(string id, string uploadedByUserId, string taskId = "task-a", string projectId = "project-a", string? fileId = null) => new()
     {
@@ -232,6 +256,7 @@ public sealed class ProjectManagementTaskAttachmentServiceTests
     {
         public List<string> DeletedFileIds { get; } = [];
         public int OpenReadCount { get; private set; }
+        public bool FailDelete { get; set; }
 
         public Task<ProjectManagementStoredFile> StoreAsync(IFormFile file, ProjectManagementFileUploadContext context, CancellationToken cancellationToken = default) =>
             Task.FromResult(new ProjectManagementStoredFile("file-upload", file.FileName, file.Length));
@@ -244,6 +269,7 @@ public sealed class ProjectManagementTaskAttachmentServiceTests
 
         public Task DeleteAsync(string fileId, CancellationToken cancellationToken = default)
         {
+            if (FailDelete) throw new InvalidOperationException("storage delete failed");
             DeletedFileIds.Add(fileId);
             return Task.CompletedTask;
         }
@@ -259,6 +285,49 @@ public sealed class ProjectManagementTaskAttachmentServiceTests
             if (Fail) throw new InvalidOperationException("activity writer failed");
             Events.Add(activity);
             return Task.CompletedTask;
+        }
+    }
+
+    private sealed class RecordingPurgeFileDeletionService : IProjectManagementPurgeFileDeletionService
+    {
+        public List<string> FileIds { get; } = [];
+        public Task ScheduleAsync(ISqlSugarClient db, string operationId, IReadOnlyCollection<ProjectManagementTaskAttachmentEntity> attachments, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task ScheduleOrphanAsync(ISqlSugarClient db, string operationId, string fileId, CancellationToken cancellationToken = default)
+        {
+            FileIds.Add(fileId);
+            return Task.CompletedTask;
+        }
+        public Task<bool> TryProcessAsync(string operationId, CancellationToken cancellationToken = default) => Task.FromResult(false);
+    }
+
+    private sealed class RecordingOperationWriter : IProjectManagementOperationWriter
+    {
+        public string? OperationId { get; private set; }
+        public string? OperationType { get; private set; }
+        public Task CreatePendingAsync(string operationId, string operationType, string impactJson, string traceId, CancellationToken cancellationToken = default)
+        {
+            OperationId = operationId;
+            OperationType = operationType;
+            return Task.CompletedTask;
+        }
+        public Task StartAsync(string operationId, string operationType, string impactJson, string traceId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task<bool> ReportProgressAsync(string operationId, string phase, int progressPercent, CancellationToken cancellationToken = default) => Task.FromResult(true);
+        public Task<bool> IsCancellationRequestedAsync(string operationId, CancellationToken cancellationToken = default) => Task.FromResult(false);
+        public Task RequestCancellationAsync(string operationId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task CancelAsync(string operationId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task SucceedAsync(string operationId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task CompleteWithImpactAsync(string operationId, string impactJson, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task FailAsync(string operationId, string errorMessage, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task FailRunningExceptAsync(string operationId, string errorMessage, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    }
+
+    private sealed class RecordingBackgroundJobManager : IBackgroundJobManager
+    {
+        public List<ProjectManagementOperationJobArgs> Args { get; } = [];
+        public Task<string> EnqueueAsync<TArgs>(TArgs args, BackgroundJobPriority priority = BackgroundJobPriority.Normal, TimeSpan? delay = null)
+        {
+            if (args is ProjectManagementOperationJobArgs operationArgs) Args.Add(operationArgs);
+            return Task.FromResult(Guid.NewGuid().ToString("N"));
         }
     }
 

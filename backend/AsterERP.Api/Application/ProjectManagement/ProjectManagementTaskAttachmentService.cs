@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text.Json;
 using AsterERP.Api.Application.System.Files;
 using AsterERP.Api.Infrastructure.Database;
 using AsterERP.Api.Infrastructure.Security;
@@ -7,6 +8,7 @@ using AsterERP.Contracts.ProjectManagement;
 using AsterERP.Shared;
 using AsterERP.Shared.Exceptions;
 using Microsoft.AspNetCore.Http;
+using Volo.Abp.BackgroundJobs;
 using Volo.Abp.Users;
 
 namespace AsterERP.Api.Application.ProjectManagement;
@@ -18,7 +20,10 @@ public sealed class ProjectManagementTaskAttachmentService(
     ProjectManagementAccessPolicy accessPolicy,
     IFileAppService fileAppService,
     IProjectManagementRealtimePublisher? realtimePublisher = null,
-    IProjectManagementActivityWriter? activityWriter = null) : IProjectManagementTaskAttachmentService
+    IProjectManagementActivityWriter? activityWriter = null,
+    IProjectManagementPurgeFileDeletionService? purgeFileDeletionService = null,
+    IProjectManagementOperationWriter? operationWriter = null,
+    IBackgroundJobManager? backgroundJobManager = null) : IProjectManagementTaskAttachmentService
 {
     public async Task<IReadOnlyList<ProjectManagementTaskAttachmentResponse>> QueryAsync(string taskId, CancellationToken cancellationToken = default)
     {
@@ -55,9 +60,9 @@ public sealed class ProjectManagementTaskAttachmentService(
             {
                 await fileStore.DeleteAsync(uploaded.Id, CancellationToken.None);
             }
-            catch
+            catch (Exception cleanupException)
             {
-                // 保留原始落库异常；文件清理由后续垃圾回收兜底。
+                await ScheduleOrphanCleanupAsync(task, uploaded.Id, cleanupException);
             }
 
             throw;
@@ -65,6 +70,31 @@ public sealed class ProjectManagementTaskAttachmentService(
 
         await PublishInvalidationAsync(task, entity, "attachment.created", cancellationToken);
         return Map(entity);
+    }
+
+    private async Task ScheduleOrphanCleanupAsync(ProjectManagementTaskEntity task, string fileId, Exception cleanupException)
+    {
+        if (purgeFileDeletionService is null || operationWriter is null || backgroundJobManager is null) return;
+
+        var operationId = $"attachment-orphan-{Guid.NewGuid():N}";
+        var traceId = Activity.Current?.Id ?? operationId;
+        var impactJson = JsonSerializer.Serialize(new
+        {
+            taskId = task.Id,
+            projectId = task.ProjectId,
+            fileId,
+            cleanupError = cleanupException.Message.Length > 500 ? cleanupException.Message[..500] : cleanupException.Message
+        });
+        try
+        {
+            await operationWriter.CreatePendingAsync(operationId, "attachment.orphan-cleanup", impactJson, traceId, CancellationToken.None);
+            await purgeFileDeletionService.ScheduleOrphanAsync(databaseAccessor.GetCurrentDb(), operationId, fileId, CancellationToken.None);
+            await backgroundJobManager.EnqueueAsync(new ProjectManagementOperationJobArgs(operationId, Tenant(), App(), User(), traceId));
+        }
+        catch
+        {
+            // 保留原始上传/落库异常；操作审计和后续文件补偿尽力落库。
+        }
     }
 
     public async Task<(ProjectManagementTaskAttachmentResponse Metadata, Stream Stream)> DownloadAsync(string taskId, string id, CancellationToken cancellationToken = default)

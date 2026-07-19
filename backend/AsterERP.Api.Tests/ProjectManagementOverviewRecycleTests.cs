@@ -177,6 +177,24 @@ public sealed class ProjectManagementOverviewRecycleTests
     }
 
     [Fact]
+    public async Task Restore_task_keeps_attachment_relation_available_after_task_recovery()
+    {
+        using var db = CreateDb();
+        await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
+        await db.Insertable(new ProjectManagementProjectEntity { Id = "project-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "A", ProjectName = "A", OwnerUserId = "operator" }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementTaskEntity { Id = "deleted-task", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", TaskCode = "T-1", Title = "deleted", IsDeleted = true, VersionNo = 2 }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementTaskAttachmentEntity { Id = "attachment", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", TaskId = "deleted-task", FileId = "file-1", FileName = "proof.txt" }).ExecuteCommandAsync();
+
+        await new ProjectManagementRecycleService(new TestWorkspaceDatabaseAccessor(db), CreateUser("operator"))
+            .RestoreTaskAsync("deleted-task", new ProjectManagementRecycleRestoreRequest(2));
+
+        var attachment = await db.Queryable<ProjectManagementTaskAttachmentEntity>().SingleAsync(item => item.Id == "attachment");
+        Assert.False((await db.Queryable<ProjectManagementTaskEntity>().SingleAsync(item => item.Id == "deleted-task")).IsDeleted);
+        Assert.False(attachment.IsDeleted);
+        Assert.Equal("file-1", attachment.FileId);
+    }
+
+    [Fact]
     public async Task Recycle_query_reports_impact_counts_without_exposing_other_workspace_data()
     {
         using var db = CreateDb();
@@ -348,6 +366,7 @@ public sealed class ProjectManagementOverviewRecycleTests
             ScheduledFileIds.AddRange(attachments.Select(item => item.FileId));
             return Task.CompletedTask;
         }
+        public Task ScheduleOrphanAsync(ISqlSugarClient db, string operationId, string fileId, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task<bool> TryProcessAsync(string operationId, CancellationToken cancellationToken = default) => Task.FromResult(false);
     }
 
