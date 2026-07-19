@@ -50,6 +50,8 @@ public sealed class AsterErpProjectManagementModule : AbpModule
         context.Services.AddScoped<IProjectManagementFileStore, ProjectManagementFileStore>();
         context.Services.AddScoped<IProjectManagementTaskCommentService, ProjectManagementTaskCommentService>();
         context.Services.AddScoped<IProjectManagementTaskAttachmentService, ProjectManagementTaskAttachmentService>();
+        context.Services.AddScoped<IProjectManagementExternalApiIdempotencyService, ProjectManagementExternalApiIdempotencyService>();
+        context.Services.AddScoped<IProjectManagementExternalApiService, ProjectManagementExternalApiService>();
         context.Services.AddScoped<IProjectManagementSyncService, ProjectManagementSyncService>();
         context.Services.AddScoped<IProjectManagementDataSpaceService, ProjectManagementDataSpaceService>();
         context.Services.AddScoped<IProjectManagementNotificationService, ProjectManagementNotificationService>();
@@ -114,6 +116,7 @@ public sealed class AsterErpProjectManagementModule : AbpModule
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementTaskCommentEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementTaskCommentMentionEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementTaskAttachmentEntity));
+        registry.RegisterProjectManagementFilter(typeof(ProjectManagementExternalApiRequestEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementNotificationEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementTaskReminderEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementSavedViewEntity));

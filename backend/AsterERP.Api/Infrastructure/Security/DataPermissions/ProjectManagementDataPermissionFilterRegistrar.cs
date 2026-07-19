@@ -185,6 +185,14 @@ public static class ProjectManagementDataPermissionFilterRegistrar
             return true;
         }
 
+        if (entityType == typeof(ProjectManagementExternalApiRequestEntity))
+        {
+            db.QueryFilter.AddTableFilter<ProjectManagementExternalApiRequestEntity>(request =>
+                request.TenantId == tenantId && request.AppCode == appCode &&
+                (!restrictToMembership || request.CallerUserId == userId));
+            return true;
+        }
+
         if (entityType == typeof(ProjectManagementImConversationLinkEntity))
         {
             db.QueryFilter.AddTableFilter<ProjectManagementImConversationLinkEntity>(link =>
