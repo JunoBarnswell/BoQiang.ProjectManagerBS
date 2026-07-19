@@ -14,6 +14,7 @@ public static class ProjectManagementNotificationTypes
     public const string TaskDueDateChanged = "task.due-date.changed";
     public const string MilestoneRiskDetected = "milestone.risk.detected";
     public const string ExcelImportCompleted = "project.excel-import";
+    public const string SyncExportCompleted = "sync.export";
     public const string SyncImportCompleted = "sync.import";
     public const string OperationSucceeded = "operation.succeeded";
     public const string OperationFailed = "operation.failed";

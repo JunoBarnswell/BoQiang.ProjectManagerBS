@@ -33,6 +33,7 @@ const notificationTypeOptions = [
   { label: '截止日期', value: 'task.due-date.changed' },
   { label: '里程碑风险', value: 'milestone.risk.detected' },
   { label: 'Excel 导入', value: 'project.excel-import' },
+  { label: '同步导出', value: 'sync.export' },
   { label: '同步导入', value: 'sync.import' },
   { label: '操作完成', value: 'operation.succeeded' },
   { label: '操作失败', value: 'operation.failed' },

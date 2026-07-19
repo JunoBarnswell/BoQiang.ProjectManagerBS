@@ -95,11 +95,14 @@ public sealed class ProjectManagementNotificationService(
         await MarkReadAsync(id, cancellationToken);
         if (string.IsNullOrWhiteSpace(notification.ProjectId))
         {
-            if (!string.Equals(notification.TargetRoute, "/project-audit-center", StringComparison.Ordinal))
-                return new ProjectManagementNotificationOpenResponse(false, null, "通知未关联可打开的项目对象");
-            return currentUser.HasAsterErpPermission(PermissionCodes.ProjectManagementOperationView)
-                ? new ProjectManagementNotificationOpenResponse(true, notification.TargetRoute, null)
-                : new ProjectManagementNotificationOpenResponse(false, null, "无权访问关联操作记录");
+            return notification.TargetRoute switch
+            {
+                "/project-audit-center" when currentUser.HasAsterErpPermission(PermissionCodes.ProjectManagementOperationView) => new ProjectManagementNotificationOpenResponse(true, notification.TargetRoute, null),
+                "/project-audit-center" => new ProjectManagementNotificationOpenResponse(false, null, "无权访问关联操作记录"),
+                "/project-sync" when currentUser.HasAsterErpPermission(PermissionCodes.ProjectManagementSyncExport) => new ProjectManagementNotificationOpenResponse(true, notification.TargetRoute, null),
+                "/project-sync" => new ProjectManagementNotificationOpenResponse(false, null, "无权访问项目同步"),
+                _ => new ProjectManagementNotificationOpenResponse(false, null, "通知未关联可打开的项目对象")
+            };
         }
         try
         {

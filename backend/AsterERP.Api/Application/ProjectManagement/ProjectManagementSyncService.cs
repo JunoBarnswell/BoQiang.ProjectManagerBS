@@ -26,7 +26,8 @@ public sealed class ProjectManagementSyncService(
     IProjectManagementFileStore? fileStore = null,
     IProjectManagementMaintenanceLock? maintenanceLock = null,
     IProjectManagementOperationWriter? operationWriter = null,
-    IProjectManagementSearchService? searchService = null) : IProjectManagementSyncService
+    IProjectManagementSearchService? searchService = null,
+    IProjectManagementNotificationPublisher? notificationPublisher = null) : IProjectManagementSyncService
 {
     private const string Magic = "BQSYNC";
     private const string SchemaVersion = "3";
@@ -125,6 +126,7 @@ public sealed class ProjectManagementSyncService(
         if (content.Length > MaxPackageBytes) throw new ValidationException("同步包超过 200 MB 限制", ErrorCodes.SchemaOrPayloadTooLarge);
         if (!string.IsNullOrWhiteSpace(request.DeviceId))
             await TouchDeviceAsync(request.DeviceId, journalSequenceNo, cancellationToken);
+        await PublishExportCompletedAsync(packageId, mode, projectIds, cancellationToken);
         return (content, $"project-management-{DateTime.UtcNow:yyyyMMddHHmmss}-{packageId}.bqsync");
     }
 
@@ -541,6 +543,29 @@ public sealed class ProjectManagementSyncService(
         return normalized;
     }
     private string UserId() => currentUser.GetAsterErpUserId()?.Trim() ?? throw new ValidationException("当前会话缺少用户", ErrorCodes.PermissionDenied);
+
+    private async Task PublishExportCompletedAsync(string packageId, string mode, IReadOnlyList<string> projectIds, CancellationToken cancellationToken)
+    {
+        if (notificationPublisher is null) return;
+        var projectId = projectIds.Count == 1 ? projectIds[0] : null;
+        try
+        {
+            await notificationPublisher.PublishAsync(new ProjectManagementNotification(
+                Tenant(),
+                App(),
+                ProjectManagementNotificationTypes.SyncExportCompleted,
+                UserId(),
+                "项目同步导出完成",
+                $"已生成 {mode} 同步包 {packageId}",
+                projectId is null ? "/project-sync" : $"/projects/{projectId}/tasks",
+                $"notification:{ProjectManagementNotificationTypes.SyncExportCompleted}:{packageId}:{UserId()}",
+                projectId), cancellationToken);
+        }
+        catch (Exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            // 导出文件已生成，通知持久化异常不应使调用方失去可下载结果。
+        }
+    }
 
     private async Task<IReadOnlyList<ProjectManagementSyncConflict>> DetectConflictsAsync(SyncSnapshot snapshot, IReadOnlyList<string> projectIds, CancellationToken cancellationToken)
     {
