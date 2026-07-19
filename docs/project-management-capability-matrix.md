@@ -41,7 +41,7 @@ Project 是工作边界，Task 是唯一执行对象；Project、Membership、Mi
 | 备份恢复 | Backup service | 真实 SQLite 文件回归 | Partial | 保留策略、下载/删除、后台任务、多实例锁和演练 |
 | 报表、Excel/CSV/PDF、导入导出 | `report:export` permission only | 无完整 PM 报表链路 | Missing | 统一报表 DTO、异步导出、注入防护、导入预览/幂等 |
 | 审计与治理 | Audit service/page | 活动/操作分页和 CSV | Partial | 详情差异、脱敏、保留策略、真实 HTTP/浏览器证据 |
-| M5 安全/性能/迁移/E2E | 全仓库门禁 | 53 PM tests；全仓库有既有失败 | Missing | 真实身份链路、10k 任务、跨浏览器、迁移回滚和 UAT |
+| M5 安全/性能/迁移/E2E | 全仓库门禁 | 自动化证据按实际结果记录；真实身份浏览器 E2E/UAT 已登记为用户确认的允许例外 | Partial / Allowed Exception | 继续补充领域边界、契约、性能、迁移和权限证据；E2E/UAT 缺失不作为本阶段关闭阻塞，但不得宣称已通过 |
 | M6/M7 发布、运维、培训、UAT | 发布与文档 | 无 PM 专属发布/UAT 手册 | Missing | smoke、回滚、监控、演练、培训和验收记录 |
 
 ## 实施顺序
@@ -50,4 +50,4 @@ Project 是工作边界，Task 是唯一执行对象；Project、Membership、Mi
 2. 再完成统一任务工作区：六个投影、完整 QueryState、拖动/批量/保存视图。
 3. 再完成 M3 领域事件与 Outbox 边界，避免通知/活动/SignalR/IM/Webhook 分散侵入业务服务。
 4. 再完成 M4 数据中心和报表的流式、资源、容量、恢复语义。
-5. 最后执行 M5–M7 全量质量、发布和 UAT，并逐 Case 填证据、关闭子项，再关闭父项。
+5. 最后执行 M5–M7 可执行的质量、发布和运维证据，并逐 Case 填证据、关闭子项，再关闭父项；真实身份浏览器 E2E/UAT 按用户确认登记为允许例外，不以缺失证据冒充通过。

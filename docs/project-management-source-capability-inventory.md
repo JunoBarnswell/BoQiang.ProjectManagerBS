@@ -118,7 +118,7 @@ React route/page
 | 后端能力尚未发现前端消费者 | 全前端源码未找到 `task-dependencies`、`tasks/{taskId}/participants`、`time-logs`、`task-templates`、`project-management/search`、`project-management/reports` 的调用。相应 Controller、service、contracts 与后端测试均已存在。 | 以 `projectManagement.api.ts` 补齐受类型约束的客户端函数，再在任务工作台/独立页面按权限接入；同时为 UI 流补 Vitest/E2E。 |
 | 路由语义未落地 | `projects/:projectId/reports`、`settings` 已注册，但目前都渲染任务树，没有专用报表/项目设置 UI。 | `workspaceRoutes.full.tsx` 的条件页面选择；报表优先使用 `ProjectManagementReportsController`，设置需先明确允许修改的项目字段和权限。 |
 | 实体与迁移残留 | `ProjectManagementTaskCommentMentionEntity` 已声明并注册过滤，但无迁移表且无应用服务读写；当前功能使用评论 JSON 字段。 | 在演进前选择“创建明细表并迁移读写”或“删除实体/过滤注册”；两者都应增加 schema 回归测试。 |
-| 测试边界 | 现有项目管理后端测试以 service、schema、权限特性和数据过滤为主；前端只有 4 个状态/投影辅助测试。当前未在源码中定位项目管理真实 HTTP + 浏览器 E2E 测试。 | 复用 `AsterERP.Api.Tests` 的 xUnit 基础设施添加 API/授权回归；前端为未接入能力补 API mocking 之外的路由/UI smoke。 |
+| 测试边界 | 项目管理后端已有 service、schema、权限特性和数据过滤测试，前端已有项目管理页面与功能测试；当前未在源码中定位项目管理真实 HTTP + 浏览器 E2E/UAT 测试。该缺口已按用户明确确认登记为允许例外，不代表 E2E/UAT 已通过。 | 继续补充可执行的领域边界、契约、权限和性能回归；真实身份浏览器 E2E/UAT 不作为本阶段关闭阻塞，若后续纳入范围须单独补证据。 |
 
 ## 7. 测试能力和可复用证据
 
