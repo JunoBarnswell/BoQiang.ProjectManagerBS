@@ -42,6 +42,7 @@ export function createTaskWorkspaceState(viewKey: ProjectManagementTaskView): Ta
     pageSize: 50,
     sortBy: viewKey === 'gantt' || viewKey === 'calendar' ? 'dueDate' : 'tree',
     sortDirection: 'asc',
+    visibleColumns: [...taskWorkspaceVisibleColumns],
     viewKey,
   };
 }

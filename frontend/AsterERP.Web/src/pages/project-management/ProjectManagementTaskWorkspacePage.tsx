@@ -197,7 +197,7 @@ export function ProjectManagementTaskWorkspacePage() {
     previewFile: File | null;
   }>({ attachment: null, loading: false, previewFile: null });
   const attachmentPreviewAbortController = useRef<AbortController | null>(null);
-  const appliedDefaultViewProject = useRef<string>();
+  const appliedDefaultViewProject = useRef<string | undefined>(undefined);
   const taskFormBaseline = useRef('');
   const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
   const labelFilter = useMemo<ProjectManagementTaskLabelFilter>(() => ({ labelIds: state.labelIds, matchMode: state.labelMatchMode }), [state.labelIds, state.labelMatchMode]);
@@ -370,7 +370,7 @@ export function ProjectManagementTaskWorkspacePage() {
       const nextSearch = createTaskWorkspaceSearchParams(targetView, targetState).toString();
       const path = targetView === 'tree' ? 'tasks' : targetView;
       navigate({ pathname: toProjectManagementPlatformRoute(`projects/${projectId}/${path}`), search: nextSearch ? `?${nextSearch}` : '' }, { replace: source === 'default' });
-      if (unavailable.length > 0) message.warning(`保存视图中的${unavailable.join('、')}已失效，已安全降级。`);
+      if (unavailable.length > 0) message.info(`保存视图中的${unavailable.join('、')}已失效，已安全降级。`);
     } catch {
       message.error('保存视图内容无效，未应用。');
     }
