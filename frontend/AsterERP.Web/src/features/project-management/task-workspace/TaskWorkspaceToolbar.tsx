@@ -8,7 +8,9 @@ import { toProjectManagementPlatformRoute } from '../state/projectManagementPlat
 import type { TaskWorkspaceState } from '../state/taskWorkspaceState';
 
 interface TaskWorkspaceToolbarProps {
+  onExport: () => void;
   onOpenBatch: () => void;
+  onSelectAll: () => void;
   onCreateTask: () => void;
   onSaveView: (name: string) => void;
   onSelectSavedView: (view: ProjectManagementSavedView) => void;
@@ -32,7 +34,9 @@ const viewRoutes: Array<{ key: ProjectManagementTaskView; label: string; path: s
 ];
 
 export function TaskWorkspaceToolbar({
+  onExport,
   onOpenBatch,
+  onSelectAll,
   onCreateTask,
   onSaveView,
   onSelectSavedView,
@@ -114,7 +118,9 @@ export function TaskWorkspaceToolbar({
           包含已完成
         </label>
         <span className="text-sm text-gray-500">共 {total} 个任务</span>
+        <button type="button" onClick={onSelectAll}>选择当前页</button>
         <PermissionButton code="project-management:task:edit" disabled={selectedCount === 0} onClick={onOpenBatch}>批量更新{selectedCount ? ` (${selectedCount})` : ''}</PermissionButton>
+        <PermissionButton code="project-management:report:export" onClick={onExport}>导出当前筛选</PermissionButton>
         <PermissionButton code="project-management:task:add" onClick={onCreateTask}>新建任务</PermissionButton>
         <ProjectManagementReversibleCommandControls />
       </div>

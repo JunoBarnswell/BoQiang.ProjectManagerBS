@@ -492,6 +492,30 @@ export interface ProjectManagementTaskBatchUpdateRequest {
   updateSchedule?: boolean;
   labelIds?: string[];
   updateLabels?: boolean;
+  operation?: 'update' | 'delete';
+  deleteMode?: 'Cascade' | 'PromoteChildren';
+}
+
+export type ProjectManagementTaskBatchResultStatus = 'succeeded' | 'skipped' | 'failed' | 'conflict';
+
+export interface ProjectManagementTaskBatchItemResult {
+  taskId: string;
+  taskCode?: string | null;
+  status: ProjectManagementTaskBatchResultStatus;
+  message?: string | null;
+  errorCode?: number | null;
+  versionNo?: number | null;
+}
+
+export interface ProjectManagementTaskBatchExecutionResult {
+  operationId: string;
+  projectId: string;
+  requestedCount: number;
+  succeededCount: number;
+  skippedCount: number;
+  failedCount: number;
+  conflictCount: number;
+  items: ProjectManagementTaskBatchItemResult[];
 }
 
 export interface ProjectManagementLabel {

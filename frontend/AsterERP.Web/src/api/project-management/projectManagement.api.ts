@@ -19,6 +19,7 @@ import type {
   ProjectManagementTaskDependency,
     ProjectManagementTaskListItem,
   ProjectManagementTaskBatchUpdateRequest,
+  ProjectManagementTaskBatchExecutionResult,
   ProjectManagementTaskQuery,
   ProjectManagementAuditPage,
   ProjectManagementAuditQuery,
@@ -466,6 +467,15 @@ export function updateProjectManagementTasksBatch(
 ): Promise<ApiEnvelope<ProjectManagementTask[]>> {
   return httpClient.post<ProjectManagementTask[], ProjectManagementTaskBatchUpdateRequest>(
     '/project-management/tasks/batch/update',
+    request,
+  );
+}
+
+export function executeProjectManagementTasksBatch(
+  request: ProjectManagementTaskBatchUpdateRequest,
+): Promise<ApiEnvelope<ProjectManagementTaskBatchExecutionResult>> {
+  return httpClient.post<ProjectManagementTaskBatchExecutionResult, ProjectManagementTaskBatchUpdateRequest>(
+    '/project-management/tasks/batch/execute',
     request,
   );
 }

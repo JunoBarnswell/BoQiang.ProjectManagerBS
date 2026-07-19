@@ -8,8 +8,14 @@ namespace AsterERP.Api.Controllers;
 
 [Route("api/project-management/tasks/batch")]
 [Permission(PermissionCodes.ProjectManagementTaskEdit)]
-public sealed class ProjectManagementTaskBatchController(IProjectManagementTaskBatchService service) : BaseApiController
+public sealed class ProjectManagementTaskBatchController(
+    IProjectManagementTaskBatchService service,
+    IProjectManagementTaskBatchExecutionService executionService) : BaseApiController
 {
     [HttpPost("update")]
     public async Task<IActionResult> UpdateAsync([FromBody] ProjectManagementTaskBatchUpdateRequest request, CancellationToken cancellationToken) => ApiOk(await service.UpdateAsync(request, cancellationToken));
+
+    [HttpPost("execute")]
+    public async Task<IActionResult> ExecuteAsync([FromBody] ProjectManagementTaskBatchUpdateRequest request, CancellationToken cancellationToken) =>
+        ApiOk(await executionService.ExecuteAsync(request, cancellationToken));
 }

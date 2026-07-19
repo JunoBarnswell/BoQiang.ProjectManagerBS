@@ -62,6 +62,7 @@ public sealed class AsterErpProjectManagementModule : AbpModule
         context.Services.AddScoped<IProjectManagementSavedViewService, ProjectManagementSavedViewService>();
         context.Services.AddScoped<IProjectManagementSearchService, ProjectManagementSearchService>();
         context.Services.AddScoped<IProjectManagementTaskBatchService, ProjectManagementTaskBatchService>();
+        context.Services.AddScoped<IProjectManagementTaskBatchExecutionService, ProjectManagementTaskBatchExecutionService>();
         context.Services.AddScoped<ProjectManagementTaskLabelMutation>();
         context.Services.AddScoped<ProjectManagementTaskHierarchy>();
         context.Services.AddScoped<IProjectManagementTaskProgressProjector, ProjectManagementTaskProgressProjector>();

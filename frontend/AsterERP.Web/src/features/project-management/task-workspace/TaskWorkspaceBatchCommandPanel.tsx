@@ -28,6 +28,7 @@ interface TaskWorkspaceBatchCommandPanelProps {
 interface BatchFormState {
   assigneeUserId: string;
   dueDate: string;
+  deleteMode: 'Cascade' | 'PromoteChildren';
   labelIds: string[];
   milestoneId: string;
   priority: string;
@@ -36,11 +37,13 @@ interface BatchFormState {
   updateLabels: boolean;
   updateMilestone: boolean;
   updateSchedule: boolean;
+  operation: 'update' | 'delete';
 }
 
 const initialForm: BatchFormState = {
   assigneeUserId: '',
   dueDate: '',
+  deleteMode: 'Cascade',
   labelIds: [],
   milestoneId: '',
   priority: '',
@@ -49,6 +52,7 @@ const initialForm: BatchFormState = {
   updateLabels: false,
   updateMilestone: false,
   updateSchedule: false,
+  operation: 'update',
 };
 
 export function TaskWorkspaceBatchCommandPanel({
@@ -67,7 +71,7 @@ export function TaskWorkspaceBatchCommandPanel({
 }: TaskWorkspaceBatchCommandPanelProps) {
   const [form, setForm] = useState<BatchFormState>(initialForm);
   const hasChanges = useMemo(() => Boolean(
-    form.status || form.priority || form.assigneeUserId || form.updateMilestone || form.updateSchedule || form.updateLabels,
+    form.operation === 'delete' || form.status || form.priority || form.assigneeUserId || form.updateMilestone || form.updateSchedule || form.updateLabels,
   ), [form]);
 
   const close = () => {
@@ -80,6 +84,8 @@ export function TaskWorkspaceBatchCommandPanel({
     onSubmit({
       projectId,
       items: tasks.map((task) => ({ taskId: task.id, versionNo: task.versionNo })),
+      operation: form.operation,
+      deleteMode: form.deleteMode,
       status: form.status || undefined,
       priority: form.priority || undefined,
       assigneeUserId: form.assigneeUserId === '__clear__' ? '' : form.assigneeUserId || undefined,
@@ -101,19 +107,24 @@ export function TaskWorkspaceBatchCommandPanel({
 
   return (
     <ResponsiveModal
-      description={`将对 ${tasks.length} 个任务执行同一原子命令；任一版本、权限、WIP、依赖或数据校验失败时不会产生部分更新。`}
+      description={`将对 ${tasks.length} 个任务逐项执行；每项都会重新校验权限、版本、WIP、依赖和数据规则，部分失败会保留并展示明细。`}
       footer={<><button type="button" disabled={pending} onClick={close}>取消</button><PermissionButton code="project-management:task:edit" disabled={!hasChanges || pending || tasks.length === 0} onClick={submit}>{pending ? '批量更新中…' : `更新 ${tasks.length} 个任务`}</PermissionButton></>}
       onClose={close}
       open={open}
       title="批量更新任务"
     >
       <div className="grid gap-4 sm:grid-cols-2">
+        <label className="grid gap-1 text-sm">操作<select value={form.operation} onChange={(event) => setForm((current) => ({ ...current, operation: event.target.value as BatchFormState['operation'] }))}><option value="update">批量编辑</option><option value="delete">软删除</option></select></label>
+        {form.operation === 'delete' ? <label className="grid gap-1 text-sm">删除策略<select value={form.deleteMode} onChange={(event) => setForm((current) => ({ ...current, deleteMode: event.target.value as BatchFormState['deleteMode'] }))}><option value="Cascade">删除任务树</option><option value="PromoteChildren">删除并提升子任务</option></select></label> : null}
+        {form.operation === 'delete' ? <p className="text-sm text-amber-700 sm:col-span-2">软删除会逐项校验权限和版本；部分失败不会隐藏，完成后可下载明细。</p> : null}
+        {form.operation === 'delete' ? null : <>
         <label className="grid gap-1 text-sm">状态<select value={form.status} onChange={(event) => setForm((current) => ({ ...current, status: event.target.value }))}><option value="">不变</option>{['Todo', 'InProgress', 'Blocked', 'Done', 'Cancelled'].map((status) => <option key={status} value={status}>{status}</option>)}</select></label>
         <label className="grid gap-1 text-sm">优先级<select value={form.priority} onChange={(event) => setForm((current) => ({ ...current, priority: event.target.value }))}><option value="">不变</option>{['Low', 'Medium', 'High', 'Urgent'].map((priority) => <option key={priority} value={priority}>{priority}</option>)}</select></label>
         <label className="grid gap-1 text-sm">负责人<select value={form.assigneeUserId} onChange={(event) => setForm((current) => ({ ...current, assigneeUserId: event.target.value }))}><option value="">不变</option><option value="__clear__">清空负责人</option>{candidates.map((candidate) => <option key={`${candidate.userId}-${candidate.employmentId}`} value={candidate.userId}>{candidate.displayName} · {candidate.employmentName}</option>)}</select>{candidatesError ? <span className="text-xs text-amber-700">候选人员加载失败，暂不能从列表选择负责人。</span> : null}</label>
         <label className="grid gap-1 text-sm"><span><input checked={form.updateMilestone} type="checkbox" onChange={(event) => setForm((current) => ({ ...current, updateMilestone: event.target.checked }))} /> 更新里程碑</span><select disabled={!form.updateMilestone} value={form.milestoneId} onChange={(event) => setForm((current) => ({ ...current, milestoneId: event.target.value }))}><option value="">请选择里程碑</option><option value="__clear__">清空里程碑</option>{milestones.map((milestone) => <option key={milestone.id} value={milestone.id}>{milestone.milestoneName}</option>)}</select>{milestonesError ? <span className="text-xs text-amber-700">里程碑加载失败，暂不能更新此字段。</span> : null}</label>
         <label className="grid gap-1 text-sm sm:col-span-2"><span><input checked={form.updateSchedule} type="checkbox" onChange={(event) => setForm((current) => ({ ...current, updateSchedule: event.target.checked }))} /> 更新计划日期</span><span className="grid gap-2 sm:grid-cols-2"><input aria-label="批量开始日期" disabled={!form.updateSchedule} type="date" value={form.startDate} onChange={(event) => setForm((current) => ({ ...current, startDate: event.target.value }))} /><input aria-label="批量截止日期" disabled={!form.updateSchedule} type="date" value={form.dueDate} onChange={(event) => setForm((current) => ({ ...current, dueDate: event.target.value }))} /></span></label>
         <fieldset className="grid gap-2 text-sm sm:col-span-2"><label><input checked={form.updateLabels} type="checkbox" onChange={(event) => setForm((current) => ({ ...current, updateLabels: event.target.checked }))} /> 替换标签</label>{labelsError ? <span className="text-xs text-amber-700">标签加载失败，暂不能更新标签。</span> : <div className="flex flex-wrap gap-2">{labels.map((label) => <label className="rounded border border-gray-200 px-2 py-1" key={label.id}><input checked={form.labelIds.includes(label.id)} disabled={!form.updateLabels} type="checkbox" onChange={(event) => toggleLabel(label.id, event.target.checked)} /> <span style={{ color: label.color }}>{label.labelName}</span></label>)}</div>}</fieldset>
+        </>}
       </div>
     </ResponsiveModal>
   );

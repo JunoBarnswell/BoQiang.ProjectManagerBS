@@ -9,6 +9,7 @@ import {
   createProjectManagementTask,
   createProjectManagementTaskComment,
   downloadProjectManagementTaskAttachment,
+  executeProjectManagementTasksBatch,
   deleteProjectManagementTask,
   deleteProjectManagementTaskComment,
   createProjectManagementTaskReminders,
@@ -26,11 +27,11 @@ import {
   getProjectManagementTaskDependencies,
   getProjectManagementTaskReminders,
   getProjectManagementTasks,
+  exportProjectManagementTasksCsv,
   previewProjectManagementTaskAttachment,
   moveProjectManagementTask,
   updateProjectManagementTask,
   updateProjectManagementTaskComment,
-  updateProjectManagementTasksBatch,
   updateProjectManagementSavedView,
 } from '../../api/project-management/projectManagement.api';
 import type {
@@ -39,6 +40,7 @@ import type {
   ProjectManagementTaskCommentUpsertRequest,
   ProjectManagementActivityQuery,
   ProjectManagementTaskBatchUpdateRequest,
+  ProjectManagementTaskBatchExecutionResult,
   ProjectManagementTaskDetail,
   ProjectManagementTaskLabelFilter,
   ProjectManagementTaskListItem,
@@ -60,6 +62,8 @@ import { taskWorkspaceStateToQuery, taskWorkspaceStateToSavedView } from '../../
 import { SavedViewManager } from '../../features/project-management/task-workspace/SavedViewManager';
 import { createTaskMoveRequest } from '../../features/project-management/task-workspace/taskMoveIntent';
 import { TaskWorkspaceBatchCommandPanel } from '../../features/project-management/task-workspace/TaskWorkspaceBatchCommandPanel';
+import { TaskWorkspaceBatchResultPanel } from '../../features/project-management/task-workspace/TaskWorkspaceBatchResultPanel';
+import { taskBatchResultToCsv } from '../../features/project-management/task-workspace/taskBatchExecutionModel';
 import { TaskWorkspaceImConversationPanel } from '../../features/project-management/task-workspace/TaskWorkspaceImConversationPanel';
 import { TaskWorkspaceLabelManager } from '../../features/project-management/task-workspace/TaskWorkspaceLabelManager';
 import { TaskWorkspaceProjection } from '../../features/project-management/task-workspace/TaskWorkspaceProjection';
@@ -144,6 +148,7 @@ export function ProjectManagementTaskWorkspacePage() {
   const [detailSection, setDetailSection] = useState<TaskDetailSection>('basic');
   const [taskConflict, setTaskConflict] = useState<ReturnType<typeof readProjectManagementTaskConflict>>(null);
   const [batchOpen, setBatchOpen] = useState(false);
+  const [batchResult, setBatchResult] = useState<ProjectManagementTaskBatchExecutionResult | null>(null);
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(() => new Set());
   const [openingConversationScope, setOpeningConversationScope] = useState<'project' | 'task' | null>(null);
   const [form, setForm] = useState<ProjectManagementTaskUpsertRequest>(emptyForm);
@@ -483,14 +488,22 @@ export function ProjectManagementTaskWorkspacePage() {
     },
   });
   const batchMutation = useApiMutation({
-    mutationFn: (request: ProjectManagementTaskBatchUpdateRequest) => updateProjectManagementTasksBatch(request),
+    mutationFn: (request: ProjectManagementTaskBatchUpdateRequest) => executeProjectManagementTasksBatch(request),
     onError: (error) => message.error(getErrorMessage(error, '批量任务更新失败')),
     onSuccess: async (result) => {
-      message.success(`已更新 ${result.data?.length ?? selectedTasks.length} 个任务`);
+      if (result.data) {
+        setBatchResult(result.data);
+        message.success(`批量操作完成：成功 ${result.data.succeededCount} 项，失败 ${result.data.failedCount + result.data.conflictCount} 项`);
+      }
       setBatchOpen(false);
       setSelectedTaskIds(new Set());
       await invalidateProjectTaskViews();
     },
+  });
+  const exportMutation = useApiMutation({
+    mutationFn: () => exportProjectManagementTasksCsv(query),
+    onError: (error) => message.error(getErrorMessage(error, '任务导出失败')),
+    onSuccess: (result) => saveBlob(result.blob, result.fileName || 'project-management-tasks.csv'),
   });
   const moveMutation = useApiMutation({
     mutationFn: ({ taskId, request }: { taskId: string; request: ReturnType<typeof createTaskMoveRequest> }) => {
@@ -567,7 +580,15 @@ export function ProjectManagementTaskWorkspacePage() {
       title={`项目任务 · ${activeView.label}`}
       toolbar={
         <TaskWorkspaceToolbar
+          onExport={() => exportMutation.mutate()}
           onOpenBatch={() => setBatchOpen(true)}
+          onSelectAll={() => setSelectedTaskIds((current) => {
+            const pageIds = rows.map((task) => task.id);
+            const allSelected = pageIds.length > 0 && pageIds.every((taskId) => current.has(taskId));
+            const next = new Set(current);
+            pageIds.forEach((taskId) => allSelected ? next.delete(taskId) : next.add(taskId));
+            return next;
+          })}
           onCreateTask={() => {
             setCreating(true);
             setForm(emptyForm);
@@ -742,6 +763,11 @@ export function ProjectManagementTaskWorkspacePage() {
         projectId={projectId}
         tasks={selectedTasks}
       />
+      {batchResult ? <TaskWorkspaceBatchResultPanel
+        onClose={() => setBatchResult(null)}
+        onDownload={() => saveBlob(new Blob([taskBatchResultToCsv(batchResult)], { type: 'text/csv;charset=utf-8' }), `task-batch-${batchResult.operationId}.csv`)}
+        result={batchResult}
+      /> : null}
       <section className="pm-projection" aria-labelledby="task-projection-title">
         <div className="pm-projection-heading"><div><h2 id="task-projection-title">{activeView.label}</h2><p>当前渲染的是服务端返回的任务数据；选择、批量更新和可用的移动命令均继续使用原有请求链路。</p></div><span className="pm-view-note">{rows.length} 条已加载</span></div>
         <TaskWorkspaceProjection
