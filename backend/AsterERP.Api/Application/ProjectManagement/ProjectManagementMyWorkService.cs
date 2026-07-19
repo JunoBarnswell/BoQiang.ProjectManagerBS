@@ -15,6 +15,41 @@ public sealed class ProjectManagementMyWorkService(
     ICurrentUser currentUser,
     ProjectManagementAccessPolicy? accessPolicy = null) : IProjectManagementMyWorkService, ITransientDependency
 {
+    public async Task<GridPageResult<ProjectManagementMyWorkProjectOption>> QueryProjectOptionsAsync(
+        ProjectManagementMyWorkProjectOptionQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ProjectManagementPlatformScope.RequireSystemWorkspace(currentUser);
+        var tenantId = RequireTenantId();
+        var appCode = RequireAppCode();
+        var userId = RequireUserId();
+        var keyword = string.IsNullOrWhiteSpace(query.Keyword) ? null : query.Keyword.Trim();
+        var projects = databaseAccessor.GetCurrentDb().Queryable<ProjectManagementProjectEntity>()
+            .Where(project => project.TenantId == tenantId && project.AppCode == appCode && !project.IsDeleted);
+
+        if (!currentUser.IsAsterErpPlatformAdmin() && !currentUser.HasAsterErpPermission("*"))
+        {
+            projects = projects.Where(project => project.OwnerUserId == userId || SqlFunc.Subqueryable<ProjectManagementProjectMemberEntity>()
+                .Where(member => member.ProjectId == project.Id && member.TenantId == tenantId && member.AppCode == appCode && member.UserId == userId && member.IsActive && !member.IsDeleted)
+                .Any());
+        }
+        if (keyword is not null)
+        {
+            projects = projects.Where(project => project.ProjectCode.Contains(keyword) || project.ProjectName.Contains(keyword));
+        }
+
+        var total = new RefAsync<int>();
+        var items = await projects
+            .OrderBy(project => project.ProjectName, OrderByType.Asc)
+            .OrderBy(project => project.ProjectCode, OrderByType.Asc)
+            .ToPageListAsync(Math.Max(query.PageIndex, 1), Math.Clamp(query.PageSize, 1, 100), total, cancellationToken);
+        return new GridPageResult<ProjectManagementMyWorkProjectOption>
+        {
+            Total = total.Value,
+            Items = items.Select(project => new ProjectManagementMyWorkProjectOption(project.Id, project.ProjectCode, project.ProjectName)).ToList(),
+        };
+    }
+
     public async Task<GridPageResult<ProjectManagementMyWorkItem>> QueryAsync(ProjectManagementMyWorkQuery query, CancellationToken cancellationToken = default)
     {
         ProjectManagementPlatformScope.RequireSystemWorkspace(currentUser);

@@ -118,12 +118,13 @@ export const useTabStore = create<TabStoreState>((set, get) => ({
       const targetTabs = normalizedTabs.length > 0
         ? normalizedTabs
         : normalizeOpenTabs(nextGroups[workspaceKey] ?? []);
-      return {
-        activeWorkspaceKey: workspaceKey,
-        openTabs: targetTabs.length > 0 ? targetTabs : [defaultTab],
-        pageCache: {},
-        workspaceTabGroups: nextGroups
-      };
+        return {
+          activeWorkspaceKey: workspaceKey,
+          openTabs: targetTabs.length > 0 ? targetTabs : [defaultTab],
+          pageCache: {},
+          workspaceActivationVersion: state.workspaceActivationVersion + 1,
+          workspaceTabGroups: nextGroups
+        };
     });
   },
   clearPageCache: (cacheKey) => {
@@ -140,11 +141,44 @@ export const useTabStore = create<TabStoreState>((set, get) => ({
   },
   closeTab: (path) => {
     const filteredTabs = normalizeOpenTabs(get().openTabs.filter((item) => item.path !== path));
-    const fallbackTabs = filteredTabs.length > 0 ? filteredTabs : [defaultTab];
     set((state) => ({
-      openTabs: fallbackTabs,
+      openTabs: filteredTabs,
       pageCache: clearTabCacheEntries(state.pageCache, path)
     }));
+  },
+  ensureRouteTab: (tab) => {
+    const normalizedTab = normalizeOpenTabs([{ ...tab, refreshToken: 0 }])[0];
+    if (!normalizedTab) return;
+
+    const existing = get().openTabs;
+    const existingIndex = existing.findIndex((item) => item.path === normalizedTab.path);
+    if (existingIndex < 0) {
+      set({ openTabs: [...existing, normalizedTab] });
+      return;
+    }
+
+    const currentTab = existing[existingIndex];
+    if (!currentTab) return;
+    const nextTab = { ...normalizedTab, refreshToken: currentTab.refreshToken ?? 0 };
+    if (
+      currentTab.cacheKey === nextTab.cacheKey &&
+      currentTab.closable === nextTab.closable &&
+      currentTab.id === nextTab.id &&
+      currentTab.isDefault === nextTab.isDefault &&
+      currentTab.label === nextTab.label &&
+      currentTab.parentPath === nextTab.parentPath &&
+      currentTab.title === nextTab.title
+    ) return;
+
+    const nextTabs = [...existing];
+    nextTabs[existingIndex] = nextTab;
+    set({ openTabs: nextTabs });
+  },
+  getCloseFallback: (path, homePath) => {
+    const tabs = get().openTabs;
+    const index = tabs.findIndex((tab) => tab.path === path);
+    if (index < 0) return homePath;
+    return tabs[index - 1]?.path ?? tabs[index + 1]?.path ?? homePath;
   },
   getPageCache: (cacheKey) => {
     return get().pageCache[cacheKey] as never;
@@ -195,5 +229,6 @@ export const useTabStore = create<TabStoreState>((set, get) => ({
   },
   workspaceTabGroups: {
     [defaultWorkspaceKey]: [defaultTab]
-  }
+  },
+  workspaceActivationVersion: 0
 }));

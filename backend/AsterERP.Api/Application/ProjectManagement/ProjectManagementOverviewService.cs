@@ -13,7 +13,8 @@ namespace AsterERP.Api.Application.ProjectManagement;
 public sealed class ProjectManagementOverviewService(
     IWorkspaceDatabaseAccessor databaseAccessor,
     ICurrentUser currentUser,
-    ProjectManagementAccessPolicy accessPolicy) : IProjectManagementOverviewService, ITransientDependency
+    ProjectManagementAccessPolicy accessPolicy,
+    IProjectManagementDisplayProjectionService? displayProjection = null) : IProjectManagementOverviewService, ITransientDependency
 {
     public async Task<GridPageResult<ProjectManagementOverviewItem>> QueryAsync(ProjectManagementOverviewQuery query, CancellationToken cancellationToken = default)
     {
@@ -49,6 +50,7 @@ public sealed class ProjectManagementOverviewService(
         var milestones = await db.Queryable<ProjectManagementMilestoneEntity>().Where(milestone => ids.Contains(milestone.ProjectId) && milestone.TenantId == tenantId && milestone.AppCode == appCode && !milestone.IsDeleted)
             .OrderBy(milestone => milestone.DueDate, OrderByType.Asc).ToListAsync(cancellationToken);
         var members = await db.Queryable<ProjectManagementProjectMemberEntity>().Where(member => ids.Contains(member.ProjectId) && member.TenantId == tenantId && member.AppCode == appCode && member.IsActive && !member.IsDeleted).ToListAsync(cancellationToken);
+        var displays = await DisplayProjection.ResolveAsync([], [], page.Select(project => project.OwnerUserId), cancellationToken);
         var now = DateTime.UtcNow;
         return new GridPageResult<ProjectManagementOverviewItem>
         {
@@ -67,7 +69,7 @@ public sealed class ProjectManagementOverviewService(
                     .Select(group => new ProjectManagementOverviewPersonSummary(group.Key, group.Count(), group.Count(ProjectManagementTaskProgressCalculator.IsCompleted), group.Count(task => overdueIds.Contains(task.Id))))
                     .OrderByDescending(item => item.TaskCount).Take(10).ToList();
                 return new ProjectManagementOverviewItem(
-                    new ProjectManagementProjectResponse(project.Id, project.TenantId, project.AppCode, project.ProjectCode, project.ProjectName, project.Description, project.Status, project.Priority, project.OwnerUserId, project.StartDate, project.DueDate, project.CompletedAt, project.WipLimit, project.ProgressPercent, project.VersionNo, project.CreatedTime, project.UpdatedTime),
+                    new ProjectManagementProjectResponse(project.Id, project.TenantId, project.AppCode, project.ProjectCode, project.ProjectName, project.Description, project.Status, project.Priority, project.OwnerUserId, project.StartDate, project.DueDate, project.CompletedAt, project.WipLimit, project.ProgressPercent, project.VersionNo, project.CreatedTime, project.UpdatedTime, displays.User(project.OwnerUserId)),
                     leaves.Count, leaves.Count(ProjectManagementTaskProgressCalculator.IsCompleted), inProgressCount, overdue.Count, blockedCount, snapshot.ProjectProgressPercent,
                     milestones.Count(item => item.ProjectId == project.Id), members.Count(item => item.ProjectId == project.Id),
                     milestones.Where(item => item.ProjectId == project.Id).Take(10).Select(item => new ProjectManagementOverviewMilestoneSummary(item.Id, item.MilestoneName, item.Status, item.HealthStatus, item.ProgressPercent, item.DueDate)).ToList(), people,
@@ -75,6 +77,8 @@ public sealed class ProjectManagementOverviewService(
             }).ToList()
         };
     }
+
+    private IProjectManagementDisplayProjectionService DisplayProjection => displayProjection ?? new ProjectManagementDisplayProjectionService(databaseAccessor);
 
     private string RequireTenantId() => currentUser.GetAsterErpTenantId()?.Trim() ?? throw new ValidationException("当前会话缺少租户", ErrorCodes.PermissionDenied);
     private string RequireAppCode() => currentUser.GetAsterErpAppCode()?.Trim().ToUpperInvariant() ?? throw new ValidationException("当前会话缺少应用", ErrorCodes.PermissionDenied);

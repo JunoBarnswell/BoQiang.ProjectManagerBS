@@ -19,14 +19,15 @@ public sealed class ProjectManagementAuditService(
     ProjectManagementAccessPolicy accessPolicy,
     IProjectManagementOperationWriter? operationWriter = null,
     IBackgroundJobManager? backgroundJobManager = null,
-    IHostEnvironment? environment = null) : IProjectManagementAuditService
+    IHostEnvironment? environment = null,
+    IProjectManagementDisplayProjectionService? displayProjection = null) : IProjectManagementAuditService
 {
     private const int MaximumTimeRangeDays = 92;
     private const int MaximumExportRows = 100_000;
-    private static readonly string[] DefaultExportFields = ["Id", "ProjectId", "AggregateType", "AggregateId", "ActivityType", "Summary", "TraceId", "ActorUserId", "CreatedTime"];
+    private static readonly string[] DefaultExportFields = ["Project", "Object", "ActivityType", "Summary", "TraceId", "Actor", "CreatedTime"];
     private static readonly HashSet<string> ExportFields = new(StringComparer.OrdinalIgnoreCase)
     {
-        "Id", "ProjectId", "AggregateType", "AggregateId", "ActivityType", "Summary", "TraceId", "ActorUserId", "CreatedTime", "Source", "FieldChanges"
+        "Project", "Object", "ActivityType", "Summary", "TraceId", "Actor", "CreatedTime", "Source", "FieldChanges"
     };
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private static readonly IReadOnlyDictionary<string, Func<ISugarQueryable<ProjectManagementActivityEntity>, OrderByType, ISugarQueryable<ProjectManagementActivityEntity>>> Sorters =
@@ -84,7 +85,8 @@ public sealed class ProjectManagementAuditService(
             .OrderBy(item => item.CreatedTime, OrderByType.Asc)
             .ToListAsync(cancellationToken);
         var device = journals.Where(item => !string.IsNullOrWhiteSpace(item.DeviceId)).OrderByDescending(item => item.CreatedTime).FirstOrDefault()?.DeviceId;
-        var audit = Map(entity, device);
+        var display = await DisplayProjection.ResolveAsync([entity.ProjectId], [new ProjectManagementDisplayReference(entity.AggregateType, entity.AggregateId)], [entity.ActorUserId], cancellationToken);
+        var audit = Map(entity, device, display);
 
         return new ProjectManagementAuditDetail(
             audit,
@@ -206,10 +208,11 @@ public sealed class ProjectManagementAuditService(
         var total = new RefAsync<int>();
         var rows = await operationQuery.OrderBy(item => item.StartedTime, OrderByType.Desc)
             .ToPageListAsync(Math.Max(1, query.PageIndex), Math.Clamp(query.PageSize, 1, 200), total, cancellationToken);
+        var display = await DisplayProjection.ResolveAsync([], [], rows.Select(item => item.ActorUserId), cancellationToken);
         return new GridPageResult<ProjectManagementOperationItem>
         {
             Total = total.Value,
-            Items = rows.Select(item => new ProjectManagementOperationItem(item.Id, item.OperationType, item.Status, item.Phase, item.ProgressPercent, item.IsCancellationRequested, item.ImpactJson, item.ErrorMessage, item.TraceId, item.ActorUserId, item.StartedTime, item.CompletedTime)).ToList()
+            Items = rows.Select(item => new ProjectManagementOperationItem(item.Id, item.OperationType, item.Status, item.Phase, item.ProgressPercent, item.IsCancellationRequested, item.ImpactJson, item.ErrorMessage, item.TraceId, item.ActorUserId, item.StartedTime, item.CompletedTime, display.User(item.ActorUserId))).ToList()
         };
     }
 
@@ -219,21 +222,22 @@ public sealed class ProjectManagementAuditService(
         RequireTenant();
         RequireApp();
         var (from, to) = NormalizeTimeRange(query.From, query.To);
-        var projectId = NormalizeOptional(query.ProjectId, 128, "项目标识");
-        if (projectId is not null) await accessPolicy.EnsureCanViewProjectAsync(projectId, cancellationToken);
+        var projectName = NormalizeOptional(query.ProjectId, 128, "项目名称");
+        var projectIds = projectName is null ? null : await DisplayProjection.FindProjectIdsAsync(projectName, cancellationToken);
 
         // ProjectManagementDataPermissionFilterRegistrar 已为 ProjectManagementActivityEntity 注册 ORM 查询过滤器：
         // 这里必须从项目管理平台库查询，使成员授权变化立即在数据库端收敛，而不是在内存中再筛选。
         var activityQuery = databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementActivityEntity>()
             .Where(item => !item.IsDeleted);
-        if (projectId is not null) activityQuery = activityQuery.Where(item => item.ProjectId == projectId);
+        if (projectIds is not null) activityQuery = projectIds.Count == 0 ? activityQuery.Where(_ => false) : activityQuery.Where(item => projectIds.Contains(item.ProjectId));
 
         var aggregateType = NormalizeOptional(query.AggregateType, 128, "实体类型");
         if (aggregateType is not null) activityQuery = activityQuery.Where(item => item.AggregateType == aggregateType);
         var activityType = NormalizeOptional(query.ActivityType, 128, "操作类型");
         if (activityType is not null) activityQuery = activityQuery.Where(item => item.ActivityType == activityType);
-        var actorUserId = NormalizeOptional(query.ActorUserId, 128, "操作者");
-        if (actorUserId is not null) activityQuery = activityQuery.Where(item => item.ActorUserId == actorUserId);
+        var actorName = NormalizeOptional(query.ActorUserId, 128, "操作者名称");
+        var actorUserIds = actorName is null ? null : await DisplayProjection.FindUserIdsAsync(actorName, cancellationToken);
+        if (actorUserIds is not null) activityQuery = actorUserIds.Count == 0 ? activityQuery.Where(_ => false) : activityQuery.Where(item => actorUserIds.Contains(item.ActorUserId));
         var actorRole = NormalizeOptional(query.ActorRole, 64, "项目角色");
         if (actorRole is not null)
         {
@@ -287,7 +291,12 @@ public sealed class ProjectManagementAuditService(
             .Where(item => item.ProjectId is not null && !string.IsNullOrWhiteSpace(item.DeviceId))
             .GroupBy(item => ProjectTraceKey(item.ProjectId!, item.TraceId), StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.OrderByDescending(item => item.CreatedTime).First().DeviceId, StringComparer.Ordinal);
-        return entities.Select(item => Map(item, deviceByProjectTrace.GetValueOrDefault(ProjectTraceKey(item.ProjectId, item.TraceId)))).ToList();
+        var display = await DisplayProjection.ResolveAsync(
+            entities.Select(item => item.ProjectId),
+            entities.Select(item => new ProjectManagementDisplayReference(item.AggregateType, item.AggregateId)),
+            entities.Select(item => item.ActorUserId),
+            cancellationToken);
+        return entities.Select(item => Map(item, deviceByProjectTrace.GetValueOrDefault(ProjectTraceKey(item.ProjectId, item.TraceId)), display)).ToList();
     }
 
     private static ISugarQueryable<ProjectManagementActivityEntity> ApplySorting(
@@ -325,7 +334,8 @@ public sealed class ProjectManagementAuditService(
     private string RequireTenant() => currentUser.GetAsterErpTenantId()?.Trim() ?? throw new ValidationException("当前会话缺少租户", ErrorCodes.PermissionDenied);
     private string RequireApp() => currentUser.GetAsterErpAppCode()?.Trim() ?? throw new ValidationException("当前会话缺少应用", ErrorCodes.PermissionDenied);
     private string RequireUser() => currentUser.GetAsterErpUserId()?.Trim() ?? throw new ValidationException("当前会话缺少用户", ErrorCodes.PermissionDenied);
-    private static ProjectManagementAuditItem Map(ProjectManagementActivityEntity entity, string? sourceDeviceId)
+    private IProjectManagementDisplayProjectionService DisplayProjection => displayProjection ?? new ProjectManagementDisplayProjectionService(databaseAccessor);
+    private static ProjectManagementAuditItem Map(ProjectManagementActivityEntity entity, string? sourceDeviceId, ProjectManagementDisplayProjection? display = null)
     {
         var source = "Business";
         if (!string.IsNullOrWhiteSpace(entity.Remark))
@@ -333,7 +343,24 @@ public sealed class ProjectManagementAuditService(
             try { source = JsonSerializer.Deserialize<ProjectManagementActivityPayload>(entity.Remark, JsonOptions)?.Source ?? source; }
             catch (JsonException) { }
         }
-        return new ProjectManagementAuditItem(entity.Id, entity.ProjectId, entity.AggregateType, entity.AggregateId, entity.ActivityType, entity.Summary, entity.TraceId, entity.ActorUserId, entity.CreatedTime, source, sourceDeviceId, !IsFailedActivity(entity));
+        var projectDisplayName = display?.Project(entity.ProjectId);
+        var aggregateDisplayName = display?.Aggregate(entity.AggregateType, entity.AggregateId);
+        var actorDisplayName = display?.User(entity.ActorUserId);
+        return new ProjectManagementAuditItem(entity.Id, entity.ProjectId, entity.AggregateType, entity.AggregateId, entity.ActivityType, ProjectSummary(entity.Summary, entity, projectDisplayName, aggregateDisplayName, actorDisplayName), entity.TraceId, entity.ActorUserId, entity.CreatedTime, source, sourceDeviceId, !IsFailedActivity(entity), projectDisplayName, aggregateDisplayName, actorDisplayName);
+    }
+
+    private static string? ProjectSummary(
+        string? summary,
+        ProjectManagementActivityEntity entity,
+        string? projectDisplayName,
+        string? aggregateDisplayName,
+        string? actorDisplayName)
+    {
+        if (string.IsNullOrWhiteSpace(summary)) return summary;
+        return summary
+            .Replace(entity.ProjectId, projectDisplayName ?? "项目已删除或无权查看", StringComparison.Ordinal)
+            .Replace(entity.AggregateId, aggregateDisplayName ?? "对象已删除或无权查看", StringComparison.Ordinal)
+            .Replace(entity.ActorUserId, actorDisplayName ?? "用户已删除或无权查看", StringComparison.Ordinal);
     }
 
     private static ProjectManagementActivityPayload? DeserializePayload(string? value)
@@ -461,6 +488,7 @@ public sealed class ProjectManagementAuditService(
     {
         var activityQuery = await BuildQueryAsync(query, cancellationToken);
         var rows = await ApplySorting(activityQuery, query.Sorts).Take(MaximumExportRows).ToListAsync(cancellationToken);
+        var display = await DisplayProjection.ResolveAsync(rows.Select(item => item.ProjectId), rows.Select(item => new ProjectManagementDisplayReference(item.AggregateType, item.AggregateId)), rows.Select(item => item.ActorUserId), cancellationToken);
         var builder = new StringBuilder();
         AppendCsvRow(builder, fields);
         for (var index = 0; index < rows.Count; index++)
@@ -470,14 +498,12 @@ public sealed class ProjectManagementAuditService(
             var payload = DeserializePayload(row.Remark);
             var values = fields.Select(field => field switch
             {
-                "Id" => row.Id,
-                "ProjectId" => row.ProjectId,
-                "AggregateType" => row.AggregateType,
-                "AggregateId" => row.AggregateId,
+                "Project" => display.Project(row.ProjectId),
+                "Object" => display.Aggregate(row.AggregateType, row.AggregateId),
                 "ActivityType" => row.ActivityType,
                 "Summary" => row.Summary,
                 "TraceId" => row.TraceId,
-                "ActorUserId" => row.ActorUserId,
+                "Actor" => display.User(row.ActorUserId),
                 "CreatedTime" => row.CreatedTime.ToString("O"),
                 "Source" => payload?.Source ?? "Business",
                 "FieldChanges" => JsonSerializer.Serialize(includeSensitive ? LimitFieldChanges(payload?.FieldChanges) : SanitizeFieldChanges(payload?.FieldChanges), JsonOptions),

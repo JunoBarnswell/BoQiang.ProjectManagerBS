@@ -11,6 +11,10 @@ namespace AsterERP.Api.Controllers;
 [Permission(PermissionCodes.ProjectManagementTaskView)]
 public sealed class ProjectManagementMyWorkController(IProjectManagementMyWorkService service) : BaseApiController
 {
+    [HttpGet("project-options")]
+    public async Task<IActionResult> QueryProjectOptionsAsync([FromQuery] ProjectManagementMyWorkProjectOptionQuery query, CancellationToken cancellationToken)
+        => ApiOk(await service.QueryProjectOptionsAsync(query, cancellationToken));
+
     [HttpGet]
     public async Task<IActionResult> QueryAsync([FromQuery] ProjectManagementMyWorkQuery query, CancellationToken cancellationToken)
         => ApiOk(await service.QueryAsync(query, cancellationToken));

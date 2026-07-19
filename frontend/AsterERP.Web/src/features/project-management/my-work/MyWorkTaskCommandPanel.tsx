@@ -1,7 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useEffect, useMemo, useState } from 'react';
 
+import { getProjectManagementMemberCandidates } from '../../../api/project-management/projectManagement.api';
 import type { ProjectManagementMyWorkItem, ProjectManagementTaskUpsertRequest } from '../../../api/project-management/projectManagement.types';
-import { PermissionButton } from '../../../shared/auth/PermissionButton';
+import { projectManagementQueryKeys } from '../../../core/query/projectManagementQueryKeys';
+import { priorityLabel, taskStatusLabel } from '../projectManagementPresentation';
+import { useProjectManagementWorkspaceScope } from '../state/projectManagementWorkspaceScope';
+import { ModalForm } from '../../../shared/forms/ModalForm';
+import type { FormFieldConfig } from '../../../shared/forms/formTypes';
 
 interface MyWorkTaskCommandPanelProps {
   item: ProjectManagementMyWorkItem | null;
@@ -32,21 +38,46 @@ function toRequest(item: ProjectManagementMyWorkItem): ProjectManagementTaskUpse
 }
 
 export function MyWorkTaskCommandPanel({ item, onCancel, onSubmit, saving }: MyWorkTaskCommandPanelProps) {
+  const scope = useProjectManagementWorkspaceScope();
   const [request, setRequest] = useState<ProjectManagementTaskUpsertRequest | null>(null);
-
+  const candidatesQuery = useQuery({
+    enabled: scope.isAvailable && Boolean(item),
+    queryKey: projectManagementQueryKeys.memberCandidates(scope, { pageIndex: 1, pageSize: 100, projectId: item?.task.projectId ?? '' }),
+    queryFn: ({ signal }) => getProjectManagementMemberCandidates({ pageIndex: 1, pageSize: 100, projectId: item?.task.projectId }, signal),
+  });
   useEffect(() => setRequest(item ? toRequest(item) : null), [item]);
-  if (!item || !request) return null;
 
+  const candidates = candidatesQuery.data?.data.items ?? [];
+  const assigneeOptions = useMemo(() => candidates.map((candidate) => ({ label: `${candidate.displayName || candidate.userName} · ${candidate.employmentName}`, value: candidate.userId })), [candidates]);
+  const fields: FormFieldConfig<ProjectManagementTaskUpsertRequest>[] = [
+    { label: '状态', name: 'status', options: ['Todo', 'InProgress', 'Blocked', 'Done', 'Cancelled'].map((status) => ({ label: taskStatusLabel(status), value: status })), section: '快速更新', type: 'select' },
+    { label: '优先级', name: 'priority', options: ['Low', 'Medium', 'High', 'Urgent'].map((priority) => ({ label: priorityLabel(priority), value: priority })), section: '快速更新', type: 'select' },
+    { label: '完成进度', name: 'progressPercent', max: 100, min: 0, section: '快速更新', span: 2, step: 1, type: 'range' },
+    { label: '负责人', name: 'assigneeUserId', options: assigneeOptions, emptyOptionLabel: candidatesQuery.isLoading ? '正在加载项目成员…' : '选择负责人', section: '快速更新', span: 2, type: 'select' },
+  ];
+
+  if (!item || !request) return null;
   return (
-    <section className="mb-4 rounded-lg border border-gray-200 p-4">
-      <div className="mb-3 font-semibold">快速更新：{item.task.title}</div>
-      <div className="grid gap-3 md:grid-cols-4">
-        <label className="text-sm">状态<select className="mt-1 w-full rounded border border-gray-300 p-2" onChange={(event) => setRequest({ ...request, status: event.target.value })} value={request.status ?? 'Todo'}>{['Todo', 'InProgress', 'Blocked', 'Done', 'Cancelled'].map((status) => <option key={status}>{status}</option>)}</select></label>
-        <label className="text-sm">进度<input className="mt-1 w-full rounded border border-gray-300 p-2" max={100} min={0} onChange={(event) => setRequest({ ...request, progressPercent: Number(event.target.value) })} type="number" value={request.progressPercent ?? 0} /></label>
-        <label className="text-sm">负责人用户 ID<input className="mt-1 w-full rounded border border-gray-300 p-2" onChange={(event) => setRequest({ ...request, assigneeUserId: event.target.value.trim() || undefined, assigneeEmploymentId: undefined })} value={request.assigneeUserId ?? ''} /></label>
-        <label className="text-sm">优先级<select className="mt-1 w-full rounded border border-gray-300 p-2" onChange={(event) => setRequest({ ...request, priority: event.target.value })} value={request.priority ?? 'Medium'}>{['Low', 'Medium', 'High', 'Urgent'].map((priority) => <option key={priority}>{priority}</option>)}</select></label>
-      </div>
-      <div className="mt-3 flex gap-2"><PermissionButton code="project-management:task:edit" disabled={saving} onClick={() => onSubmit(request)}>{saving ? '保存中…' : '保存任务'}</PermissionButton><button onClick={onCancel} type="button">取消</button></div>
-    </section>
+    <ModalForm
+      actions={[
+        { label: '取消', onClick: onCancel, variant: 'ghost' },
+        { label: '保存任务', loading: saving, onClick: () => onSubmit(request), variant: 'primary' },
+      ]}
+      fields={fields}
+      open={Boolean(item)}
+      onClose={onCancel}
+      onValueChange={(name, value) => {
+        if (name === 'assigneeUserId') {
+          const candidate = candidates.find((item) => item.userId === value);
+          setRequest((current) => current ? { ...current, assigneeUserId: String(value) || undefined, assigneeEmploymentId: candidate?.employmentId } : current);
+          return;
+        }
+        setRequest((current) => current ? { ...current, [name]: value } : current);
+      }}
+      title={`快速更新：${item.task.title}`}
+      value={request}
+    >
+      <dl className="grid grid-cols-2 gap-2 text-xs"><div><dt className="text-gray-400">项目</dt><dd>{item.projectName}</dd></div><div><dt className="text-gray-400">截止日期</dt><dd>{item.task.dueDate ? new Date(item.task.dueDate).toLocaleDateString() : '未设置'}</dd></div><div className="col-span-2"><dt className="text-gray-400">任务说明</dt><dd>{item.task.description || '暂无任务说明'}</dd></div></dl>
+    </ModalForm>
   );
 }

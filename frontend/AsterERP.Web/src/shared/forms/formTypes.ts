@@ -11,6 +11,7 @@ export type FormFieldType =
   | 'multiselect'
   | 'number'
   | 'permissionTree'
+  | 'range'
   | 'select'
   | 'switch'
   | 'textarea'
@@ -30,6 +31,8 @@ export interface FormFieldConfig<TValues extends object> {
   helpText?: string;
   hideBelow?: BreakpointName;
   label: string;
+  max?: number;
+  min?: number;
   name: keyof TValues & string;
   options?: FormOption[];
   permissionTreeNodes?: MenuTreeNodeDto[];
@@ -38,6 +41,7 @@ export interface FormFieldConfig<TValues extends object> {
   rows?: number;
   section?: string;
   span?: number;
+  step?: number;
   type: FormFieldType;
 }
 

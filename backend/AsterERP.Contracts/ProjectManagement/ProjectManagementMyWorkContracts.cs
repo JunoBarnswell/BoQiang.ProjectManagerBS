@@ -16,3 +16,13 @@ public sealed record ProjectManagementMyWorkItem(
     bool IsParticipant,
     bool IsCreator,
     bool IsMentioned);
+
+public sealed record ProjectManagementMyWorkProjectOptionQuery(
+    int PageIndex = 1,
+    int PageSize = 50,
+    string? Keyword = null);
+
+public sealed record ProjectManagementMyWorkProjectOption(
+    string Id,
+    string ProjectCode,
+    string ProjectName);

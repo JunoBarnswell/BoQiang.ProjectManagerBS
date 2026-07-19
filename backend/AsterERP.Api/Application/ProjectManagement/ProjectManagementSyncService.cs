@@ -28,7 +28,8 @@ public sealed class ProjectManagementSyncService(
     IProjectManagementOperationWriter? operationWriter = null,
     IProjectManagementSearchService? searchService = null,
     IProjectManagementNotificationPublisher? notificationPublisher = null,
-    IProjectManagementSyncHistoryService? syncHistoryService = null) : IProjectManagementSyncService
+    IProjectManagementSyncHistoryService? syncHistoryService = null,
+    IProjectManagementDisplayProjectionService? displayProjection = null) : IProjectManagementSyncService
 {
     private const string Magic = "BQSYNC";
     private const string SchemaVersion = "3";
@@ -153,13 +154,18 @@ public sealed class ProjectManagementSyncService(
             .OrderBy(item => item.SequenceNo, OrderByType.Asc)
             .Take(Math.Clamp(limit, 1, 1000))
             .ToListAsync(cancellationToken);
+        var projection = await DisplayProjection.ResolveAsync(
+            rows.Select(item => item.ProjectId),
+            rows.Select(item => new ProjectManagementDisplayReference(item.AggregateType, item.AggregateId)),
+            [],
+            cancellationToken);
         return rows.Select(item =>
         {
             var metadata = ProjectManagementSyncJournalWriter.ReadMetadata(item.PayloadJson);
             return new ProjectManagementSyncJournalItem(
                 item.SequenceNo, item.AggregateType, item.AggregateId, item.ProjectId, item.Operation,
                 item.VersionNo, item.PayloadJson, item.TraceId, item.CreatedTime, metadata.Source,
-                metadata.FieldChanges, item.DeviceId);
+                metadata.FieldChanges, item.DeviceId, projection.Project(item.ProjectId), projection.Aggregate(item.AggregateType, item.AggregateId));
         }).ToList();
     }
 
@@ -1263,6 +1269,7 @@ public sealed class ProjectManagementSyncService(
 
     private string Tenant() => currentUser.GetAsterErpTenantId()?.Trim() ?? throw new ValidationException("当前会话缺少租户", ErrorCodes.PermissionDenied);
     private string App() => currentUser.GetAsterErpAppCode()?.Trim().ToUpperInvariant() ?? throw new ValidationException("当前会话缺少应用", ErrorCodes.PermissionDenied);
+    private IProjectManagementDisplayProjectionService DisplayProjection => displayProjection ?? new ProjectManagementDisplayProjectionService(databaseAccessor);
     private static string? Normalize(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private static string NormalizeMode(string? value) => value?.Trim() switch

@@ -11,7 +11,8 @@ namespace AsterERP.Api.Application.ProjectManagement;
 
 public sealed class ProjectManagementSyncHistoryService(
     IWorkspaceDatabaseAccessor databaseAccessor,
-    ICurrentUser currentUser) : IProjectManagementSyncHistoryService
+    ICurrentUser currentUser,
+    IProjectManagementDisplayProjectionService? displayProjection = null) : IProjectManagementSyncHistoryService
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -47,14 +48,16 @@ public sealed class ProjectManagementSyncHistoryService(
         var total = new RefAsync<int>();
         var items = await rows.OrderBy(item => item.OccurredAt, OrderByType.Desc)
             .ToPageListAsync(pageIndex, pageSize, total, cancellationToken);
-        return new ProjectManagementSyncHistoryPage(total.Value, items.Select(Map).ToList());
+        var projection = await DisplayProjection.ResolveAsync([], [], items.Select(item => item.ActorUserId), cancellationToken);
+        return new ProjectManagementSyncHistoryPage(total.Value, items.Select(item => Map(item, projection.User(item.ActorUserId))).ToList());
     }
 
     public async Task<ProjectManagementSyncHistoryDetail> GetAsync(string id, CancellationToken cancellationToken = default)
     {
         var entity = await FindOwnedAsync(id, cancellationToken);
         var report = ReadReport(entity.ReportJson);
-        return new ProjectManagementSyncHistoryDetail(Map(entity), entity.Strategy, report.Warnings, report.Conflicts);
+        var projection = await DisplayProjection.ResolveAsync([], [], [entity.ActorUserId], cancellationToken);
+        return new ProjectManagementSyncHistoryDetail(Map(entity, projection.User(entity.ActorUserId)), entity.Strategy, report.Warnings, report.Conflicts);
     }
 
     public async Task<(string FileName, byte[] Content)> DownloadSafeReportAsync(string id, CancellationToken cancellationToken = default)
@@ -82,7 +85,8 @@ public sealed class ProjectManagementSyncHistoryService(
         return row.FirstOrDefault() ?? throw new ValidationException("同步历史不存在或无权访问");
     }
 
-    private static ProjectManagementSyncHistoryItem Map(ProjectManagementSyncHistoryEntity item) => new(item.Id, item.OperationType, item.PackageId, item.SourceTenantId, item.SourceAppCode, item.SourceDeviceId, item.TargetTenantId, item.TargetAppCode, item.ActorUserId, item.Status, item.Inserted, item.Updated, item.Deleted, item.Skipped, item.ConflictCount, item.Failed, item.AttachmentsImported, item.TraceId, item.ErrorMessage, item.RetryOfHistoryId, item.OccurredAt);
+    private static ProjectManagementSyncHistoryItem Map(ProjectManagementSyncHistoryEntity item, string? actorDisplayName = null) => new(item.Id, item.OperationType, item.PackageId, item.SourceTenantId, item.SourceAppCode, item.SourceDeviceId, item.TargetTenantId, item.TargetAppCode, item.ActorUserId, item.Status, item.Inserted, item.Updated, item.Deleted, item.Skipped, item.ConflictCount, item.Failed, item.AttachmentsImported, item.TraceId, item.ErrorMessage, item.RetryOfHistoryId, item.OccurredAt, actorDisplayName);
+    private IProjectManagementDisplayProjectionService DisplayProjection => displayProjection ?? new ProjectManagementDisplayProjectionService(databaseAccessor);
     private static SyncHistoryReport ReadReport(string json) => JsonSerializer.Deserialize<SyncHistoryReport>(json, JsonOptions) ?? new([], []);
     private string Tenant() => currentUser.GetAsterErpTenantId()?.Trim() ?? throw new ValidationException("当前会话缺少租户");
     private string App() => currentUser.GetAsterErpAppCode()?.Trim().ToUpperInvariant() ?? throw new ValidationException("当前会话缺少应用");

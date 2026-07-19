@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 
 import { useI18n } from '../../core/i18n/I18nProvider';
 import { AppIcon } from '../../shared/icons/AppIcon';
@@ -35,6 +35,28 @@ export function TabsView({
   const { translate } = useI18n();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const visibleTabs = useMemo(() => tabs.filter((tab) => tab.path !== '/' && tab.path !== homePath), [homePath, tabs]);
+  const navigationTabs = useMemo(() => [{ closable: false, label: translate('nav.home'), path: homePath }, ...visibleTabs], [homePath, translate, visibleTabs]);
+
+  const onTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number, tab: TabItem) => {
+    if ((event.key === 'Delete' || event.key === 'Backspace') && tab.closable !== false) {
+      event.preventDefault();
+      onTabClose?.(tab.path);
+      return;
+    }
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    const targetIndex = event.key === 'Home'
+      ? 0
+      : event.key === 'End'
+        ? navigationTabs.length - 1
+        : (index + (event.key === 'ArrowRight' ? 1 : -1) + navigationTabs.length) % navigationTabs.length;
+    const target = navigationTabs[targetIndex];
+    if (!target) return;
+    tabRefs.current[target.path]?.focus();
+    onTabClick(target.path);
+  };
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -51,34 +73,52 @@ export function TabsView({
   }, [isMenuOpen]);
 
   return (
-    <div className="app-tabs-view bg-[#e2e8f0] flex min-w-0 items-end gap-1 overflow-x-auto px-1.5 pt-1 border-b border-gray-300 shrink-0">
-      <div
+    <div aria-label="已打开页签" className="app-tabs-view bg-[#e2e8f0] flex min-w-0 items-end gap-1 overflow-x-auto px-1.5 pt-1 border-b border-gray-300 shrink-0" role="tablist">
+      <button
+        aria-label={translate('nav.home')}
+        aria-selected={activePath === homePath || activePath === '/'}
         className={`erp-tab px-3 py-1 flex items-center gap-1.5 cursor-pointer text-xs whitespace-nowrap ${activePath === homePath || activePath === '/' ? 'active shadow-[0_-1px_2px_rgba(0,0,0,0.02)]' : ''}`}
         onClick={() => onTabClick(homePath)}
+        onKeyDown={(event) => onTabKeyDown(event, 0, navigationTabs[0])}
+        ref={(element) => { tabRefs.current[homePath] = element; }}
+        role="tab"
+        type="button"
       >
         <AppIcon name="house" />
-      </div>
+      </button>
 
       <div className="flex min-w-0 flex-1 items-end overflow-x-auto">
-        {tabs.filter((tab) => tab.path !== '/' && tab.path !== homePath).map((tab) => {
+        {visibleTabs.map((tab, index) => {
           const isActive = activePath === tab.path;
           return (
             <div
               key={tab.path}
-              className={`erp-tab px-3 py-1 flex items-center gap-1.5 cursor-pointer text-xs whitespace-nowrap ${isActive ? 'active shadow-[0_-1px_2px_rgba(0,0,0,0.02)]' : ''}`}
-              onClick={() => onTabClick(tab.path)}
+              className={`erp-tab px-2 py-1 flex items-center gap-1.5 text-xs whitespace-nowrap ${isActive ? 'active shadow-[0_-1px_2px_rgba(0,0,0,0.02)]' : ''}`}
             >
-              {isActive ? <span className="w-1.5 h-1.5 rounded-full bg-primary-500 shrink-0" /> : null}
-              <span className="whitespace-nowrap">{tab.label}</span>
+              <button
+                aria-selected={isActive}
+                className="flex min-w-0 items-center gap-1.5"
+                onClick={() => onTabClick(tab.path)}
+                onKeyDown={(event) => onTabKeyDown(event, index + 1, tab)}
+                ref={(element) => { tabRefs.current[tab.path] = element; }}
+                role="tab"
+                type="button"
+              >
+                {isActive ? <span className="w-1.5 h-1.5 rounded-full bg-primary-500 shrink-0" /> : null}
+                <span className="whitespace-nowrap">{tab.label}</span>
+              </button>
               {tab.closable !== false ? (
-                <AppIcon
+                <button
+                  aria-label={`关闭页签 ${tab.label}`}
                   className={`rounded p-0.5 ml-1 -mr-1 transition-colors shrink-0 ${isActive ? 'hover:text-red-500 hover:bg-gray-100' : 'hover:text-red-500 hover:bg-gray-200'}`}
-                  name="x"
                   onClick={(event) => {
                     event.stopPropagation();
                     onTabClose?.(tab.path);
                   }}
-                />
+                  type="button"
+                >
+                  <AppIcon name="x" />
+                </button>
               ) : null}
             </div>
           );

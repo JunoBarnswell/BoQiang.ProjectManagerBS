@@ -10,7 +10,7 @@ import {
 export function useTaskWorkspaceUrlState(viewKey: ProjectManagementTaskView) {
   const [searchParams, setSearchParams] = useSearchParams();
   const state = useMemo(
-    () => normalizeTaskWorkspaceState(viewKey, {
+    () => normalizeTaskWorkspaceState(readViewKey(searchParams.get('view'), viewKey), {
       assigneeUserId: searchParams.get('assignee') ?? undefined,
       dueFrom: searchParams.get('dueFrom') ?? undefined,
       dueTo: searchParams.get('dueTo') ?? undefined,
@@ -34,8 +34,9 @@ export function useTaskWorkspaceUrlState(viewKey: ProjectManagementTaskView) {
 
   const setState = useCallback(
     (next: Partial<TaskWorkspaceState>, options: { replace?: boolean } = {}) => {
-      const normalized = normalizeTaskWorkspaceState(viewKey, { ...state, ...next });
-      setSearchParams(createTaskWorkspaceSearchParams(viewKey, normalized), { replace: options.replace ?? false });
+      const nextViewKey = next.viewKey ?? state.viewKey;
+      const normalized = normalizeTaskWorkspaceState(nextViewKey, { ...state, ...next });
+      setSearchParams(createTaskWorkspaceSearchParams(nextViewKey, normalized), { replace: options.replace ?? false });
     },
     [setSearchParams, state, viewKey],
   );
@@ -45,6 +46,7 @@ export function useTaskWorkspaceUrlState(viewKey: ProjectManagementTaskView) {
 
 export function createTaskWorkspaceSearchParams(viewKey: ProjectManagementTaskView, normalized: TaskWorkspaceState): URLSearchParams {
   const params = new URLSearchParams();
+  if (viewKey !== 'tree') params.set('view', viewKey);
   setOptional(params, 'q', normalized.keyword);
   setOptional(params, 'status', normalized.status);
   setOptional(params, 'assignee', normalized.assigneeUserId);
@@ -82,4 +84,10 @@ function setOptional(params: URLSearchParams, key: string, value: string | undef
 
 function parseCsv(value: string | null): string[] | undefined {
   return value ? value.split(',') : undefined;
+}
+
+function readViewKey(value: string | null, fallback: ProjectManagementTaskView): ProjectManagementTaskView {
+  return value && ['tree', 'list', 'card', 'board', 'gantt', 'calendar'].includes(value)
+    ? value as ProjectManagementTaskView
+    : fallback;
 }

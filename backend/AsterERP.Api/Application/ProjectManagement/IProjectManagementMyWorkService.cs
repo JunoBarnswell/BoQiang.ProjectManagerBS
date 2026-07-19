@@ -8,4 +8,8 @@ public interface IProjectManagementMyWorkService
     Task<GridPageResult<ProjectManagementMyWorkItem>> QueryAsync(
         ProjectManagementMyWorkQuery query,
         CancellationToken cancellationToken = default);
+
+    Task<GridPageResult<ProjectManagementMyWorkProjectOption>> QueryProjectOptionsAsync(
+        ProjectManagementMyWorkProjectOptionQuery query,
+        CancellationToken cancellationToken = default);
 }

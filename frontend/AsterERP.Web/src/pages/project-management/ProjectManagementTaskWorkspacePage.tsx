@@ -70,6 +70,7 @@ import { useProjectManagementGlobalShortcuts } from '../../features/project-mana
 import { useProjectManagementUnsavedChangesGuard } from '../../features/project-management/interactions/useProjectManagementUnsavedChangesGuard';
 import { useProjectManagementInteractionPreferences } from '../../features/project-management/state/projectManagementInteractionPreferences';
 import { toProjectManagementPlatformRoute } from '../../features/project-management/state/projectManagementPlatformRoutes';
+import { projectManagementTaskViewFromSearch } from '../../features/project-management/state/projectManagementWorkbenchNavigation';
 import { useProjectManagementWorkspaceScope } from '../../features/project-management/state/projectManagementWorkspaceScope';
 import { normalizeTaskWorkspaceState, taskWorkspaceStateToQuery, taskWorkspaceStateToSavedView, type TaskWorkspaceState } from '../../features/project-management/state/taskWorkspaceState';
 import { ProjectManagementTaskAttachmentPreviewDialog } from '../../features/project-management/task-workspace/ProjectManagementTaskAttachmentPreviewDialog';
@@ -85,6 +86,7 @@ import { readProjectManagementTaskConflict, taskDetailToForm, type TaskDetailSec
 import { createTaskMoveRequest, type TaskGroupDropTarget } from '../../features/project-management/task-workspace/taskMoveIntent';
 import { TaskWorkspaceBatchCommandPanel } from '../../features/project-management/task-workspace/TaskWorkspaceBatchCommandPanel';
 import { TaskWorkspaceBatchResultPanel } from '../../features/project-management/task-workspace/TaskWorkspaceBatchResultPanel';
+import { TaskWorkspaceContextPanels } from '../../features/project-management/task-workspace/TaskWorkspaceContextPanels';
 import { TaskWorkspaceImConversationPanel } from '../../features/project-management/task-workspace/TaskWorkspaceImConversationPanel';
 import { TaskWorkspaceLabelManager } from '../../features/project-management/task-workspace/TaskWorkspaceLabelManager';
 import { TaskWorkspaceProjection } from '../../features/project-management/task-workspace/TaskWorkspaceProjection';
@@ -154,7 +156,7 @@ export function ProjectManagementTaskWorkspacePage() {
   const { projectId = '' } = useParams<{ projectId: string }>();
   const { hash, pathname, search } = useLocation();
   const navigate = useNavigate();
-  const viewKey = resolveView(pathname);
+  const viewKey = projectManagementTaskViewFromSearch(search, resolveView(pathname));
   const { state, setState } = useTaskWorkspaceUrlState(viewKey);
   const message = useMessage();
   const confirm = useConfirm();
@@ -164,7 +166,11 @@ export function ProjectManagementTaskWorkspacePage() {
   const { hasPermission: canEditTask } = usePermission('project-management:task:edit');
   const { hasPermission: canSearchProjectManagement } = usePermission('project-management:search:view');
   const { hasPermission: canManageReversibleCommands } = usePermission('project-management:reversible-command:manage');
-  const interactionPreferences = useProjectManagementInteractionPreferences();
+  const {
+    isAvailable: isInteractionPreferencesAvailable,
+    rememberPosition,
+    setPreferredView,
+  } = useProjectManagementInteractionPreferences();
   const openImConversation = useOpenImConversation();
   const [creating, setCreating] = useState(false);
   const [detailSection, setDetailSection] = useState<TaskDetailSection>('basic');
@@ -815,8 +821,8 @@ export function ProjectManagementTaskWorkspacePage() {
     if (selectedTask) taskFormBaseline.current = JSON.stringify(taskDetailToForm(selectedTask));
   }, [creating, selectedTask]);
   useEffect(() => {
-    if (interactionPreferences.isAvailable) interactionPreferences.rememberPosition({ hash, pathname, search });
-  }, [hash, interactionPreferences, interactionPreferences.isAvailable, interactionPreferences.rememberPosition, pathname, search]);
+    if (isInteractionPreferencesAvailable) rememberPosition({ hash, pathname, search });
+  }, [hash, isInteractionPreferencesAvailable, pathname, rememberPosition, search]);
   useProjectManagementGlobalShortcuts({
     newChildTask: selectedTask && canAddTask ? () => {
       setCreating(true);
@@ -835,7 +841,7 @@ export function ProjectManagementTaskWorkspacePage() {
     redo: canManageReversibleCommands && !undoMutation.isPending && !redoMutation.isPending ? () => redoMutation.mutate() : undefined,
     switchView: (view) => {
       const path = view === 'tree' ? 'tasks' : view;
-      interactionPreferences.setPreferredView(view);
+      setPreferredView(view);
       const nextState = preserveProjectManagementViewSyncState(state, view);
       const nextSearch = serializeProjectManagementViewSyncState(nextState).toString();
       navigate({
@@ -899,23 +905,16 @@ export function ProjectManagementTaskWorkspacePage() {
             taskFormBaseline.current = JSON.stringify(emptyForm);
             setState({ selectedTaskId: undefined });
           }}
+          onViewChange={(view) => {
+            setPreferredView(view);
+            setState({ pageIndex: 1, viewKey: view }, { replace: true });
+          }}
           onSaveView={(viewName, isShared) => savedViewMutation.mutate({ isShared, viewName })}
           onSelectSavedView={(view) => applySavedView(view, 'manual')}
           onStateChange={(next) => {
-            if (next.viewKey) interactionPreferences.setPreferredView(next.viewKey);
+            if (next.viewKey) setPreferredView(next.viewKey);
             setState(next);
           }}
-          projectConversation={
-            <TaskWorkspaceImConversationPanel
-              conversation={projectConversationQuery.data?.data}
-              error={projectConversationQuery.isError}
-              loading={projectConversationQuery.isLoading}
-              onOpen={() => void openProjectManagementConversation('project')}
-              opening={openingConversationScope === 'project'}
-              scope="project"
-            />
-          }
-          projectId={projectId}
           savedViews={savedViewsQuery.data?.data ?? []}
           savingView={savedViewMutation.isPending}
           selectedCount={selectedTasks.length}
@@ -1020,31 +1019,39 @@ export function ProjectManagementTaskWorkspacePage() {
           onClose={closeAttachmentPreview}
         />
       </TaskDetailDrawer>
-      {selectedTask && !creating ? (
-        <TaskWorkspaceImConversationPanel
+      <TaskWorkspaceContextPanels
+        labels={<TaskWorkspaceLabelManager
+          filter={labelFilter}
+          labels={labelsQuery.data?.data ?? []}
+          onFilterChange={(next) => {
+            setState({ labelIds: next.labelIds, labelMatchMode: next.matchMode === 'All' ? 'All' : 'Any', pageIndex: 1 }, { replace: true });
+          }}
+          onChanged={async () => { await queryClient.invalidateQueries({ queryKey: queryKeys.projectManagement.labels(scope, projectId) }); }}
+          projectId={projectId}
+        />}
+        projectConversation={<TaskWorkspaceImConversationPanel
+          conversation={projectConversationQuery.data?.data}
+          error={projectConversationQuery.isError}
+          loading={projectConversationQuery.isLoading}
+          onOpen={() => void openProjectManagementConversation('project')}
+          opening={openingConversationScope === 'project'}
+          scope="project"
+        />}
+        savedViews={<SavedViewManager
+          onCopy={(view, viewName) => copySavedViewMutation.mutate({ queryJson: view.queryJson, viewKey: view.viewKey, viewName })}
+          onDelete={(view) => deleteSavedViewMutation.mutate({ id: view.id, versionNo: view.versionNo })}
+          onUpdate={(view, request) => updateSavedViewMutation.mutate({ id: view.id, request })}
+          pending={savedViewMutation.isPending || copySavedViewMutation.isPending || updateSavedViewMutation.isPending || deleteSavedViewMutation.isPending}
+          views={savedViewsQuery.data?.data ?? []}
+        />}
+        taskConversation={selectedTask && !creating ? <TaskWorkspaceImConversationPanel
           conversation={taskConversationQuery.data?.data}
           error={taskConversationQuery.isError}
           loading={taskConversationQuery.isLoading}
           onOpen={() => void openProjectManagementConversation('task')}
           opening={openingConversationScope === 'task'}
           scope="task"
-        />
-      ) : null}
-      <TaskWorkspaceLabelManager
-        filter={labelFilter}
-        labels={labelsQuery.data?.data ?? []}
-        onFilterChange={(next) => {
-          setState({ labelIds: next.labelIds, labelMatchMode: next.matchMode === 'All' ? 'All' : 'Any', pageIndex: 1 }, { replace: true });
-        }}
-        onChanged={async () => { await queryClient.invalidateQueries({ queryKey: queryKeys.projectManagement.labels(scope, projectId) }); }}
-        projectId={projectId}
-      />
-      <SavedViewManager
-        onCopy={(view, viewName) => copySavedViewMutation.mutate({ queryJson: view.queryJson, viewKey: view.viewKey, viewName })}
-        onDelete={(view) => deleteSavedViewMutation.mutate({ id: view.id, versionNo: view.versionNo })}
-        onUpdate={(view, request) => updateSavedViewMutation.mutate({ id: view.id, request })}
-        pending={savedViewMutation.isPending || copySavedViewMutation.isPending || updateSavedViewMutation.isPending || deleteSavedViewMutation.isPending}
-        views={savedViewsQuery.data?.data ?? []}
+        /> : undefined}
       />
       <TaskWorkspaceBatchCommandPanel
         candidates={memberCandidatesQuery.data?.data?.items ?? []}

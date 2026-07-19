@@ -106,7 +106,8 @@ public sealed record ProjectManagementSyncHistoryItem(
     string TraceId,
     string? ErrorMessage,
     string? RetryOfHistoryId,
-    DateTime OccurredAt);
+    DateTime OccurredAt,
+    string? ActorDisplayName = null);
 
 public sealed record ProjectManagementSyncHistoryDetail(
     ProjectManagementSyncHistoryItem Item,
@@ -140,7 +141,9 @@ public sealed record ProjectManagementSyncJournalItem(
     DateTime CreatedTime,
     string Source = "User",
     IReadOnlyList<ProjectManagementSyncFieldChange>? FieldChanges = null,
-    string? DeviceId = null);
+    string? DeviceId = null,
+    string? ProjectDisplayName = null,
+    string? AggregateDisplayName = null);
 
 public sealed record ProjectManagementSyncFieldChange(
     string Field,

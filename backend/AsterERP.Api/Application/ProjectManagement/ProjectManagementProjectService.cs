@@ -18,7 +18,8 @@ public sealed class ProjectManagementProjectService(
     IProjectManagementActivityWriter? activityWriter = null,
     IProjectManagementSyncJournalWriter? syncJournalWriter = null,
     IProjectManagementImConversationService? imConversationService = null,
-    IProjectManagementReversibleCommandWriter? reversibleCommandWriter = null) : IProjectManagementProjectService
+    IProjectManagementReversibleCommandWriter? reversibleCommandWriter = null,
+    IProjectManagementDisplayProjectionService? displayProjection = null) : IProjectManagementProjectService
 {
     public async Task<GridPageResult<ProjectManagementProjectResponse>> QueryAsync(
         ProjectManagementProjectQuery query,
@@ -47,7 +48,10 @@ public sealed class ProjectManagementProjectService(
 
         if (!string.IsNullOrWhiteSpace(ownerUserId))
         {
-            projectQuery = projectQuery.Where(item => item.OwnerUserId == ownerUserId);
+            var ownerUserIds = await DisplayProjection.FindUserIdsAsync(ownerUserId, cancellationToken);
+            projectQuery = ownerUserIds.Count == 0
+                ? projectQuery.Where(_ => false)
+                : projectQuery.Where(item => ownerUserIds.Contains(item.OwnerUserId));
         }
 
         var total = new RefAsync<int>();
@@ -59,7 +63,7 @@ public sealed class ProjectManagementProjectService(
         return new GridPageResult<ProjectManagementProjectResponse>
         {
             Total = total.Value,
-            Items = items.Select(Map).ToList()
+            Items = await MapManyAsync(items, cancellationToken)
         };
     }
 
@@ -124,7 +128,7 @@ public sealed class ProjectManagementProjectService(
             db.Ado.RollbackTran();
             throw;
         }
-        return Map(entity);
+        return await MapAsync(entity, cancellationToken);
     }
 
     public async Task<ProjectManagementProjectResponse> UpdateAsync(
@@ -134,7 +138,7 @@ public sealed class ProjectManagementProjectService(
     {
         RequirePlatformScope();
         var entity = await GetRequiredAsync(id, cancellationToken);
-        var beforeResponse = Map(entity);
+        var beforeResponse = await MapAsync(entity, cancellationToken);
         if (entity.Status == ProjectManagementDomainRules.ProjectArchived)
             throw new ValidationException("项目已归档，只读不可编辑");
         await (accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser)).EnsureCanManageProjectAsync(id, cancellationToken);
@@ -177,7 +181,7 @@ public sealed class ProjectManagementProjectService(
         {
             await imConversationService.SynchronizeProjectLinksAsync(entity.Id, cancellationToken);
         }
-        var result = Map(entity);
+        var result = await MapAsync(entity, cancellationToken);
         await RecordReversibleAsync(ProjectManagementReversibleCommandTypes.ProjectUpdated, entity.Id, "Project", entity.Id,
             ProjectManagementReversibleCommandHandler.Serialize(new ProjectManagementProjectUpdateCommand(entity.Id, request)),
             ProjectManagementReversibleCommandHandler.Serialize(new ProjectManagementProjectUpdateCommand(entity.Id, ProjectManagementReversibleCommandHandler.ToUpsert(beforeResponse) with { VersionNo = result.VersionNo })),
@@ -211,7 +215,7 @@ public sealed class ProjectManagementProjectService(
         });
         if (imConversationService is not null)
             await imConversationService.ArchiveProjectLinksAsync(entity.Id, cancellationToken);
-        return Map(entity);
+        return await MapAsync(entity, cancellationToken);
     }
 
     public async Task<ProjectManagementProjectResponse> RestoreAsync(string id, long versionNo, CancellationToken cancellationToken = default)
@@ -242,7 +246,7 @@ public sealed class ProjectManagementProjectService(
         {
             await imConversationService.ReactivateProjectLinksAsync(entity.Id, cancellationToken);
         }
-        var result = Map(entity);
+        var result = await MapAsync(entity, cancellationToken);
         await RecordReversibleAsync(ProjectManagementReversibleCommandTypes.ProjectRestored, entity.Id, "Project", entity.Id,
             ProjectManagementReversibleCommandHandler.Serialize(new ProjectManagementProjectRestoreCommand(entity.Id, versionNo)),
             ProjectManagementReversibleCommandHandler.Serialize(new ProjectManagementProjectDeleteCommand(entity.Id, result.VersionNo)),
@@ -460,8 +464,22 @@ public sealed class ProjectManagementProjectService(
             entity.StartDate, entity.DueDate, entity.WipLimit, entity.ProgressPercent, entity.IsDeleted);
     }
 
-    private static ProjectManagementProjectResponse Map(ProjectManagementProjectEntity entity) => new(
+    private async Task<List<ProjectManagementProjectResponse>> MapManyAsync(IReadOnlyList<ProjectManagementProjectEntity> entities, CancellationToken cancellationToken)
+    {
+        var projection = await DisplayProjection.ResolveAsync([], [], entities.Select(item => item.OwnerUserId), cancellationToken);
+        return entities.Select(item => Map(item, projection.User(item.OwnerUserId))).ToList();
+    }
+
+    private async Task<ProjectManagementProjectResponse> MapAsync(ProjectManagementProjectEntity entity, CancellationToken cancellationToken)
+    {
+        var projection = await DisplayProjection.ResolveAsync([], [], [entity.OwnerUserId], cancellationToken);
+        return Map(entity, projection.User(entity.OwnerUserId));
+    }
+
+    private static ProjectManagementProjectResponse Map(ProjectManagementProjectEntity entity, string? ownerDisplayName = null) => new(
         entity.Id, entity.TenantId, entity.AppCode, entity.ProjectCode, entity.ProjectName, entity.Description,
         entity.Status, entity.Priority, entity.OwnerUserId, entity.StartDate, entity.DueDate, entity.CompletedAt,
-        entity.WipLimit, entity.ProgressPercent, entity.VersionNo, entity.CreatedTime, entity.UpdatedTime);
+        entity.WipLimit, entity.ProgressPercent, entity.VersionNo, entity.CreatedTime, entity.UpdatedTime, ownerDisplayName);
+
+    private IProjectManagementDisplayProjectionService DisplayProjection => displayProjection ?? new ProjectManagementDisplayProjectionService(databaseAccessor);
 }

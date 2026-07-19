@@ -1,10 +1,8 @@
-import { useEffect, useState, type ReactNode } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { useEffect, useState } from 'react';
 
 import type { ProjectManagementSavedView, ProjectManagementTaskView } from '../../../api/project-management/projectManagement.types';
 import { PermissionButton } from '../../../shared/auth/PermissionButton';
 import { ProjectManagementReversibleCommandControls } from '../components/ProjectManagementReversibleCommandControls';
-import { toProjectManagementPlatformRoute } from '../state/projectManagementPlatformRoutes';
 import { taskWorkspaceVisibleColumns, type TaskWorkspaceState } from '../state/taskWorkspaceState';
 
 interface TaskWorkspaceToolbarProps {
@@ -12,11 +10,10 @@ interface TaskWorkspaceToolbarProps {
   onOpenBatch: () => void;
   onSelectAll: () => void;
   onCreateTask: () => void;
+  onViewChange: (view: ProjectManagementTaskView) => void;
   onSaveView: (name: string, isShared: boolean) => void;
   onSelectSavedView: (view: ProjectManagementSavedView) => void;
   onStateChange: (next: Partial<TaskWorkspaceState>) => void;
-  projectConversation?: ReactNode;
-  projectId: string;
   savedViews: ProjectManagementSavedView[];
   savingView: boolean;
   selectedCount: number;
@@ -24,13 +21,13 @@ interface TaskWorkspaceToolbarProps {
   total: number;
 }
 
-const viewRoutes: Array<{ key: ProjectManagementTaskView; label: string; path: string }> = [
-  { key: 'tree', label: '树', path: 'tasks' },
-  { key: 'list', label: '列表', path: 'list' },
-  { key: 'card', label: '卡片', path: 'card' },
-  { key: 'board', label: '看板', path: 'board' },
-  { key: 'gantt', label: '甘特', path: 'gantt' },
-  { key: 'calendar', label: '日历', path: 'calendar' },
+const viewRoutes: Array<{ key: ProjectManagementTaskView; label: string }> = [
+  { key: 'tree', label: '树' },
+  { key: 'list', label: '列表' },
+  { key: 'card', label: '卡片' },
+  { key: 'board', label: '看板' },
+  { key: 'gantt', label: '甘特' },
+  { key: 'calendar', label: '日历' },
 ];
 
 export function TaskWorkspaceToolbar({
@@ -38,18 +35,16 @@ export function TaskWorkspaceToolbar({
   onOpenBatch,
   onSelectAll,
   onCreateTask,
+  onViewChange,
   onSaveView,
   onSelectSavedView,
   onStateChange,
-  projectConversation,
-  projectId,
   savedViews,
   savingView,
   selectedCount,
   state,
   total,
 }: TaskWorkspaceToolbarProps) {
-  const location = useLocation();
   const [keywordDraft, setKeywordDraft] = useState(state.keyword);
   const [viewName, setViewName] = useState('');
   const [shareView, setShareView] = useState(false);
@@ -60,13 +55,15 @@ export function TaskWorkspaceToolbar({
     <div className="flex flex-col gap-3">
       <nav aria-label="任务视图" className="flex flex-wrap gap-2">
         {viewRoutes.map((view) => (
-          <Link
+          <button
+            aria-current={view.key === state.viewKey ? 'page' : undefined}
             className={view.key === state.viewKey ? 'rounded bg-blue-600 px-3 py-1 text-sm text-white' : 'rounded border border-gray-300 px-3 py-1 text-sm'}
             key={view.key}
-            to={`${toProjectManagementPlatformRoute(`projects/${encodeURIComponent(projectId)}/${view.path}`)}${location.search}`}
+            onClick={() => onViewChange(view.key)}
+            type="button"
           >
             {view.label}
-          </Link>
+          </button>
         ))}
       </nav>
       <div className="flex flex-wrap items-center gap-2">
@@ -159,7 +156,6 @@ export function TaskWorkspaceToolbar({
         </PermissionButton>
       </div>
       {(state.viewKey === 'tree' || state.viewKey === 'list') ? <fieldset className="flex flex-wrap items-center gap-2 text-sm"><legend className="px-1">保存列显示</legend>{taskWorkspaceVisibleColumns.map((column) => <label className="flex items-center gap-1" key={column}><input checked={state.visibleColumns.includes(column)} onChange={(event) => onStateChange({ visibleColumns: event.target.checked ? [...state.visibleColumns, column] : state.visibleColumns.filter((item) => item !== column) })} type="checkbox" />{column}</label>)}</fieldset> : null}
-      {projectConversation}
     </div>
   );
 }

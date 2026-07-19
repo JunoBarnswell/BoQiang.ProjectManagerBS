@@ -34,9 +34,7 @@ public sealed class AsterErpProjectManagementModule : AbpModule
         context.Services.AddScoped<IProjectManagementMaintenanceLock, ProjectManagementMaintenanceLock>();
         context.Services.AddScoped<ProjectManagementWipCoordinator>();
         context.Services.AddScoped<IProjectManagementRiskConfirmationService, ProjectManagementRiskConfirmationService>();
-        context.Services.AddScoped<IProjectManagementBackupService, ProjectManagementBackupService>();
-        context.Services.AddScoped<IProjectManagementDataSpaceExportService, ProjectManagementDataSpaceExportService>();
-        context.Services.AddScoped<IProjectManagementDataSpaceImportService, ProjectManagementDataSpaceImportService>();
+        context.Services.AddScoped<IProjectManagementDisplayProjectionService, ProjectManagementDisplayProjectionService>();
         context.Services.AddScoped<IProjectManagementRealtimeTransport, ProjectManagementRealtimeTransport>();
         context.Services.AddScoped<IProjectManagementOperationProgressPublisher, ProjectManagementOperationProgressPublisher>();
         context.Services.AddScoped<IProjectManagementOperationWriter, ProjectManagementOperationWriter>();
@@ -50,8 +48,6 @@ public sealed class AsterErpProjectManagementModule : AbpModule
         context.Services.AddScoped<ProjectManagementAuditExportExecutor>();
         context.Services.AddScoped<IProjectManagementAuditGovernanceService, ProjectManagementAuditGovernanceService>();
         context.Services.AddScoped<ProjectManagementAuditGovernanceExecutor>();
-        context.Services.AddScoped<ProjectManagementDataSpaceExportExecutor>();
-        context.Services.AddScoped<ProjectManagementDataSpaceImportExecutor>();
         context.Services.AddScoped<ProjectManagementPurgeFileDeletionExecutor>();
         context.Services.AddScoped<IProjectManagementPurgeFileDeletionService, ProjectManagementPurgeFileDeletionService>();
         context.Services.AddTransient<ProjectManagementOperationRunner>();
@@ -64,7 +60,6 @@ public sealed class AsterErpProjectManagementModule : AbpModule
         context.Services.AddScoped<IProjectManagementExternalApiIdempotencyService, ProjectManagementExternalApiIdempotencyService>();
         context.Services.AddScoped<IProjectManagementExternalApiService, ProjectManagementExternalApiService>();
         context.Services.AddScoped<IProjectManagementSyncService, ProjectManagementSyncService>();
-        context.Services.AddScoped<IProjectManagementDataSpaceService, ProjectManagementDataSpaceService>();
         context.Services.AddScoped<IProjectManagementNotificationService, ProjectManagementNotificationService>();
         context.Services.AddScoped<IProjectManagementNotificationPublisher>(provider => provider.GetRequiredService<IProjectManagementNotificationService>());
         context.Services.AddScoped<IProjectManagementReminderScheduler, HangfireProjectManagementReminderScheduler>();
@@ -135,8 +130,6 @@ public sealed class AsterErpProjectManagementModule : AbpModule
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementSyncDeviceEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementSyncHistoryEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementMaintenanceLockEntity));
-        registry.RegisterProjectManagementFilter(typeof(ProjectManagementBackupEntity));
-        registry.RegisterProjectManagementFilter(typeof(ProjectManagementDataSpaceExportEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementOperationEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementReversibleCommandEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementImConversationLinkEntity));

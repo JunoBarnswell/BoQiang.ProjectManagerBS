@@ -37,7 +37,7 @@ export interface ProjectManagementAuditQuery {
   sorts?: Array<{ field: 'createdTime' | 'projectId' | 'aggregateType' | 'activityType' | 'actorUserId'; order?: 'asc' | 'desc' }>;
 }
 
-export type ProjectManagementAuditExportField = 'Id' | 'ProjectId' | 'AggregateType' | 'AggregateId' | 'ActivityType' | 'Summary' | 'TraceId' | 'ActorUserId' | 'CreatedTime' | 'Source' | 'FieldChanges';
+export type ProjectManagementAuditExportField = 'Project' | 'Object' | 'ActivityType' | 'Summary' | 'TraceId' | 'Actor' | 'CreatedTime' | 'Source' | 'FieldChanges';
 
 export interface ProjectManagementAuditExportRequest {
   query: ProjectManagementAuditQuery;
@@ -64,6 +64,9 @@ export interface ProjectManagementAuditItem {
   source: string;
   sourceDeviceId?: string;
   isSuccess: boolean;
+  projectDisplayName?: string;
+  aggregateDisplayName?: string;
+  actorDisplayName?: string;
 }
 
 export interface ProjectManagementAuditPage {
@@ -151,6 +154,7 @@ export interface ProjectManagementOperationItem {
   actorUserId: string;
   startedTime: string;
   completedTime?: string;
+  actorDisplayName?: string;
 }
 
 export type ProjectManagementOperation = ProjectManagementOperationItem;
@@ -185,76 +189,11 @@ export interface ProjectManagementReversibleCommandExecuteRequest {
   requestId: string;
 }
 
-export interface ProjectManagementBackup {
-  id: string;
-  backupName: string;
-  sha256: string;
-  fileSize: number;
-  status: string;
-  createdByUserId: string;
-  createdTime: string;
-  completedAt?: string;
-  operationId?: string;
-}
-
-export interface ProjectManagementDataSpaceImpact {
-  tenantId: string;
-  appCode: string;
-  projectCount: number;
-  taskCount: number;
-  memberCount: number;
-  milestoneCount: number;
-  attachmentCount: number;
-}
-
-export interface ProjectManagementBackupRestorePreview {
-  backup: ProjectManagementBackup;
-  currentDataSpace: ProjectManagementDataSpaceImpact;
-  backupDataSpace: ProjectManagementDataSpaceImpact;
-  impactScope: string;
-  failureCompensationHint: string;
-  successfulRestoreRollbackHint: string;
-}
-
-export interface ProjectManagementDataSpaceExportManifest {
-  formatVersion: number;
-  tenantId: string;
-  appCode: string;
-  databaseProvider: string;
-  snapshotMode: string;
-  schemaVersion: number;
-  snapshotAt: string;
-  schemaObjects: string[];
-  databaseSha256: string;
-  encryptionAlgorithm: string;
-}
-
-export interface ProjectManagementDataSpaceExport {
-  id: string;
-  packageName: string;
-  status: string;
-  operationId: string;
-  packageSize: number;
-  packageSha256: string;
-  createdTime: string;
-  completedAt?: string;
-  downloadExpiresAt: string;
-  downloadCount: number;
-  maxDownloadCount: number;
-  manifest?: ProjectManagementDataSpaceExportManifest;
-}
-
-export interface ProjectManagementDataSpaceImport {
-  operationId: string;
-  exportId: string;
-  status: string;
-  requestedAt: string;
-}
-
 export interface ProjectManagementMemberCandidateQuery {
   pageIndex?: number;
   pageSize?: number;
   keyword?: string;
+  projectId?: string;
   deptId?: string;
   positionId?: string;
 }
@@ -418,6 +357,18 @@ export interface ProjectManagementMyWorkQuery {
   includeCompleted?: boolean;
 }
 
+export interface ProjectManagementMyWorkProjectOptionQuery {
+  keyword?: string;
+  pageIndex?: number;
+  pageSize?: number;
+}
+
+export interface ProjectManagementMyWorkProjectOption {
+  id: string;
+  projectCode: string;
+  projectName: string;
+}
+
 export interface ProjectManagementMyWorkItem {
   task: ProjectManagementTask;
   projectName: string;
@@ -451,6 +402,7 @@ export interface ProjectManagementProject {
   status: string;
   priority: string;
   ownerUserId: string;
+  ownerDisplayName?: string;
   startDate?: string;
   dueDate?: string;
   completedAt?: string;
@@ -791,39 +743,6 @@ export interface ProjectManagementTaskAttachment {
   previewPipeline?: string;
 }
 
-export interface ProjectManagementDataSpaceSummary {
-  tenantId: string;
-  appCode: string;
-  databaseStatus: string;
-  projectCount: number;
-  taskCount: number;
-  memberCount: number;
-  milestoneCount: number;
-  attachmentCount: number;
-  lastActivityTime?: string | null;
-  dataSpaceName: string;
-  databaseBindingStatus: string;
-  statusMessage?: string | null;
-  handlingRoute?: string | null;
-  isStatisticsScoped: boolean;
-  lastBackupTime?: string | null;
-  availableDataSpaces: ProjectManagementDataSpaceOption[];
-}
-
-export interface ProjectManagementDataSpaceOption {
-  workspaceId: string;
-  tenantId: string;
-  tenantName: string;
-  appCode: string;
-  appName: string;
-  status: string;
-  isAvailable: boolean;
-  isDatabaseBound: boolean;
-  isCurrent: boolean;
-  disabledReason?: string | null;
-  handlingRoute?: string | null;
-}
-
 export type ProjectManagementSearchScope = 'all' | 'projects' | 'tasks' | 'milestones' | 'labels' | 'members' | 'comments';
 
 export interface ProjectManagementSearchQuery {
@@ -978,6 +897,8 @@ export interface ProjectManagementSyncJournalItem {
   source: string;
   fieldChanges?: ProjectManagementSyncFieldChange[] | null;
   deviceId?: string | null;
+  projectDisplayName?: string;
+  aggregateDisplayName?: string;
 }
 
 export interface ProjectManagementSyncConflict {
@@ -1072,6 +993,7 @@ export interface ProjectManagementSyncHistoryItem {
   errorMessage?: string | null;
   retryOfHistoryId?: string | null;
   occurredAt: string;
+  actorDisplayName?: string;
 }
 
 export interface ProjectManagementSyncHistoryDetail {

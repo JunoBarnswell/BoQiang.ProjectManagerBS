@@ -76,6 +76,8 @@ export interface TabStoreState {
   clearPageCache: (cacheKey: string) => void;
   clearTabCache: (tabPath: string) => void;
   closeTab: (path: string) => void;
+  ensureRouteTab: (tab: Omit<OpenTab, 'refreshToken'>) => void;
+  getCloseFallback: (path: string, homePath: string) => string;
   getPageCache: <T>(cacheKey: string) => T | undefined;
   openTabs: OpenTab[];
   pageCache: PageCache;
@@ -83,6 +85,7 @@ export interface TabStoreState {
   resetTabs: (tabs?: OpenTab[]) => void;
   setOpenTabs: (tabs: OpenTab[]) => void;
   setPageCache: (cacheKey: string, value: unknown) => void;
-  activeWorkspaceKey: string;
-  workspaceTabGroups: Record<string, OpenTab[]>;
+    activeWorkspaceKey: string;
+    workspaceActivationVersion: number;
+    workspaceTabGroups: Record<string, OpenTab[]>;
 }

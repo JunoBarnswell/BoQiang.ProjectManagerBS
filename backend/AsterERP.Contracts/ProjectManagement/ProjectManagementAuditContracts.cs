@@ -30,7 +30,10 @@ public sealed record ProjectManagementAuditItem(
     DateTime CreatedTime,
     string Source = "Business",
     string? SourceDeviceId = null,
-    bool IsSuccess = true);
+    bool IsSuccess = true,
+    string? ProjectDisplayName = null,
+    string? AggregateDisplayName = null,
+    string? ActorDisplayName = null);
 
 /// <summary>
 /// 单条审计记录的受控详情。不会暴露 pm_activities.Remark 原文，字段差异会在服务端再次脱敏。
@@ -116,4 +119,5 @@ public sealed record ProjectManagementOperationItem(
     string TraceId,
     string ActorUserId,
     DateTime StartedTime,
-    DateTime? CompletedTime);
+    DateTime? CompletedTime,
+    string? ActorDisplayName = null);

@@ -20,4 +20,5 @@ public sealed record ProjectManagementMemberCandidateQuery(
     int PageSize = 20,
     string? Keyword = null,
     string? DeptId = null,
-    string? PositionId = null);
+    string? PositionId = null,
+    string? ProjectId = null);

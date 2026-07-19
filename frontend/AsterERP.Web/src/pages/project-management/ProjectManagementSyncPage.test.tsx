@@ -16,10 +16,6 @@ vi.mock("@tanstack/react-query", () => ({
   useQueryClient: () => ({ invalidateQueries: vi.fn() }),
 }));
 
-vi.mock("react-router-dom", () => ({
-  Link: ({ children }: { children: React.ReactNode }) => <a href="/project-data-space">{children}</a>,
-}));
-
 vi.mock("../../api/project-management/projectManagement.api", () => ({
   acknowledgeProjectManagementSync: vi.fn(),
   exportProjectManagementSync: vi.fn(),

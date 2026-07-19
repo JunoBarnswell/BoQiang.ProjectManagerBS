@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
 import {
   archiveProjectManagementProject,
@@ -13,7 +13,6 @@ import type {
   ProjectManagementProject,
   ProjectManagementProjectUpsertRequest
 } from '../../api/project-management/projectManagement.types';
-import { usePermission } from '../../core/auth/usePermission';
 import { isHttpError } from '../../core/http/httpError';
 import { queryKeys } from '../../core/query/queryKeys';
 import { useApiMutation } from '../../core/query/useApiMutation';
@@ -69,10 +68,6 @@ const projectFormFields: FormFieldConfig<ProjectManagementProjectUpsertRequest>[
 export function ProjectManagementPage() {
   const scope = useProjectManagementWorkspaceScope();
   const userId = useAuthStore((state) => state.user?.userId ?? '');
-  const { hasPermission: canViewProjectManagement } = usePermission('project-management:project:view');
-  const { hasPermission: canExportSync } = usePermission('project-management:sync:export');
-  const { hasPermission: canImportSync } = usePermission('project-management:sync:import');
-  const { hasPermission: canViewAudit } = usePermission('project-management:audit:view');
   const confirm = useConfirm();
   const message = useMessage();
   const navigate = useNavigate();
@@ -181,7 +176,7 @@ export function ProjectManagementPage() {
     { key: 'status', title: '状态', width: '118px', render: (row) => <ProjectStatus status={row.status} /> },
     { key: 'priority', title: '优先级', width: '106px', render: (row) => <PriorityBadge priority={row.priority} /> },
     { key: 'progressPercent', title: '进度', width: '142px', render: (row) => <Progress value={row.progressPercent} /> },
-    { key: 'ownerUserId', title: '负责人', width: '140px', render: (row) => row.ownerUserId || '未分配' }
+    { key: 'ownerDisplayName', title: '负责人', width: '140px', render: (row) => row.ownerDisplayName || '未分配' }
   ], [preferences.favoriteProjectIds, toggleFavorite]);
 
   if (!scope.isAvailable) {
@@ -210,48 +205,30 @@ export function ProjectManagementPage() {
       eyebrow="ProjectManagement"
       title="项目管理"
       toolbar={
-        <div className="pm-toolbar-summary">
-          <form className="flex flex-wrap items-center gap-2" onSubmit={(event) => { event.preventDefault(); setSubmittedKeyword(keyword.trim()); setPageIndex(1); }}>
+        <div className="flex min-w-0 flex-col gap-2">
+          <div className="responsive-toolbar">
+            <form className="responsive-toolbar__actions justify-start" onSubmit={(event) => { event.preventDefault(); setSubmittedKeyword(keyword.trim()); setPageIndex(1); }}>
             <input aria-label="搜索项目" value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜索编码或名称" />
             <select aria-label="按项目状态筛选" value={status} onChange={(event) => { setStatus(event.target.value); setPageIndex(1); }}>
               <option value="">全部状态</option>
               {['Planning', 'Active', 'Paused', 'Completed', 'Canceled', 'Archived'].map((value) => <option key={value} value={value}>{projectStatusLabel(value)}</option>)}
             </select>
-            <input aria-label="按负责人筛选" value={ownerUserId} onChange={(event) => { setOwnerUserId(event.target.value); setPageIndex(1); }} placeholder="负责人账号" />
-            <button type="submit">搜索</button>
-            {submittedKeyword || status || ownerUserId ? <button type="button" onClick={() => { setKeyword(''); setSubmittedKeyword(''); setStatus(''); setOwnerUserId(''); setPageIndex(1); }}>清空</button> : null}
-          </form>
-          <div className="flex flex-wrap items-center gap-2" aria-label="项目中心集合与视图">
-            {(['all', 'favorites', 'recent'] as ProjectCenterCollection[]).map((value) => <button className={collection === value ? 'rounded bg-slate-800 px-2 py-1 text-white' : 'rounded border px-2 py-1'} key={value} onClick={() => { setCollection(value); setPageIndex(1); }} type="button">{value === 'all' ? '全部项目' : value === 'favorites' ? '我的收藏' : '最近访问'}</button>)}
-            <button className="rounded border px-2 py-1" onClick={() => setViewMode(viewMode === 'list' ? 'card' : 'list')} type="button">{viewMode === 'list' ? '卡片视图' : '列表视图'}</button>
+            <input aria-label="按负责人筛选" value={ownerUserId} onChange={(event) => { setOwnerUserId(event.target.value); setPageIndex(1); }} placeholder="负责人名称" />
+            <button className="primary-button" type="submit">搜索</button>
+            {submittedKeyword || status || ownerUserId ? <button className="ghost-button" type="button" onClick={() => { setKeyword(''); setSubmittedKeyword(''); setStatus(''); setOwnerUserId(''); setPageIndex(1); }}>清空</button> : null}
+            </form>
+            <div className="responsive-toolbar__actions" aria-label="项目中心集合与视图">
+              {(['all', 'favorites', 'recent'] as ProjectCenterCollection[]).map((value) => <button className={collection === value ? 'primary-button' : 'ghost-button'} key={value} onClick={() => { setCollection(value); setPageIndex(1); }} type="button">{value === 'all' ? '全部项目' : value === 'favorites' ? '我的收藏' : '最近访问'}</button>)}
+              <button className="ghost-button" onClick={() => setViewMode(viewMode === 'list' ? 'card' : 'list')} type="button">{viewMode === 'list' ? '卡片视图' : '列表视图'}</button>
+            </div>
           </div>
-          <ProjectManagementReversibleCommandControls />
-          <span>当前工作区共 <strong>{projectsQuery.data?.data?.total ?? 0}</strong> 个项目</span>
+          <div className="responsive-toolbar">
+            <span className="text-xs text-gray-500">当前工作区共 <strong>{projectsQuery.data?.data?.total ?? 0}</strong> 个项目</span>
+            <div className="responsive-toolbar__actions"><ProjectManagementReversibleCommandControls /></div>
+          </div>
         </div>
       }
     >
-      {canViewProjectManagement || canExportSync || canImportSync || canViewAudit ? (
-        <section aria-labelledby="project-management-workbench-title" className="mb-4 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h2 id="project-management-workbench-title" className="text-base font-semibold text-gray-900">项目管理工作台</h2>
-              <p className="mt-1 text-sm text-gray-600">从当前账号可访问的项目管理能力快速进入对应页面。</p>
-            </div>
-            <span className="rounded-full bg-gray-100 px-2 py-1 text-xs text-gray-600">当前工作区</span>
-          </div>
-          <nav aria-label="项目管理工作台快捷入口" className="mt-3 flex flex-wrap gap-2">
-            {canViewProjectManagement ? <>
-              <Link className="rounded border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" to={toProjectManagementPlatformRoute('project-search')}>项目搜索</Link>
-              <Link className="rounded border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" to={toProjectManagementPlatformRoute('my-work')}>我的工作</Link>
-              <Link className="rounded border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" to={toProjectManagementPlatformRoute('project-recycle-bin')}>回收站</Link>
-              <Link className="rounded border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" to={toProjectManagementPlatformRoute('project-data-space')}>数据空间</Link>
-            </> : null}
-            {canExportSync || canImportSync ? <Link className="rounded border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" to={toProjectManagementPlatformRoute('project-sync')}>同步</Link> : null}
-            {canViewAudit ? <Link className="rounded border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" to={toProjectManagementPlatformRoute('project-audit-center')}>审计中心</Link> : null}
-          </nav>
-          <p className="mt-3 text-xs text-gray-500">说明：SYSTEM 工作台暂不提供物理数据库备份或恢复入口。</p>
-        </section>
-      ) : null}
       {rows.length === 0 ? <ProjectManagementPageStateView state="empty" /> : viewMode === 'card' ? <ProjectCardGrid favoriteProjectIds={preferences.favoriteProjectIds} onOpen={openProject} onToggleFavorite={toggleFavorite} projects={rows} /> : <DataTable
         columnSettingsKey="project-management-projects"
         columns={columns}
@@ -291,7 +268,7 @@ function ProjectCardGrid({ projects, favoriteProjectIds, onOpen, onToggleFavorit
     <div className="pm-task-card__meta"><ProjectStatus status={project.status} /><PriorityBadge priority={project.priority} /></div>
     <Progress value={project.progressPercent} />
     <p className="pm-muted">{project.description || '暂无项目说明'}</p>
-    <div className="pm-task-card__signals"><span>负责人：{project.ownerUserId || '未分配'}</span><span>截止：{project.dueDate ? new Date(project.dueDate).toLocaleDateString() : '未设置'}</span></div>
+    <div className="pm-task-card__signals"><span>负责人：{project.ownerDisplayName || '未分配'}</span><span>截止：{project.dueDate ? new Date(project.dueDate).toLocaleDateString() : '未设置'}</span></div>
     <button className="pm-task-card__open" onClick={() => onOpen(project.id)} type="button">进入项目</button>
   </article>)}</div>;
 }

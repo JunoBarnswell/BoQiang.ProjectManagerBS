@@ -17,7 +17,6 @@ export const projectManagementRoutePaths = [
   'project-search',
   'project-sync',
   'project-recycle-bin',
-  'project-data-space',
   'project-audit-center',
 ] as const;
 
@@ -36,7 +35,6 @@ export function normalizeProjectManagementTargetRoute(targetRoute: string): stri
     route === 'project-search' ||
     route === 'project-sync' ||
     route === 'project-recycle-bin' ||
-    route === 'project-data-space' ||
     route === 'project-audit-center'
     ? toProjectManagementPlatformRoute(route)
     : targetRoute;

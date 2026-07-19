@@ -13,6 +13,9 @@ import { ImProvider } from '../../features/im/components/ImProvider';
 import { ImUnreadEntry } from '../../features/im/components/ImUnreadEntry';
 import { ProjectManagementImConversationTargetLink } from '../../features/project-management/im/ProjectManagementImConversationTargetLink';
 import { ProjectManagementNotificationEntry } from '../../features/project-management/notifications/ProjectManagementNotificationEntry';
+import { ProjectManagementWorkbenchLayout } from '../../features/project-management/components/ProjectManagementWorkbenchLayout';
+import { isProjectManagementWorkbenchPath } from '../../features/project-management/state/projectManagementWorkbenchNavigation';
+import { projectManagementPlatformRoutePrefix } from '../../features/project-management/state/projectManagementPlatformRoutes';
 import { useConfirm } from '../../shared/feedback/useConfirm';
 import { resolveMenuLabel } from '../navigation/menuLabels';
 
@@ -24,10 +27,12 @@ export function AppLayout() {
   const navigate = useNavigate();
   const confirm = useConfirm();
   const openTabs = useTabStore((state) => state.openTabs);
-  const addTab = useTabStore((state) => state.addTab);
   const closeTab = useTabStore((state) => state.closeTab);
+  const ensureRouteTab = useTabStore((state) => state.ensureRouteTab);
+  const getCloseFallback = useTabStore((state) => state.getCloseFallback);
   const refreshTab = useTabStore((state) => state.refreshTab);
   const resetTabs = useTabStore((state) => state.resetTabs);
+  const workspaceActivationVersion = useTabStore((state) => state.workspaceActivationVersion);
   const theme = useThemeStore((state) => state.theme);
   const setTheme = useThemeStore((state) => state.setTheme);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -39,6 +44,7 @@ export function AppLayout() {
   const branding = useWorkspaceStore((state) => state.branding);
   const currentWorkspace = useWorkspaceStore((state) => state.currentWorkspace);
   const locationKey = `${location.pathname}${location.search}`;
+  const activeTabPath = isProjectManagementWorkbenchPath(location.pathname) ? projectManagementPlatformRoutePrefix : locationKey;
   const menuLookupPath = useMemo(
     () => toWorkspaceLocalPath(locationKey, currentWorkspace?.tenantId, currentWorkspace?.appCode, currentWorkspace?.workspaceLevel),
     [currentWorkspace?.appCode, currentWorkspace?.tenantId, currentWorkspace?.workspaceLevel, locationKey]
@@ -61,24 +67,25 @@ export function AppLayout() {
       return;
     }
 
-    const localResolvedPath = currentMenu?.routePath ?? (location.search || currentRoute.tabMode === 'detail' ? menuLookupPath : currentRoute.path);
+    const isProjectManagementWorkbench = isProjectManagementWorkbenchPath(location.pathname);
+    const localResolvedPath = isProjectManagementWorkbench
+      ? projectManagementPlatformRoutePrefix
+      : currentMenu?.routePath ?? (location.search || currentRoute.tabMode === 'detail' ? menuLookupPath : currentRoute.path);
     const resolvedPath = toWorkspaceDisplayPath(localResolvedPath, currentWorkspace?.tenantId, currentWorkspace?.appCode, currentWorkspace?.workspaceLevel);
     const nextTab = {
       cacheKey: resolvedPath,
       closable: !isDefaultWorkspacePath(resolvedPath, currentWorkspace?.workspaceLevel),
       id: resolvedPath,
-      isDefault: openTabs.length === 0 && isDefaultWorkspacePath(resolvedPath, currentWorkspace?.workspaceLevel),
-      label: currentMenuLabel ?? translate(currentRoute.labelKey),
+      isDefault: isDefaultWorkspacePath(resolvedPath, currentWorkspace?.workspaceLevel),
+      label: isProjectManagementWorkbench ? '项目管理' : currentMenuLabel ?? translate(currentRoute.labelKey),
       path: resolvedPath,
-      refreshToken: openTabs.find((tab) => tab.path === resolvedPath)?.refreshToken ?? 0,
-      title: currentMenuLabel ?? translate(currentRoute.labelKey)
+      title: isProjectManagementWorkbench ? '项目管理' : currentMenuLabel ?? translate(currentRoute.labelKey)
     };
 
-    if (currentRoute.cachePolicy !== 'none' || isDefaultWorkspacePath(resolvedPath, currentWorkspace?.workspaceLevel)) {
-      addTab(nextTab);
+    if (isProjectManagementWorkbench || currentRoute.cachePolicy !== 'none' || isDefaultWorkspacePath(resolvedPath, currentWorkspace?.workspaceLevel)) {
+      ensureRouteTab(nextTab);
     }
   }, [
-    addTab,
     currentMenuLabel,
     currentMenu?.routePath,
     currentRoute.labelKey,
@@ -88,13 +95,15 @@ export function AppLayout() {
     currentWorkspace?.appCode,
     currentWorkspace?.tenantId,
     currentWorkspace?.workspaceLevel,
+    ensureRouteTab,
     isAuthenticated,
     location.search,
     locationKey,
+    location.pathname,
     menuLookupPath,
-    openTabs,
     resetTabs,
-    translate
+    translate,
+    workspaceActivationVersion
   ]);
 
   const breadcrumbItems = useMemo(
@@ -129,7 +138,7 @@ export function AppLayout() {
     [currentWorkspace?.appCode, currentWorkspace?.tenantId, currentWorkspace?.workspaceLevel, menus, openTabs, translate]
   );
 
-  const activeTab = useMemo(() => openTabs.find((tab) => tab.path === locationKey), [locationKey, openTabs]);
+  const activeTab = useMemo(() => openTabs.find((tab) => tab.path === activeTabPath), [activeTabPath, openTabs]);
 
   if (!isAuthenticated) {
     return <Navigate replace to="/login" />;
@@ -138,22 +147,21 @@ export function AppLayout() {
   return (
     <ImProvider>
       <BasicLayout
-      activePath={locationKey}
+       activePath={activeTabPath}
       breadcrumbItems={breadcrumbItems}
-      contentKey={`${locationKey}:${activeTab?.refreshToken ?? 0}`}
+       contentKey={`${activeTabPath}:${activeTab?.refreshToken ?? 0}`}
       currentUserName={user?.displayName ?? user?.userName}
       headerExtra={<ImUnreadEntry />}
       notificationEntry={<ProjectManagementNotificationEntry />}
       locale={locale}
       onCloseCurrent={() => {
-        if (locationKey === workspaceHomePath) {
+         if (activeTabPath === workspaceHomePath) {
           return;
-        }
+          }
 
-        const currentIndex = openTabs.findIndex((tab) => tab.path === locationKey);
-        const fallbackPath = openTabs[currentIndex - 1]?.path ?? openTabs[currentIndex + 1]?.path ?? workspaceHomePath;
-        closeTab(locationKey);
-        navigate(fallbackPath, { replace: true });
+          const fallbackPath = getCloseFallback(activeTabPath, workspaceHomePath);
+          navigate(fallbackPath, { replace: true });
+          closeTab(activeTabPath);
       }}
       homePath={workspaceHomePath}
       onLocaleChange={(nextLocale) => setLocale(nextLocale)}
@@ -190,21 +198,20 @@ export function AppLayout() {
           onConfirm: switchWorkspace
         });
       }}
-      onRefreshCurrent={() => refreshTab(locationKey)}
+       onRefreshCurrent={() => refreshTab(activeTabPath)}
       onTabClick={(path) => navigate(path)}
       onTabClose={(path) => {
-        const nextTabs = openTabs.filter((tab) => tab.path !== path);
-        closeTab(path);
+         if (path !== activeTabPath) {
+           closeTab(path);
+           return;
+          }
 
-        if (path !== locationKey) {
-          return;
-        }
-
-        const fallbackPath = nextTabs[0]?.path ?? workspaceHomePath;
-        navigate(fallbackPath, { replace: true });
+          const fallbackPath = getCloseFallback(path, workspaceHomePath);
+          navigate(fallbackPath, { replace: true });
+          closeTab(path);
       }}
       onCloseOthers={() => {
-        const currentTab = openTabs.find((tab) => tab.path === locationKey);
+         const currentTab = openTabs.find((tab) => tab.path === activeTabPath);
         const homeTab = openTabs.find((tab) => tab.isDefault || tab.path === workspaceHomePath);
         const nextTabs = [];
         if (homeTab) nextTabs.push(homeTab);
@@ -216,7 +223,7 @@ export function AppLayout() {
         navigate(workspaceHomePath);
       }}
       menuTree={menus}
-      tabs={tabs}
+       tabs={tabs}
       subtitle={currentWorkspace ? `${currentWorkspace.tenantName} / ${currentWorkspace.systemName || currentWorkspace.appName}` : currentMenuLabel ?? translate(currentRoute.labelKey)}
       theme={theme}
       title={branding?.systemName ?? translate('app.title')}
@@ -224,7 +231,7 @@ export function AppLayout() {
       workspaceLevel={currentWorkspace?.workspaceLevel}
       workspaceTenantId={currentWorkspace?.tenantId}
     >
-      <Outlet />
+       {isProjectManagementWorkbenchPath(location.pathname) ? <ProjectManagementWorkbenchLayout><Outlet /></ProjectManagementWorkbenchLayout> : <Outlet />}
       </BasicLayout>
       <ImConversationDrawer
         renderConversationContext={(conversation) => conversation.conversationType === 'Group' && conversation.conversationKey.startsWith('pm:')

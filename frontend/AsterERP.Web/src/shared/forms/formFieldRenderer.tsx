@@ -17,6 +17,9 @@ export function renderFormField<TValues extends object>({
     disabled: field.disabled,
     placeholder: typeof field.placeholder === 'string' ? translateCurrentLiteral(field.placeholder) : field.placeholder,
     required: field.required,
+    max: field.max,
+    min: field.min,
+    step: field.step,
     className: "w-full border border-gray-300 rounded-md px-2.5 py-1.5 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 transition-all text-sm bg-white"
   };
 
@@ -44,6 +47,19 @@ export function renderFormField<TValues extends object>({
             )
           }
         />
+      );
+    case 'range':
+      return (
+        <div className="flex items-center gap-3">
+          <input
+            {...commonProps}
+            className="h-2 flex-1 cursor-pointer accent-primary-600"
+            type="range"
+            value={typeof value === 'number' ? value : value ? Number(value) : 0}
+            onChange={(event) => onValueChange(field.name, Number(event.target.value) as TValues[keyof TValues & string])}
+          />
+          <output className="min-w-10 text-right text-sm font-medium text-gray-700">{typeof value === 'number' ? value : 0}%</output>
+        </div>
       );
     case 'date':
     case 'datetime-local':

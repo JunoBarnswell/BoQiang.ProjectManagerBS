@@ -89,4 +89,5 @@ public sealed record ProjectManagementProjectResponse(
     decimal ProgressPercent,
     long VersionNo,
     DateTime CreatedTime,
-    DateTime? UpdatedTime);
+    DateTime? UpdatedTime,
+    string? OwnerDisplayName = null);

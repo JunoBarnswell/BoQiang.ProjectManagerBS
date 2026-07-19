@@ -17,12 +17,16 @@ vi.mock('../../../shared/feedback/useMessage', () => ({
   useMessage: () => ({ error: vi.fn(), success: vi.fn() }),
 }));
 
+vi.mock('../../../shared/feedback/useConfirm', () => ({
+  useConfirm: () => vi.fn(),
+}));
+
 describe('ProjectManagementExcelImportPanel', () => {
   it('renders template download, upload preview and permission-gated controls', () => {
     render(<ProjectManagementExcelImportPanel />);
 
     expect(screen.getByRole('button', { name: '下载 Excel 模板' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: '上传并预览' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /拖放 Excel 文件到此处/ })).toBeTruthy();
     expect(screen.getByLabelText('选择 Excel 文件')).toBeTruthy();
   });
 });

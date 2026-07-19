@@ -86,9 +86,9 @@ describe('ProjectManagementOverviewPage', () => {
 
     expect(screen.getByText('整体进度')).toBeTruthy();
     expect(screen.getByText('当前账号无查看项目活动的权限。')).toBeTruthy();
-    expect(queryCalls).toHaveLength(2);
+    expect(queryCalls).toHaveLength(4);
     expect(queryCalls[0]?.enabled).toBe(true);
-    expect(queryCalls[1]?.enabled).toBe(false);
+    expect(queryCalls.find((query) => query.queryKey?.includes('activities'))?.enabled).toBe(false);
   });
 
   it('keeps the overview available when an authorized activity request fails', () => {
@@ -99,7 +99,7 @@ describe('ProjectManagementOverviewPage', () => {
 
     expect(screen.getByText('整体进度')).toBeTruthy();
     expect(screen.getByText('项目活动暂时无法加载。')).toBeTruthy();
-    expect(queryCalls[1]?.enabled).toBe(true);
+    expect(queryCalls.find((query) => query.queryKey?.includes('activities'))?.enabled).toBe(true);
   });
 
   it('renders items from the paged activity response instead of treating the response as an array', () => {

@@ -1,5 +1,6 @@
 using AsterERP.Api.Infrastructure.Database;
 using AsterERP.Api.Infrastructure.Security;
+using AsterERP.Api.Modules.ProjectManagement;
 using AsterERP.Api.Modules.Platform;
 using AsterERP.Api.Modules.System.Organizations;
 using AsterERP.Api.Modules.System.Users;
@@ -21,7 +22,8 @@ public interface IProjectManagementMemberCandidateService
 
 public sealed class ProjectManagementMemberCandidateService(
     IWorkspaceDatabaseAccessor databaseAccessor,
-    ICurrentUser currentUser) : IProjectManagementMemberCandidateService
+    ICurrentUser currentUser,
+    ProjectManagementAccessPolicy? accessPolicy = null) : IProjectManagementMemberCandidateService
 {
     public async Task<bool> IsSelectableAsync(string userId, CancellationToken cancellationToken = default)
         => await IsSelectableAsync(userId, null, cancellationToken);
@@ -58,6 +60,10 @@ public sealed class ProjectManagementMemberCandidateService(
         var normalizedKeyword = Normalize(query.Keyword);
         var normalizedDeptId = Normalize(query.DeptId);
         var normalizedPositionId = Normalize(query.PositionId);
+        var normalizedProjectId = Normalize(query.ProjectId);
+
+        if (normalizedProjectId is not null)
+            await Policy().EnsureCanViewProjectAsync(normalizedProjectId, cancellationToken);
 
         var userQuery = db.Queryable<SystemUserEntity>()
             .Where(user => !user.IsDeleted && user.Status == "Enabled");
@@ -99,6 +105,17 @@ public sealed class ProjectManagementMemberCandidateService(
                 user.DisplayName.Contains(normalizedKeyword) ||
                 (user.Email != null && user.Email.Contains(normalizedKeyword)) ||
                 (user.PhoneNumber != null && user.PhoneNumber.Contains(normalizedKeyword)));
+        }
+
+        if (normalizedProjectId is not null)
+        {
+            userQuery = userQuery.Where(user =>
+                SqlFunc.Subqueryable<ProjectManagementProjectEntity>()
+                    .Where(project => project.Id == normalizedProjectId && project.TenantId == tenantId && project.AppCode == appCode && !project.IsDeleted && project.OwnerUserId == user.Id)
+                    .Any() ||
+                SqlFunc.Subqueryable<ProjectManagementProjectMemberEntity>()
+                    .Where(member => member.ProjectId == normalizedProjectId && member.TenantId == tenantId && member.AppCode == appCode && member.UserId == user.Id && member.IsActive && !member.IsDeleted)
+                    .Any());
         }
 
         var totalCount = new RefAsync<int>();
@@ -232,6 +249,8 @@ public sealed class ProjectManagementMemberCandidateService(
 
     private string RequireAppCode() =>
         currentUser.GetAsterErpAppCode() ?? throw new InvalidOperationException("当前会话缺少应用上下文");
+
+    private ProjectManagementAccessPolicy Policy() => accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser);
 
     private static string? Normalize(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();

@@ -15,6 +15,8 @@ import type {
   ProjectManagementOverviewQuery,
   ProjectManagementMyWorkItem,
   ProjectManagementMyWorkQuery,
+  ProjectManagementMyWorkProjectOption,
+  ProjectManagementMyWorkProjectOptionQuery,
     ProjectManagementTask,
   ProjectManagementTaskDetail,
   ProjectManagementTaskDependency,
@@ -33,10 +35,6 @@ import type {
   ProjectManagementReversibleCommand,
   ProjectManagementReversibleCommandExecuteRequest,
   ProjectManagementReversibleCommandStack,
-  ProjectManagementBackup,
-  ProjectManagementBackupRestorePreview,
-  ProjectManagementDataSpaceExport,
-  ProjectManagementDataSpaceImport,
   ProjectManagementRecyclePurgePreview,
   ProjectManagementRecycleTaskPurgePreview,
   ProjectManagementTaskUpsertRequest,
@@ -51,8 +49,6 @@ import type {
   ProjectManagementNotificationPage,
   ProjectManagementNotificationOpenResult,
   ProjectManagementTaskAttachment,
-  ProjectManagementDataSpaceOption,
-  ProjectManagementDataSpaceSummary,
   ProjectManagementSavedView,
   ProjectManagementSavedViewUpsertRequest,
   ProjectManagementWorkspaceOverview,
@@ -118,6 +114,17 @@ export function getProjectManagementMyWork(
 ): Promise<ApiEnvelope<{ total: number; items: ProjectManagementMyWorkItem[] }>> {
   return httpClient.get<{ total: number; items: ProjectManagementMyWorkItem[] }>(
     `/project-management/my-work${buildQueryString(query)}`,
+    undefined,
+    signal,
+  );
+}
+
+export function getProjectManagementMyWorkProjectOptions(
+  query: ProjectManagementMyWorkProjectOptionQuery,
+  signal?: AbortSignal,
+): Promise<ApiEnvelope<{ total: number; items: ProjectManagementMyWorkProjectOption[] }>> {
+  return httpClient.get<{ total: number; items: ProjectManagementMyWorkProjectOption[] }>(
+    `/project-management/my-work/project-options${buildQueryString(query)}`,
     undefined,
     signal,
   );
@@ -653,18 +660,6 @@ export function previewProjectManagementTaskAttachment(
   return httpClient.downloadBlob(normalizeProjectManagementAttachmentPath(attachment.previewUrl), { signal, timeoutMs: 120_000 });
 }
 
-export function getProjectManagementDataSpaceSummary(
-  signal?: AbortSignal,
-): Promise<ApiEnvelope<ProjectManagementDataSpaceSummary>> {
-  return httpClient.get<ProjectManagementDataSpaceSummary>("/project-management/data-space/summary", undefined, signal);
-}
-
-export function getProjectManagementAvailableDataSpaces(
-  signal?: AbortSignal,
-): Promise<ApiEnvelope<ProjectManagementDataSpaceOption[]>> {
-  return httpClient.get<ProjectManagementDataSpaceOption[]>("/project-management/data-space/available", undefined, signal);
-}
-
 export function searchProjectManagement(
   query: ProjectManagementSearchQuery,
   signal?: AbortSignal,
@@ -911,62 +906,6 @@ export function startProjectManagementAuditExport(
 
 export function downloadProjectManagementAuditExport(operationId: string): Promise<{ blob: Blob; fileName: string }> {
   return httpClient.downloadBlob(`/project-management/audit/exports/${encodeURIComponent(operationId)}/download`, { timeoutMs: 120_000 });
-}
-
-export function getProjectManagementBackups(): Promise<ApiEnvelope<ProjectManagementBackup[]>> {
-  return httpClient.get<ProjectManagementBackup[]>("/project-management/backups");
-}
-
-export function createProjectManagementBackup(request: {
-  currentPassword: string;
-  confirmRisk: boolean;
-  reason?: string;
-}): Promise<ApiEnvelope<ProjectManagementBackup>> {
-  return httpClient.post<ProjectManagementBackup, typeof request>("/project-management/backups", request);
-}
-
-export function downloadProjectManagementBackup(id: string): Promise<{ blob: Blob; fileName: string }> {
-  return httpClient.downloadBlob(`/project-management/backups/${id}/download`);
-}
-
-export function deleteProjectManagementBackup(id: string, request: { currentPassword: string; confirmRisk: boolean }): Promise<ApiEnvelope<boolean>> {
-  return httpClient.post<boolean, typeof request>(`/project-management/backups/${id}/delete`, request);
-}
-
-export function restoreProjectManagementBackup(
-  id: string,
-  request: { currentPassword: string; confirmRisk: boolean },
-): Promise<ApiEnvelope<ProjectManagementBackup>> {
-  return httpClient.post<ProjectManagementBackup, typeof request>(`/project-management/backups/${id}/restore`, request);
-}
-
-export function previewProjectManagementBackupRestore(id: string): Promise<ApiEnvelope<ProjectManagementBackupRestorePreview>> {
-  return httpClient.get<ProjectManagementBackupRestorePreview>(`/project-management/backups/${id}/restore-preview`);
-}
-
-export function getProjectManagementDataSpaceExports(): Promise<ApiEnvelope<ProjectManagementDataSpaceExport[]>> {
-  return httpClient.get<ProjectManagementDataSpaceExport[]>('/project-management/data-space-exports');
-}
-
-export function startProjectManagementDataSpaceExport(request: {
-  currentPassword: string;
-  confirmRisk: boolean;
-  reason?: string;
-}): Promise<ApiEnvelope<ProjectManagementDataSpaceExport>> {
-  return httpClient.post<ProjectManagementDataSpaceExport, typeof request>('/project-management/data-space-exports', request);
-}
-
-export function downloadProjectManagementDataSpaceExport(id: string): Promise<{ blob: Blob; fileName: string }> {
-  return httpClient.downloadBlob(`/project-management/data-space-exports/${id}/download`, { timeoutMs: 120_000 });
-}
-
-export function startProjectManagementDataSpaceImport(request: {
-  exportId: string;
-  currentPassword: string;
-  confirmRisk: boolean;
-  reason?: string;
-}): Promise<ApiEnvelope<ProjectManagementDataSpaceImport>> {
-  return httpClient.post<ProjectManagementDataSpaceImport, typeof request>('/project-management/data-space-imports', request);
 }
 
 export function getProjectManagementSavedViews(

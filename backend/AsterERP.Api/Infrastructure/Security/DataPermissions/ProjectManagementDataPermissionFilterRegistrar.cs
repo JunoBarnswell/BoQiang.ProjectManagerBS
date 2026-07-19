@@ -230,18 +230,6 @@ public static class ProjectManagementDataPermissionFilterRegistrar
             return true;
         }
 
-        if (entityType == typeof(ProjectManagementBackupEntity))
-        {
-            db.QueryFilter.AddTableFilter<ProjectManagementBackupEntity>(backup => backup.TenantId == tenantId && backup.AppCode == appCode);
-            return true;
-        }
-
-        if (entityType == typeof(ProjectManagementDataSpaceExportEntity))
-        {
-            db.QueryFilter.AddTableFilter<ProjectManagementDataSpaceExportEntity>(export => export.TenantId == tenantId && export.AppCode == appCode);
-            return true;
-        }
-
         if (entityType == typeof(ProjectManagementOperationEntity))
         {
             db.QueryFilter.AddTableFilter<ProjectManagementOperationEntity>(operation => operation.TenantId == tenantId && operation.AppCode == appCode);

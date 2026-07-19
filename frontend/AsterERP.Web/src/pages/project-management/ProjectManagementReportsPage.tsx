@@ -5,11 +5,13 @@ import { downloadProjectManagementReportSnapshot, exportProjectManagementReportC
 import type { ProjectManagementOperation, ProjectManagementReportQuery, ProjectManagementReportSnapshotFormat, ProjectManagementReportSnapshotOptions } from '../../api/project-management/projectManagement.types';
 import { useApiMutation } from '../../core/query/useApiMutation';
 import { useAuthStore } from '../../core/state/authStore';
-import { ProjectManagementOperationProgress } from '../../features/project-management/components/ProjectManagementOperationProgress';
+import { projectStatusLabel } from '../../features/project-management/projectManagementPresentation';
+import { ProjectManagementSnapshotJobStatus } from '../../features/project-management/reports/ProjectManagementSnapshotJobStatus';
 import { getProjectManagementOperationTrackingKey, readProjectManagementOperationTracking, writeProjectManagementOperationTracking } from '../../features/project-management/state/projectManagementOperationTracking';
 import { useProjectManagementWorkspaceScope } from '../../features/project-management/state/projectManagementWorkspaceScope';
 import { PermissionButton } from '../../shared/auth/PermissionButton';
 import { useMessage } from '../../shared/feedback/useMessage';
+import { saveBlob } from '../../shared/file-preview/filePreviewUtils';
 import { ResponsivePage } from '../../shared/responsive/ResponsivePage';
 import { getErrorMessage } from '../../shared/utils/errorMessage';
 
@@ -38,25 +40,26 @@ export function ProjectManagementReportsPage() {
     setCompletedSnapshot(null);
   }, [snapshotStorageKey]);
 
+  const saveDownload = (blob: Blob, fileName: string) => {
+    saveBlob(blob, fileName);
+    message.success(`已生成 ${fileName}`);
+  };
   const csvMutation = useApiMutation({
     mutationFn: () => exportProjectManagementReportCsv(query),
     onError: (error) => message.error(getErrorMessage(error, 'CSV 报表导出失败')),
-    onSuccess: (result) => download(result.blob, result.fileName, message),
+    onSuccess: (result) => saveDownload(result.blob, result.fileName),
   });
   const excelMutation = useApiMutation({
     mutationFn: () => exportProjectManagementReportExcel(query),
     onError: (error) => message.error(getErrorMessage(error, 'Excel 报表导出失败')),
-    onSuccess: (result) => download(result.blob, result.fileName, message),
+    onSuccess: (result) => saveDownload(result.blob, result.fileName),
   });
   const snapshotMutation = useApiMutation({
     mutationFn: (format: ProjectManagementReportSnapshotFormat) => startProjectManagementReportSnapshot({ format, query, options }),
     onError: (error) => message.error(getErrorMessage(error, '报表快照启动失败')),
     onSuccess: (result) => {
       const operationId = result.data?.operationId;
-      if (!operationId) {
-        message.error('报表快照未返回后台任务标识');
-        return;
-      }
+      if (!operationId) return message.error('报表快照未返回后台任务标识');
       writeProjectManagementOperationTracking(snapshotStorageKey, operationId);
       setCompletedSnapshot(null);
       setSnapshotOperationId(operationId);
@@ -78,49 +81,62 @@ export function ProjectManagementReportsPage() {
   const snapshotDownloadMutation = useApiMutation({
     mutationFn: () => snapshotOperationId ? downloadProjectManagementReportSnapshot(snapshotOperationId) : Promise.reject(new Error('报表快照任务不存在')),
     onError: (error) => message.error(getErrorMessage(error, '报表快照下载失败')),
-    onSuccess: (result) => download(result.blob, result.fileName, message),
+    onSuccess: (result) => saveDownload(result.blob, result.fileName),
   });
   const isDirectExportPending = csvMutation.isPending || excelMutation.isPending;
+  const canStartSnapshot = !snapshotMutation.isPending && !snapshotOperationId;
 
-  return <ResponsivePage
-    title="项目报表"
-    eyebrow="ProjectManagement / Reports"
-    description="CSV 与 Excel 直接由服务端在当前授权范围内生成；完整 Excel 快照额外包含 Schema、项目、任务、成员、标签、依赖、评论、工时、附件、提醒、活动和变更日志工作表。PDF、CSV、Excel 快照由后台长任务生成并持久化，页面通过 SignalR 和轮询回补显示真实状态。"
-    toolbar={<span className="text-sm text-gray-500">当前深链项目：{projectId ?? '未指定'} · 导出范围：当前授权工作区</span>}
-  >
-    <section className="max-w-4xl rounded-lg border border-gray-200 p-4">
-      <h2 className="font-semibold">导出条件</h2>
-      <div className="mt-3 grid gap-3 md:grid-cols-3">
-        <label className="text-sm">关键字<input className="mt-1 w-full" maxLength={200} placeholder="项目编码或名称" value={keyword} onChange={(event) => setKeyword(event.target.value)} /></label>
-        <label className="text-sm">项目状态<select className="mt-1 w-full" value={status} onChange={(event) => setStatus(event.target.value)}>{statuses.map((item) => <option key={item} value={item}>{item || '全部状态'}</option>)}</select></label>
-        <label className="text-sm">最大导出行数<select className="mt-1 w-full" value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))}><option value={100}>100</option><option value={500}>500</option></select></label>
-      </div>
-      <div className="mt-3 flex flex-wrap gap-4 text-sm">
-        <label><input type="checkbox" checked={options.includeCompleted ?? false} onChange={(event) => setOptions((current) => ({ ...current, includeCompleted: event.target.checked }))} /> 包含已完成任务</label>
-        <label><input type="checkbox" checked={options.includeDeleted ?? false} onChange={(event) => setOptions((current) => ({ ...current, includeDeleted: event.target.checked }))} /> 包含已删除项目</label>
-        <label><input type="checkbox" checked={options.includeCommentSummary ?? false} onChange={(event) => setOptions((current) => ({ ...current, includeCommentSummary: event.target.checked }))} /> 评论摘要</label>
-        <label><input type="checkbox" checked={options.includeAttachmentList ?? false} onChange={(event) => setOptions((current) => ({ ...current, includeAttachmentList: event.target.checked }))} /> 附件清单</label>
-        <label><input type="checkbox" checked={options.includeGanttSnapshot ?? false} onChange={(event) => setOptions((current) => ({ ...current, includeGanttSnapshot: event.target.checked }))} /> 甘特快照</label>
-      </div>
-      <p className="mt-3 text-sm text-gray-500" role="status">服务端执行行数上限、公式前缀安全处理和数据权限过滤。后台快照完成后可重复下载，不会重新查询当前页面数据。</p>
-      <div className="mt-4 flex flex-wrap gap-2">
-        <PermissionButton code="project-management:report:export" disabled={isDirectExportPending} onClick={() => csvMutation.mutate()}> {csvMutation.isPending ? 'CSV 导出中…' : '直接导出 CSV'} </PermissionButton>
-        <PermissionButton code="project-management:report:export" disabled={isDirectExportPending} onClick={() => excelMutation.mutate()}> {excelMutation.isPending ? 'Excel 导出中…' : '直接导出 Excel'} </PermissionButton>
-        <PermissionButton code="project-management:report:export" disabled={snapshotMutation.isPending || Boolean(snapshotOperationId && !completedSnapshot)} onClick={() => snapshotMutation.mutate('pdf')}>{snapshotMutation.isPending ? '正在创建快照…' : '生成 PDF 快照'}</PermissionButton>
-        <PermissionButton code="project-management:report:export" disabled={snapshotMutation.isPending || Boolean(snapshotOperationId && !completedSnapshot)} onClick={() => snapshotMutation.mutate('xlsx')}>生成完整 Excel 快照</PermissionButton>
-        <PermissionButton code="project-management:report:export" disabled={snapshotMutation.isPending || Boolean(snapshotOperationId && !completedSnapshot)} onClick={() => snapshotMutation.mutate('csv')}>生成 CSV 快照</PermissionButton>
-      </div>
-    </section>
-    {snapshotOperationId ? <section className="mt-4 max-w-4xl rounded-lg border border-sky-200 p-4"><h2 className="font-semibold">后台快照任务</h2><div className="mt-3"><ProjectManagementOperationProgress clearOnTerminal={false} operationId={snapshotOperationId} onTerminal={(operation) => setCompletedSnapshot(operation)} onTrackingEnded={() => { setSnapshotOperationId(null); setCompletedSnapshot(null); }} /></div>{completedSnapshot?.status === 'Succeeded' ? <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-emerald-800"><span>快照已生成，可在有效期内重复下载。</span><PermissionButton code="project-management:report:export" disabled={snapshotDownloadMutation.isPending} onClick={() => snapshotDownloadMutation.mutate()}>{snapshotDownloadMutation.isPending ? '下载中…' : '下载快照'}</PermissionButton></div> : null}{completedSnapshot?.status === 'Failed' ? <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-red-700"><span>生成失败：{completedSnapshot.errorMessage ?? '后台服务未提供失败原因'}</span><PermissionButton code="project-management:report:export" disabled={retryMutation.isPending} onClick={() => retryMutation.mutate()}>{retryMutation.isPending ? '重试中…' : '重试生成'}</PermissionButton></div> : null}{completedSnapshot?.status === 'Canceled' ? <div className="mt-3 text-sm text-amber-700">该快照任务已取消，未保留可下载文件。</div> : null}</section> : null}
-  </ResponsivePage>;
+  return (
+    <ResponsivePage
+      title="项目报表"
+      eyebrow="ProjectManagement / Reports"
+      description="直接导出以当前授权范围实时生成；后台快照持久化生成过程和下载结果。"
+      toolbar={<span className="text-sm text-gray-500">当前深链项目：{projectId ?? '未指定'} · 导出范围：当前授权工作区</span>}
+    >
+      <section className="max-w-5xl rounded-lg border border-gray-200 p-4" aria-labelledby="report-conditions-title">
+        <h2 id="report-conditions-title" className="font-semibold">条件设置</h2>
+        <div className="mt-3 grid gap-3 md:grid-cols-3">
+          <label className="text-sm">关键字<input className="mt-1 w-full" maxLength={200} placeholder="项目编码或名称" value={keyword} onChange={(event) => setKeyword(event.target.value)} /></label>
+          <label className="text-sm">项目状态<select className="mt-1 w-full" value={status} onChange={(event) => setStatus(event.target.value)}>{statuses.map((item) => <option key={item} value={item}>{item ? projectStatusLabel(item) : '全部状态'}</option>)}</select></label>
+          <label className="text-sm">导出范围<select className="mt-1 w-full" value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))}><option value={100}>标准导出（最多 100 项）</option><option value={500}>完整导出（最多 500 项）</option></select></label>
+        </div>
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <OptionGroup title="基础选项">
+            <Checkbox checked={options.includeCompleted ?? false} label="包含已完成任务" onChange={(checked) => setOptions((current) => ({ ...current, includeCompleted: checked }))} />
+            <Checkbox checked={options.includeDeleted ?? false} label="包含已删除项目" onChange={(checked) => setOptions((current) => ({ ...current, includeDeleted: checked }))} />
+          </OptionGroup>
+          <OptionGroup title="附加内容">
+            <Checkbox checked={options.includeCommentSummary ?? false} label="评论摘要" onChange={(checked) => setOptions((current) => ({ ...current, includeCommentSummary: checked }))} />
+            <Checkbox checked={options.includeAttachmentList ?? false} label="附件清单" onChange={(checked) => setOptions((current) => ({ ...current, includeAttachmentList: checked }))} />
+            <Checkbox checked={options.includeGanttSnapshot ?? false} label="甘特快照" onChange={(checked) => setOptions((current) => ({ ...current, includeGanttSnapshot: checked }))} />
+          </OptionGroup>
+        </div>
+        <p className="mt-3 text-sm text-gray-500" role="status">服务端执行行数上限、公式前缀安全处理和数据权限过滤。</p>
+      </section>
+      <section className="mt-4 grid max-w-5xl gap-4 lg:grid-cols-2" aria-label="报表导出方式">
+        <ExportActionPanel description="立即按当前条件生成并下载，适合小范围数据查阅。" title="直接导出">
+          <PermissionButton code="project-management:report:export" disabled={isDirectExportPending} onClick={() => csvMutation.mutate()}>{csvMutation.isPending ? 'CSV 导出中…' : '导出 CSV'}</PermissionButton>
+          <PermissionButton code="project-management:report:export" disabled={isDirectExportPending} onClick={() => excelMutation.mutate()}>{excelMutation.isPending ? 'Excel 导出中…' : '导出 Excel'}</PermissionButton>
+        </ExportActionPanel>
+        <ExportActionPanel description="异步生成并保存结果，适合完整报表和耗时内容。" title="后台快照">
+          <PermissionButton code="project-management:report:export" disabled={!canStartSnapshot} onClick={() => snapshotMutation.mutate('pdf')}>生成 PDF 快照</PermissionButton>
+          <PermissionButton code="project-management:report:export" disabled={!canStartSnapshot} onClick={() => snapshotMutation.mutate('xlsx')}>生成完整 Excel</PermissionButton>
+          <PermissionButton code="project-management:report:export" disabled={!canStartSnapshot} onClick={() => snapshotMutation.mutate('csv')}>生成 CSV 快照</PermissionButton>
+        </ExportActionPanel>
+      </section>
+      {snapshotOperationId ? <ProjectManagementSnapshotJobStatus completedSnapshot={completedSnapshot} downloading={snapshotDownloadMutation.isPending} operationId={snapshotOperationId} retrying={retryMutation.isPending} onDownload={() => snapshotDownloadMutation.mutate()} onRetry={() => retryMutation.mutate()} onTerminal={setCompletedSnapshot} onTrackingEnded={() => { setSnapshotOperationId(null); setCompletedSnapshot(null); }} /> : null}
+    </ResponsivePage>
+  );
 }
 
-function download(blob: Blob, fileName: string, message: { success: (content: string) => void }) {
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = fileName;
-  anchor.click();
-  URL.revokeObjectURL(url);
-  message.success(`已生成 ${fileName}`);
+function Checkbox({ checked, label, onChange }: { checked: boolean; label: string; onChange: (checked: boolean) => void }) {
+  return <label className="flex items-center gap-2"><input checked={checked} type="checkbox" onChange={(event) => onChange(event.target.checked)} /> {label}</label>;
+}
+
+function ExportActionPanel({ children, description, title }: { children: React.ReactNode; description: string; title: string }) {
+  return <section className="rounded-lg border border-gray-200 bg-white p-4"><h2 className="font-semibold">{title}</h2><p className="mt-1 text-sm text-gray-500">{description}</p><div className="mt-4 flex flex-wrap gap-2">{children}</div></section>;
+}
+
+function OptionGroup({ children, title }: { children: React.ReactNode; title: string }) {
+  return <fieldset className="rounded border border-gray-200 p-3"><legend className="px-1 text-sm font-medium">{title}</legend><div className="mt-1 flex flex-wrap gap-x-4 gap-y-2 text-sm">{children}</div></fieldset>;
 }
