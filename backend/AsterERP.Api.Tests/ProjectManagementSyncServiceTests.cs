@@ -1,5 +1,9 @@
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.IO.Compression;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using AsterERP.Api.Application.ProjectManagement;
 using AsterERP.Api.Infrastructure.Abp.ProjectManagement;
 using AsterERP.Api.Infrastructure.Database;
@@ -123,6 +127,53 @@ public sealed class ProjectManagementSyncServiceTests
     }
 
     [Fact]
+    public async Task Import_merge_preserves_a_locally_changed_field_and_reports_the_field_level_conflict()
+    {
+        using var db = new SqlSugarClient(new ConnectionConfig
+        {
+            ConnectionString = $"Data Source=file:project-management-sync-merge-{Guid.NewGuid():N};Mode=Memory;Cache=Shared",
+            DbType = DbType.Sqlite,
+            IsAutoCloseConnection = false
+        });
+        await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
+        db.CodeFirst.InitTables<SystemUserEntity>();
+        await db.Insertable(new SystemUserEntity { Id = "operator", UserName = "operator", PasswordHash = "secret", Status = "Enabled" }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementProjectEntity { Id = "project-merge", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "MERGE", ProjectName = "Merge", OwnerUserId = "operator" }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementTaskEntity { Id = "task-merge", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-merge", TaskCode = "T-MERGE", Title = "Local", CreatedBy = "operator", CreatedTime = DateTime.UtcNow }).ExecuteCommandAsync();
+
+        var accessor = new TestWorkspaceDatabaseAccessor(db);
+        var user = CreateUser();
+        var service = new ProjectManagementSyncService(accessor, user, new ProjectManagementAccessPolicy(accessor, user), new TestPasswordHashService());
+        var journalWriter = new ProjectManagementSyncJournalWriter(accessor);
+        await journalWriter.AppendAsync(new ProjectManagementSyncJournalEvent(
+            "tenant-a", "SYSTEM", "Task", "task-merge", "project-merge", "updated", 1,
+            "{\"id\":\"task-merge\",\"title\":\"Remote\"}", "operator", "device-remote", "trace-merge",
+            FieldChanges: [new ProjectManagementSyncFieldChange("Title", "\"Base\"", "\"Remote\"")]));
+
+        var exported = await service.ExportAsync(new ProjectManagementSyncExportRequest("project-merge", DeviceId: "device-remote"));
+        using (var exportedArchive = new ZipArchive(new MemoryStream(exported.Content), ZipArchiveMode.Read))
+        {
+            var journalJson = await ReadEntryAsync(exportedArchive, "journal.json");
+            var exportedJournal = JsonNode.Parse(journalJson)!.AsArray();
+            Assert.Equal("Title", exportedJournal.Single()!["fieldChanges"]!.AsArray().Single()!["field"]!.GetValue<string>());
+            Assert.Equal("Title", JsonSerializer.Deserialize<List<ProjectManagementSyncJournalItem>>(journalJson, new JsonSerializerOptions(JsonSerializerDefaults.Web))!.Single().FieldChanges!.Single().Field);
+        }
+        var remotePackage = await ReplaceTaskTitleAsync(exported.Content, "Remote");
+
+        var preview = await service.PreviewAsync(new MemoryStream(remotePackage));
+        var titleConflict = Assert.Single(preview.ConflictDetails!, item => item.AggregateType == "Task" && item.AggregateId == "task-merge" && item.Field == "Title");
+        Assert.True(titleConflict.BaselineKnown, JsonSerializer.Serialize(titleConflict));
+        Assert.True(titleConflict.LocalChanged);
+        Assert.True(titleConflict.RemoteChanged);
+        Assert.Equal("\"Base\"", titleConflict.BaselineValue);
+
+        var imported = await service.ImportAsync(new MemoryStream(remotePackage), new ProjectManagementSyncImportRequest("secret", ConfirmRisk: true, ConflictStrategy: "Merge"));
+        Assert.Equal(0, imported.Updated);
+        Assert.True(imported.Skipped >= 2);
+        Assert.Equal("Local", (await db.Queryable<ProjectManagementTaskEntity>().SingleAsync(item => item.Id == "task-merge")).Title);
+    }
+
+    [Fact]
     public async Task Sync_watermark_accepts_zero_rejects_negative_and_future_values()
     {
         using var db = new SqlSugarClient(new ConnectionConfig
@@ -180,6 +231,42 @@ public sealed class ProjectManagementSyncServiceTests
         new Claim(AsterErpClaimTypes.TenantId, "tenant-a"),
         new Claim(AsterErpClaimTypes.AppCode, "SYSTEM")
     }, "test")));
+
+    private static async Task<byte[]> ReplaceTaskTitleAsync(byte[] package, string title)
+    {
+        using var source = new ZipArchive(new MemoryStream(package), ZipArchiveMode.Read);
+        var manifest = JsonNode.Parse(await ReadEntryAsync(source, "manifest.json"))!.AsObject();
+        var data = JsonNode.Parse(await ReadEntryAsync(source, "data.json"))!.AsObject();
+        data["tasks"]!.AsArray().Single()!["title"] = title;
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var dataBytes = Encoding.UTF8.GetBytes(data.ToJsonString(options));
+        manifest["dataSha256"] = Convert.ToHexString(SHA256.HashData(dataBytes));
+        manifest["signature"] = string.Empty;
+        var canonical = Encoding.UTF8.GetBytes(manifest.ToJsonString(options));
+        manifest["signature"] = Convert.ToHexString(HMACSHA256.HashData(Encoding.UTF8.GetBytes("tenant-a:SYSTEM:project-management-bqsync-v1"), canonical));
+
+        await using var result = new MemoryStream();
+        using (var archive = new ZipArchive(result, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            await WriteEntryAsync(archive, "manifest.json", Encoding.UTF8.GetBytes(manifest.ToJsonString(options)));
+            await WriteEntryAsync(archive, "data.json", dataBytes);
+            await WriteEntryAsync(archive, "journal.json", Encoding.UTF8.GetBytes(await ReadEntryAsync(source, "journal.json")));
+        }
+        return result.ToArray();
+    }
+
+    private static async Task<string> ReadEntryAsync(ZipArchive archive, string entryName)
+    {
+        await using var stream = archive.GetEntry(entryName)!.Open();
+        using var reader = new StreamReader(stream, Encoding.UTF8);
+        return await reader.ReadToEndAsync();
+    }
+
+    private static async Task WriteEntryAsync(ZipArchive archive, string entryName, byte[] content)
+    {
+        await using var stream = archive.CreateEntry(entryName, CompressionLevel.Fastest).Open();
+        await stream.WriteAsync(content);
+    }
 
     private sealed class TestWorkspaceDatabaseAccessor(ISqlSugarClient db) : IWorkspaceDatabaseAccessor
     {

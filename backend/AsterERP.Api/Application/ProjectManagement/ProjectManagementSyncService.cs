@@ -207,6 +207,7 @@ public sealed class ProjectManagementSyncService(
         var snapshot = JsonSerializer.Deserialize<SyncSnapshot>(data, JsonOptions) ?? throw new ValidationException("同步包数据为空");
         var journalRecords = JsonSerializer.Deserialize<List<ProjectManagementSyncJournalItem>>(journalData, JsonOptions) ?? [];
         if (journalRecords.Count != manifest.JournalCount) throw new ValidationException("同步包 Journal 数量与 Manifest 不一致");
+        snapshot.Journal = journalRecords;
         var projectIds = await ResolveScopeAsync(manifest.ProjectId, cancellationToken);
         var conflicts = await DetectConflictsAsync(snapshot, projectIds, cancellationToken);
         var replay = await FindImportResultAsync(manifest.PackageId, null, cancellationToken);
