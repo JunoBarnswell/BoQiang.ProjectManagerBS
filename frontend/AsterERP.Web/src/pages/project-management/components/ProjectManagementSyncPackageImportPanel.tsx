@@ -25,6 +25,7 @@ export function ProjectManagementSyncPackageImportPanel() {
   const [password, setPassword] = useState('');
   const [confirmRisk, setConfirmRisk] = useState(false);
   const [conflictStrategy, setConflictStrategy] = useState<ConflictStrategy>('Skip');
+  const [idempotencyKey, setIdempotencyKey] = useState('');
   const [preview, setPreview] = useState<ProjectManagementSyncPreviewResponse | null>(null);
   const [importResult, setImportResult] = useState<ProjectManagementSyncImportResponse | null>(null);
   const [failureMessage, setFailureMessage] = useState<string | null>(null);
@@ -43,6 +44,7 @@ export function ProjectManagementSyncPackageImportPanel() {
     },
     onSuccess: (result) => {
       setPreview(result.data);
+      setIdempotencyKey(result.data?.packageId ?? '');
       setImportResult(null);
       setFailureMessage(null);
       setFailedAction(null);
@@ -52,7 +54,7 @@ export function ProjectManagementSyncPackageImportPanel() {
   const applyMutation = useApiMutation({
     mutationFn: () => {
       if (!packageFile) throw new Error('请先选择同步包');
-      return applyProjectManagementSync(packageFile, { currentPassword: password, confirmRisk, conflictStrategy });
+      return applyProjectManagementSync(packageFile, { currentPassword: password, confirmRisk, conflictStrategy, idempotencyKey });
     },
     onError: (error) => {
       const messageText = getErrorMessage(error, '同步包导入失败');
@@ -98,6 +100,7 @@ export function ProjectManagementSyncPackageImportPanel() {
             setPackageFile(event.target.files?.[0] ?? null);
             setPreview(null);
             setImportResult(null);
+            setIdempotencyKey('');
             setFailureMessage(null);
             setFailedAction(null);
           }}
@@ -124,10 +127,23 @@ export function ProjectManagementSyncPackageImportPanel() {
             <span>成员 {preview.memberCount}</span>
             <span>里程碑 {preview.milestoneCount}</span>
             <span>冲突 {preview.conflicts.length}</span>
+            <span>模式 {preview.mode === 'Incremental' ? `增量（>${preview.sinceSequenceNo}）` : '全量'}</span>
           </div>
           {preview.conflicts.length ? (
             <div className="mt-2 text-amber-700">冲突：{preview.conflicts.join("；")}</div>
           ) : null}
+          {preview.conflictDetails?.length ? (
+            <div className="mt-2 space-y-2" aria-label="冲突详情">
+              {preview.conflictDetails.map((conflict) => (
+                <div className="rounded border border-amber-200 bg-amber-50 p-2 text-amber-900" key={`${conflict.aggregateType}-${conflict.aggregateId}`}>
+                  <div>{conflict.aggregateType} / {conflict.aggregateId} · 建议 {conflict.recommendedStrategy}</div>
+                  <div className="mt-1 break-all text-xs">本地：{conflict.localValue ?? '无'}</div>
+                  <div className="break-all text-xs">远端：{conflict.remoteValue ?? '无'}</div>
+                </div>
+              ))}
+            </div>
+          ) : null}
+          {preview.alreadyImported ? <div className="mt-2 text-blue-700">该同步包已有成功导入记录；使用相同幂等键执行将直接返回原结果。</div> : null}
           {preview.warnings.length ? (
             <div className="mt-2 text-amber-700">提示：{preview.warnings.join('；')}</div>
           ) : null}
@@ -153,6 +169,13 @@ export function ProjectManagementSyncPackageImportPanel() {
               value={password}
               onChange={(event) => setPassword(event.target.value)}
             />
+            <input
+              className="rounded border border-gray-300 px-3 py-2"
+              aria-label="同步导入幂等键"
+              placeholder="幂等键（默认包 ID）"
+              value={idempotencyKey}
+              onChange={(event) => setIdempotencyKey(event.target.value)}
+            />
             <label className="flex items-center gap-2">
               <input type="checkbox" checked={confirmRisk} onChange={(event) => setConfirmRisk(event.target.checked)} />
               确认执行高风险导入
@@ -173,8 +196,9 @@ export function ProjectManagementSyncPackageImportPanel() {
           <h3 className="font-medium">{importResult.warnings.length || importResult.skipped ? '导入完成，但有需要关注的结果' : '导入完成'}</h3>
           <div className="mt-1">
             包 {importResult.packageId} · 策略 {importResult.strategy} · 新增 {importResult.inserted} · 更新{' '}
-            {importResult.updated} · 跳过 {importResult.skipped} · 已导入附件 {importResult.attachmentsImported}
+            {importResult.updated} · 跳过 {importResult.skipped} · 已导入附件 {importResult.attachmentsImported} · 冲突 {importResult.conflictCount}
           </div>
+          <div className="mt-1 text-xs">{importResult.replayed ? '本次为幂等重放' : '本次为新导入'} · ImportId {importResult.importId} · TraceId {importResult.traceId}</div>
           {importResult.warnings.length ? <ul className="mt-2 list-disc space-y-1 pl-5">{importResult.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul> : null}
           {importResult.skipped ? <p className="mt-2">部分记录已按策略跳过；如需重新处理，请重新预览该包并选择适合的冲突策略。</p> : null}
         </section>

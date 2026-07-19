@@ -838,6 +838,18 @@ export interface ProjectManagementSyncJournalItem {
   createdTime: string;
 }
 
+export interface ProjectManagementSyncConflict {
+  aggregateType: string;
+  aggregateId: string;
+  projectId?: string | null;
+  field: string;
+  localValue?: string | null;
+  remoteValue?: string | null;
+  localVersionNo?: number | null;
+  remoteVersionNo?: number | null;
+  recommendedStrategy: string;
+}
+
 export interface ProjectManagementSyncPreviewResponse {
   packageId: string;
   schemaVersion: string;
@@ -857,6 +869,10 @@ export interface ProjectManagementSyncPreviewResponse {
   isCompatible: boolean;
   warnings: string[];
   conflicts: string[];
+  mode: 'Full' | 'Incremental' | string;
+  sinceSequenceNo: number;
+  conflictDetails?: ProjectManagementSyncConflict[] | null;
+  alreadyImported: boolean;
 }
 
 export interface ProjectManagementSyncImportResponse {
@@ -867,6 +883,11 @@ export interface ProjectManagementSyncImportResponse {
   skipped: number;
   attachmentsImported: number;
   warnings: string[];
+  importId: string;
+  traceId: string;
+  replayed: boolean;
+  conflictCount: number;
+  conflicts?: ProjectManagementSyncConflict[] | null;
 }
 
 export interface ProjectManagementSavedView {

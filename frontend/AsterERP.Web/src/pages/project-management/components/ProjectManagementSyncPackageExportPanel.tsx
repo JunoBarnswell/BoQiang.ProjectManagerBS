@@ -18,11 +18,15 @@ type ExportStatus =
 export function ProjectManagementSyncPackageExportPanel({ deviceId }: ProjectManagementSyncPackageExportPanelProps) {
   const message = useMessage();
   const [includeAttachments, setIncludeAttachments] = useState(false);
+  const [mode, setMode] = useState<'Full' | 'Incremental'>('Full');
+  const [sinceSequenceNo, setSinceSequenceNo] = useState('0');
   const [status, setStatus] = useState<ExportStatus>(null);
   const exportMutation = useApiMutation({
     mutationFn: () => exportProjectManagementSync({
       deviceId: deviceId.trim(),
       includeAttachments,
+      mode,
+      sinceSequenceNo: Math.max(0, Number.parseInt(sinceSequenceNo, 10) || 0),
     }),
     onError: (error) => {
       const failureMessage = getErrorMessage(error, '同步包导出失败');
@@ -45,6 +49,33 @@ export function ProjectManagementSyncPackageExportPanel({ deviceId }: ProjectMan
     <div className="mt-3 space-y-3" aria-live="polite">
       <div className="flex flex-wrap items-center gap-3">
         <label className="flex items-center gap-2 text-sm">
+          导出模式
+          <select
+            aria-label="同步导出模式"
+            value={mode}
+            disabled={exportMutation.isPending}
+            onChange={(event) => setMode(event.target.value as 'Full' | 'Incremental')}
+          >
+            <option value="Full">全量快照</option>
+            <option value="Incremental">增量变更</option>
+          </select>
+        </label>
+        {mode === 'Incremental' ? (
+          <label className="flex items-center gap-2 text-sm">
+            起始水位
+            <input
+              aria-label="同步起始水位"
+              className="w-28 rounded border border-gray-300 px-2 py-1"
+              inputMode="numeric"
+              min="0"
+              type="number"
+              value={sinceSequenceNo}
+              disabled={exportMutation.isPending}
+              onChange={(event) => setSinceSequenceNo(event.target.value)}
+            />
+          </label>
+        ) : null}
+        <label className="flex items-center gap-2 text-sm">
           <input
             checked={includeAttachments}
             disabled={exportMutation.isPending}
@@ -62,7 +93,7 @@ export function ProjectManagementSyncPackageExportPanel({ deviceId }: ProjectMan
         </PermissionButton>
       </div>
       <p className="text-sm text-gray-500">
-        导出范围由服务端按当前工作区与项目访问权限确定。包含附件会增加包体积；服务端生成期间请保持此页面打开。
+        导出范围由服务端按当前工作区与项目访问权限确定。增量模式按起始水位读取同步日志；包含附件会增加包体积。
       </p>
       {exportMutation.isPending ? (
         <div className="rounded border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900" role="status">

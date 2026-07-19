@@ -24,14 +24,18 @@ public sealed class ProjectManagementSyncService(
     IProjectManagementOperationWriter? operationWriter = null) : IProjectManagementSyncService
 {
     private const string Magic = "BQSYNC";
-    private const string SchemaVersion = "1";
+    private const string SchemaVersion = "2";
     private const int MaxPackageBytes = 200 * 1024 * 1024;
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     public async Task<(byte[] Content, string FileName)> ExportAsync(ProjectManagementSyncExportRequest request, CancellationToken cancellationToken = default)
     {
+        var mode = NormalizeMode(request.Mode);
         var projectIds = await ResolveScopeAsync(request.ProjectId, cancellationToken);
-        var snapshot = await LoadSnapshotAsync(projectIds, cancellationToken);
+        var sinceSequenceNo = await ResolveSinceSequenceNoAsync(request, mode, cancellationToken);
+        var snapshot = mode == "Incremental"
+            ? await LoadIncrementalSnapshotAsync(projectIds, sinceSequenceNo, cancellationToken)
+            : await LoadSnapshotAsync(projectIds, cancellationToken);
         var journalSequenceNo = await GetJournalSequenceNoAsync(projectIds, cancellationToken);
         var packageId = Guid.NewGuid().ToString("N");
         var data = JsonSerializer.SerializeToUtf8Bytes(snapshot, JsonOptions);
@@ -46,6 +50,8 @@ public sealed class ProjectManagementSyncService(
             SourceDeviceId = Normalize(request.DeviceId),
             ProjectId = request.ProjectId,
             IncludeAttachments = request.IncludeAttachments,
+            Mode = mode,
+            SinceSequenceNo = sinceSequenceNo,
             DataEntry = "data.json",
             DataSha256 = Sha256(data),
             ProjectCount = snapshot.Projects.Count,
@@ -57,24 +63,40 @@ public sealed class ProjectManagementSyncService(
             JournalSequenceNo = journalSequenceNo
         };
 
-        await using var output = new MemoryStream();
-        using (var archive = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true))
+        var attachmentChecksums = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (request.IncludeAttachments)
         {
-            await WriteEntryAsync(archive, "manifest.json", JsonSerializer.SerializeToUtf8Bytes(manifest, JsonOptions), cancellationToken);
-            await WriteEntryAsync(archive, "data.json", data, cancellationToken);
+            if (fileStore is null) throw new ValidationException("文件服务不可用，无法导出附件");
+            foreach (var attachment in snapshot.Attachments)
+            {
+                await using var sourceStream = await fileStore.OpenReadAsync(attachment.FileId, cancellationToken);
+                await using var attachmentBytes = new MemoryStream();
+                await sourceStream.CopyToAsync(attachmentBytes, cancellationToken);
+                if (attachmentBytes.Length > MaxPackageBytes) throw new ValidationException("单个附件超过同步包限制", ErrorCodes.SchemaOrPayloadTooLarge);
+                attachmentChecksums[attachment.FileId] = Sha256(attachmentBytes.ToArray());
+            }
+        }
+
+        manifest.AttachmentSha256 = attachmentChecksums;
+        await using var finalizedOutput = new MemoryStream();
+        using (var finalizedArchive = new ZipArchive(finalizedOutput, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            await WriteEntryAsync(finalizedArchive, "manifest.json", JsonSerializer.SerializeToUtf8Bytes(manifest, JsonOptions), cancellationToken);
+            await WriteEntryAsync(finalizedArchive, "data.json", data, cancellationToken);
             if (request.IncludeAttachments)
             {
                 if (fileStore is null) throw new ValidationException("文件服务不可用，无法导出附件");
                 foreach (var attachment in snapshot.Attachments)
                 {
                     await using var sourceStream = await fileStore.OpenReadAsync(attachment.FileId, cancellationToken);
-                    await using var entryStream = archive.CreateEntry($"attachments/{attachment.FileId}", CompressionLevel.Fastest).Open();
-                    await sourceStream.CopyToAsync(entryStream, cancellationToken);
+                    await using var attachmentBytes = new MemoryStream();
+                    await sourceStream.CopyToAsync(attachmentBytes, cancellationToken);
+                    await WriteEntryAsync(finalizedArchive, $"attachments/{attachment.FileId}", attachmentBytes.ToArray(), cancellationToken);
                 }
             }
         }
 
-        var content = output.ToArray();
+        var content = finalizedOutput.ToArray();
         if (content.Length > MaxPackageBytes) throw new ValidationException("同步包超过 200 MB 限制", ErrorCodes.SchemaOrPayloadTooLarge);
         if (!string.IsNullOrWhiteSpace(request.DeviceId))
             await TouchDeviceAsync(request.DeviceId, journalSequenceNo, cancellationToken);
@@ -153,6 +175,7 @@ public sealed class ProjectManagementSyncService(
         var snapshot = JsonSerializer.Deserialize<SyncSnapshot>(data, JsonOptions) ?? throw new ValidationException("同步包数据为空");
         var projectIds = await ResolveScopeAsync(manifest.ProjectId, cancellationToken);
         var conflicts = await DetectConflictsAsync(snapshot, projectIds, cancellationToken);
+        var replay = await FindImportResultAsync(manifest.PackageId, null, cancellationToken);
         var warnings = manifest.IncludeAttachments && snapshot.Attachments.Count > 0
             ? new[] { "附件内容将在导入阶段按 FileId 和校验和校验" }
             : Array.Empty<string>();
@@ -160,7 +183,8 @@ public sealed class ProjectManagementSyncService(
             manifest.PackageId, manifest.SchemaVersion, manifest.TenantId, manifest.AppCode,
             manifest.ExportedAt, manifest.SourceDeviceId, snapshot.Projects.Count, snapshot.Members.Count,
             snapshot.Milestones.Count, snapshot.Tasks.Count, snapshot.Dependencies.Count, snapshot.Attachments.Count,
-            packageBytes.LongLength, Sha256(packageBytes), manifest.JournalSequenceNo, true, warnings, conflicts);
+            packageBytes.LongLength, Sha256(packageBytes), manifest.JournalSequenceNo, true, warnings,
+            conflicts.Select(FormatConflict).ToList(), manifest.Mode, manifest.SinceSequenceNo, conflicts, replay is not null);
         }
     }
 
@@ -173,6 +197,9 @@ public sealed class ProjectManagementSyncService(
         var (manifest, snapshot, packageBytes) = await ReadValidatedPackageAsync(packageStream, cancellationToken);
         var projectIds = await ResolveScopeAsync(manifest.ProjectId, cancellationToken);
         ValidateSnapshotScope(snapshot, projectIds);
+        var idempotencyKey = NormalizeIdempotencyKey(request.IdempotencyKey, manifest.PackageId);
+        var replay = await FindImportResultAsync(manifest.PackageId, idempotencyKey, cancellationToken);
+        if (replay is not null) return replay with { Replayed = true };
         var conflicts = await DetectConflictsAsync(snapshot, projectIds, cancellationToken);
         if (strategy == "Reject" && conflicts.Count > 0) throw new ValidationException($"同步包存在 {conflicts.Count} 个冲突，已拒绝导入");
 
@@ -185,6 +212,9 @@ public sealed class ProjectManagementSyncService(
         var skipped = 0;
         var importedFiles = new List<string>();
         var warnings = new List<string>();
+        var importId = Guid.NewGuid().ToString("N");
+        var traceId = global::System.Diagnostics.Activity.Current?.Id ?? Guid.NewGuid().ToString("N");
+        var transactionStarted = false;
         try
         {
             if (operationId is not null && operationWriter is not null)
@@ -193,6 +223,7 @@ public sealed class ProjectManagementSyncService(
                 operationStarted = true;
             }
             db.Ado.BeginTran();
+            transactionStarted = true;
             inserted += await UpsertAsync(snapshot.Projects, strategy, db, cancellationToken, () => skipped++, () => updated++);
             inserted += await UpsertAsync(snapshot.Members, strategy, db, cancellationToken, () => skipped++, () => updated++);
             inserted += await UpsertAsync(snapshot.Milestones, strategy, db, cancellationToken, () => skipped++, () => updated++);
@@ -209,13 +240,39 @@ public sealed class ProjectManagementSyncService(
 
             var attachmentCount = await ImportAttachmentsAsync(snapshot.Attachments, manifest, packageBytes, strategy, db, importedFiles, cancellationToken, () => skipped++, () => updated++);
             if (!manifest.IncludeAttachments && snapshot.Attachments.Count > 0) warnings.Add("未包含附件内容，附件记录已跳过");
+            var result = new ProjectManagementSyncImportResponse(
+                manifest.PackageId, strategy, inserted, updated, skipped, attachmentCount, warnings,
+                importId, traceId, false, conflicts.Count, conflicts);
+            await db.Insertable(new ProjectManagementOperationEntity
+            {
+                Id = importId,
+                TenantId = Tenant(),
+                AppCode = App(),
+                OperationType = "sync.import",
+                Status = "Succeeded",
+                Phase = "Completed",
+                ProgressPercent = 100,
+                VersionNo = 1,
+                ImpactJson = JsonSerializer.Serialize(new SyncImportImpact(manifest.PackageId, idempotencyKey, result), JsonOptions),
+                TraceId = traceId,
+                ActorUserId = UserId(),
+                StartedTime = DateTime.UtcNow,
+                CompletedTime = DateTime.UtcNow,
+                CreatedBy = UserId(),
+                CreatedTime = DateTime.UtcNow
+            }).ExecuteCommandAsync(cancellationToken);
             db.Ado.CommitTran();
+            transactionStarted = false;
             if (operationId is not null && operationWriter is not null) await operationWriter.SucceedAsync(operationId, cancellationToken);
-            return new ProjectManagementSyncImportResponse(manifest.PackageId, strategy, inserted, updated, skipped, attachmentCount, warnings);
+            return result;
         }
         catch (Exception exception)
         {
-            db.Ado.RollbackTran();
+            if (transactionStarted)
+            {
+                db.Ado.RollbackTran();
+                transactionStarted = false;
+            }
             foreach (var fileId in importedFiles)
             {
                 try { if (fileStore is not null) await fileStore.DeleteAsync(fileId, cancellationToken); } catch { }
@@ -224,6 +281,13 @@ public sealed class ProjectManagementSyncService(
             {
                 try { await operationWriter.FailAsync(operationId, exception.Message, CancellationToken.None); } catch { }
             }
+            try
+            {
+                await PersistImportFailureAsync(new ProjectManagementSyncImportResponse(
+                    manifest.PackageId, strategy, inserted, updated, skipped, 0, warnings,
+                    importId, traceId, false, conflicts.Count, conflicts), idempotencyKey, exception.Message, CancellationToken.None);
+            }
+            catch { }
             throw;
         }
         finally
@@ -258,6 +322,59 @@ public sealed class ProjectManagementSyncService(
             Templates = templates, Occurrences = occurrences, Activities = activities, Comments = comments, Attachments = attachments
         };
     }
+
+    private async Task<SyncSnapshot> LoadIncrementalSnapshotAsync(IReadOnlyList<string> projectIds, long sinceSequenceNo, CancellationToken cancellationToken)
+    {
+        var journals = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementSyncJournalEntity>()
+            .Where(item => item.SequenceNo > sinceSequenceNo && (item.ProjectId == null || projectIds.Contains(item.ProjectId)) && !item.IsDeleted)
+            .OrderBy(item => item.SequenceNo, OrderByType.Asc)
+            .Take(10000)
+            .ToListAsync(cancellationToken);
+        var snapshot = new SyncSnapshot();
+        foreach (var journal in journals)
+        {
+            if (string.IsNullOrWhiteSpace(journal.PayloadJson)) continue;
+            switch (journal.AggregateType)
+            {
+                case "Project": AddUnique(snapshot.Projects, DeserializePayload<ProjectManagementProjectEntity>(journal.PayloadJson)); break;
+                case "ProjectMember": AddUnique(snapshot.Members, DeserializePayload<ProjectManagementProjectMemberEntity>(journal.PayloadJson)); break;
+                case "Milestone": AddUnique(snapshot.Milestones, DeserializePayload<ProjectManagementMilestoneEntity>(journal.PayloadJson)); break;
+                case "Task": AddUnique(snapshot.Tasks, DeserializePayload<ProjectManagementTaskEntity>(journal.PayloadJson)); break;
+                case "TaskDependency": AddUnique(snapshot.Dependencies, DeserializePayload<ProjectManagementTaskDependencyEntity>(journal.PayloadJson)); break;
+                case "Label": AddUnique(snapshot.Labels, DeserializePayload<ProjectManagementLabelEntity>(journal.PayloadJson)); break;
+                case "TaskLabel": AddUnique(snapshot.TaskLabels, DeserializePayload<ProjectManagementTaskLabelEntity>(journal.PayloadJson)); break;
+                case "Participant": AddUnique(snapshot.Participants, DeserializePayload<ProjectManagementTaskParticipantEntity>(journal.PayloadJson)); break;
+                case "TimeLog": AddUnique(snapshot.TimeLogs, DeserializePayload<ProjectManagementTaskTimeLogEntity>(journal.PayloadJson)); break;
+                case "TaskTemplate": AddUnique(snapshot.Templates, DeserializePayload<ProjectManagementTaskTemplateEntity>(journal.PayloadJson)); break;
+                case "TaskOccurrence": AddUnique(snapshot.Occurrences, DeserializePayload<ProjectManagementTaskOccurrenceEntity>(journal.PayloadJson)); break;
+                case "Activity": AddUnique(snapshot.Activities, DeserializePayload<ProjectManagementActivityEntity>(journal.PayloadJson)); break;
+                case "TaskComment": AddUnique(snapshot.Comments, DeserializePayload<ProjectManagementTaskCommentEntity>(journal.PayloadJson)); break;
+                case "TaskAttachment": AddUnique(snapshot.Attachments, DeserializePayload<ProjectManagementTaskAttachmentEntity>(journal.PayloadJson)); break;
+            }
+        }
+        return snapshot;
+    }
+
+    private async Task<long> ResolveSinceSequenceNoAsync(ProjectManagementSyncExportRequest request, string mode, CancellationToken cancellationToken)
+    {
+        if (mode == "Full") return 0;
+        if (request.SinceSequenceNo < 0) throw new ValidationException("增量同步起始水位不能为负数");
+        if (request.SinceSequenceNo > 0) return request.SinceSequenceNo;
+        if (string.IsNullOrWhiteSpace(request.DeviceId)) throw new ValidationException("增量导出必须提供设备标识或起始水位");
+        var deviceId = NormalizeRequiredDevice(request.DeviceId);
+        var row = (await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementSyncDeviceEntity>()
+            .Where(item => item.TenantId == Tenant() && item.AppCode == App() && item.DeviceId == deviceId && !item.IsDeleted)
+            .Take(1).ToListAsync(cancellationToken)).FirstOrDefault();
+        return row?.LastAcknowledgedSequenceNo ?? 0;
+    }
+
+    private static void AddUnique<T>(ICollection<T> target, T value) where T : EntityBase
+    {
+        if (!target.Any(item => item.Id == value.Id)) target.Add(value);
+    }
+
+    private static T DeserializePayload<T>(string payload) where T : EntityBase, new() =>
+        JsonSerializer.Deserialize<T>(payload, JsonOptions) ?? throw new ValidationException("同步日志载荷无效");
 
     private async Task<IReadOnlyList<string>> ResolveScopeAsync(string? projectId, CancellationToken cancellationToken)
     {
@@ -304,21 +421,91 @@ public sealed class ProjectManagementSyncService(
     private static string NormalizeRequiredDevice(string value) => string.IsNullOrWhiteSpace(value) ? throw new ValidationException("设备标识不能为空") : value.Trim();
     private string UserId() => currentUser.GetAsterErpUserId()?.Trim() ?? throw new ValidationException("当前会话缺少用户", ErrorCodes.PermissionDenied);
 
-    private async Task<IReadOnlyList<string>> DetectConflictsAsync(SyncSnapshot snapshot, IReadOnlyList<string> projectIds, CancellationToken cancellationToken)
+    private async Task<IReadOnlyList<ProjectManagementSyncConflict>> DetectConflictsAsync(SyncSnapshot snapshot, IReadOnlyList<string> projectIds, CancellationToken cancellationToken)
     {
         var db = databaseAccessor.GetCurrentDb();
-        var conflicts = new List<string>();
+        var conflicts = new List<ProjectManagementSyncConflict>();
         var projectIdsInPackage = snapshot.Projects.Select(item => item.Id).ToList();
         var existingProjects = await db.Queryable<ProjectManagementProjectEntity>()
             .Where(item => projectIdsInPackage.Contains(item.Id) && projectIds.Contains(item.Id) && !item.IsDeleted)
-            .Select(item => new { item.Id, item.VersionNo }).ToListAsync(cancellationToken);
-        conflicts.AddRange(existingProjects.Select(item => $"Project:{item.Id}:local-version-{item.VersionNo}"));
+            .ToListAsync(cancellationToken);
+        conflicts.AddRange(existingProjects.Select(local =>
+        {
+            var remote = snapshot.Projects.First(item => item.Id == local.Id);
+            return new ProjectManagementSyncConflict(
+                "Project", local.Id, local.Id, "*",
+                JsonSerializer.Serialize(local, JsonOptions),
+                JsonSerializer.Serialize(remote, JsonOptions),
+                local.VersionNo, remote.VersionNo, "Skip");
+        }));
         var taskIds = snapshot.Tasks.Select(item => item.Id).ToList();
         var existingTasks = await db.Queryable<ProjectManagementTaskEntity>()
             .Where(item => taskIds.Contains(item.Id) && projectIds.Contains(item.ProjectId) && !item.IsDeleted)
-            .Select(item => new { item.Id, item.VersionNo }).ToListAsync(cancellationToken);
-        conflicts.AddRange(existingTasks.Select(item => $"Task:{item.Id}:local-version-{item.VersionNo}"));
+            .ToListAsync(cancellationToken);
+        conflicts.AddRange(existingTasks.Select(local =>
+        {
+            var remote = snapshot.Tasks.First(item => item.Id == local.Id);
+            return new ProjectManagementSyncConflict(
+                "Task", local.Id, local.ProjectId, "*",
+                JsonSerializer.Serialize(local, JsonOptions),
+                JsonSerializer.Serialize(remote, JsonOptions),
+                local.VersionNo, remote.VersionNo, "Skip");
+        }));
         return conflicts;
+    }
+
+    private static string FormatConflict(ProjectManagementSyncConflict conflict) =>
+        $"{conflict.AggregateType}:{conflict.AggregateId}:local-version-{conflict.LocalVersionNo}:remote-version-{conflict.RemoteVersionNo}";
+
+    private async Task<ProjectManagementSyncImportResponse?> FindImportResultAsync(string packageId, string? idempotencyKey, CancellationToken cancellationToken)
+    {
+        var rows = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementOperationEntity>()
+            .Where(item => item.OperationType == "sync.import" && item.TenantId == Tenant() && item.AppCode == App() && item.ActorUserId == UserId() && !item.IsDeleted)
+            .OrderBy(item => item.CreatedTime, OrderByType.Desc)
+            .Take(200)
+            .ToListAsync(cancellationToken);
+        foreach (var row in rows)
+        {
+            var impact = JsonSerializer.Deserialize<SyncImportImpact>(row.ImpactJson, JsonOptions);
+            if (impact is null || !string.Equals(impact.PackageId, packageId, StringComparison.Ordinal)) continue;
+            if (idempotencyKey is not null && !string.Equals(impact.IdempotencyKey, idempotencyKey, StringComparison.Ordinal)) continue;
+            if (!string.Equals(row.Status, "Succeeded", StringComparison.Ordinal)) continue;
+            return impact.Result;
+        }
+        return null;
+    }
+
+    private async Task PersistImportFailureAsync(ProjectManagementSyncImportResponse result, string idempotencyKey, string errorMessage, CancellationToken cancellationToken)
+    {
+        var replay = await FindImportResultAsync(result.PackageId, idempotencyKey, cancellationToken);
+        if (replay is not null) return;
+        var now = DateTime.UtcNow;
+        await databaseAccessor.GetCurrentDb().Insertable(new ProjectManagementOperationEntity
+        {
+            Id = result.ImportId,
+            TenantId = Tenant(),
+            AppCode = App(),
+            OperationType = "sync.import",
+            Status = "Failed",
+            Phase = "Failed",
+            ProgressPercent = 0,
+            VersionNo = 1,
+            ImpactJson = JsonSerializer.Serialize(new SyncImportImpact(result.PackageId, idempotencyKey, result), JsonOptions),
+            ErrorMessage = errorMessage,
+            TraceId = result.TraceId,
+            ActorUserId = UserId(),
+            StartedTime = now,
+            CompletedTime = now,
+            CreatedBy = UserId(),
+            CreatedTime = now
+        }).ExecuteCommandAsync(cancellationToken);
+    }
+
+    private static string NormalizeIdempotencyKey(string? value, string packageId)
+    {
+        var normalized = string.IsNullOrWhiteSpace(value) ? packageId : value.Trim();
+        if (normalized.Length > 128) throw new ValidationException("幂等键长度不能超过 128 个字符");
+        return normalized;
     }
 
     private void ValidateSnapshotScope(SyncSnapshot snapshot, IReadOnlyList<string> projectIds)
@@ -343,6 +530,19 @@ public sealed class ProjectManagementSyncService(
             throw new ValidationException("同步包包含其他工作区数据", ErrorCodes.PermissionDenied);
         if (snapshot.Projects.Any(item => !projectIds.Contains(item.Id, StringComparer.Ordinal)))
             throw new ValidationException("同步包包含未授权项目", ErrorCodes.PermissionDenied);
+        var referencedProjectIds = snapshot.Members.Select(item => item.ProjectId)
+            .Concat(snapshot.Milestones.Select(item => item.ProjectId))
+            .Concat(snapshot.Tasks.Select(item => item.ProjectId))
+            .Concat(snapshot.Dependencies.Select(item => item.ProjectId))
+            .Concat(snapshot.TaskLabels.Select(item => item.ProjectId))
+            .Concat(snapshot.Participants.Select(item => item.ProjectId))
+            .Concat(snapshot.TimeLogs.Select(item => item.ProjectId))
+            .Concat(snapshot.Occurrences.Select(item => item.ProjectId))
+            .Concat(snapshot.Activities.Select(item => item.ProjectId))
+            .Concat(snapshot.Comments.Select(item => item.ProjectId))
+            .Concat(snapshot.Attachments.Select(item => item.ProjectId));
+        if (referencedProjectIds.Any(item => !projectIds.Contains(item, StringComparer.Ordinal)))
+            throw new ValidationException("同步包关联数据超出项目授权范围", ErrorCodes.PermissionDenied);
     }
 
     private async Task<int> UpsertAsync<T>(
@@ -395,8 +595,12 @@ public sealed class ProjectManagementSyncService(
             await using var stream = entry.Open();
             await using var attachmentBytes = new MemoryStream();
             await stream.CopyToAsync(attachmentBytes, cancellationToken);
-            attachmentBytes.Position = 0;
-            var formFile = new FormFile(attachmentBytes, 0, attachmentBytes.Length, "file", source.FileName)
+            var bytes = attachmentBytes.ToArray();
+            if (!manifest.AttachmentSha256.TryGetValue(source.FileId, out var expectedChecksum) ||
+                !string.Equals(Sha256(bytes), expectedChecksum, StringComparison.OrdinalIgnoreCase))
+                throw new ValidationException($"附件 {source.FileId} 校验和不匹配");
+            await using var uploadStream = new MemoryStream(bytes);
+            var formFile = new FormFile(uploadStream, 0, bytes.Length, "file", source.FileName)
             {
                 Headers = new HeaderDictionary(),
                 ContentType = source.ContentType
@@ -444,6 +648,8 @@ public sealed class ProjectManagementSyncService(
             var manifest = await ReadJsonAsync<SyncManifest>(archive, "manifest.json", cancellationToken);
             if (!string.Equals(manifest.Magic, Magic, StringComparison.Ordinal) || !string.Equals(manifest.SchemaVersion, SchemaVersion, StringComparison.Ordinal))
                 throw new ValidationException("同步包格式或版本不兼容");
+            manifest.Mode = NormalizeMode(manifest.Mode);
+            if (manifest.SinceSequenceNo < 0) throw new ValidationException("同步包起始水位不能为负数");
             if (!string.Equals(manifest.TenantId, Tenant(), StringComparison.Ordinal) || !string.Equals(manifest.AppCode, App(), StringComparison.OrdinalIgnoreCase))
                 throw new ValidationException("同步包工作区与当前工作区不匹配", ErrorCodes.PermissionDenied);
             var data = await ReadBytesAsync(archive, manifest.DataEntry, cancellationToken);
@@ -487,6 +693,13 @@ public sealed class ProjectManagementSyncService(
     private string App() => currentUser.GetAsterErpAppCode()?.Trim().ToUpperInvariant() ?? throw new ValidationException("当前会话缺少应用", ErrorCodes.PermissionDenied);
     private static string? Normalize(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
+    private static string NormalizeMode(string? value) => value?.Trim() switch
+    {
+        null or "" or "Full" => "Full",
+        "Incremental" => "Incremental",
+        _ => throw new ValidationException("同步导出模式必须是 Full 或 Incremental")
+    };
+
     private sealed class SyncManifest
     {
         public string Magic { get; set; } = string.Empty;
@@ -498,6 +711,8 @@ public sealed class ProjectManagementSyncService(
         public string? SourceDeviceId { get; set; }
         public string? ProjectId { get; set; }
         public bool IncludeAttachments { get; set; }
+        public string Mode { get; set; } = "Full";
+        public long SinceSequenceNo { get; set; }
         public string DataEntry { get; set; } = string.Empty;
         public string DataSha256 { get; set; } = string.Empty;
         public int ProjectCount { get; set; }
@@ -507,7 +722,13 @@ public sealed class ProjectManagementSyncService(
         public int DependencyCount { get; set; }
         public int AttachmentCount { get; set; }
         public long JournalSequenceNo { get; set; }
+        public Dictionary<string, string> AttachmentSha256 { get; set; } = new(StringComparer.Ordinal);
     }
+
+    private sealed record SyncImportImpact(
+        string PackageId,
+        string IdempotencyKey,
+        ProjectManagementSyncImportResponse Result);
 
     private sealed class SyncSnapshot
     {

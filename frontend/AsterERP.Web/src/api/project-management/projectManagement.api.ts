@@ -738,6 +738,8 @@ export function exportProjectManagementSync(request: {
   projectId?: string;
   includeAttachments?: boolean;
   deviceId?: string;
+  mode?: 'Full' | 'Incremental';
+  sinceSequenceNo?: number;
 }): Promise<{ blob: Blob; fileName: string }> {
   return httpClient.postDownloadBlob("/project-management/sync/export", request, { timeoutMs: 120_000 });
 }
@@ -752,13 +754,14 @@ export function previewProjectManagementSync(file: File): Promise<ApiEnvelope<Pr
 
 export function applyProjectManagementSync(
   file: File,
-  request: { currentPassword: string; confirmRisk: boolean; conflictStrategy: "Skip" | "Overwrite" | "Reject" },
+  request: { currentPassword: string; confirmRisk: boolean; conflictStrategy: "Skip" | "Overwrite" | "Reject"; idempotencyKey?: string },
 ): Promise<ApiEnvelope<ProjectManagementSyncImportResponse>> {
   const formData = new FormData();
   formData.append("file", file);
   formData.append("currentPassword", request.currentPassword);
   formData.append("confirmRisk", String(request.confirmRisk));
   formData.append("conflictStrategy", request.conflictStrategy);
+  if (request.idempotencyKey?.trim()) formData.append("idempotencyKey", request.idempotencyKey.trim());
   return httpClient.postForm<ProjectManagementSyncImportResponse>("/project-management/sync/apply", formData, {
     timeoutMs: 120_000,
   });

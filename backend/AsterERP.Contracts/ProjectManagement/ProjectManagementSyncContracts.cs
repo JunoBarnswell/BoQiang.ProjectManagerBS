@@ -3,7 +3,20 @@ namespace AsterERP.Contracts.ProjectManagement;
 public sealed record ProjectManagementSyncExportRequest(
     string? ProjectId = null,
     bool IncludeAttachments = false,
-    string? DeviceId = null);
+    string? DeviceId = null,
+    string Mode = "Full",
+    long SinceSequenceNo = 0);
+
+public sealed record ProjectManagementSyncConflict(
+    string AggregateType,
+    string AggregateId,
+    string? ProjectId,
+    string Field,
+    string? LocalValue,
+    string? RemoteValue,
+    long? LocalVersionNo,
+    long? RemoteVersionNo,
+    string RecommendedStrategy);
 
 public sealed record ProjectManagementSyncPreviewResponse(
     string PackageId,
@@ -23,12 +36,17 @@ public sealed record ProjectManagementSyncPreviewResponse(
     long JournalSequenceNo,
     bool IsCompatible,
     IReadOnlyList<string> Warnings,
-    IReadOnlyList<string> Conflicts);
+    IReadOnlyList<string> Conflicts,
+    string Mode = "Full",
+    long SinceSequenceNo = 0,
+    IReadOnlyList<ProjectManagementSyncConflict>? ConflictDetails = null,
+    bool AlreadyImported = false);
 
 public sealed record ProjectManagementSyncImportRequest(
     string CurrentPassword,
     bool ConfirmRisk,
-    string ConflictStrategy = "Skip");
+    string ConflictStrategy = "Skip",
+    string? IdempotencyKey = null);
 
 public sealed record ProjectManagementSyncImportResponse(
     string PackageId,
@@ -37,7 +55,12 @@ public sealed record ProjectManagementSyncImportResponse(
     int Updated,
     int Skipped,
     int AttachmentsImported,
-    IReadOnlyList<string> Warnings);
+    IReadOnlyList<string> Warnings,
+    string ImportId = "",
+    string TraceId = "",
+    bool Replayed = false,
+    int ConflictCount = 0,
+    IReadOnlyList<ProjectManagementSyncConflict>? Conflicts = null);
 
 public sealed record ProjectManagementSyncWatermarkResponse(
     string DeviceId,
