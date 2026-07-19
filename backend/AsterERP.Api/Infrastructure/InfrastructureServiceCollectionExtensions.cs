@@ -51,6 +51,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<IDataPermissionDescriptor<ApplicationIntegrationTaskEntity>, ApplicationIntegrationTaskDataPermissionDescriptor>();
         services.AddScoped<IDataPermissionDescriptor<ApplicationIntegrationTaskRunEntity>, ApplicationIntegrationTaskRunDataPermissionDescriptor>();
         services.AddScoped<IDataPermissionDescriptor<ApplicationMicroflowEntity>, ApplicationMicroflowDataPermissionDescriptor>();
+        services.AddScoped<IDataPermissionDescriptor<ApplicationMicroflowRevisionEntity>, ApplicationMicroflowRevisionDataPermissionDescriptor>();
         services.AddScoped<IDataPermissionDescriptor<ApplicationSqlScriptAuditEntity>, ApplicationSqlScriptAuditDataPermissionDescriptor>();
         services.AddScoped<IDataPermissionDescriptor<ApplicationDataSourceCatalogSnapshotEntity>, ApplicationDataSourceCatalogSnapshotDataPermissionDescriptor>();
         services.AddScoped<IDataPermissionDescriptor<ApplicationDataSourceSchemaChangePlanEntity>, ApplicationDataSourceSchemaChangePlanDataPermissionDescriptor>();

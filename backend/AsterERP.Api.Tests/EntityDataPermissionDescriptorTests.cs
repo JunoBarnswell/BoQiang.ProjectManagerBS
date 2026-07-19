@@ -98,6 +98,7 @@ public sealed class EntityDataPermissionDescriptorTests
         var dictionaryFilter = (await new ApplicationDataCenterDictionaryDataPermissionDescriptor(currentUser).BuildAsync())!.Compile();
         var apiServiceFilter = (await new ApplicationApiServiceDataPermissionDescriptor(currentUser).BuildAsync())!.Compile();
         var microflowFilter = (await new ApplicationMicroflowDataPermissionDescriptor(currentUser).BuildAsync())!.Compile();
+        var microflowRevisionFilter = (await new ApplicationMicroflowRevisionDataPermissionDescriptor(currentUser).BuildAsync())!.Compile();
 
         AssertWorkspaceIsolation(
             dictionaryFilter,
@@ -114,6 +115,9 @@ public sealed class EntityDataPermissionDescriptorTests
             new ApplicationMicroflowEntity(),
             item => item.TenantId = "tenant-b",
             item => item.AppCode = "WMS");
+        Assert.True(microflowRevisionFilter(new ApplicationMicroflowRevisionEntity { TenantId = "tenant-a", AppCode = "MES" }));
+        Assert.False(microflowRevisionFilter(new ApplicationMicroflowRevisionEntity { TenantId = "tenant-b", AppCode = "MES" }));
+        Assert.False(microflowRevisionFilter(new ApplicationMicroflowRevisionEntity { TenantId = "tenant-a", AppCode = "WMS" }));
     }
 
     [Fact]

@@ -45,6 +45,7 @@ public sealed class DataPermissionFilterRegistrar(
     IDataPermissionDescriptor<ApplicationIntegrationTaskEntity> integrationTaskDescriptor,
     IDataPermissionDescriptor<ApplicationIntegrationTaskRunEntity> integrationTaskRunDescriptor,
     IDataPermissionDescriptor<ApplicationMicroflowEntity> microflowDescriptor,
+    IDataPermissionDescriptor<ApplicationMicroflowRevisionEntity> microflowRevisionDescriptor,
     IDataPermissionDescriptor<ApplicationSqlScriptAuditEntity> sqlScriptAuditDescriptor,
     IDataPermissionDescriptor<ApplicationDataMutationLedgerEntity> mutationLedgerDescriptor,
     IDataPermissionDescriptor<ApplicationDataSourceCatalogSnapshotEntity> catalogSnapshotDescriptor,
@@ -136,6 +137,7 @@ public sealed class DataPermissionFilterRegistrar(
         await RegisterDescriptorFilterAsync(integrationTaskDescriptor, cancellationToken);
         await RegisterDescriptorFilterAsync(integrationTaskRunDescriptor, cancellationToken);
         await RegisterDescriptorFilterAsync(microflowDescriptor, cancellationToken);
+        await RegisterDescriptorFilterAsync(microflowRevisionDescriptor, cancellationToken);
         await RegisterDescriptorFilterAsync(sqlScriptAuditDescriptor, cancellationToken);
         await RegisterDescriptorFilterAsync(mutationLedgerDescriptor, cancellationToken);
         await RegisterDescriptorFilterAsync(catalogSnapshotDescriptor, cancellationToken);

@@ -36,7 +36,7 @@ public sealed class ApplicationDataCenterDataPermissionArchitectureTests
             .Select(parameter => parameter.ParameterType.GetGenericArguments()[0])
             .ToHashSet();
 
-        Assert.True(entityTypes.Length == 23, string.Join(", ", entityTypes.Select(type => type.FullName)));
+        Assert.True(entityTypes.Length == 24, string.Join(", ", entityTypes.Select(type => type.FullName)));
         foreach (var entityType in entityTypes)
         {
             var descriptors = descriptorTypes[entityType].Distinct().ToArray();

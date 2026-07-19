@@ -42,10 +42,9 @@ public sealed class ApplicationMicroflowRevisionService(
         ApplicationMicroflowEntity microflow,
         CancellationToken cancellationToken)
     {
-        var workspace = workspaceResolver.Resolve();
         var db = await databaseAccessor.RequireApplicationDbAsync(cancellationToken);
         var revisions = await db.Queryable<ApplicationMicroflowRevisionEntity>()
-            .Where(item => item.TenantId == workspace.TenantId && item.AppCode == workspace.AppCode && item.MicroflowId == microflow.Id && !item.IsDeleted)
+            .Where(item => item.MicroflowId == microflow.Id && !item.IsDeleted)
             .OrderByDescending(item => item.RevisionNo)
             .ToListAsync(cancellationToken);
         if (revisions.Count == 0)
@@ -91,10 +90,9 @@ public sealed class ApplicationMicroflowRevisionService(
 
     public async Task<ApplicationMicroflowRevisionEntity> RequireAsync(string microflowId, string revisionId, CancellationToken cancellationToken)
     {
-        var workspace = workspaceResolver.Resolve();
         var db = await databaseAccessor.RequireApplicationDbAsync(cancellationToken);
         var revision = await db.Queryable<ApplicationMicroflowRevisionEntity>()
-            .Where(item => item.TenantId == workspace.TenantId && item.AppCode == workspace.AppCode && item.MicroflowId == microflowId && item.Id == revisionId && !item.IsDeleted)
+            .Where(item => item.MicroflowId == microflowId && item.Id == revisionId && !item.IsDeleted)
             .FirstAsync(cancellationToken);
         return revision ?? throw new NotFoundException("微流版本不存在", ErrorCodes.ApplicationDataCenterObjectNotFound);
     }
