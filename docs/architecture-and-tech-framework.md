@@ -292,3 +292,4 @@ src/app
 | 2026-06-30 | Codex | 应用级业务对象构建工作台补齐 Runtime 导入导出、Workflow 绑定引导、PageSchema 主子表关系表达和文档契约。 |
 | 2026-06-12 | Codex | 应用发布升级为按 ABP 模块闭包精确裁剪：后端模块文件归属、前端 target 可达图 prune、产物泄漏扫描与源码+release+manifest 包审计。 |
 | 2026-06-14 | Codex | 审批待办动作升级为详情抽屉，补齐提交表单快照、流程附件下载、审批意见与时间线的前后端契约说明。 |
+| 2026-07-19 | Codex | ProjectManagement HOME V1 直接替换旧项目中心：新增三栏 Projects Home、`/api/project-management/home/projects` 与 `/summary` 聚合查询、服务端健康度 Projector、任务统计/里程碑/负责人投影、`pm:home:{tenantId}:{appCode}` SignalR 通知组及前端 120ms 精确失效；继续使用 SYSTEM 平台作用域、现有 ORM data filter 和项目权限码。 |

@@ -78,6 +78,8 @@ public sealed class AsterErpProjectManagementModule : AbpModule
         context.Services.AddScoped<IProjectManagementRealtimePublisher, ProjectManagementRealtimePublisher>();
         context.Services.AddScoped<IProjectManagementMemberCandidateService, ProjectManagementMemberCandidateService>();
         context.Services.AddScoped<IProjectManagementProjectService, ProjectManagementProjectService>();
+        context.Services.AddScoped<ProjectManagementHomeHealthProjector>();
+        context.Services.AddScoped<IProjectManagementHomeQueryService, ProjectManagementHomeQueryService>();
         context.Services.AddScoped<IProjectManagementMemberService, ProjectManagementMemberService>();
         context.Services.AddScoped<IProjectManagementMilestoneService, ProjectManagementMilestoneService>();
         context.Services.AddScoped<IProjectManagementTaskService, ProjectManagementTaskService>();

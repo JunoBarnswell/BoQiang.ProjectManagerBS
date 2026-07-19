@@ -22,6 +22,11 @@ public sealed class ProjectManagementRealtimeTransport(IHubContext<SystemNotific
             .Group(SystemNotificationHub.BuildProjectManagementProjectGroupName(tenantId, appCode, projectId))
             .SendAsync("ProjectManagementInvalidated", invalidation, cancellationToken);
 
+    public Task PublishHomeInvalidationAsync(string tenantId, string appCode, ProjectManagementRealtimeEvent invalidation, CancellationToken cancellationToken = default) =>
+        hubContext.Clients
+            .Group(SystemNotificationHub.BuildProjectManagementHomeGroupName(tenantId, appCode))
+            .SendAsync("ProjectManagementHomeInvalidated", invalidation, cancellationToken);
+
     public async Task RevokeProjectAccessAsync(string tenantId, string appCode, string projectId, string connectionId, CancellationToken cancellationToken = default)
     {
         var group = SystemNotificationHub.BuildProjectManagementProjectGroupName(tenantId, appCode, projectId);

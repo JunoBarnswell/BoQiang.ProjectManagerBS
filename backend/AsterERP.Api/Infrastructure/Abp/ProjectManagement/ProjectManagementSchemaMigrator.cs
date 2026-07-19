@@ -439,10 +439,12 @@ CREATE TABLE IF NOT EXISTS pm_reversible_commands (
         schema.EnsureColumn("pm_activities", "ArchivedTime", "TEXT NULL");
         schema.Execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_pm_projects_code ON pm_projects(TenantId, AppCode, ProjectCode) WHERE IsDeleted = 0;");
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_projects_workspace_status ON pm_projects(TenantId, AppCode, Status, IsDeleted);");
+        schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_projects_updated ON pm_projects(TenantId, AppCode, IsDeleted, Status, UpdatedTime);");
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_projects_owner ON pm_projects(TenantId, AppCode, OwnerUserId, IsDeleted);");
         schema.Execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_pm_project_members_user ON pm_project_members(TenantId, AppCode, ProjectId, UserId) WHERE IsDeleted = 0;");
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_project_members_user ON pm_project_members(TenantId, AppCode, UserId, IsActive, IsDeleted);");
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_milestones_project ON pm_milestones(TenantId, AppCode, ProjectId, SortOrder, IsDeleted);");
+        schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_milestones_due_status ON pm_milestones(TenantId, AppCode, ProjectId, DueDate, Status, IsDeleted);");
         schema.Execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_pm_tasks_code ON pm_tasks(TenantId, AppCode, ProjectId, TaskCode) WHERE IsDeleted = 0;");
         schema.Execute("DROP INDEX IF EXISTS ux_pm_tasks_sibling_sort;");
         schema.Execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_pm_tasks_sibling_sort_v2 ON pm_tasks(TenantId, AppCode, ProjectId, COALESCE(ParentTaskId, ''), CASE WHEN SortOrder = 0 THEN Id ELSE SortOrder END) WHERE IsDeleted = 0;");

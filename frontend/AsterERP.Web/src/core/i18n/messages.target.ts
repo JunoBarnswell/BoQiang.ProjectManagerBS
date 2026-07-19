@@ -2,12 +2,15 @@ import type { AppLocale } from '../config/env';
 
 import { domainMessagesEnUS, domainMessagesZhCN } from './catalogs/domainMessages';
 import { sharedUiMessagesEnUS, sharedUiMessagesZhCN } from './catalogs/sharedUiMessages';
+import { projectManagementMessagesEnUS } from './catalogs/shell/en-US/projectManagement';
+import { projectManagementMessagesZhCN } from './catalogs/shell/zh-CN/projectManagement';
 
 type MessageBag = Record<string, string>;
 
 const zhCN: MessageBag = {
   ...sharedUiMessagesZhCN,
   ...domainMessagesZhCN,
+  ...projectManagementMessagesZhCN,
   'app.subtitle': '业务应用运行时',
   'app.title': 'AsterERP',
   'breadcrumbs.dashboard': '首页',
@@ -120,6 +123,7 @@ const enUS: MessageBag = {
   ...zhCN,
   ...sharedUiMessagesEnUS,
   ...domainMessagesEnUS,
+  ...projectManagementMessagesEnUS,
   'app.subtitle': 'Business runtime',
   'breadcrumbs.dashboard': 'Home',
   'breadcrumbs.home': 'Home',

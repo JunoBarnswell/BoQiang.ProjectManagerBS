@@ -220,6 +220,50 @@ export interface ProjectManagementProjectQuery {
   ownerUserId?: string;
 }
 
+export type ProjectManagementHomeCollection = 'all' | 'favorites' | 'recent';
+export type ProjectManagementHomeHealth = 'Completed' | 'UpdateMissing' | 'AtRisk' | 'OffTrack' | 'OnTrack' | 'NoUpdateExpected';
+
+export interface ProjectManagementHomeQuery {
+  collection?: ProjectManagementHomeCollection;
+  keyword?: string;
+  health?: ProjectManagementHomeHealth;
+  priority?: string;
+  leadUserId?: string;
+  status?: string;
+  targetDateFrom?: string;
+  targetDateTo?: string;
+  includeArchived?: boolean;
+  sortBy?: string;
+  sortDirection?: 'asc' | 'desc';
+  pageIndex?: number;
+  pageSize?: number;
+}
+
+export interface ProjectManagementHomeProjectItem extends ProjectManagementProject {
+  health: ProjectManagementHomeHealth;
+  targetDate?: string;
+  currentMilestoneId?: string;
+  currentMilestoneName?: string;
+  issueCount: number;
+  openIssueCount: number;
+  completedIssueCount: number;
+}
+
+export interface ProjectManagementHomeProjectsResponse {
+  items: ProjectManagementHomeProjectItem[];
+  total: number;
+  pageIndex: number;
+  pageSize: number;
+  sequence: number;
+}
+
+export interface ProjectManagementHomeSummaryResponse {
+  health: Array<{ key: ProjectManagementHomeHealth; count: number }>;
+  leads: Array<{ userId?: string; displayName: string; count: number }>;
+  unassignedCount: number;
+  sequence: number;
+}
+
 export interface ProjectManagementRecycleQuery {
   pageIndex?: number;
   pageSize?: number;

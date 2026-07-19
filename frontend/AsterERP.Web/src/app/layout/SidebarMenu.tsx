@@ -147,6 +147,33 @@ function isApplicationDevelopmentRuntimeDirectory(node: MenuTreeNodeDto): boolea
     && node.configJson.includes('application-development-center');
 }
 
+function isSystemMenu(node: MenuTreeNodeDto): boolean {
+  const code = node.menuCode.trim().toLowerCase();
+  return code === 'system' || code === 'system-management' || code === 'system:management' || node.menuName.trim() === '系统管理';
+}
+
+function isProjectManagementMenu(node: MenuTreeNodeDto): boolean {
+  const code = node.menuCode.trim().toLowerCase();
+  const routePath = node.routePath?.trim().toLowerCase() ?? '';
+  return code === 'project-management' || code.startsWith('project-management:') || routePath.includes('/project-management');
+}
+
+function keepSystemAndProjectMenus(nodes: MenuTreeNodeDto[]): MenuTreeNodeDto[] {
+  const systemMenus = nodes.filter(isSystemMenu);
+  const projectMenus: MenuTreeNodeDto[] = [];
+  const collectProjectMenus = (items: MenuTreeNodeDto[]) => {
+    items.forEach((item) => {
+      if (isProjectManagementMenu(item)) {
+        projectMenus.push(item);
+        return;
+      }
+      collectProjectMenus(item.children ?? []);
+    });
+  };
+  collectProjectMenus(nodes.filter((item) => !isSystemMenu(item)));
+  return [...systemMenus, ...projectMenus];
+}
+
 function renderMenuItems(
   nodes: MenuTreeNodeDto[],
   activePath: string,
@@ -213,7 +240,7 @@ function renderMenuItems(
 export function SidebarMenu({ activePath, menuTree, onNavigate, open, onToggle, workspaceAppCode, workspaceLevel, workspaceTenantId }: SidebarMenuProps) {
   const { translate } = useI18n();
   const visibleMenuTree = useMemo(
-    () => pruneEmptyMenuDirectories(menuTree, workspaceAppCode, workspaceLevel, workspaceTenantId),
+    () => pruneEmptyMenuDirectories(keepSystemAndProjectMenus(menuTree), workspaceAppCode, workspaceLevel, workspaceTenantId),
     [menuTree, workspaceAppCode, workspaceLevel, workspaceTenantId]
   );
   const collapsed = !open;

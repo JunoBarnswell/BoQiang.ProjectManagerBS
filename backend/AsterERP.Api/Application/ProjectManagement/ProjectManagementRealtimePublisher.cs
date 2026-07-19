@@ -12,8 +12,18 @@ public sealed class ProjectManagementRealtimePublisher(
             invalidation.AggregateId,
             invalidation.EventType,
             invalidation.Version,
-            projectId);
-        return realtimeTransport.PublishInvalidationAsync(invalidation.TenantId, invalidation.AppCode, projectId, payload, cancellationToken);
+            projectId,
+            invalidation.TraceId,
+            invalidation.Version,
+            [invalidation.AggregateType, "updatedTime"],
+            invalidation.TraceId);
+        return PublishAsync(invalidation, projectId, payload, cancellationToken);
+    }
+
+    private async Task PublishAsync(ProjectManagementDataInvalidationEvent invalidation, string projectId, ProjectManagementRealtimeEvent payload, CancellationToken cancellationToken)
+    {
+        await realtimeTransport.PublishInvalidationAsync(invalidation.TenantId, invalidation.AppCode, projectId, payload, cancellationToken);
+        await realtimeTransport.PublishHomeInvalidationAsync(invalidation.TenantId, invalidation.AppCode, payload, cancellationToken);
     }
 
     public async Task RevokeProjectAccessAsync(string tenantId, string appCode, string projectId, string userId, CancellationToken cancellationToken = default)

@@ -7,6 +7,7 @@ import type {
   ProjectManagementOperationQuery,
   ProjectManagementOverviewQuery,
   ProjectManagementProjectQuery,
+  ProjectManagementHomeQuery,
   ProjectManagementRecycleQuery,
   ProjectManagementTaskQuery,
   ProjectManagementWorkspaceQuery,
@@ -102,6 +103,14 @@ export const projectManagementQueryKeys = {
     query.status ?? '',
     query.ownerUserId ?? '',
   ] as const,
+  homeProjects: (scope: ProjectManagementWorkspaceScope, query: ProjectManagementHomeQuery) => [
+    ...root(scope), 'home', 'projects', JSON.stringify(query),
+  ] as const,
+  homeProjectsRoot: (scope: ProjectManagementWorkspaceScope) => [...root(scope), 'home', 'projects'] as const,
+  homeSummary: (scope: ProjectManagementWorkspaceScope, query: ProjectManagementHomeQuery) => [
+    ...root(scope), 'home', 'summary', JSON.stringify(query),
+  ] as const,
+  homeSummaryRoot: (scope: ProjectManagementWorkspaceScope) => [...root(scope), 'home', 'summary'] as const,
   recycle: (scope: ProjectManagementWorkspaceScope, query: ProjectManagementRecycleQuery) => [
     ...root(scope),
     'recycle',

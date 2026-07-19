@@ -8,6 +8,7 @@
   --pm-selected-bg: var(--app-table-active-bg);
   --pm-focus-ring: var(--app-focus-ring);
   --pm-accent: var(--app-accent);
+
   color: var(--pm-text);
 }
 
@@ -127,7 +128,7 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: currentColor;
+  background: currentcolor;
   content: '';
 }
 
@@ -371,7 +372,7 @@
 
 .pm-task-card__labels > span {
   padding: 2px 6px;
-  border: 1px solid currentColor;
+  border: 1px solid currentcolor;
   border-radius: 999px;
   font-size: var(--app-text-xs);
 }

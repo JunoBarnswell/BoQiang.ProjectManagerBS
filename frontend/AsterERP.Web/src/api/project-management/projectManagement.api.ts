@@ -8,6 +8,9 @@ import type {
   ProjectManagementMemberCandidateQuery,
   ProjectManagementProject,
   ProjectManagementProjectQuery,
+  ProjectManagementHomeQuery,
+  ProjectManagementHomeProjectsResponse,
+  ProjectManagementHomeSummaryResponse,
   ProjectManagementProjectUpsertRequest,
   ProjectManagementRecycleQuery,
   ProjectManagementRecycleResponse,
@@ -85,6 +88,28 @@ import type {
   ProjectManagementWebhookSubscription,
   ProjectManagementWebhookSubscriptionUpsertRequest,
 } from "./projectManagement.types";
+
+export function getProjectManagementHomeProjects(
+  query: ProjectManagementHomeQuery,
+  signal?: AbortSignal,
+): Promise<ApiEnvelope<ProjectManagementHomeProjectsResponse>> {
+  return httpClient.get<ProjectManagementHomeProjectsResponse>(
+    `/project-management/home/projects${buildQueryString(query)}`,
+    undefined,
+    signal,
+  );
+}
+
+export function getProjectManagementHomeSummary(
+  query: ProjectManagementHomeQuery,
+  signal?: AbortSignal,
+): Promise<ApiEnvelope<ProjectManagementHomeSummaryResponse>> {
+  return httpClient.get<ProjectManagementHomeSummaryResponse>(
+    `/project-management/home/summary${buildQueryString(query)}`,
+    undefined,
+    signal,
+  );
+}
 
 export function getProjectManagementProjects(
   query: ProjectManagementProjectQuery,
