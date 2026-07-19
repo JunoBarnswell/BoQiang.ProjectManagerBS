@@ -16,7 +16,11 @@ public sealed record ProjectManagementSyncConflict(
     string? RemoteValue,
     long? LocalVersionNo,
     long? RemoteVersionNo,
-    string RecommendedStrategy);
+    string RecommendedStrategy,
+    string? BaselineValue = null,
+    bool BaselineKnown = false,
+    bool LocalChanged = false,
+    bool RemoteChanged = false);
 
 public sealed record ProjectManagementSyncPreviewResponse(
     string PackageId,

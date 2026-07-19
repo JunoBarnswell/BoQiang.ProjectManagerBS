@@ -1,7 +1,10 @@
 using System.IO.Compression;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using AsterERP.Api.Infrastructure.Database;
 using AsterERP.Api.Infrastructure.Security;
 using AsterERP.Api.Modules.ProjectManagement;
@@ -22,7 +25,8 @@ public sealed class ProjectManagementSyncService(
     IPasswordHashService passwordHashService,
     IProjectManagementFileStore? fileStore = null,
     IProjectManagementMaintenanceLock? maintenanceLock = null,
-    IProjectManagementOperationWriter? operationWriter = null) : IProjectManagementSyncService
+    IProjectManagementOperationWriter? operationWriter = null,
+    IProjectManagementSearchService? searchService = null) : IProjectManagementSyncService
 {
     private const string Magic = "BQSYNC";
     private const string SchemaVersion = "3";
@@ -69,7 +73,9 @@ public sealed class ProjectManagementSyncService(
             MilestoneCount = snapshot.Milestones.Count,
             TaskCount = snapshot.Tasks.Count,
             DependencyCount = snapshot.Dependencies.Count,
-            AttachmentCount = snapshot.Attachments.Count,
+            // Manifest 的附件计数表示归档中实际携带内容的条目数；快照仍会保留附件记录，
+            // 使接收方能明确区分“有元数据但未请求传输文件内容”的导出。
+            AttachmentCount = request.IncludeAttachments ? snapshot.Attachments.Count : 0,
             JournalSequenceNo = journalSequenceNo
         };
 
@@ -225,7 +231,7 @@ public sealed class ProjectManagementSyncService(
     {
         if (!request.ConfirmRisk) throw new ValidationException("必须确认高风险导入操作");
         var strategy = request.ConflictStrategy.Trim();
-        if (strategy is not ("Skip" or "Overwrite" or "Reject")) throw new ValidationException("冲突策略必须是 Skip、Overwrite 或 Reject");
+        if (strategy is not ("Skip" or "Overwrite" or "Merge" or "Reject")) throw new ValidationException("冲突策略必须是 Skip、Overwrite、Merge 或 Reject");
         await VerifyCurrentPasswordAsync(request.CurrentPassword, cancellationToken);
         var (manifest, snapshot, packageBytes) = await ReadValidatedPackageAsync(packageStream, cancellationToken);
         var projectIds = await ResolveScopeAsync(manifest.ProjectId, cancellationToken);
@@ -237,6 +243,7 @@ public sealed class ProjectManagementSyncService(
         if (replay is not null) return replay with { Replayed = true };
         var conflicts = await DetectConflictsAsync(snapshot, projectIds, cancellationToken);
         if (strategy == "Reject" && conflicts.Count > 0) throw new ValidationException($"同步包存在 {conflicts.Count} 个冲突，已拒绝导入");
+        ValidateImportGraph(snapshot);
 
         var operationId = maintenanceLock is null ? null : await maintenanceLock.AcquireAsync("project-management-sync-import", TimeSpan.FromMinutes(30), cancellationToken);
         var operationStarted = false;
@@ -256,22 +263,24 @@ public sealed class ProjectManagementSyncService(
             {
                 await operationWriter.StartAsync(operationId, "sync.import", $"{{\"packageId\":\"{manifest.PackageId}\",\"strategy\":\"{strategy}\"}}", operationId, cancellationToken);
                 operationStarted = true;
+                await operationWriter.ReportProgressAsync(operationId, "Validated", 15, cancellationToken);
             }
+            cancellationToken.ThrowIfCancellationRequested();
             db.Ado.BeginTran();
             transactionStarted = true;
-            inserted += await UpsertAsync(snapshot.Projects, strategy, db, cancellationToken, () => skipped++, () => updated++);
-            inserted += await UpsertAsync(snapshot.Members, strategy, db, cancellationToken, () => skipped++, () => updated++);
-            inserted += await UpsertAsync(snapshot.Milestones, strategy, db, cancellationToken, () => skipped++, () => updated++);
-            inserted += await UpsertAsync(snapshot.Tasks, strategy, db, cancellationToken, () => skipped++, () => updated++);
-            inserted += await UpsertAsync(snapshot.Dependencies, strategy, db, cancellationToken, () => skipped++, () => updated++);
-            inserted += await UpsertAsync(snapshot.Labels, strategy, db, cancellationToken, () => skipped++, () => updated++);
-            inserted += await UpsertAsync(snapshot.TaskLabels, strategy, db, cancellationToken, () => skipped++, () => updated++);
-            inserted += await UpsertAsync(snapshot.Participants, strategy, db, cancellationToken, () => skipped++, () => updated++);
-            inserted += await UpsertAsync(snapshot.TimeLogs, strategy, db, cancellationToken, () => skipped++, () => updated++);
-            inserted += await UpsertAsync(snapshot.Templates, strategy, db, cancellationToken, () => skipped++, () => updated++);
-            inserted += await UpsertAsync(snapshot.Occurrences, strategy, db, cancellationToken, () => skipped++, () => updated++);
-            inserted += await UpsertAsync(snapshot.Activities, strategy, db, cancellationToken, () => skipped++, () => updated++);
-            inserted += await UpsertAsync(snapshot.Comments, strategy, db, cancellationToken, () => skipped++, () => updated++);
+            inserted += await UpsertStageAsync("Projects", snapshot.Projects, strategy, snapshot.Journal, db, cancellationToken, () => skipped++, () => updated++, operationId);
+            inserted += await UpsertStageAsync("Members", snapshot.Members, strategy, snapshot.Journal, db, cancellationToken, () => skipped++, () => updated++, operationId);
+            inserted += await UpsertStageAsync("Milestones", snapshot.Milestones, strategy, snapshot.Journal, db, cancellationToken, () => skipped++, () => updated++, operationId);
+            inserted += await UpsertStageAsync("Tasks", OrderTasks(snapshot.Tasks), strategy, snapshot.Journal, db, cancellationToken, () => skipped++, () => updated++, operationId);
+            inserted += await UpsertStageAsync("Dependencies", snapshot.Dependencies, strategy, snapshot.Journal, db, cancellationToken, () => skipped++, () => updated++, operationId);
+            inserted += await UpsertStageAsync("Labels", snapshot.Labels, strategy, snapshot.Journal, db, cancellationToken, () => skipped++, () => updated++, operationId);
+            inserted += await UpsertStageAsync("TaskLabels", snapshot.TaskLabels, strategy, snapshot.Journal, db, cancellationToken, () => skipped++, () => updated++, operationId);
+            inserted += await UpsertStageAsync("Participants", snapshot.Participants, strategy, snapshot.Journal, db, cancellationToken, () => skipped++, () => updated++, operationId);
+            inserted += await UpsertStageAsync("TimeLogs", snapshot.TimeLogs, strategy, snapshot.Journal, db, cancellationToken, () => skipped++, () => updated++, operationId);
+            inserted += await UpsertStageAsync("Templates", snapshot.Templates, strategy, snapshot.Journal, db, cancellationToken, () => skipped++, () => updated++, operationId);
+            inserted += await UpsertStageAsync("Occurrences", snapshot.Occurrences, strategy, snapshot.Journal, db, cancellationToken, () => skipped++, () => updated++, operationId);
+            inserted += await UpsertStageAsync("Activities", snapshot.Activities, strategy, snapshot.Journal, db, cancellationToken, () => skipped++, () => updated++, operationId);
+            inserted += await UpsertStageAsync("Comments", snapshot.Comments, strategy, snapshot.Journal, db, cancellationToken, () => skipped++, () => updated++, operationId);
 
             var attachmentCount = await ImportAttachmentsAsync(snapshot.Attachments, manifest, packageBytes, strategy, db, importedFiles, cancellationToken, () => skipped++, () => updated++);
             if (!manifest.IncludeAttachments && snapshot.Attachments.Count > 0) warnings.Add("未包含附件内容，附件记录已跳过");
@@ -300,6 +309,17 @@ public sealed class ProjectManagementSyncService(
                 await AdvanceAcknowledgedWatermarkAsync(db, NormalizeRequiredDevice(request.DeviceId), manifest.JournalSequenceNo, cancellationToken);
             db.Ado.CommitTran();
             transactionStarted = false;
+            if (searchService is not null)
+            {
+                try
+                {
+                    await searchService.QueueIndexIncrementalAsync(new ProjectManagementSearchIndexOperationRequest(), CancellationToken.None);
+                    warnings.Add("搜索索引增量更新已排队");
+                }
+                catch { warnings.Add("搜索索引增量更新排队失败，请稍后执行索引恢复"); }
+            }
+            if (operationStarted && operationId is not null && operationWriter is not null)
+                await operationWriter.ReportProgressAsync(operationId, "Committed", 90, cancellationToken);
             if (operationId is not null && operationWriter is not null) await operationWriter.SucceedAsync(operationId, cancellationToken);
             return result;
         }
@@ -523,34 +543,118 @@ public sealed class ProjectManagementSyncService(
     {
         var db = databaseAccessor.GetCurrentDb();
         var conflicts = new List<ProjectManagementSyncConflict>();
-        var projectIdsInPackage = snapshot.Projects.Select(item => item.Id).ToList();
-        var existingProjects = await db.Queryable<ProjectManagementProjectEntity>()
-            .Where(item => projectIdsInPackage.Contains(item.Id) && projectIds.Contains(item.Id) && !item.IsDeleted)
-            .ToListAsync(cancellationToken);
-        conflicts.AddRange(existingProjects.Select(local =>
-        {
-            var remote = snapshot.Projects.First(item => item.Id == local.Id);
-            return new ProjectManagementSyncConflict(
-                "Project", local.Id, local.Id, "*",
-                JsonSerializer.Serialize(local, JsonOptions),
-                JsonSerializer.Serialize(remote, JsonOptions),
-                local.VersionNo, remote.VersionNo, "Skip");
-        }));
-        var taskIds = snapshot.Tasks.Select(item => item.Id).ToList();
-        var existingTasks = await db.Queryable<ProjectManagementTaskEntity>()
-            .Where(item => taskIds.Contains(item.Id) && projectIds.Contains(item.ProjectId) && !item.IsDeleted)
-            .ToListAsync(cancellationToken);
-        conflicts.AddRange(existingTasks.Select(local =>
-        {
-            var remote = snapshot.Tasks.First(item => item.Id == local.Id);
-            return new ProjectManagementSyncConflict(
-                "Task", local.Id, local.ProjectId, "*",
-                JsonSerializer.Serialize(local, JsonOptions),
-                JsonSerializer.Serialize(remote, JsonOptions),
-                local.VersionNo, remote.VersionNo, "Skip");
-        }));
+        await AppendEntityConflictsAsync(snapshot.Projects, "Project", projectIds, snapshot.Journal, db, conflicts, cancellationToken);
+        await AppendEntityConflictsAsync(snapshot.Members, "ProjectMember", projectIds, snapshot.Journal, db, conflicts, cancellationToken);
+        await AppendEntityConflictsAsync(snapshot.Milestones, "Milestone", projectIds, snapshot.Journal, db, conflicts, cancellationToken);
+        await AppendEntityConflictsAsync(snapshot.Tasks, "Task", projectIds, snapshot.Journal, db, conflicts, cancellationToken);
+        await AppendEntityConflictsAsync(snapshot.Dependencies, "TaskDependency", projectIds, snapshot.Journal, db, conflicts, cancellationToken);
+        await AppendEntityConflictsAsync(snapshot.Labels, "Label", projectIds, snapshot.Journal, db, conflicts, cancellationToken);
+        await AppendEntityConflictsAsync(snapshot.TaskLabels, "TaskLabel", projectIds, snapshot.Journal, db, conflicts, cancellationToken);
+        await AppendEntityConflictsAsync(snapshot.Participants, "Participant", projectIds, snapshot.Journal, db, conflicts, cancellationToken);
+        await AppendEntityConflictsAsync(snapshot.TimeLogs, "TimeLog", projectIds, snapshot.Journal, db, conflicts, cancellationToken);
+        await AppendEntityConflictsAsync(snapshot.Templates, "TaskTemplate", projectIds, snapshot.Journal, db, conflicts, cancellationToken);
+        await AppendEntityConflictsAsync(snapshot.Occurrences, "TaskOccurrence", projectIds, snapshot.Journal, db, conflicts, cancellationToken);
+        await AppendEntityConflictsAsync(snapshot.Activities, "Activity", projectIds, snapshot.Journal, db, conflicts, cancellationToken);
+        await AppendEntityConflictsAsync(snapshot.Comments, "TaskComment", projectIds, snapshot.Journal, db, conflicts, cancellationToken);
+        await AppendEntityConflictsAsync(snapshot.Attachments, "TaskAttachment", projectIds, snapshot.Journal, db, conflicts, cancellationToken);
         return conflicts;
     }
+
+    private async Task AppendEntityConflictsAsync<T>(
+        IReadOnlyList<T> remoteRecords,
+        string aggregateType,
+        IReadOnlyList<string> projectIds,
+        IReadOnlyList<ProjectManagementSyncJournalItem> journals,
+        ISqlSugarClient db,
+        ICollection<ProjectManagementSyncConflict> conflicts,
+        CancellationToken cancellationToken) where T : EntityBase, new()
+    {
+        var ids = remoteRecords.Select(item => item.Id).Distinct(StringComparer.Ordinal).ToList();
+        if (ids.Count == 0) return;
+        var localRecords = await db.Queryable<T>().Where(item => ids.Contains(item.Id) && !item.IsDeleted).ToListAsync(cancellationToken);
+        var remoteById = remoteRecords.ToDictionary(item => item.Id, StringComparer.Ordinal);
+        var baseline = BuildBaseline(journals, aggregateType);
+        foreach (var local in localRecords)
+        {
+            if (!IsAuthorizedEntity(local, projectIds) || !remoteById.TryGetValue(local.Id, out var remote)) continue;
+            var fieldConflicts = new List<ProjectManagementSyncConflict>();
+            foreach (var property in SyncProperties<T>())
+            {
+                var localValue = JsonValue(property.GetValue(local));
+                var remoteValue = JsonValue(property.GetValue(remote));
+                if (JsonEqual(localValue, remoteValue)) continue;
+                var key = $"{aggregateType}:{local.Id}:{property.Name}";
+                var baselineKnown = baseline.TryGetValue(key, out var baselineValue);
+                var localChanged = !baselineKnown || !JsonEqual(localValue, baselineValue);
+                var remoteChanged = !baselineKnown || !JsonEqual(remoteValue, baselineValue);
+                if (baselineKnown && (!localChanged || !remoteChanged)) continue;
+                fieldConflicts.Add(new ProjectManagementSyncConflict(
+                    aggregateType, local.Id, ProjectIdOf(local), property.Name, localValue, remoteValue,
+                    VersionOf(local), VersionOf(remote), baselineKnown ? "Reject" : "Skip", baselineValue,
+                    baselineKnown, localChanged, remoteChanged));
+            }
+            if (fieldConflicts.Count == 0)
+            {
+                fieldConflicts.Add(new ProjectManagementSyncConflict(
+                    aggregateType, local.Id, ProjectIdOf(local), "*",
+                    JsonSerializer.Serialize(local, JsonOptions), JsonSerializer.Serialize(remote, JsonOptions),
+                    VersionOf(local), VersionOf(remote), "Skip"));
+            }
+            foreach (var conflict in fieldConflicts) conflicts.Add(conflict);
+        }
+    }
+
+    private static IReadOnlyList<PropertyInfo> SyncProperties<T>() where T : EntityBase
+    {
+        var ignored = new HashSet<string>(StringComparer.Ordinal)
+        {
+            nameof(EntityBase.Id), nameof(EntityBase.CreatedBy), nameof(EntityBase.CreatedTime), nameof(EntityBase.UpdatedBy),
+            nameof(EntityBase.UpdatedTime), nameof(EntityBase.DeletedBy), nameof(EntityBase.DeletedTime), nameof(EntityBase.IsDeleted),
+            nameof(EntityBase.Remark), "TenantId", "AppCode", "VersionNo", "FileId"
+        };
+        return typeof(T).GetProperties(BindingFlags.Instance | BindingFlags.Public)
+            .Where(item => item.CanRead && item.CanWrite && !ignored.Contains(item.Name))
+            .ToList();
+    }
+
+    private static Dictionary<string, string?> BuildBaseline(IReadOnlyList<ProjectManagementSyncJournalItem> journals, string aggregateType)
+    {
+        var baseline = new Dictionary<string, string?>(StringComparer.Ordinal);
+        foreach (var journal in journals.OrderBy(item => item.SequenceNo))
+        {
+            if (!string.Equals(journal.AggregateType, aggregateType, StringComparison.Ordinal)) continue;
+            foreach (var change in journal.FieldChanges ?? [])
+            {
+                var key = $"{aggregateType}:{journal.AggregateId}:{change.Field}";
+                if (!baseline.ContainsKey(key)) baseline[key] = NormalizeJson(change.Before);
+            }
+        }
+        return baseline;
+    }
+
+    private bool IsAuthorizedEntity<T>(T entity, IReadOnlyList<string> projectIds) where T : EntityBase
+    {
+        var tenant = typeof(T).GetProperty("TenantId")?.GetValue(entity) as string;
+        var app = typeof(T).GetProperty("AppCode")?.GetValue(entity) as string;
+        if (!string.Equals(tenant, Tenant(), StringComparison.Ordinal) || !string.Equals(app, App(), StringComparison.OrdinalIgnoreCase)) return false;
+        var projectId = ProjectIdOf(entity);
+        return projectId is null || projectIds.Contains(projectId, StringComparer.Ordinal);
+    }
+
+    private static string? ProjectIdOf<T>(T entity) where T : EntityBase =>
+        typeof(T).GetProperty("ProjectId")?.GetValue(entity) as string
+        ?? (entity is ProjectManagementProjectEntity ? entity.Id : null);
+
+    private static long? VersionOf<T>(T entity) where T : EntityBase =>
+        typeof(T).GetProperty("VersionNo")?.GetValue(entity) is long value ? value : null;
+
+    private static string? JsonValue(object? value) => value is null ? null : JsonSerializer.Serialize(value, value.GetType(), JsonOptions);
+    private static string? NormalizeJson(string? value)
+    {
+        if (value is null) return null;
+        try { return JsonNode.Parse(value)?.ToJsonString(JsonOptions); } catch { return value; }
+    }
+    private static bool JsonEqual(string? left, string? right) => string.Equals(NormalizeJson(left), NormalizeJson(right), StringComparison.Ordinal);
 
     private static string FormatConflict(ProjectManagementSyncConflict conflict) =>
         $"{conflict.AggregateType}:{conflict.AggregateId}:local-version-{conflict.LocalVersionNo}:remote-version-{conflict.RemoteVersionNo}";
@@ -643,22 +747,112 @@ public sealed class ProjectManagementSyncService(
             throw new ValidationException("同步包关联数据超出项目授权范围", ErrorCodes.PermissionDenied);
     }
 
-    private async Task<int> UpsertAsync<T>(
+    private static void ValidateImportGraph(SyncSnapshot snapshot)
+    {
+        ValidateUniqueIds(snapshot.Projects, "项目");
+        ValidateUniqueIds(snapshot.Members, "项目成员");
+        ValidateUniqueIds(snapshot.Milestones, "里程碑");
+        ValidateUniqueIds(snapshot.Tasks, "任务");
+        ValidateUniqueIds(snapshot.Dependencies, "任务依赖");
+        ValidateUniqueIds(snapshot.Labels, "标签");
+        ValidateUniqueIds(snapshot.TaskLabels, "任务标签关联");
+        ValidateUniqueIds(snapshot.Participants, "任务参与人");
+        ValidateUniqueIds(snapshot.TimeLogs, "工时记录");
+        ValidateUniqueIds(snapshot.Templates, "任务模板");
+        ValidateUniqueIds(snapshot.Occurrences, "任务实例");
+        ValidateUniqueIds(snapshot.Activities, "活动记录");
+        ValidateUniqueIds(snapshot.Comments, "任务评论");
+        ValidateUniqueIds(snapshot.Attachments, "任务附件");
+
+        var taskById = snapshot.Tasks.ToDictionary(item => item.Id, StringComparer.Ordinal);
+        foreach (var task in snapshot.Tasks)
+        {
+            if (string.IsNullOrWhiteSpace(task.ProjectId)) throw new ValidationException("同步包任务缺少项目标识");
+            if (string.Equals(task.Id, task.ParentTaskId, StringComparison.Ordinal)) throw new ValidationException($"任务 {task.Id} 不能引用自身作为父任务");
+            if (!string.IsNullOrWhiteSpace(task.ParentTaskId) && taskById.TryGetValue(task.ParentTaskId, out var parent) &&
+                !string.Equals(parent.ProjectId, task.ProjectId, StringComparison.Ordinal))
+                throw new ValidationException($"任务 {task.Id} 的父任务不属于同一项目");
+        }
+        ValidateTaskHierarchy(snapshot.Tasks, taskById);
+
+        foreach (var dependency in snapshot.Dependencies)
+        {
+            if (string.IsNullOrWhiteSpace(dependency.ProjectId) || string.IsNullOrWhiteSpace(dependency.PredecessorTaskId) || string.IsNullOrWhiteSpace(dependency.SuccessorTaskId))
+                throw new ValidationException("同步包任务依赖缺少项目或任务标识");
+            if (string.Equals(dependency.PredecessorTaskId, dependency.SuccessorTaskId, StringComparison.Ordinal))
+                throw new ValidationException($"任务依赖 {dependency.Id} 不能指向同一任务");
+            if (taskById.TryGetValue(dependency.PredecessorTaskId, out var predecessor) && !string.Equals(predecessor.ProjectId, dependency.ProjectId, StringComparison.Ordinal) ||
+                taskById.TryGetValue(dependency.SuccessorTaskId, out var successor) && !string.Equals(successor.ProjectId, dependency.ProjectId, StringComparison.Ordinal))
+                throw new ValidationException($"任务依赖 {dependency.Id} 跨越了项目边界");
+        }
+    }
+
+    private static void ValidateUniqueIds<T>(IReadOnlyList<T> records, string label) where T : EntityBase
+    {
+        if (records.Any(item => string.IsNullOrWhiteSpace(item.Id))) throw new ValidationException($"同步包{label}缺少标识");
+        var duplicate = records.GroupBy(item => item.Id, StringComparer.Ordinal).FirstOrDefault(group => group.Count() > 1);
+        if (duplicate is not null) throw new ValidationException($"同步包{label}存在重复标识 {duplicate.Key}");
+    }
+
+    private static void ValidateTaskHierarchy(
+        IReadOnlyList<ProjectManagementTaskEntity> tasks,
+        IReadOnlyDictionary<string, ProjectManagementTaskEntity> taskById)
+    {
+        var visiting = new HashSet<string>(StringComparer.Ordinal);
+        var visited = new HashSet<string>(StringComparer.Ordinal);
+
+        void Visit(ProjectManagementTaskEntity task)
+        {
+            if (visited.Contains(task.Id)) return;
+            if (!visiting.Add(task.Id)) throw new ValidationException($"同步包任务层级存在循环：{task.Id}");
+            if (!string.IsNullOrWhiteSpace(task.ParentTaskId) && taskById.TryGetValue(task.ParentTaskId, out var parent)) Visit(parent);
+            visiting.Remove(task.Id);
+            visited.Add(task.Id);
+        }
+
+        foreach (var task in tasks) Visit(task);
+    }
+
+    private async Task<int> UpsertStageAsync<T>(
+        string stage,
         IReadOnlyList<T> records,
         string strategy,
+        IReadOnlyList<ProjectManagementSyncJournalItem> journals,
         ISqlSugarClient db,
         CancellationToken cancellationToken,
         Action onSkip,
-        Action onUpdate) where T : EntityBase, new()
+        Action onUpdate,
+        string? operationId) where T : EntityBase, new()
     {
+        if (records.Count == 0)
+        {
+            await ReportImportStageAsync(stage, operationId, cancellationToken);
+            return 0;
+        }
+
         var inserted = 0;
+        var aggregateType = AggregateTypeForStage(stage);
+        var baseline = BuildBaseline(journals, aggregateType);
         foreach (var record in records)
         {
-            var exists = await db.Queryable<T>().Where(item => item.Id == record.Id && !item.IsDeleted).AnyAsync(cancellationToken);
-            if (exists)
+            cancellationToken.ThrowIfCancellationRequested();
+            var local = (await db.Queryable<T>().Where(item => item.Id == record.Id && !item.IsDeleted).Take(1).ToListAsync(cancellationToken)).FirstOrDefault();
+            if (local is not null)
             {
                 if (strategy == "Skip") { onSkip(); continue; }
-                await db.Updateable(record).Where(item => item.Id == record.Id).ExecuteCommandAsync(cancellationToken);
+                if (strategy == "Merge")
+                {
+                    if (!MergeRecord(local, record, baseline, aggregateType))
+                    {
+                        onSkip();
+                        continue;
+                    }
+                    await db.Updateable(local).Where(item => item.Id == local.Id).ExecuteCommandAsync(cancellationToken);
+                }
+                else
+                {
+                    await db.Updateable(record).Where(item => item.Id == record.Id).ExecuteCommandAsync(cancellationToken);
+                }
                 onUpdate();
             }
             else
@@ -667,7 +861,96 @@ public sealed class ProjectManagementSyncService(
                 inserted++;
             }
         }
+        await ReportImportStageAsync(stage, operationId, cancellationToken);
         return inserted;
+    }
+
+    private async Task ReportImportStageAsync(string stage, string? operationId, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(operationId) || operationWriter is null) return;
+        if (!await operationWriter.ReportProgressAsync(operationId, $"Imported{stage}", ImportStageProgress(stage), cancellationToken))
+            throw new OperationCanceledException("同步导入已被取消", cancellationToken);
+    }
+
+    private static int ImportStageProgress(string stage) => stage switch
+    {
+        "Projects" => 20,
+        "Members" => 25,
+        "Milestones" => 30,
+        "Tasks" => 40,
+        "Dependencies" => 46,
+        "Labels" => 51,
+        "TaskLabels" => 56,
+        "Participants" => 61,
+        "TimeLogs" => 66,
+        "Templates" => 71,
+        "Occurrences" => 76,
+        "Activities" => 81,
+        "Comments" => 86,
+        _ => 15
+    };
+
+    private static string AggregateTypeForStage(string stage) => stage switch
+    {
+        "Projects" => "Project",
+        "Members" => "ProjectMember",
+        "Milestones" => "Milestone",
+        "Tasks" => "Task",
+        "Dependencies" => "TaskDependency",
+        "Labels" => "Label",
+        "TaskLabels" => "TaskLabel",
+        "Participants" => "Participant",
+        "TimeLogs" => "TimeLog",
+        "Templates" => "TaskTemplate",
+        "Occurrences" => "TaskOccurrence",
+        "Activities" => "Activity",
+        "Comments" => "TaskComment",
+        _ => throw new ArgumentOutOfRangeException(nameof(stage), stage, "未知同步导入阶段")
+    };
+
+    private static bool MergeRecord<T>(T local, T remote, IReadOnlyDictionary<string, string?> baseline, string aggregateType)
+        where T : EntityBase
+    {
+        var changed = false;
+        foreach (var property in SyncProperties<T>())
+        {
+            var localValue = JsonValue(property.GetValue(local));
+            var remoteValue = JsonValue(property.GetValue(remote));
+            if (JsonEqual(localValue, remoteValue)) continue;
+
+            var key = $"{aggregateType}:{local.Id}:{property.Name}";
+            if (!baseline.TryGetValue(key, out var baselineValue)) continue;
+            var localChanged = !JsonEqual(localValue, baselineValue);
+            var remoteChanged = !JsonEqual(remoteValue, baselineValue);
+            if (localChanged || !remoteChanged) continue;
+
+            property.SetValue(local, property.GetValue(remote));
+            changed = true;
+        }
+        return changed;
+    }
+
+    private static IReadOnlyList<ProjectManagementTaskEntity> OrderTasks(IReadOnlyList<ProjectManagementTaskEntity> tasks)
+    {
+        var pending = tasks.ToDictionary(item => item.Id, StringComparer.Ordinal);
+        var ordered = new List<ProjectManagementTaskEntity>(tasks.Count);
+        while (pending.Count > 0)
+        {
+            var ready = pending.Values
+                .Where(item => string.IsNullOrWhiteSpace(item.ParentTaskId) || !pending.ContainsKey(item.ParentTaskId))
+                .OrderBy(item => item.Depth)
+                .ThenBy(item => item.SortOrder)
+                .ThenBy(item => item.TaskCode, StringComparer.Ordinal)
+                .ThenBy(item => item.Id, StringComparer.Ordinal)
+                .ToList();
+            if (ready.Count == 0) throw new ValidationException("同步包任务层级存在循环");
+            foreach (var task in ready)
+            {
+                ordered.Add(task);
+                pending.Remove(task.Id);
+            }
+        }
+        return ordered;
     }
 
     private async Task<int> ImportAttachmentsAsync(
@@ -759,6 +1042,7 @@ public sealed class ProjectManagementSyncService(
             var snapshot = JsonSerializer.Deserialize<SyncSnapshot>(data, JsonOptions) ?? throw new ValidationException("同步包数据为空");
             var journalRecords = JsonSerializer.Deserialize<List<ProjectManagementSyncJournalItem>>(journalData, JsonOptions) ?? [];
             if (journalRecords.Count != manifest.JournalCount) throw new ValidationException("同步包 Journal 数量与 Manifest 不一致");
+            snapshot.Journal = journalRecords;
             return (manifest, snapshot, bytes);
         }
     }
@@ -930,5 +1214,6 @@ public sealed class ProjectManagementSyncService(
         public List<ProjectManagementActivityEntity> Activities { get; set; } = [];
         public List<ProjectManagementTaskCommentEntity> Comments { get; set; } = [];
         public List<ProjectManagementTaskAttachmentEntity> Attachments { get; set; } = [];
+        [JsonIgnore] public List<ProjectManagementSyncJournalItem> Journal { get; set; } = [];
     }
 }
