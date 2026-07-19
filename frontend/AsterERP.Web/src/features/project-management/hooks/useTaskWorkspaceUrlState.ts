@@ -16,7 +16,10 @@ export function useTaskWorkspaceUrlState(viewKey: ProjectManagementTaskView) {
       dueTo: searchParams.get('dueTo') ?? undefined,
       groupBy: searchParams.get('groupBy') as TaskWorkspaceState['groupBy'],
       includeCompleted: searchParams.get('completed') !== 'false',
+      ganttZoom: parseInteger(searchParams.get('ganttZoom')) as TaskWorkspaceState['ganttZoom'],
       keyword: searchParams.get('q') ?? '',
+      labelIds: parseCsv(searchParams.get('labelIds')),
+      labelMatchMode: searchParams.get('labelMatchMode') as TaskWorkspaceState['labelMatchMode'],
       milestoneId: searchParams.get('milestoneId') ?? undefined,
       pageIndex: parseInteger(searchParams.get('page')),
       pageSize: parseInteger(searchParams.get('pageSize')),
@@ -24,6 +27,7 @@ export function useTaskWorkspaceUrlState(viewKey: ProjectManagementTaskView) {
       sortBy: searchParams.get('sortBy') as TaskWorkspaceState['sortBy'],
       sortDirection: searchParams.get('sortDirection') as TaskWorkspaceState['sortDirection'],
       status: searchParams.get('status') ?? undefined,
+      visibleColumns: parseCsv(searchParams.get('columns')),
     }),
     [searchParams, viewKey],
   );
@@ -31,26 +35,39 @@ export function useTaskWorkspaceUrlState(viewKey: ProjectManagementTaskView) {
   const setState = useCallback(
     (next: Partial<TaskWorkspaceState>, options: { replace?: boolean } = {}) => {
       const normalized = normalizeTaskWorkspaceState(viewKey, { ...state, ...next });
-      const params = new URLSearchParams();
-      setOptional(params, 'q', normalized.keyword);
-      setOptional(params, 'status', normalized.status);
-      setOptional(params, 'assignee', normalized.assigneeUserId);
-      setOptional(params, 'milestoneId', normalized.milestoneId);
-      setOptional(params, 'groupBy', normalized.groupBy);
-      setOptional(params, 'dueFrom', normalized.dueFrom);
-      setOptional(params, 'dueTo', normalized.dueTo);
-      setOptional(params, 'taskId', normalized.selectedTaskId);
-      if (!normalized.includeCompleted) params.set('completed', 'false');
-      if (normalized.sortBy !== (viewKey === 'gantt' || viewKey === 'calendar' ? 'dueDate' : 'tree')) params.set('sortBy', normalized.sortBy);
-      if (normalized.sortDirection !== 'asc') params.set('sortDirection', normalized.sortDirection);
-      if (normalized.pageIndex !== 1) params.set('page', String(normalized.pageIndex));
-      if (normalized.pageSize !== 50) params.set('pageSize', String(normalized.pageSize));
-      setSearchParams(params, { replace: options.replace ?? false });
+      setSearchParams(createTaskWorkspaceSearchParams(viewKey, normalized), { replace: options.replace ?? false });
     },
     [setSearchParams, state, viewKey],
   );
 
   return { state, setState };
+}
+
+export function createTaskWorkspaceSearchParams(viewKey: ProjectManagementTaskView, normalized: TaskWorkspaceState): URLSearchParams {
+  const params = new URLSearchParams();
+  setOptional(params, 'q', normalized.keyword);
+  setOptional(params, 'status', normalized.status);
+  setOptional(params, 'assignee', normalized.assigneeUserId);
+  setOptional(params, 'milestoneId', normalized.milestoneId);
+  setOptional(params, 'groupBy', normalized.groupBy);
+  setOptional(params, 'dueFrom', normalized.dueFrom);
+  setOptional(params, 'dueTo', normalized.dueTo);
+  setOptional(params, 'taskId', normalized.selectedTaskId);
+  setOptional(params, 'labelIds', normalized.labelIds.join(','));
+  if (normalized.labelMatchMode === 'All') params.set('labelMatchMode', 'All');
+  if (normalized.visibleColumns.length > 0) params.set('columns', normalized.visibleColumns.join(','));
+  if (normalized.ganttZoom !== 56) params.set('ganttZoom', String(normalized.ganttZoom));
+  if (!normalized.includeCompleted) params.set('completed', 'false');
+  if (normalized.sortBy !== (viewKey === 'gantt' || viewKey === 'calendar' ? 'dueDate' : 'tree')) params.set('sortBy', normalized.sortBy);
+  if (normalized.sortDirection !== 'asc') params.set('sortDirection', normalized.sortDirection);
+  if (normalized.pageIndex !== 1) params.set('page', String(normalized.pageIndex));
+  if (normalized.pageSize !== 50) params.set('pageSize', String(normalized.pageSize));
+  return params;
+}
+
+export function hasTaskWorkspaceUrlOverrides(search: string): boolean {
+  const params = new URLSearchParams(search);
+  return ['q', 'status', 'assignee', 'milestoneId', 'groupBy', 'dueFrom', 'dueTo', 'completed', 'sortBy', 'sortDirection', 'labelIds', 'labelMatchMode', 'columns', 'ganttZoom'].some((key) => params.has(key));
 }
 
 function parseInteger(value: string | null): number | undefined {
@@ -61,4 +78,8 @@ function parseInteger(value: string | null): number | undefined {
 
 function setOptional(params: URLSearchParams, key: string, value: string | undefined): void {
   if (value) params.set(key, value);
+}
+
+function parseCsv(value: string | null): string[] | undefined {
+  return value ? value.split(',') : undefined;
 }

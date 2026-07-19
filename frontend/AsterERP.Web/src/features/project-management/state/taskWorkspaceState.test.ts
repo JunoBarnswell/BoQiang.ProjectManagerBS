@@ -61,9 +61,17 @@ describe('task workspace state', () => {
   it('excludes transient selection and pagination from a saved view', () => {
     const state = normalizeTaskWorkspaceState('board', { pageIndex: 3, selectedTaskId: 'task-a', status: 'Todo' });
 
-    expect(taskWorkspaceStateToSavedView(state)).toMatchObject({ status: 'Todo', version: 1, viewKey: 'board' });
+    expect(taskWorkspaceStateToSavedView(state)).toMatchObject({ status: 'Todo', version: 2, viewKey: 'board' });
     expect(taskWorkspaceStateToSavedView(state)).not.toHaveProperty('selectedTaskId');
     expect(taskWorkspaceStateToSavedView(state)).not.toHaveProperty('pageIndex');
     expect(createTaskWorkspaceState('board').viewKey).toBe('board');
+  });
+
+  it('keeps label filters, table columns and gantt zoom in the saved-view state only', () => {
+    const state = normalizeTaskWorkspaceState('gantt', { ganttZoom: 84, labelIds: ['label-a', 'label-a'], labelMatchMode: 'All', visibleColumns: ['title', 'dueDate', 'unknown'] });
+    const saved = taskWorkspaceStateToSavedView(state);
+
+    expect(saved).toMatchObject({ ganttZoom: 84, labelIds: ['label-a'], labelMatchMode: 'All', visibleColumns: ['title', 'dueDate'] });
+    expect(saved).not.toHaveProperty('pageSize');
   });
 });

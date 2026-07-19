@@ -3,13 +3,11 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 
 import { getProjectManagementTasks } from '../../../api/project-management/projectManagement.api';
 import type { ProjectManagementMilestone, ProjectManagementTaskDependency, ProjectManagementTaskLabelFilter, ProjectManagementTaskListItem, ProjectManagementTaskQuery } from '../../../api/project-management/projectManagement.types';
-import { useAuthStore } from '../../../core/state';
 import { queryKeys } from '../../../core/query/queryKeys';
+import { useAuthStore } from '../../../core/state';
 import { DataTable } from '../../../shared/table/DataTable';
 import type { DataTableColumn } from '../../../shared/table/tableTypes';
 import { useProjectManagementWorkspaceScope } from '../state/projectManagementWorkspaceScope';
-import type { TaskWorkspaceState } from '../state/taskWorkspaceState';
-import { taskWorkspaceStateToQuery } from '../state/taskWorkspaceState';
 import {
   buildVisibleTaskTreeRows,
   readTaskTreeExpansionState,
@@ -20,11 +18,13 @@ import {
   writeTaskTreeExpansionState,
   type TaskTreeRow,
 } from '../state/taskTreeState';
+import type { TaskWorkspaceState } from '../state/taskWorkspaceState';
+import { taskWorkspaceStateToQuery } from '../state/taskWorkspaceState';
 
-import type { TaskGroupDropTarget, TaskMoveDropTarget } from './taskMoveIntent';
-import { TaskCardProjection, type TaskCardDragHandlers } from './TaskCardProjection';
 import { TaskBoardColumnProjection } from './TaskBoardColumnProjection';
 import { summarizeTaskBoardColumns, taskBoardStatuses, type TaskBoardStatus } from './taskBoardProjectionModel';
+import { TaskCardProjection, type TaskCardDragHandlers } from './TaskCardProjection';
+import type { TaskGroupDropTarget, TaskMoveDropTarget } from './taskMoveIntent';
 import { TaskCalendarScheduleProjection, TaskGanttScheduleProjection } from './TaskScheduleProjections';
 
 interface TaskWorkspaceProjectionProps {
@@ -36,6 +36,7 @@ interface TaskWorkspaceProjectionProps {
   onChangeTaskSchedule?: (task: ProjectManagementTaskListItem, startDate: string | undefined, dueDate: string | undefined) => void;
   onCreateTaskOnDate?: (date: string) => void;
   onGanttScheduleSaved?: () => Promise<void> | void;
+  onGanttZoomChange?: (zoom: 28 | 56 | 84) => void;
   onDeleteTask?: (task: ProjectManagementTaskListItem) => void;
   onBoardRowsLoaded?: (rows: ProjectManagementTaskListItem[]) => void;
   participantLabels?: Readonly<Record<string, string>>;
@@ -54,7 +55,7 @@ interface TaskWorkspaceProjectionProps {
   state: TaskWorkspaceState;
 }
 
-export function TaskWorkspaceProjection({ dependencies, labelFilter, milestoneLabels, milestones, onAddChildTask, onBoardRowsLoaded, onChangeTaskSchedule, onChangeTaskStatus, onCompleteTask, onCreateTaskOnDate, onDeleteTask, onGanttScheduleSaved, onMoveTask, onMoveTaskGroup, onSelectTask, onToggleTaskSelection, optimisticBoardRows, participantLabels, pendingTaskId, projectId, rows, schedulePending, selectedTaskIds, state }: TaskWorkspaceProjectionProps) {
+export function TaskWorkspaceProjection({ dependencies, labelFilter, milestoneLabels, milestones, onAddChildTask, onBoardRowsLoaded, onChangeTaskSchedule, onChangeTaskStatus, onCompleteTask, onCreateTaskOnDate, onDeleteTask, onGanttScheduleSaved, onGanttZoomChange, onMoveTask, onMoveTaskGroup, onSelectTask, onToggleTaskSelection, optimisticBoardRows, participantLabels, pendingTaskId, projectId, rows, schedulePending, selectedTaskIds, state }: TaskWorkspaceProjectionProps) {
   const scope = useProjectManagementWorkspaceScope();
   const userId = useAuthStore((current) => current.user?.userId ?? '');
   const expansionKey = useMemo(
@@ -209,7 +210,7 @@ export function TaskWorkspaceProjection({ dependencies, labelFilter, milestoneLa
 
   if (state.viewKey === 'board') return <>{dragHelp}<TaskBoardProjection baseQuery={{ ...taskWorkspaceStateToQuery(projectId, state), labelFilter: labelFilter?.labelIds.length ? labelFilter : undefined }} drag={drag} groupBy={state.groupBy} milestoneLabels={milestoneLabels} onAddChildTask={onAddChildTask} onBoardRowsLoaded={onBoardRowsLoaded} onChangeTaskStatus={onChangeTaskStatus} onCompleteTask={onCompleteTask} onDeleteTask={onDeleteTask} optimisticBoardRows={optimisticBoardRows} participantLabels={participantLabels} pendingTaskId={pendingTaskId} onSelectTask={onSelectTask} onToggleTaskSelection={onToggleTaskSelection} selectedTaskIds={selectedTaskIds} />;</>;
   if (state.viewKey === 'card') return <>{dragHelp}{rootDropZone}<TaskCardProjection drag={drag} groupBy={state.groupBy} milestoneLabels={milestoneLabels} onAddChildTask={onAddChildTask} onCompleteTask={onCompleteTask} onDeleteTask={onDeleteTask} onSelectTask={onSelectTask} onToggleTaskSelection={onToggleTaskSelection} participantLabels={participantLabels} pendingTaskId={pendingTaskId} projectId={projectId} rows={rows} selectedTaskIds={selectedTaskIds} /></>;
-  if (state.viewKey === 'gantt') return <TaskGanttScheduleProjection dependencies={dependencies} milestones={milestones} onChangeTaskSchedule={onChangeTaskSchedule} onGanttScheduleSaved={onGanttScheduleSaved} projectId={projectId} rows={rows} onSelectTask={onSelectTask} onToggleTaskSelection={onToggleTaskSelection} selectedTaskIds={selectedTaskIds} />;
+  if (state.viewKey === 'gantt') return <TaskGanttScheduleProjection dependencies={dependencies} ganttZoom={state.ganttZoom} milestones={milestones} onChangeTaskSchedule={onChangeTaskSchedule} onGanttScheduleSaved={onGanttScheduleSaved} onGanttZoomChange={onGanttZoomChange} projectId={projectId} rows={rows} onSelectTask={onSelectTask} onToggleTaskSelection={onToggleTaskSelection} selectedTaskIds={selectedTaskIds} />;
   if (state.viewKey === 'calendar') return <TaskCalendarScheduleProjection dependencies={dependencies} milestones={milestones} onChangeTaskSchedule={onChangeTaskSchedule} onCreateTask={onCreateTaskOnDate} onSelectTask={onSelectTask} onToggleTaskSelection={onToggleTaskSelection} rows={rows} schedulePending={schedulePending} selectedTaskIds={selectedTaskIds} />;
   return <>{rootDropZone}<TaskTableProjection childStateByParent={loadedChildren} expandedTaskIds={new Set(expandedTaskIds)} onLoadMoreChildren={loadMoreChildren} onToggleTaskExpansion={toggleExpansion} drag={drag} rows={visibleRows} onSelectTask={onSelectTask} onToggleTaskSelection={onToggleTaskSelection} selectedTaskIds={selectedTaskIds} state={state} /></>;
 }
@@ -266,7 +267,8 @@ function TaskTableProjection({ childStateByParent, expandedTaskIds, onLoadMoreCh
     { key: 'blockedByCount', title: '阻塞', width: '96px', render: (row) => row.blockedByCount ? <StatusBadge status="Blocked" label={`${row.blockedByCount} 项`} /> : '—' },
   ], [childStateByParent, drag, expandedTaskIds, onLoadMoreChildren, onToggleTaskExpansion, onToggleTaskSelection, rows, selectedTaskIds, state.viewKey]);
 
-  return <DataTable columnSettingsKey={`project-management-tasks-${state.viewKey}`} columns={columns} emptyText="暂无任务" rowActions={(row) => <button type="button" onClick={() => onSelectTask(row.id)}>查看</button>} rowKey={(row) => row.id} rowVirtualize={state.viewKey === 'tree' || state.viewKey === 'list'} rowVirtualization={{ overscan: 8, rowHeight: 56 }} rows={rows} showColumnSettings />;
+  const visibleColumns = new Set(state.visibleColumns);
+  return <DataTable columnSettingsKey={`project-management-tasks-${state.viewKey}`} columns={columns.filter((column) => column.key === 'select' || visibleColumns.has(String(column.key)))} emptyText="暂无任务" rowActions={(row) => <button type="button" onClick={() => onSelectTask(row.id)}>查看</button>} rowKey={(row) => row.id} rowVirtualize={state.viewKey === 'tree' || state.viewKey === 'list'} rowVirtualization={{ overscan: 8, rowHeight: 56 }} rows={rows} showColumnSettings />;
 }
 
 function TaskBoardProjection({ baseQuery, drag, groupBy, milestoneLabels, onAddChildTask, onBoardRowsLoaded, onChangeTaskStatus, onCompleteTask, onDeleteTask, optimisticBoardRows, participantLabels, pendingTaskId, onSelectTask, onToggleTaskSelection, selectedTaskIds }: Pick<TaskWorkspaceProjectionProps, 'milestoneLabels' | 'onAddChildTask' | 'onBoardRowsLoaded' | 'onChangeTaskStatus' | 'onCompleteTask' | 'onDeleteTask' | 'onSelectTask' | 'onToggleTaskSelection' | 'optimisticBoardRows' | 'participantLabels' | 'pendingTaskId' | 'selectedTaskIds'> & { baseQuery: ProjectManagementTaskQuery; drag: TaskCardDragHandlers; groupBy?: TaskWorkspaceState['groupBy'] }) {

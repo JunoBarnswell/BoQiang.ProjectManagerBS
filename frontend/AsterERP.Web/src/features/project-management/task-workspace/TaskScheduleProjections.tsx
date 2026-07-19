@@ -3,11 +3,12 @@ import { useMemo, useRef, useState, type MutableRefObject, type PointerEvent } f
 
 import type { ProjectManagementMilestone, ProjectManagementTaskDependency, ProjectManagementTaskListItem } from '../../../api/project-management/projectManagement.types';
 import { ProjectManagementTaskCalendar } from '../calendar/ProjectManagementTaskCalendar';
+import { previewTaskDependencyImpact } from '../gantt/dependency-analysis/dependencyAnalysisApi';
 import { DependencyAnalysisOverlay } from '../gantt/dependency-analysis/DependencyAnalysisOverlay';
 import { DependencyImpactPreviewPanel } from '../gantt/dependency-analysis/DependencyImpactPreviewPanel';
-import { previewTaskDependencyImpact } from '../gantt/dependency-analysis/dependencyAnalysisApi';
 import { useDependencyAnalysis } from '../gantt/dependency-analysis/useDependencyAnalysis';
 import { updateGanttSchedule } from '../gantt/ganttSchedule.api';
+
 import {
   buildTaskScheduleRows,
   adjustTaskSchedule,
@@ -20,12 +21,14 @@ import {
 
 interface TaskScheduleProjectionProps {
   dependencies?: readonly ProjectManagementTaskDependency[];
+  ganttZoom?: 28 | 56 | 84;
   milestones?: readonly ProjectManagementMilestone[];
   onChangeTaskSchedule?: (task: ProjectManagementTaskListItem, startDate: string | undefined, dueDate: string | undefined) => void;
   onCreateTask?: (date: string) => void;
   onSelectTask: (taskId: string) => void;
   onToggleTaskSelection: (taskId: string) => void;
   onGanttScheduleSaved?: () => Promise<void> | void;
+  onGanttZoomChange?: (zoom: 28 | 56 | 84) => void;
   projectId?: string;
   rows: ProjectManagementTaskListItem[];
   schedulePending?: boolean;
@@ -35,13 +38,13 @@ interface TaskScheduleProjectionProps {
 const dayWidth = 36;
 const labelWidth = 240;
 
-export function TaskGanttScheduleProjection({ dependencies = [], milestones = [], onChangeTaskSchedule, onGanttScheduleSaved, onSelectTask, onToggleTaskSelection, projectId, rows, selectedTaskIds }: TaskScheduleProjectionProps) {
+export function TaskGanttScheduleProjection({ dependencies = [], ganttZoom = 56, milestones = [], onChangeTaskSchedule, onGanttScheduleSaved, onGanttZoomChange, onSelectTask, onToggleTaskSelection, projectId, rows, selectedTaskIds }: TaskScheduleProjectionProps) {
   const dependencyAnalysisQuery = useDependencyAnalysis(projectId);
   const criticalTaskIds = useMemo(() => new Set((dependencyAnalysisQuery.data?.data?.tasks ?? []).filter((task) => task.isCritical).map((task) => task.taskId)), [dependencyAnalysisQuery.data?.data?.tasks]);
   const scheduleRows = useMemo(() => buildTaskScheduleRows(rows, dependencies).map((task) => ({ ...task, isCritical: dependencyAnalysisQuery.data ? criticalTaskIds.has(task.id) : task.isCritical })), [criticalTaskIds, dependencies, dependencyAnalysisQuery.data, rows]);
   const datedRows = scheduleRows.filter((task) => task.scheduleStartDate || task.scheduleDueDate);
   const firstDate = datedRows.map((task) => task.scheduleStartDate ?? task.scheduleDueDate).filter((value): value is string => Boolean(value)).sort()[0];
-  const [rangeDays, setRangeDays] = useState(56);
+  const rangeDays = ganttZoom;
   const [anchorDate, setAnchorDate] = useState(() => firstDate ? new Date(`${firstDate.slice(0, 10)}T00:00:00`) : new Date());
   const range = useMemo(() => createScheduleWindow(anchorDate, rangeDays), [anchorDate, rangeDays]);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -95,7 +98,7 @@ export function TaskGanttScheduleProjection({ dependencies = [], milestones = []
   return <div className="pm-gantt">
     <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
       <p className="pm-prototype-note">父任务显示后代汇总条；红色条为关键路径，线段为真实依赖，菱形为里程碑。大范围计划按行虚拟渲染。</p>
-      <div className="flex flex-wrap gap-2"><button className="rounded border border-gray-300 px-2 py-1 text-xs" onClick={() => setAnchorDate((value) => addDays(value, -rangeDays))} type="button">前移窗口</button><button className="rounded border border-gray-300 px-2 py-1 text-xs" onClick={() => setAnchorDate((value) => addDays(value, rangeDays))} type="button">后移窗口</button>{[28, 56, 84].map((days) => <button aria-pressed={rangeDays === days} className={rangeDays === days ? 'rounded bg-blue-600 px-2 py-1 text-xs text-white' : 'rounded border border-gray-300 px-2 py-1 text-xs'} key={days} onClick={() => setRangeDays(days)} type="button">{days / 7} 周</button>)}</div>
+      <div className="flex flex-wrap gap-2"><button className="rounded border border-gray-300 px-2 py-1 text-xs" onClick={() => setAnchorDate((value) => addDays(value, -rangeDays))} type="button">前移窗口</button><button className="rounded border border-gray-300 px-2 py-1 text-xs" onClick={() => setAnchorDate((value) => addDays(value, rangeDays))} type="button">后移窗口</button>{([28, 56, 84] as const).map((days) => <button aria-pressed={rangeDays === days} className={rangeDays === days ? 'rounded bg-blue-600 px-2 py-1 text-xs text-white' : 'rounded border border-gray-300 px-2 py-1 text-xs'} key={days} onClick={() => onGanttZoomChange?.(days)} type="button">{days / 7} 周</button>)}</div>
     </div>
     {previewError ? <p className="mb-2 text-sm text-red-600" role="alert">{previewError}</p> : null}
     {impactPreview && pendingScheduleMove ? <div className="mb-3 rounded border border-amber-300 bg-amber-50 p-3"><DependencyImpactPreviewPanel preview={impactPreview} /><label className="mt-3 flex items-center gap-2 text-sm"><input checked={pendingScheduleMove.includeSubtree} disabled={!pendingScheduleMove.task.hasChildren} onChange={(event) => setPendingScheduleMove((current) => current ? { ...current, includeSubtree: event.target.checked } : current)} type="checkbox" />同时平移子树（仅手动日期任务）</label><div className="mt-3 flex gap-2"><button className="rounded bg-blue-600 px-3 py-1 text-sm text-white" disabled={savingSchedule} onClick={() => void savePendingSchedule()} type="button">{savingSchedule ? '保存中…' : '确认并保存调期'}</button><button className="rounded border border-gray-300 px-3 py-1 text-sm" disabled={savingSchedule} onClick={() => { setImpactPreview(undefined); setPendingScheduleMove(undefined); }} type="button">取消</button></div></div> : null}

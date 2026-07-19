@@ -18,7 +18,7 @@ public sealed class ProjectManagementSavedViewService(IWorkspaceDatabaseAccessor
     {
         await EnsureProjectAsync(projectId, cancellationToken);
         var user = User();
-        var rows = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementSavedViewEntity>().Where(item => item.ProjectId == projectId && !item.IsDeleted && (item.IsShared || item.OwnerUserId == user)).OrderBy(item => item.IsDefault, OrderByType.Desc).OrderBy(item => item.ViewName).ToListAsync(cancellationToken);
+        var rows = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementSavedViewEntity>().Where(item => item.ProjectId == projectId && !item.IsDeleted && (item.IsShared || item.OwnerUserId == user)).OrderBy(item => item.IsShared, OrderByType.Asc).OrderBy(item => item.IsDefault, OrderByType.Desc).OrderBy(item => item.ViewName).ToListAsync(cancellationToken);
         return rows.Select(Map).ToList();
     }
 
@@ -28,7 +28,12 @@ public sealed class ProjectManagementSavedViewService(IWorkspaceDatabaseAccessor
         var queryJson = Validate(request);
         if (request.IsShared) await Policy().EnsureCanManageProjectAsync(projectId, cancellationToken);
         var db = databaseAccessor.GetCurrentDb();
-        if (await db.Queryable<ProjectManagementSavedViewEntity>().AnyAsync(item => item.ProjectId == projectId && item.OwnerUserId == User() && item.ViewName == request.ViewName.Trim() && !item.IsDeleted, cancellationToken)) throw new ValidationException("同名视图已存在");
+        var name = request.ViewName.Trim();
+        var duplicateQuery = db.Queryable<ProjectManagementSavedViewEntity>().Where(item => item.ProjectId == projectId && item.ViewName == name && !item.IsDeleted);
+        var duplicate = request.IsShared
+            ? await duplicateQuery.Where(item => item.IsShared).AnyAsync(cancellationToken)
+            : await duplicateQuery.Where(item => !item.IsShared && item.OwnerUserId == User()).AnyAsync(cancellationToken);
+        if (duplicate) throw new ValidationException("同一范围内已存在同名视图");
         if (request.IsDefault) await ClearDefaultAsync(projectId, request.IsShared, cancellationToken);
         var entity = new ProjectManagementSavedViewEntity { TenantId = Tenant(), AppCode = App(), ProjectId = projectId, ViewName = request.ViewName.Trim(), ViewKey = request.ViewKey, QueryJson = queryJson, OwnerUserId = User(), IsShared = request.IsShared, IsDefault = request.IsDefault, CreatedBy = User(), CreatedTime = DateTime.UtcNow };
         await db.Insertable(entity).ExecuteCommandAsync(cancellationToken);
@@ -43,6 +48,7 @@ public sealed class ProjectManagementSavedViewService(IWorkspaceDatabaseAccessor
         var entity = (await db.Queryable<ProjectManagementSavedViewEntity>().Where(item => item.Id == id && item.ProjectId == projectId && !item.IsDeleted).Take(1).ToListAsync(cancellationToken)).FirstOrDefault() ?? throw new NotFoundException("保存视图不存在", ErrorCodes.PlatformResourceNotFound);
         if (!string.Equals(entity.OwnerUserId, User(), StringComparison.OrdinalIgnoreCase) && !entity.IsShared) throw new ValidationException("不能编辑其他用户的视图", ErrorCodes.PermissionDenied);
         if (entity.IsShared || request.IsShared) await Policy().EnsureCanManageProjectAsync(projectId, cancellationToken);
+        if (entity.IsShared != request.IsShared) throw new ValidationException("视图共享范围不可变；请使用复制创建另一范围的视图");
         EnsureVersion(entity.VersionNo, request.VersionNo);
         if (request.IsDefault) await ClearDefaultAsync(projectId, request.IsShared, cancellationToken, entity.Id);
         entity.ViewName = request.ViewName.Trim(); entity.ViewKey = request.ViewKey; entity.QueryJson = queryJson; entity.IsShared = request.IsShared; entity.IsDefault = request.IsDefault; entity.VersionNo++; entity.UpdatedBy = User(); entity.UpdatedTime = DateTime.UtcNow;
@@ -64,7 +70,10 @@ public sealed class ProjectManagementSavedViewService(IWorkspaceDatabaseAccessor
     private async Task ClearDefaultAsync(string projectId, bool shared, CancellationToken cancellationToken, string? excludedId = null)
     {
         var db = databaseAccessor.GetCurrentDb();
-        var rows = await db.Queryable<ProjectManagementSavedViewEntity>().Where(item => item.ProjectId == projectId && item.IsShared == shared && item.IsDefault && !item.IsDeleted && (excludedId == null || item.Id != excludedId)).ToListAsync(cancellationToken);
+        var baseQuery = db.Queryable<ProjectManagementSavedViewEntity>().Where(item => item.ProjectId == projectId && item.IsShared == shared && item.IsDefault && !item.IsDeleted && (excludedId == null || item.Id != excludedId));
+        var rows = shared
+            ? await baseQuery.ToListAsync(cancellationToken)
+            : await baseQuery.Where(item => item.OwnerUserId == User()).ToListAsync(cancellationToken);
         foreach (var row in rows) { row.IsDefault = false; row.VersionNo++; row.UpdatedBy = User(); row.UpdatedTime = DateTime.UtcNow; }
         if (rows.Count > 0) await db.Updateable(rows).ExecuteCommandAsync(cancellationToken);
     }

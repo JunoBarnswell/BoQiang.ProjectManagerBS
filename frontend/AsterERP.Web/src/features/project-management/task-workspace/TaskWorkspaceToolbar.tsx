@@ -5,14 +5,14 @@ import type { ProjectManagementSavedView, ProjectManagementTaskView } from '../.
 import { PermissionButton } from '../../../shared/auth/PermissionButton';
 import { ProjectManagementReversibleCommandControls } from '../components/ProjectManagementReversibleCommandControls';
 import { toProjectManagementPlatformRoute } from '../state/projectManagementPlatformRoutes';
-import type { TaskWorkspaceState } from '../state/taskWorkspaceState';
+import { taskWorkspaceVisibleColumns, type TaskWorkspaceState } from '../state/taskWorkspaceState';
 
 interface TaskWorkspaceToolbarProps {
   onExport: () => void;
   onOpenBatch: () => void;
   onSelectAll: () => void;
   onCreateTask: () => void;
-  onSaveView: (name: string) => void;
+  onSaveView: (name: string, isShared: boolean) => void;
   onSelectSavedView: (view: ProjectManagementSavedView) => void;
   onStateChange: (next: Partial<TaskWorkspaceState>) => void;
   projectConversation?: ReactNode;
@@ -52,6 +52,7 @@ export function TaskWorkspaceToolbar({
   const location = useLocation();
   const [keywordDraft, setKeywordDraft] = useState(state.keyword);
   const [viewName, setViewName] = useState('');
+  const [shareView, setShareView] = useState(false);
 
   useEffect(() => setKeywordDraft(state.keyword), [state.keyword]);
 
@@ -134,7 +135,7 @@ export function TaskWorkspaceToolbar({
           }}
         >
           <option value="">恢复保存视图</option>
-          {savedViews.filter((item) => item.viewKey === state.viewKey).map((item) => (
+          {savedViews.map((item) => (
             <option key={item.id} value={item.id}>{item.viewName}{item.isDefault ? ' · 默认' : ''}</option>
           ))}
         </select>
@@ -144,17 +145,20 @@ export function TaskWorkspaceToolbar({
           placeholder="视图名称"
           value={viewName}
         />
+        <label className="flex items-center gap-1 text-sm"><input checked={shareView} onChange={(event) => setShareView(event.target.checked)} type="checkbox" />共享给项目</label>
         <PermissionButton
           code="project-management:task:edit"
           disabled={!viewName.trim() || savingView}
           onClick={() => {
-            onSaveView(viewName.trim());
+            onSaveView(viewName.trim(), shareView);
             setViewName('');
+            setShareView(false);
           }}
         >
           {savingView ? '保存中…' : '保存视图'}
         </PermissionButton>
       </div>
+      {(state.viewKey === 'tree' || state.viewKey === 'list') ? <fieldset className="flex flex-wrap items-center gap-2 text-sm"><legend className="px-1">保存列显示</legend>{taskWorkspaceVisibleColumns.map((column) => <label className="flex items-center gap-1" key={column}><input checked={state.visibleColumns.includes(column)} onChange={(event) => onStateChange({ visibleColumns: event.target.checked ? [...state.visibleColumns, column] : state.visibleColumns.filter((item) => item !== column) })} type="checkbox" />{column}</label>)}</fieldset> : null}
       {projectConversation}
     </div>
   );

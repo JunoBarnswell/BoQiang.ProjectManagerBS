@@ -10,6 +10,9 @@ export interface TaskWorkspaceState {
   dueTo?: string;
   groupBy?: TaskWorkspaceGroupBy;
   includeCompleted: boolean;
+  ganttZoom: 28 | 56 | 84;
+  labelIds: string[];
+  labelMatchMode: 'Any' | 'All';
   keyword: string;
   milestoneId?: string;
   pageIndex: number;
@@ -18,17 +21,23 @@ export interface TaskWorkspaceState {
   sortBy: TaskWorkspaceSortBy;
   sortDirection: TaskWorkspaceSortDirection;
   status?: string;
+  visibleColumns: string[];
   viewKey: ProjectManagementTaskView;
 }
 
 const views: readonly ProjectManagementTaskView[] = ['tree', 'list', 'card', 'board', 'gantt', 'calendar'];
 const groupByValues: readonly TaskWorkspaceGroupBy[] = ['status', 'priority', 'assignee', 'milestone', 'parent', 'label'];
 const sortByValues: readonly TaskWorkspaceSortBy[] = ['tree', 'dueDate', 'priority', 'status', 'updated'];
+export const taskWorkspaceVisibleColumns = ['taskCode', 'title', 'status', 'priority', 'progressPercent', 'dueDate', 'blockedByCount'] as const;
+const visibleColumnValues = new Set<string>(taskWorkspaceVisibleColumns);
 
 export function createTaskWorkspaceState(viewKey: ProjectManagementTaskView): TaskWorkspaceState {
   return {
     includeCompleted: true,
+    ganttZoom: 56,
     keyword: '',
+    labelIds: [],
+    labelMatchMode: 'Any',
     pageIndex: 1,
     pageSize: 50,
     sortBy: viewKey === 'gantt' || viewKey === 'calendar' ? 'dueDate' : 'tree',
@@ -60,6 +69,10 @@ export function normalizeTaskWorkspaceState(
     sortBy,
     sortDirection,
     status: normalizeText(input.status),
+    ganttZoom: input.ganttZoom === 28 || input.ganttZoom === 84 ? input.ganttZoom : 56,
+    labelIds: normalizeStringArray(input.labelIds, 50, 64),
+    labelMatchMode: input.labelMatchMode === 'All' ? 'All' : 'Any',
+    visibleColumns: normalizeVisibleColumns(input.visibleColumns),
     viewKey: views.includes(viewKey) ? viewKey : 'tree',
   };
 }
@@ -89,12 +102,16 @@ export function taskWorkspaceStateToSavedView(state: TaskWorkspaceState) {
     dueTo: state.dueTo,
     groupBy: state.groupBy,
     includeCompleted: state.includeCompleted,
+    ganttZoom: state.ganttZoom,
     keyword: state.keyword || undefined,
+    labelIds: state.labelIds,
+    labelMatchMode: state.labelMatchMode,
     milestoneId: state.milestoneId,
     sortBy: state.sortBy,
     sortDirection: state.sortDirection,
     status: state.status,
-    version: 1,
+    version: 2,
+    visibleColumns: state.visibleColumns,
     viewKey: state.viewKey,
   };
 }
@@ -111,4 +128,14 @@ function normalizeInteger(value: number | undefined, fallback: number, minimum: 
 function normalizeText(value: string | undefined): string | undefined {
   const normalized = value?.trim();
   return normalized || undefined;
+}
+
+function normalizeStringArray(value: string[] | undefined, maximumCount: number, maximumLength: number): string[] {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.map((item) => normalizeText(item)).filter((item): item is string => Boolean(item && item.length <= maximumLength)))].slice(0, maximumCount);
+}
+
+function normalizeVisibleColumns(value: string[] | undefined): string[] {
+  const normalized = normalizeStringArray(value, taskWorkspaceVisibleColumns.length, 32).filter((column) => visibleColumnValues.has(column));
+  return normalized.length > 0 ? normalized : [...taskWorkspaceVisibleColumns];
 }

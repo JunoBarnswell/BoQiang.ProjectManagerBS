@@ -51,45 +51,46 @@ import type {
   ProjectManagementTaskListItem,
   ProjectManagementTaskReminder,
   ProjectManagementTaskReminderCreateRequest,
+  ProjectManagementSavedView,
   ProjectManagementTaskUpsertRequest,
   ProjectManagementTaskView,
 } from '../../api/project-management/projectManagement.types';
-import { isHttpError } from '../../core/http/httpError';
 import { usePermission } from '../../core/auth/usePermission';
+import { isHttpError } from '../../core/http/httpError';
 import { queryKeys } from '../../core/query/queryKeys';
 import { useApiMutation } from '../../core/query/useApiMutation';
 import { useOpenImConversation } from '../../features/im/hooks/useOpenImConversation';
 import '../../features/project-management/projectManagement.css';
 import { useProjectManagementViewSyncRealtime } from '../../features/project-management/hooks/useProjectManagementViewSyncRealtime';
-import { useTaskWorkspaceUrlState } from '../../features/project-management/hooks/useTaskWorkspaceUrlState';
-import { useProjectManagementWorkspaceScope } from '../../features/project-management/state/projectManagementWorkspaceScope';
-import { toProjectManagementPlatformRoute } from '../../features/project-management/state/projectManagementPlatformRoutes';
-import { taskWorkspaceStateToQuery, taskWorkspaceStateToSavedView } from '../../features/project-management/state/taskWorkspaceState';
-import { preserveProjectManagementViewSyncState, serializeProjectManagementViewSyncState } from '../../features/project-management/view-sync/projectManagementViewSyncModel';
+import { createTaskWorkspaceSearchParams, hasTaskWorkspaceUrlOverrides, useTaskWorkspaceUrlState } from '../../features/project-management/hooks/useTaskWorkspaceUrlState';
 import { ProjectManagementEscapeStack } from '../../features/project-management/interactions/ProjectManagementEscapeStack';
 import { ProjectManagementShortcutHelp } from '../../features/project-management/interactions/ProjectManagementShortcutHelp';
 import { ProjectManagementUnsavedChangesDialog } from '../../features/project-management/interactions/ProjectManagementUnsavedChangesDialog';
 import { useProjectManagementGlobalShortcuts } from '../../features/project-management/interactions/useProjectManagementGlobalShortcuts';
 import { useProjectManagementUnsavedChangesGuard } from '../../features/project-management/interactions/useProjectManagementUnsavedChangesGuard';
 import { useProjectManagementInteractionPreferences } from '../../features/project-management/state/projectManagementInteractionPreferences';
+import { toProjectManagementPlatformRoute } from '../../features/project-management/state/projectManagementPlatformRoutes';
+import { useProjectManagementWorkspaceScope } from '../../features/project-management/state/projectManagementWorkspaceScope';
+import { normalizeTaskWorkspaceState, taskWorkspaceStateToQuery, taskWorkspaceStateToSavedView, type TaskWorkspaceState } from '../../features/project-management/state/taskWorkspaceState';
+import { ProjectManagementTaskAttachmentPreviewDialog } from '../../features/project-management/task-workspace/ProjectManagementTaskAttachmentPreviewDialog';
 import { SavedViewManager } from '../../features/project-management/task-workspace/SavedViewManager';
+import { getProjectManagementTaskActivities } from '../../features/project-management/task-workspace/taskActivity.api';
+import { TaskActivityTimeline } from '../../features/project-management/task-workspace/TaskActivityTimeline';
+import { uploadProjectManagementTaskAttachmentWithProgress } from '../../features/project-management/task-workspace/taskAttachmentUpload.api';
+import { taskBatchResultToCsv } from '../../features/project-management/task-workspace/taskBatchExecutionModel';
+import { applyOptimisticBoardMove, clearOptimisticBoardMove, rollbackOptimisticBoardMove } from '../../features/project-management/task-workspace/taskBoardInteractionModel';
+import { resolveBoardStatusProgress, rollbackBoardStatus } from '../../features/project-management/task-workspace/taskBoardStatusMutationModel';
+import { TaskDetailChildrenSection, TaskDetailDependenciesSection, TaskDetailDrawer } from '../../features/project-management/task-workspace/TaskDetailDrawer';
+import { readProjectManagementTaskConflict, taskDetailToForm, type TaskDetailSection } from '../../features/project-management/task-workspace/taskDetailDrawerModel';
 import { createTaskMoveRequest, type TaskGroupDropTarget } from '../../features/project-management/task-workspace/taskMoveIntent';
 import { TaskWorkspaceBatchCommandPanel } from '../../features/project-management/task-workspace/TaskWorkspaceBatchCommandPanel';
 import { TaskWorkspaceBatchResultPanel } from '../../features/project-management/task-workspace/TaskWorkspaceBatchResultPanel';
-import { taskBatchResultToCsv } from '../../features/project-management/task-workspace/taskBatchExecutionModel';
-import { resolveBoardStatusProgress, rollbackBoardStatus } from '../../features/project-management/task-workspace/taskBoardStatusMutationModel';
-import { applyOptimisticBoardMove, clearOptimisticBoardMove, rollbackOptimisticBoardMove } from '../../features/project-management/task-workspace/taskBoardInteractionModel';
 import { TaskWorkspaceImConversationPanel } from '../../features/project-management/task-workspace/TaskWorkspaceImConversationPanel';
 import { TaskWorkspaceLabelManager } from '../../features/project-management/task-workspace/TaskWorkspaceLabelManager';
 import { TaskWorkspaceProjection } from '../../features/project-management/task-workspace/TaskWorkspaceProjection';
 import { TaskWorkspaceSelectionPanel } from '../../features/project-management/task-workspace/TaskWorkspaceSelectionPanel';
-import { TaskDetailChildrenSection, TaskDetailDependenciesSection, TaskDetailDrawer } from '../../features/project-management/task-workspace/TaskDetailDrawer';
-import { readProjectManagementTaskConflict, taskDetailToForm, type TaskDetailSection } from '../../features/project-management/task-workspace/taskDetailDrawerModel';
 import { TaskWorkspaceToolbar } from '../../features/project-management/task-workspace/TaskWorkspaceToolbar';
-import { ProjectManagementTaskAttachmentPreviewDialog } from '../../features/project-management/task-workspace/ProjectManagementTaskAttachmentPreviewDialog';
-import { uploadProjectManagementTaskAttachmentWithProgress } from '../../features/project-management/task-workspace/taskAttachmentUpload.api';
-import { getProjectManagementTaskActivities } from '../../features/project-management/task-workspace/taskActivity.api';
-import { TaskActivityTimeline } from '../../features/project-management/task-workspace/TaskActivityTimeline';
+import { preserveProjectManagementViewSyncState, serializeProjectManagementViewSyncState } from '../../features/project-management/view-sync/projectManagementViewSyncModel';
 import { useConfirm } from '../../shared/feedback/useConfirm';
 import { useMessage } from '../../shared/feedback/useMessage';
 import { saveBlob } from '../../shared/file-preview/filePreviewUtils';
@@ -196,9 +197,10 @@ export function ProjectManagementTaskWorkspacePage() {
     previewFile: File | null;
   }>({ attachment: null, loading: false, previewFile: null });
   const attachmentPreviewAbortController = useRef<AbortController | null>(null);
+  const appliedDefaultViewProject = useRef<string>();
   const taskFormBaseline = useRef('');
   const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
-  const [labelFilter, setLabelFilter] = useState<ProjectManagementTaskLabelFilter>({ labelIds: [], matchMode: 'Any' });
+  const labelFilter = useMemo<ProjectManagementTaskLabelFilter>(() => ({ labelIds: state.labelIds, matchMode: state.labelMatchMode }), [state.labelIds, state.labelMatchMode]);
   const query = useMemo(() => ({
     ...taskWorkspaceStateToQuery(projectId, state),
     ...(state.viewKey === 'calendar' ? { pageIndex: 1, pageSize: 200 } : {}),
@@ -297,7 +299,7 @@ export function ProjectManagementTaskWorkspacePage() {
     queryKey: queryKeys.projectManagement.taskReminders(scope, projectId, selectedTaskId),
   });
   const membersQuery = useQuery({
-    enabled: scope.isAvailable && Boolean(projectId && selectedTaskId) && detailSection === 'reminders',
+    enabled: scope.isAvailable && Boolean(projectId),
     queryFn: ({ signal }) => getProjectManagementMembers(projectId, signal),
     queryKey: queryKeys.projectManagement.members(scope, projectId),
   });
@@ -349,6 +351,37 @@ export function ProjectManagementTaskWorkspacePage() {
   const participantLabels = useMemo(() => Object.fromEntries((memberCandidatesQuery.data?.data?.items ?? []).map((candidate) => [candidate.userId, candidate.displayName || candidate.userName])), [memberCandidatesQuery.data?.data?.items]);
   const milestones = useMemo(() => milestonesQuery.data?.data.items ?? [], [milestonesQuery.data?.data.items]);
   const milestoneLabels = useMemo(() => Object.fromEntries(milestones.map((milestone) => [milestone.id, milestone.milestoneName])), [milestones]);
+  const applySavedView = useCallback((view: ProjectManagementSavedView, source: 'default' | 'manual') => {
+    try {
+      const parsed = JSON.parse(view.queryJson) as Partial<TaskWorkspaceState>;
+      const unavailable: string[] = [];
+      const knownMembers = new Set((membersQuery.data?.data ?? []).map((member) => member.userId));
+      const knownLabels = new Set((labelsQuery.data?.data ?? []).map((label) => label.id));
+      const sanitized = { ...parsed, selectedTaskId: undefined };
+      if (sanitized.assigneeUserId && membersQuery.isSuccess && !knownMembers.has(sanitized.assigneeUserId)) { delete sanitized.assigneeUserId; unavailable.push('负责人'); }
+      if (sanitized.milestoneId && milestonesQuery.isSuccess && !milestoneLabels[sanitized.milestoneId]) { delete sanitized.milestoneId; unavailable.push('里程碑'); }
+      if (sanitized.labelIds && labelsQuery.isSuccess) {
+        const validLabels = sanitized.labelIds.filter((id) => knownLabels.has(id));
+        if (validLabels.length !== sanitized.labelIds.length) unavailable.push('标签');
+        sanitized.labelIds = validLabels;
+      }
+      const targetView = parsed.viewKey ?? view.viewKey;
+      const targetState = normalizeTaskWorkspaceState(targetView, sanitized);
+      const nextSearch = createTaskWorkspaceSearchParams(targetView, targetState).toString();
+      const path = targetView === 'tree' ? 'tasks' : targetView;
+      navigate({ pathname: toProjectManagementPlatformRoute(`projects/${projectId}/${path}`), search: nextSearch ? `?${nextSearch}` : '' }, { replace: source === 'default' });
+      if (unavailable.length > 0) message.warning(`保存视图中的${unavailable.join('、')}已失效，已安全降级。`);
+    } catch {
+      message.error('保存视图内容无效，未应用。');
+    }
+  }, [labelsQuery.data?.data, labelsQuery.isSuccess, membersQuery.data?.data, membersQuery.isSuccess, message, milestoneLabels, milestonesQuery.isSuccess, navigate, projectId]);
+  useEffect(() => {
+    if (appliedDefaultViewProject.current === projectId || !savedViewsQuery.isSuccess || !membersQuery.isSuccess || !labelsQuery.isSuccess || !milestonesQuery.isSuccess) return;
+    appliedDefaultViewProject.current = projectId;
+    if (hasTaskWorkspaceUrlOverrides(search)) return;
+    const defaultView = (savedViewsQuery.data?.data ?? []).find((view) => view.isDefault);
+    if (defaultView) applySavedView(defaultView, 'default');
+  }, [applySavedView, labelsQuery.isSuccess, membersQuery.isSuccess, milestonesQuery.isSuccess, projectId, savedViewsQuery.data?.data, savedViewsQuery.isSuccess, search]);
   const selectedListTask = rows.find((task) => task.id === selectedTaskId);
   const selectedTask = taskDetailQuery.data?.data;
   const selectedTasks = useMemo(() => selectableRows.filter((task) => selectedTaskIds.has(task.id)), [selectableRows, selectedTaskIds]);
@@ -733,8 +766,9 @@ export function ProjectManagementTaskWorkspacePage() {
     },
   });
   const savedViewMutation = useApiMutation({
-    mutationFn: (viewName: string) => createProjectManagementSavedView(projectId, {
+    mutationFn: ({ isShared, viewName }: { isShared: boolean; viewName: string }) => createProjectManagementSavedView(projectId, {
       isDefault: false,
+      isShared,
       queryJson: JSON.stringify(taskWorkspaceStateToSavedView(state)),
       viewKey: state.viewKey,
       viewName,
@@ -782,7 +816,7 @@ export function ProjectManagementTaskWorkspacePage() {
   }, [creating, selectedTask]);
   useEffect(() => {
     if (interactionPreferences.isAvailable) interactionPreferences.rememberPosition({ hash, pathname, search });
-  }, [hash, interactionPreferences.isAvailable, interactionPreferences.rememberPosition, pathname, search]);
+  }, [hash, interactionPreferences, interactionPreferences.isAvailable, interactionPreferences.rememberPosition, pathname, search]);
   useProjectManagementGlobalShortcuts({
     newChildTask: selectedTask && canAddTask ? () => {
       setCreating(true);
@@ -865,15 +899,8 @@ export function ProjectManagementTaskWorkspacePage() {
             taskFormBaseline.current = JSON.stringify(emptyForm);
             setState({ selectedTaskId: undefined });
           }}
-          onSaveView={(viewName) => savedViewMutation.mutate(viewName)}
-          onSelectSavedView={(view) => {
-            try {
-              const saved = JSON.parse(view.queryJson) as Partial<typeof state>;
-              setState({ ...saved, selectedTaskId: saved.selectedTaskId });
-            } catch {
-              message.error('保存视图内容无效');
-            }
-          }}
+          onSaveView={(viewName, isShared) => savedViewMutation.mutate({ isShared, viewName })}
+          onSelectSavedView={(view) => applySavedView(view, 'manual')}
           onStateChange={(next) => {
             if (next.viewKey) interactionPreferences.setPreferredView(next.viewKey);
             setState(next);
@@ -1007,8 +1034,7 @@ export function ProjectManagementTaskWorkspacePage() {
         filter={labelFilter}
         labels={labelsQuery.data?.data ?? []}
         onFilterChange={(next) => {
-          setLabelFilter(next);
-          setState({ pageIndex: 1 }, { replace: true });
+          setState({ labelIds: next.labelIds, labelMatchMode: next.matchMode === 'All' ? 'All' : 'Any', pageIndex: 1 }, { replace: true });
         }}
         onChanged={async () => { await queryClient.invalidateQueries({ queryKey: queryKeys.projectManagement.labels(scope, projectId) }); }}
         projectId={projectId}
@@ -1058,6 +1084,7 @@ export function ProjectManagementTaskWorkspacePage() {
             scheduleMutation.mutate({ dueDate, startDate, task });
           }}
           onGanttScheduleSaved={invalidateProjectTaskViews}
+          onGanttZoomChange={(ganttZoom) => setState({ ganttZoom }, { replace: true })}
           onCreateTaskOnDate={(date) => {
             setCreating(true);
             setForm({ ...emptyForm, dueDate: date, startDate: date });
