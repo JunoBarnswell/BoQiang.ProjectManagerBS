@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { ProjectManagementTaskDependency, ProjectManagementTaskListItem } from '../../../api/project-management/projectManagement.types';
 
-import { adjustTaskSchedule, buildSubtreeScheduleChanges, buildTaskScheduleRows, deriveCriticalTaskIds, validateScheduleMove } from './taskScheduleProjectionModel';
+import { adjustTaskSchedule, buildSubtreeScheduleChanges, buildTaskScheduleRows, createScheduleWindow, deriveCriticalTaskIds, getSchedulePlacement, validateScheduleMove } from './taskScheduleProjectionModel';
 
 const task = (id: string, dates: Pick<ProjectManagementTaskListItem, 'startDate' | 'dueDate'>, parentTaskId?: string, progressPercent = 0): ProjectManagementTaskListItem => ({
   id,
@@ -80,5 +80,16 @@ describe('taskScheduleProjectionModel', () => {
       expect.objectContaining({ taskId: 'manual-parent', startDate: '2026-07-03' }),
       expect.objectContaining({ taskId: 'leaf', startDate: '2026-07-05' }),
     ]);
+  });
+
+  it('keeps unscheduled tasks available while clipping bars to the active time window', () => {
+    const rows = buildTaskScheduleRows([
+      task('unscheduled', {}),
+      task('scheduled', { startDate: '2026-07-05', dueDate: '2026-07-12' }),
+    ]);
+    const range = createScheduleWindow(new Date('2026-07-06T00:00:00'), 7);
+
+    expect(rows.find((row) => row.id === 'unscheduled')).toMatchObject({ scheduleStartDate: undefined, scheduleDueDate: undefined });
+    expect(getSchedulePlacement('2026-07-05', '2026-07-12', range)).toEqual({ startOffset: 0, endOffset: 6 });
   });
 });
