@@ -29,6 +29,12 @@ export interface ProjectManagementAuditQuery {
   keyword?: string;
   from?: string;
   to?: string;
+  actorUserId?: string;
+  actorRole?: string;
+  source?: string;
+  sourceDeviceId?: string;
+  isSuccess?: boolean;
+  sorts?: Array<{ field: 'createdTime' | 'projectId' | 'aggregateType' | 'activityType' | 'actorUserId'; order?: 'asc' | 'desc' }>;
 }
 
 export interface ProjectManagementAuditItem {
@@ -41,6 +47,9 @@ export interface ProjectManagementAuditItem {
   traceId: string;
   actorUserId: string;
   createdTime: string;
+  source: string;
+  sourceDeviceId?: string;
+  isSuccess: boolean;
 }
 
 export interface ProjectManagementAuditPage {

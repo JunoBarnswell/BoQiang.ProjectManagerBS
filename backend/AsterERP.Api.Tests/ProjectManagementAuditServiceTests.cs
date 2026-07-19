@@ -3,9 +3,11 @@ using AsterERP.Api.Application.ProjectManagement;
 using AsterERP.Api.Infrastructure.Abp.ProjectManagement;
 using AsterERP.Api.Infrastructure.Database;
 using AsterERP.Api.Infrastructure.Security;
+using AsterERP.Api.Infrastructure.Security.DataPermissions;
 using AsterERP.Api.Modules.ProjectManagement;
 using AsterERP.Contracts.ProjectManagement;
 using AsterERP.Shared;
+using AsterERP.Shared.Exceptions;
 using SqlSugar;
 using Xunit;
 
@@ -49,6 +51,101 @@ public sealed class ProjectManagementAuditServiceTests
         Assert.Contains("\"标题, \"\"已更新\"\"\"", csv, StringComparison.Ordinal);
         Assert.Equal(1, export.Count);
     }
+
+    [Fact]
+    public async Task Audit_query_applies_combined_filters_sorting_and_device_lookup_in_database()
+    {
+        using var db = CreateDatabase();
+        await SeedAuditDataAsync(db);
+        var user = CreateUser("manager");
+        Assert.True(ProjectManagementDataPermissionFilterRegistrar.TryRegister(db, typeof(ProjectManagementActivityEntity), user, "tenant-a", "SYSTEM"));
+        Assert.True(ProjectManagementDataPermissionFilterRegistrar.TryRegister(db, typeof(ProjectManagementSyncJournalEntity), user, "tenant-a", "SYSTEM"));
+        var service = new ProjectManagementAuditService(new TestWorkspaceDatabaseAccessor(db), user, new ProjectManagementAccessPolicy(new TestWorkspaceDatabaseAccessor(db), user));
+
+        var page = await service.QueryAsync(new ProjectManagementAuditQuery(
+            ProjectId: "project-visible",
+            AggregateType: "Task",
+            ActivityType: "task.updated",
+            ActorUserId: "manager",
+            ActorRole: "Manager",
+            Source: "User",
+            SourceDeviceId: "device-a",
+            IsSuccess: true,
+            Keyword: "planning",
+            From: DateTime.UtcNow.AddDays(-1),
+            To: DateTime.UtcNow.AddDays(1),
+            Sorts: [new GridSort { Field = "actorUserId", Order = "asc" }]));
+
+        var item = Assert.Single(page.Items);
+        Assert.Equal("visible-success", item.Id);
+        Assert.Equal("User", item.Source);
+        Assert.Equal("device-a", item.SourceDeviceId);
+        Assert.True(item.IsSuccess);
+
+        await Assert.ThrowsAsync<ValidationException>(() => service.QueryAsync(new ProjectManagementAuditQuery(
+            From: DateTime.UtcNow.AddDays(-1), To: DateTime.UtcNow.AddDays(1), Sorts: [new GridSort { Field = "summary", Order = "asc" }])));
+        await Assert.ThrowsAsync<ValidationException>(() => service.QueryAsync(new ProjectManagementAuditQuery(
+            From: DateTime.UtcNow.AddDays(-93), To: DateTime.UtcNow)));
+    }
+
+    [Fact]
+    public async Task Audit_query_never_returns_activities_after_project_membership_is_revoked()
+    {
+        using var db = CreateDatabase();
+        await SeedAuditDataAsync(db);
+        var revokedUser = CreateUser("revoked");
+        Assert.True(ProjectManagementDataPermissionFilterRegistrar.TryRegister(db, typeof(ProjectManagementActivityEntity), revokedUser, "tenant-a", "SYSTEM"));
+        var accessor = new TestWorkspaceDatabaseAccessor(db);
+        var service = new ProjectManagementAuditService(accessor, revokedUser, new ProjectManagementAccessPolicy(accessor, revokedUser));
+
+        var page = await service.QueryAsync(new ProjectManagementAuditQuery(From: DateTime.UtcNow.AddDays(-1), To: DateTime.UtcNow.AddDays(1)));
+
+        Assert.Empty(page.Items);
+    }
+
+    private static SqlSugarClient CreateDatabase()
+    {
+        var db = new SqlSugarClient(new ConnectionConfig
+        {
+            ConnectionString = $"Data Source=file:project-management-audit-{Guid.NewGuid():N};Mode=Memory;Cache=Shared",
+            DbType = DbType.Sqlite,
+            IsAutoCloseConnection = false
+        });
+        new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None).GetAwaiter().GetResult();
+        return db;
+    }
+
+    private static async Task SeedAuditDataAsync(ISqlSugarClient db)
+    {
+        var now = DateTime.UtcNow;
+        await db.Insertable(new[]
+        {
+            new ProjectManagementProjectEntity { Id = "project-visible", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "VISIBLE", ProjectName = "Visible", OwnerUserId = "operator" },
+            new ProjectManagementProjectEntity { Id = "project-hidden", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "HIDDEN", ProjectName = "Hidden", OwnerUserId = "other" }
+        }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementProjectMemberEntity
+        {
+            Id = "visible-manager", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-visible", UserId = "manager", RoleCode = "Manager", IsActive = true
+        }).ExecuteCommandAsync();
+        await db.Insertable(new[]
+        {
+            new ProjectManagementActivityEntity { Id = "visible-success", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-visible", AggregateType = "Task", AggregateId = "task-visible", ActivityType = "task.updated", Summary = "planning updated", TraceId = "trace-visible", ActorUserId = "manager", CreatedBy = "manager", CreatedTime = now, Remark = "{\"source\":\"User\"}" },
+            new ProjectManagementActivityEntity { Id = "visible-failed", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-visible", AggregateType = "Task", AggregateId = "task-failed", ActivityType = "task.failed", Summary = "更新失败", TraceId = "trace-failed", ActorUserId = "manager", CreatedBy = "manager", CreatedTime = now, Remark = "{\"source\":\"Governance\"}" },
+            new ProjectManagementActivityEntity { Id = "hidden-match", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-hidden", AggregateType = "Task", AggregateId = "task-hidden", ActivityType = "task.updated", Summary = "planning updated", TraceId = "trace-hidden", ActorUserId = "manager", CreatedBy = "manager", CreatedTime = now, Remark = "{\"source\":\"User\"}" }
+        }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementSyncJournalEntity
+        {
+            Id = "journal-visible", TenantId = "tenant-a", AppCode = "SYSTEM", SequenceNo = 1, ProjectId = "project-visible", AggregateType = "Task", AggregateId = "task-visible", Operation = "updated", VersionNo = 1, PayloadJson = "{}", ActorUserId = "manager", DeviceId = "device-a", TraceId = "trace-visible", CreatedBy = "manager", CreatedTime = now
+        }).ExecuteCommandAsync();
+    }
+
+    private static FixedAsterErpCurrentUser CreateUser(string userId) => new(new ClaimsPrincipal(new ClaimsIdentity(new[]
+    {
+        new Claim(AsterErpClaimTypes.UserId, userId),
+        new Claim(AsterErpClaimTypes.TenantId, "tenant-a"),
+        new Claim(AsterErpClaimTypes.AppCode, "SYSTEM"),
+        new Claim(AsterErpClaimTypes.DataScope, "SELF")
+    }, "test")));
 
     private sealed class TestWorkspaceDatabaseAccessor(ISqlSugarClient db) : IWorkspaceDatabaseAccessor
     {
