@@ -34,6 +34,7 @@ interface TaskWorkspaceProjectionProps {
   onCompleteTask?: (task: ProjectManagementTaskListItem) => void;
   onChangeTaskStatus?: (task: ProjectManagementTaskListItem, status: string) => void;
   onChangeTaskSchedule?: (task: ProjectManagementTaskListItem, startDate: string | undefined, dueDate: string | undefined) => void;
+  onCreateTaskOnDate?: (date: string) => void;
   onDeleteTask?: (task: ProjectManagementTaskListItem) => void;
   onBoardRowsLoaded?: (rows: ProjectManagementTaskListItem[]) => void;
   participantLabels?: Readonly<Record<string, string>>;
@@ -47,11 +48,12 @@ interface TaskWorkspaceProjectionProps {
   milestones?: readonly ProjectManagementMilestone[];
   optimisticBoardRows?: Readonly<Record<string, ProjectManagementTaskListItem>>;
   rows: ProjectManagementTaskListItem[];
+  schedulePending?: boolean;
   selectedTaskIds: ReadonlySet<string>;
   state: TaskWorkspaceState;
 }
 
-export function TaskWorkspaceProjection({ dependencies, labelFilter, milestoneLabels, milestones, onAddChildTask, onBoardRowsLoaded, onChangeTaskSchedule, onChangeTaskStatus, onCompleteTask, onDeleteTask, onMoveTask, onMoveTaskGroup, onSelectTask, onToggleTaskSelection, optimisticBoardRows, participantLabels, pendingTaskId, projectId, rows, selectedTaskIds, state }: TaskWorkspaceProjectionProps) {
+export function TaskWorkspaceProjection({ dependencies, labelFilter, milestoneLabels, milestones, onAddChildTask, onBoardRowsLoaded, onChangeTaskSchedule, onChangeTaskStatus, onCompleteTask, onCreateTaskOnDate, onDeleteTask, onMoveTask, onMoveTaskGroup, onSelectTask, onToggleTaskSelection, optimisticBoardRows, participantLabels, pendingTaskId, projectId, rows, schedulePending, selectedTaskIds, state }: TaskWorkspaceProjectionProps) {
   const scope = useProjectManagementWorkspaceScope();
   const userId = useAuthStore((current) => current.user?.userId ?? '');
   const expansionKey = useMemo(
@@ -207,7 +209,7 @@ export function TaskWorkspaceProjection({ dependencies, labelFilter, milestoneLa
   if (state.viewKey === 'board') return <>{dragHelp}<TaskBoardProjection baseQuery={{ ...taskWorkspaceStateToQuery(projectId, state), labelFilter: labelFilter?.labelIds.length ? labelFilter : undefined }} drag={drag} groupBy={state.groupBy} milestoneLabels={milestoneLabels} onAddChildTask={onAddChildTask} onBoardRowsLoaded={onBoardRowsLoaded} onChangeTaskStatus={onChangeTaskStatus} onCompleteTask={onCompleteTask} onDeleteTask={onDeleteTask} optimisticBoardRows={optimisticBoardRows} participantLabels={participantLabels} pendingTaskId={pendingTaskId} onSelectTask={onSelectTask} onToggleTaskSelection={onToggleTaskSelection} selectedTaskIds={selectedTaskIds} />;</>;
   if (state.viewKey === 'card') return <>{dragHelp}{rootDropZone}<TaskCardProjection drag={drag} groupBy={state.groupBy} milestoneLabels={milestoneLabels} onAddChildTask={onAddChildTask} onCompleteTask={onCompleteTask} onDeleteTask={onDeleteTask} onSelectTask={onSelectTask} onToggleTaskSelection={onToggleTaskSelection} participantLabels={participantLabels} pendingTaskId={pendingTaskId} projectId={projectId} rows={rows} selectedTaskIds={selectedTaskIds} /></>;
   if (state.viewKey === 'gantt') return <TaskGanttScheduleProjection dependencies={dependencies} milestones={milestones} onChangeTaskSchedule={onChangeTaskSchedule} rows={rows} onSelectTask={onSelectTask} onToggleTaskSelection={onToggleTaskSelection} selectedTaskIds={selectedTaskIds} />;
-  if (state.viewKey === 'calendar') return <TaskCalendarScheduleProjection dependencies={dependencies} onSelectTask={onSelectTask} onToggleTaskSelection={onToggleTaskSelection} rows={rows} selectedTaskIds={selectedTaskIds} />;
+  if (state.viewKey === 'calendar') return <TaskCalendarScheduleProjection dependencies={dependencies} milestones={milestones} onChangeTaskSchedule={onChangeTaskSchedule} onCreateTask={onCreateTaskOnDate} onSelectTask={onSelectTask} onToggleTaskSelection={onToggleTaskSelection} rows={rows} schedulePending={schedulePending} selectedTaskIds={selectedTaskIds} />;
   return <>{rootDropZone}<TaskTableProjection childStateByParent={loadedChildren} expandedTaskIds={new Set(expandedTaskIds)} onLoadMoreChildren={loadMoreChildren} onToggleTaskExpansion={toggleExpansion} drag={drag} rows={visibleRows} onSelectTask={onSelectTask} onToggleTaskSelection={onToggleTaskSelection} selectedTaskIds={selectedTaskIds} state={state} /></>;
 }
 

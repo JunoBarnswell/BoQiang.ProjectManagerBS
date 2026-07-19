@@ -2,9 +2,9 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { useMemo, useRef, useState } from 'react';
 
 import type { ProjectManagementMilestone, ProjectManagementTaskDependency, ProjectManagementTaskListItem } from '../../../api/project-management/projectManagement.types';
+import { ProjectManagementTaskCalendar } from '../calendar/ProjectManagementTaskCalendar';
 import {
   buildTaskScheduleRows,
-  createCalendarEvents,
   createScheduleWindow,
   getSchedulePlacement,
   milestonePlacement,
@@ -16,9 +16,11 @@ interface TaskScheduleProjectionProps {
   dependencies?: readonly ProjectManagementTaskDependency[];
   milestones?: readonly ProjectManagementMilestone[];
   onChangeTaskSchedule?: (task: ProjectManagementTaskListItem, startDate: string | undefined, dueDate: string | undefined) => void;
+  onCreateTask?: (date: string) => void;
   onSelectTask: (taskId: string) => void;
   onToggleTaskSelection: (taskId: string) => void;
   rows: ProjectManagementTaskListItem[];
+  schedulePending?: boolean;
   selectedTaskIds: ReadonlySet<string>;
 }
 
@@ -75,24 +77,20 @@ export function TaskGanttScheduleProjection({ dependencies = [], milestones = []
   </div>;
 }
 
-export function TaskCalendarScheduleProjection({ dependencies = [], onSelectTask, onToggleTaskSelection, rows, selectedTaskIds }: Omit<TaskScheduleProjectionProps, 'milestones' | 'onChangeTaskSchedule'>) {
-  const scheduleRows = useMemo(() => buildTaskScheduleRows(rows, dependencies), [dependencies, rows]);
-  const events = useMemo(() => createCalendarEvents(scheduleRows), [scheduleRows]);
-  const [mode, setMode] = useState<'month' | 'week'>('month');
-  const [anchorDate, setAnchorDate] = useState(() => firstScheduleDate(scheduleRows) ?? new Date());
-  const calendar = useMemo(() => createScheduleWindow(anchorDate, mode === 'week' ? 7 : 42), [anchorDate, mode]);
-  return <div className="pm-calendar">
-    <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><p className="pm-prototype-note">日历与甘特共享真实任务日期；月/周视图同时显示开始和截止事件，父任务使用子任务汇总日期。</p><div className="flex items-center gap-2"><button className="rounded border border-gray-300 px-2 py-1 text-sm" onClick={() => setAnchorDate((value) => movePeriod(value, mode, -1))} type="button">上一{mode === 'month' ? '月' : '周'}</button><button className="rounded border border-gray-300 px-2 py-1 text-sm" onClick={() => setAnchorDate(firstScheduleDate(scheduleRows) ?? new Date())} type="button">回到有任务日期</button><button className="rounded border border-gray-300 px-2 py-1 text-sm" onClick={() => setAnchorDate((value) => movePeriod(value, mode, 1))} type="button">下一{mode === 'month' ? '月' : '周'}</button><select aria-label="日历视图" onChange={(event) => setMode(event.target.value as 'month' | 'week')} value={mode}><option value="month">月视图</option><option value="week">周视图</option></select></div></div>
-    <div className="grid grid-cols-7 overflow-hidden rounded border border-gray-200"><div className="col-span-7 grid grid-cols-7 border-b border-gray-200 bg-gray-50 text-center text-xs text-gray-500">{['日', '一', '二', '三', '四', '五', '六'].map((day) => <div className="p-2" key={day}>周{day}</div>)}</div>{calendar.days.map((day) => { const key = formatDateKey(day); const currentPeriod = mode === 'week' || day.getMonth() === anchorDate.getMonth(); const dayEvents = events[key] ?? []; return <section className={`min-h-28 border-b border-r border-gray-100 p-2 ${currentPeriod ? 'bg-white' : 'bg-gray-50 text-gray-400'}`} key={key}><div className="mb-1 flex items-center justify-between text-xs"><span>{day.getDate()}</span>{dayEvents.length ? <span>{dayEvents.length} 项</span> : null}</div><div className="space-y-1">{dayEvents.map(({ task, kind }) => <div className="flex items-center gap-1" key={`${task.id}-${kind}`}><input aria-label={`选择任务 ${task.title}`} checked={selectedTaskIds.has(task.id)} type="checkbox" onChange={() => onToggleTaskSelection(task.id)} /><button className="truncate rounded bg-blue-50 px-1 py-0.5 text-left text-xs text-blue-800 hover:bg-blue-100" onClick={() => onSelectTask(task.id)} title={`${task.title} · ${kind === 'start' ? '开始' : '截止'}`} type="button"><span className="mr-1 text-slate-500">{kind === 'start' ? '始' : '止'}</span>{task.title}</button></div>)}</div></section>; })}</div>
-  </div>;
-}
-
-function firstScheduleDate(rows: readonly TaskScheduleRow[]): Date | undefined {
-  const first = rows.map((task) => task.scheduleStartDate ?? task.scheduleDueDate).filter((value): value is string => Boolean(value)).sort()[0];
-  return first ? new Date(`${first.slice(0, 10)}T00:00:00`) : undefined;
+export function TaskCalendarScheduleProjection({ dependencies = [], milestones = [], onChangeTaskSchedule, onCreateTask, onSelectTask, onToggleTaskSelection, rows, schedulePending, selectedTaskIds }: TaskScheduleProjectionProps) {
+  return <ProjectManagementTaskCalendar
+    dependencies={dependencies}
+    milestones={milestones}
+    onChangeTaskSchedule={onChangeTaskSchedule}
+    onCreateTask={onCreateTask}
+    onSelectTask={onSelectTask}
+    onToggleTaskSelection={onToggleTaskSelection}
+    rows={rows}
+    schedulePending={schedulePending}
+    selectedTaskIds={selectedTaskIds}
+  />;
 }
 
 function addDays(value: Date, days: number): Date { const next = new Date(value); next.setDate(next.getDate() + days); return next; }
-function movePeriod(value: Date, mode: 'month' | 'week', direction: -1 | 1): Date { if (mode === 'week') return addDays(value, direction * 7); const next = new Date(value); next.setMonth(next.getMonth() + direction); return next; }
 function formatDate(value: string | undefined): string { return value ? new Date(value).toLocaleDateString() : '未设置'; }
 function formatDateKey(value: Date): string { return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`; }

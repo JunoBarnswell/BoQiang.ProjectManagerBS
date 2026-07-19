@@ -135,7 +135,7 @@ const taskViewMeta: Record<ProjectManagementTaskView, { description: string; lab
   card: { label: '任务卡片', description: '以卡片投影查看当前筛选结果，任务编辑仍走统一命令。' },
   board: { label: '任务看板', description: '按任务状态分列显示当前筛选结果，拖动仍由后端校验。' },
   gantt: { label: '计划投影', description: '按现有开始/截止日期显示任务计划数据。', note: '当前为计划数据投影；可缩放时间轴、依赖连线、关键路径和日期拖动由后续甘特 Case 实现。' },
-  calendar: { label: '日期投影', description: '按现有截止日期汇总任务，保持与其他视图相同的查询和权限。', note: '当前为按截止日期聚合的日历原型；月/周网格、日期拖动和快速新建由后续日历 Case 实现。' }
+  calendar: { label: '项目日历', description: '按当前筛选和权限显示连续任务计划，支持月/周切换、当日任务抽屉和调期。' }
 };
 
 export function ProjectManagementTaskWorkspacePage() {
@@ -183,6 +183,7 @@ export function ProjectManagementTaskWorkspacePage() {
   const [labelFilter, setLabelFilter] = useState<ProjectManagementTaskLabelFilter>({ labelIds: [], matchMode: 'Any' });
   const query = useMemo(() => ({
     ...taskWorkspaceStateToQuery(projectId, state),
+    ...(state.viewKey === 'calendar' ? { pageIndex: 1, pageSize: 200 } : {}),
     labelFilter: labelFilter.labelIds.length > 0 ? labelFilter : undefined,
   }), [labelFilter, projectId, state]);
   const activeView = taskViewMeta[state.viewKey];
@@ -285,7 +286,7 @@ export function ProjectManagementTaskWorkspacePage() {
     queryKey: queryKeys.projectManagement.tasks(scope, { projectId, pageIndex: 1, pageSize: 100, parentTaskId: selectedTaskId, viewKey: 'list', sortBy: 'tree', sortDirection: 'asc' }),
   });
   const dependenciesQuery = useQuery({
-    enabled: scope.isAvailable && Boolean(projectId && selectedTaskId) && detailSection === 'dependencies',
+    enabled: scope.isAvailable && Boolean(projectId) && (state.viewKey === 'calendar' || state.viewKey === 'gantt' || Boolean(selectedTaskId) && detailSection === 'dependencies'),
     queryFn: ({ signal }) => getProjectManagementTaskDependencies(projectId, signal),
     queryKey: ['project-management-task-dependencies', scope.tenantId, scope.appCode, projectId],
   });
@@ -411,6 +412,22 @@ export function ProjectManagementTaskWorkspacePage() {
       await invalidateProjectTaskViews();
     },
     onSettled: () => setQuickActionTaskId(undefined),
+  });
+  const scheduleMutation = useApiMutation({
+    mutationFn: async ({ dueDate, startDate, task }: { dueDate: string | undefined; startDate: string | undefined; task: ProjectManagementTaskListItem }) => {
+      const current = (await getProjectManagementTask(task.id)).data;
+      if (!current) throw new Error('任务不存在、已删除或无权调整日期');
+      return updateProjectManagementTask(task.id, { ...taskDetailToForm(current), dueDate, startDate, versionNo: current.versionNo });
+    },
+    onError: async (error) => {
+      message.error(getErrorMessage(error, '任务调期失败，已刷新服务器最新任务'));
+      await invalidateProjectTaskViews();
+    },
+    onSuccess: async (result) => {
+      message.success(`任务“${result.data?.title ?? ''}”计划日期已更新`);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.projectManagement.task(scope, projectId, result.data?.id ?? '') });
+      await invalidateProjectTaskViews();
+    },
   });
   const commentMutation = useApiMutation({
     mutationFn: () => createProjectManagementTaskComment(selectedTaskId, commentForm),
@@ -915,6 +932,18 @@ export function ProjectManagementTaskWorkspacePage() {
             setForm({ ...emptyForm, milestoneId: task.milestoneId, parentTaskId: task.id });
             setState({ selectedTaskId: undefined });
           }}
+          onChangeTaskSchedule={(task, startDate, dueDate) => {
+            if (scheduleMutation.isPending) {
+              message.error('正在提交上一项任务调期，请稍候');
+              return;
+            }
+            scheduleMutation.mutate({ dueDate, startDate, task });
+          }}
+          onCreateTaskOnDate={(date) => {
+            setCreating(true);
+            setForm({ ...emptyForm, dueDate: date, startDate: date });
+            setState({ selectedTaskId: undefined });
+          }}
           onBoardRowsLoaded={handleBoardRowsLoaded}
           onCompleteTask={(task) => confirm({ title: '完成任务', content: `将任务“${task.title}”标记为已完成，并将进度设为 100%。`, confirmText: '完成任务', onConfirm: () => { setQuickActionTaskId(task.id); quickActionMutation.mutate({ action: 'complete', task }); } })}
           onDeleteTask={(task) => confirm({ title: '删除任务', content: `删除任务“${task.title}”及其子任务？删除后可从回收站恢复。`, confirmText: '删除任务', onConfirm: () => { setQuickActionTaskId(task.id); quickActionMutation.mutate({ action: 'delete', task }); } })}
@@ -961,8 +990,11 @@ export function ProjectManagementTaskWorkspacePage() {
             return next;
           })}
           rows={rows}
+          schedulePending={scheduleMutation.isPending}
           selectedTaskIds={selectedTaskIds}
           state={state}
+          dependencies={dependenciesQuery.data?.data ?? []}
+          milestones={milestonesQuery.data?.data ?? []}
         />
       </section>
     </ResponsivePage>
