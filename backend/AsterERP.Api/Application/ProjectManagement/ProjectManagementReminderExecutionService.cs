@@ -30,12 +30,24 @@ public sealed class ProjectManagementReminderExecutionService(
             await MarkFailedAsync(db, reminder, "提醒已达到最大重试次数", cancellationToken);
             return;
         }
-        reminder.AttemptCount++;
+        var nextAttempt = reminder.AttemptCount + 1;
+        var claimed = await db.Updateable<ProjectManagementTaskReminderEntity>()
+            .SetColumns(item => new ProjectManagementTaskReminderEntity
+            {
+                AttemptCount = nextAttempt,
+                LastAttemptAt = now,
+                LastError = null,
+                UpdatedBy = User(),
+                UpdatedTime = now
+            })
+            .Where(item => item.Id == reminder.Id && item.VersionNo == args.VersionNo && item.AttemptCount == reminder.AttemptCount && item.Status == "Pending" && !item.IsDeleted)
+            .ExecuteCommandAsync(cancellationToken);
+        if (claimed != 1) return;
+        reminder.AttemptCount = nextAttempt;
         reminder.LastAttemptAt = now;
         reminder.LastError = null;
         reminder.UpdatedBy = User();
         reminder.UpdatedTime = now;
-        await db.Updateable(reminder).UpdateColumns(item => new { item.AttemptCount, item.LastAttemptAt, item.LastError, item.UpdatedBy, item.UpdatedTime }).ExecuteCommandAsync(cancellationToken);
         try
         {
             var task = (await db.Queryable<ProjectManagementTaskEntity>().Where(item => item.Id == reminder.TaskId && item.ProjectId == reminder.ProjectId && !item.IsDeleted).Take(1).ToListAsync(cancellationToken)).FirstOrDefault();

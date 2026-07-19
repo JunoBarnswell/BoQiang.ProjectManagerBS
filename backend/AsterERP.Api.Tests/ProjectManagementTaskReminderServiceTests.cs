@@ -64,13 +64,13 @@ public sealed class ProjectManagementTaskReminderServiceTests
         await SeedTaskAsync(db, "user-a", "user-a");
         var reminder = new ProjectManagementTaskReminderEntity
         {
-            Id = "reminder-a", TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-a", TaskId = "task-a", RecipientUserId = "user-a",
+            Id = "reminder-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", TaskId = "task-a", RecipientUserId = "user-a",
             ReminderAtUtc = DateTime.UtcNow.AddMinutes(-1), TimeZoneId = "UTC", IdempotencyKey = "key-a", CreatedBy = "user-a", MaxAttempts = 3
         };
         await db.Insertable(reminder).ExecuteCommandAsync();
         var publisher = new RecordingNotificationPublisher();
         var service = new ProjectManagementReminderExecutionService(new TestWorkspaceDatabaseAccessor(db), CreateUser("user-a"), publisher);
-        var args = new ProjectManagementReminderJobArgs(reminder.Id, "tenant-a", "MES", "user-a", reminder.VersionNo);
+        var args = new ProjectManagementReminderJobArgs(reminder.Id, "tenant-a", "SYSTEM", "user-a", reminder.VersionNo);
         await service.ExecuteAsync(args);
         await service.ExecuteAsync(args);
         Assert.Single(publisher.Notifications);
@@ -79,14 +79,14 @@ public sealed class ProjectManagementTaskReminderServiceTests
 
         var canceled = new ProjectManagementTaskReminderEntity
         {
-            Id = "reminder-deleted-task", TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-a", TaskId = "task-a", RecipientUserId = "user-a",
+            Id = "reminder-deleted-task", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", TaskId = "task-a", RecipientUserId = "user-a",
             ReminderAtUtc = DateTime.UtcNow.AddMinutes(-1), TimeZoneId = "UTC", IdempotencyKey = "key-deleted", CreatedBy = "user-a", MaxAttempts = 3
         };
         var deletedTask = await db.Queryable<ProjectManagementTaskEntity>().FirstAsync(item => item.Id == "task-a");
         deletedTask.IsDeleted = true;
         await db.Updateable(deletedTask).ExecuteCommandAsync();
         await db.Insertable(canceled).ExecuteCommandAsync();
-        await service.ExecuteAsync(new ProjectManagementReminderJobArgs(canceled.Id, "tenant-a", "MES", "user-a", 1));
+        await service.ExecuteAsync(new ProjectManagementReminderJobArgs(canceled.Id, "tenant-a", "SYSTEM", "user-a", 1));
         Assert.Single(publisher.Notifications);
         Assert.Equal("Canceled", (await db.Queryable<ProjectManagementTaskReminderEntity>().FirstAsync(item => item.Id == canceled.Id)).Status);
     }
@@ -98,7 +98,7 @@ public sealed class ProjectManagementTaskReminderServiceTests
         await SeedTaskAsync(db, "operator", "operator");
         await db.Insertable(new ProjectManagementTaskReminderEntity
         {
-            Id = "reminder-a", TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-a", TaskId = "task-a", RecipientUserId = "operator",
+            Id = "reminder-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", TaskId = "task-a", RecipientUserId = "operator",
             ReminderAtUtc = DateTime.UtcNow.AddMinutes(10), TimeZoneId = "UTC", IdempotencyKey = "key-a", HangfireJobId = "job-a", CreatedBy = "operator"
         }).ExecuteCommandAsync();
         var scheduler = new RecordingScheduler();
@@ -113,14 +113,14 @@ public sealed class ProjectManagementTaskReminderServiceTests
     {
         using var db = CreateDatabase("reminder-filter");
         await SeedTaskAsync(db, "owner-a", "user-a");
-        await db.Insertable(new ProjectManagementProjectEntity { Id = "project-b", TenantId = "tenant-a", AppCode = "MES", ProjectCode = "B", ProjectName = "B", OwnerUserId = "owner-b" }).ExecuteCommandAsync();
-        await db.Insertable(new ProjectManagementTaskEntity { Id = "task-b", TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-b", TaskCode = "T-2", Title = "Other" }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementProjectEntity { Id = "project-b", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "B", ProjectName = "B", OwnerUserId = "owner-b" }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementTaskEntity { Id = "task-b", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-b", TaskCode = "T-2", Title = "Other" }).ExecuteCommandAsync();
         await db.Insertable(new[]
         {
-            new ProjectManagementTaskReminderEntity { Id = "visible", TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-a", TaskId = "task-a", RecipientUserId = "user-a", ReminderAtUtc = DateTime.UtcNow.AddMinutes(10), TimeZoneId = "UTC", IdempotencyKey = "visible" },
-            new ProjectManagementTaskReminderEntity { Id = "hidden", TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-b", TaskId = "task-b", RecipientUserId = "user-b", ReminderAtUtc = DateTime.UtcNow.AddMinutes(10), TimeZoneId = "UTC", IdempotencyKey = "hidden" },
+            new ProjectManagementTaskReminderEntity { Id = "visible", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", TaskId = "task-a", RecipientUserId = "user-a", ReminderAtUtc = DateTime.UtcNow.AddMinutes(10), TimeZoneId = "UTC", IdempotencyKey = "visible" },
+            new ProjectManagementTaskReminderEntity { Id = "hidden", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-b", TaskId = "task-b", RecipientUserId = "user-b", ReminderAtUtc = DateTime.UtcNow.AddMinutes(10), TimeZoneId = "UTC", IdempotencyKey = "hidden" },
         }).ExecuteCommandAsync();
-        Assert.True(ProjectManagementDataPermissionFilterRegistrar.TryRegister(db, typeof(ProjectManagementTaskReminderEntity), CreateUser("user-a"), "tenant-a", "MES"));
+        Assert.True(ProjectManagementDataPermissionFilterRegistrar.TryRegister(db, typeof(ProjectManagementTaskReminderEntity), CreateUser("user-a"), "tenant-a", "SYSTEM"));
         var rows = await db.Queryable<ProjectManagementTaskReminderEntity>().OrderBy(item => item.Id).ToListAsync();
         Assert.Equal(["visible"], rows.Select(item => item.Id));
     }
@@ -132,12 +132,12 @@ public sealed class ProjectManagementTaskReminderServiceTests
         await SeedTaskAsync(db, "user-a", "user-a");
         var reminder = new ProjectManagementTaskReminderEntity
         {
-            Id = "reminder-failure", TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-a", TaskId = "task-a", RecipientUserId = "user-a",
+            Id = "reminder-failure", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", TaskId = "task-a", RecipientUserId = "user-a",
             ReminderAtUtc = DateTime.UtcNow.AddMinutes(-1), TimeZoneId = "UTC", IdempotencyKey = "failure", CreatedBy = "user-a", MaxAttempts = 1
         };
         await db.Insertable(reminder).ExecuteCommandAsync();
         var service = new ProjectManagementReminderExecutionService(new TestWorkspaceDatabaseAccessor(db), CreateUser("user-a"), new ThrowingNotificationPublisher());
-        await service.ExecuteAsync(new ProjectManagementReminderJobArgs(reminder.Id, "tenant-a", "MES", "user-a", reminder.VersionNo));
+        await service.ExecuteAsync(new ProjectManagementReminderJobArgs(reminder.Id, "tenant-a", "SYSTEM", "user-a", reminder.VersionNo));
         var failed = await db.Queryable<ProjectManagementTaskReminderEntity>().FirstAsync(item => item.Id == reminder.Id);
         Assert.Equal("Failed", failed.Status);
         Assert.Equal(1, failed.AttemptCount);
@@ -154,13 +154,13 @@ public sealed class ProjectManagementTaskReminderServiceTests
     private static async Task SeedTaskAsync(ISqlSugarClient db, string ownerUserId, string memberUserId)
     {
         await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
-        await db.Insertable(new ProjectManagementProjectEntity { Id = "project-a", TenantId = "tenant-a", AppCode = "MES", ProjectCode = "A", ProjectName = "A", OwnerUserId = ownerUserId }).ExecuteCommandAsync();
-        await db.Insertable(new ProjectManagementProjectMemberEntity { TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-a", UserId = memberUserId, RoleCode = "Manager", IsActive = true }).ExecuteCommandAsync();
-        await db.Insertable(new ProjectManagementTaskEntity { Id = "task-a", TenantId = "tenant-a", AppCode = "MES", ProjectId = "project-a", TaskCode = "T-1", Title = "Task", CreatedBy = ownerUserId, CreatedTime = DateTime.UtcNow }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementProjectEntity { Id = "project-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "A", ProjectName = "A", OwnerUserId = ownerUserId }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementProjectMemberEntity { TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", UserId = memberUserId, RoleCode = "Manager", IsActive = true }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementTaskEntity { Id = "task-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", TaskCode = "T-1", Title = "Task", CreatedBy = ownerUserId, CreatedTime = DateTime.UtcNow }).ExecuteCommandAsync();
     }
 
     private static SqlSugarClient CreateDatabase(string name) => new(new ConnectionConfig { ConnectionString = $"Data Source=file:project-management-{name}-{Guid.NewGuid():N};Mode=Memory;Cache=Shared", DbType = DbType.Sqlite, IsAutoCloseConnection = false });
-    private static FixedAsterErpCurrentUser CreateUser(string userId = "operator") => new(new ClaimsPrincipal(new ClaimsIdentity(new[] { new Claim(AsterErpClaimTypes.UserId, userId), new Claim(AsterErpClaimTypes.TenantId, "tenant-a"), new Claim(AsterErpClaimTypes.AppCode, "MES") }, "test")));
+    private static FixedAsterErpCurrentUser CreateUser(string userId = "operator") => new(new ClaimsPrincipal(new ClaimsIdentity(new[] { new Claim(AsterErpClaimTypes.UserId, userId), new Claim(AsterErpClaimTypes.TenantId, "tenant-a"), new Claim(AsterErpClaimTypes.AppCode, "SYSTEM") }, "test")));
 
     private sealed class RecordingScheduler : IProjectManagementReminderScheduler
     {
