@@ -441,7 +441,9 @@ public sealed class ProjectManagementSyncService(
 
     private static void AddUnique<T>(ICollection<T> target, T value) where T : EntityBase
     {
-        if (!target.Any(item => item.Id == value.Id)) target.Add(value);
+        var existing = target.FirstOrDefault(item => item.Id == value.Id);
+        if (existing is not null) target.Remove(existing);
+        target.Add(value);
     }
 
     private static T DeserializePayload<T>(string payload) where T : EntityBase, new() =>
@@ -971,7 +973,8 @@ public sealed class ProjectManagementSyncService(
         foreach (var source in records)
         {
             var exists = await db.Queryable<ProjectManagementTaskAttachmentEntity>().Where(item => item.Id == source.Id && !item.IsDeleted).AnyAsync(cancellationToken);
-            if (exists && strategy == "Skip") { onSkip(); continue; }
+            // 附件内容没有可安全按字段合并的基线；Merge 与 Skip 一样保留本地文件，避免覆盖业务侧新上传内容。
+            if (exists && strategy is "Skip" or "Merge") { onSkip(); continue; }
             var entryName = manifest.AttachmentEntries.GetValueOrDefault(source.FileId)
                 ?? throw new ValidationException($"同步包缺少附件 {source.FileId}");
             var entry = archive.GetEntry(entryName) ?? throw new ValidationException($"同步包缺少附件 {source.FileId}");
