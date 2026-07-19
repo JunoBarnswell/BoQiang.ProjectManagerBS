@@ -3,6 +3,7 @@ import { useRef, useState } from 'react';
 import {
   applyProjectManagementSync,
   previewProjectManagementSync,
+  retryProjectManagementSync,
 } from '../../../api/project-management/projectManagement.api';
 import type {
   ProjectManagementSyncImportResponse,
@@ -15,14 +16,16 @@ import { useMessage } from '../../../shared/feedback/useMessage';
 import { formatFileSize } from '../../../shared/file-preview/filePreviewUtils';
 import { getErrorMessage } from '../../../shared/utils/errorMessage';
 
-type ConflictStrategy = 'Skip' | 'Overwrite' | 'Reject';
+type ConflictStrategy = 'Skip' | 'Overwrite' | 'Merge' | 'Reject';
 type FailedAction = 'preview' | 'apply' | null;
 
 interface ProjectManagementSyncPackageImportPanelProps {
   deviceId?: string;
+  retryHistoryId?: string | null;
+  onImportFinished?: () => void;
 }
 
-export function ProjectManagementSyncPackageImportPanel({ deviceId }: ProjectManagementSyncPackageImportPanelProps) {
+export function ProjectManagementSyncPackageImportPanel({ deviceId, retryHistoryId, onImportFinished }: ProjectManagementSyncPackageImportPanelProps) {
   const { hasPermission: canImport } = usePermission("project-management:sync:import");
   const message = useMessage();
   const [packageFile, setPackageFile] = useState<File | null>(null);
@@ -62,7 +65,10 @@ export function ProjectManagementSyncPackageImportPanel({ deviceId }: ProjectMan
   const applyMutation = useApiMutation({
     mutationFn: () => {
       if (!packageFile) throw new Error('请先选择同步包');
-      return applyProjectManagementSync(packageFile, { currentPassword: password, confirmRisk, conflictStrategy, idempotencyKey, deviceId });
+      const request = { currentPassword: password, confirmRisk, conflictStrategy, idempotencyKey, deviceId };
+      return retryHistoryId
+        ? retryProjectManagementSync(retryHistoryId, packageFile, request)
+        : applyProjectManagementSync(packageFile, request);
     },
     onError: (error) => {
       const messageText = getErrorMessage(error, '同步包导入失败');
@@ -80,6 +86,7 @@ export function ProjectManagementSyncPackageImportPanel({ deviceId }: ProjectMan
       setPassword('');
       setFailureMessage(null);
       setFailedAction(null);
+      onImportFinished?.();
     },
   });
 
@@ -130,6 +137,7 @@ export function ProjectManagementSyncPackageImportPanel({ deviceId }: ProjectMan
         {previewMutation.isPending ? <button className="rounded border border-gray-300 px-3 py-2" type="button" onClick={cancelPreview}>取消校验</button> : null}
       </div>
       {packageFile ? <p className="text-sm text-gray-500">已选择：{packageFile.name}（{formatFileSize(packageFile.size)}）。服务端会校验包格式、工作区、校验和与冲突。</p> : null}
+      {retryHistoryId ? <p className="rounded border border-blue-200 bg-blue-50 p-2 text-sm text-blue-900">正在重试失败批次 {retryHistoryId}：必须重新选择包，服务端会先比对 Package ID，再沿用原有幂等语义执行。</p> : null}
       {previewMutation.isPending ? <div className="rounded border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900" role="status">正在读取同步包并计算影响范围，请勿关闭页面。</div> : null}
       {preview ? (
         <div className="rounded bg-slate-50 p-3 text-sm">
@@ -179,6 +187,7 @@ export function ProjectManagementSyncPackageImportPanel({ deviceId }: ProjectMan
             >
               <option value="Skip">跳过冲突</option>
               <option value="Overwrite">覆盖冲突</option>
+              <option value="Merge">合并可安全字段</option>
               <option value="Reject">遇到冲突即拒绝</option>
             </select>
             <input

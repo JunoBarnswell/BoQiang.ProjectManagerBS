@@ -61,7 +61,8 @@ public sealed record ProjectManagementSyncImportRequest(
     bool ConfirmRisk,
     string ConflictStrategy = "Skip",
     string? IdempotencyKey = null,
-    string? DeviceId = null);
+    string? DeviceId = null,
+    string? RetryOfHistoryId = null);
 
 public sealed record ProjectManagementSyncImportResponse(
     string PackageId,
@@ -75,7 +76,47 @@ public sealed record ProjectManagementSyncImportResponse(
     string TraceId = "",
     bool Replayed = false,
     int ConflictCount = 0,
-    IReadOnlyList<ProjectManagementSyncConflict>? Conflicts = null);
+    IReadOnlyList<ProjectManagementSyncConflict>? Conflicts = null,
+    int Deleted = 0,
+    int Failed = 0);
+
+public sealed record ProjectManagementSyncHistoryQuery(
+    int PageIndex = 1,
+    int PageSize = 50,
+    string? Status = null);
+
+public sealed record ProjectManagementSyncHistoryItem(
+    string Id,
+    string OperationType,
+    string PackageId,
+    string SourceTenantId,
+    string SourceAppCode,
+    string? SourceDeviceId,
+    string TargetTenantId,
+    string TargetAppCode,
+    string ActorUserId,
+    string Status,
+    int Inserted,
+    int Updated,
+    int Deleted,
+    int Skipped,
+    int ConflictCount,
+    int Failed,
+    int AttachmentsImported,
+    string TraceId,
+    string? ErrorMessage,
+    string? RetryOfHistoryId,
+    DateTime OccurredAt);
+
+public sealed record ProjectManagementSyncHistoryDetail(
+    ProjectManagementSyncHistoryItem Item,
+    string Strategy,
+    IReadOnlyList<string> Warnings,
+    IReadOnlyList<ProjectManagementSyncConflict> Conflicts);
+
+public sealed record ProjectManagementSyncHistoryPage(
+    int Total,
+    IReadOnlyList<ProjectManagementSyncHistoryItem> Items);
 
 public sealed record ProjectManagementSyncWatermarkResponse(
     string DeviceId,

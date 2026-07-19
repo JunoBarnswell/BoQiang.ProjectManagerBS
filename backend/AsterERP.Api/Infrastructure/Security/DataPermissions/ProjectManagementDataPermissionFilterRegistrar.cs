@@ -218,6 +218,12 @@ public static class ProjectManagementDataPermissionFilterRegistrar
             return true;
         }
 
+        if (entityType == typeof(ProjectManagementSyncHistoryEntity))
+        {
+            db.QueryFilter.AddTableFilter<ProjectManagementSyncHistoryEntity>(history => history.TenantId == tenantId && history.AppCode == appCode && history.ActorUserId == userId);
+            return true;
+        }
+
         if (entityType == typeof(ProjectManagementMaintenanceLockEntity))
         {
             db.QueryFilter.AddTableFilter<ProjectManagementMaintenanceLockEntity>(lockEntity => lockEntity.TenantId == tenantId && lockEntity.AppCode == appCode);

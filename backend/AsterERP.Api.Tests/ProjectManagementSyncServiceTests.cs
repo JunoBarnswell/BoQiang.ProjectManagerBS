@@ -202,6 +202,50 @@ public sealed class ProjectManagementSyncServiceTests
     }
 
     [Fact]
+    public async Task Sync_history_records_failed_import_exposes_safe_report_and_retries_the_same_package()
+    {
+        using var db = new SqlSugarClient(new ConnectionConfig
+        {
+            ConnectionString = $"Data Source=file:project-management-sync-history-{Guid.NewGuid():N};Mode=Memory;Cache=Shared",
+            DbType = DbType.Sqlite,
+            IsAutoCloseConnection = false
+        });
+        await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
+        db.CodeFirst.InitTables<SystemUserEntity>();
+        await db.Insertable(new SystemUserEntity { Id = "operator", UserName = "operator", PasswordHash = "secret", Status = "Enabled" }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementProjectEntity
+        {
+            Id = "history-project", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "HISTORY", ProjectName = "History", OwnerUserId = "operator"
+        }).ExecuteCommandAsync();
+
+        var accessor = new TestWorkspaceDatabaseAccessor(db);
+        var user = CreateUser();
+        var history = new ProjectManagementSyncHistoryService(accessor, user);
+        var service = new ProjectManagementSyncService(accessor, user, new ProjectManagementAccessPolicy(accessor, user), new TestPasswordHashService(), syncHistoryService: history);
+        var package = await service.ExportAsync(new ProjectManagementSyncExportRequest("history-project", DeviceId: "history-device"));
+
+        await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() => service.ImportAsync(
+            new MemoryStream(package.Content), new ProjectManagementSyncImportRequest("secret", ConfirmRisk: true, ConflictStrategy: "Reject")));
+
+        var failed = Assert.Single((await service.GetHistoryAsync(new ProjectManagementSyncHistoryQuery(PageSize: 20))).Items, item => item.OperationType == "Import" && item.Status == "Failed");
+        Assert.Equal("tenant-a", failed.SourceTenantId);
+        Assert.Equal("SYSTEM", failed.TargetAppCode);
+        Assert.Equal(1, failed.Failed);
+        var detail = await service.GetHistoryDetailAsync(failed.Id);
+        Assert.NotEmpty(detail.Conflicts);
+        var report = await service.DownloadHistoryReportAsync(failed.Id);
+        var reportText = Encoding.UTF8.GetString(report.Content);
+        Assert.Contains("AggregateType", reportText, StringComparison.Ordinal);
+        Assert.DoesNotContain("ProjectName", reportText, StringComparison.Ordinal);
+
+        var retried = await service.RetryAsync(failed.Id, new MemoryStream(package.Content),
+            new ProjectManagementSyncImportRequest("secret", ConfirmRisk: true, ConflictStrategy: "Skip"));
+        Assert.False(retried.Replayed);
+        Assert.Contains((await service.GetHistoryAsync(new ProjectManagementSyncHistoryQuery(PageSize: 20))).Items,
+            item => item.OperationType == "Import" && item.Status == "Succeeded" && item.RetryOfHistoryId == failed.Id);
+    }
+
+    [Fact]
     public async Task Sync_preview_rejects_zip_entries_that_escape_the_archive_root()
     {
         using var db = new SqlSugarClient(new ConnectionConfig

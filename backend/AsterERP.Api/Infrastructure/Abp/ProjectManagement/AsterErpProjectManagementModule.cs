@@ -47,6 +47,7 @@ public sealed class AsterErpProjectManagementModule : AbpModule
         context.Services.AddTransient<ProjectManagementOperationRunner>();
         context.Services.AddTransient<ProjectManagementOperationJob>();
         context.Services.AddScoped<IProjectManagementSyncJournalWriter, ProjectManagementSyncJournalWriter>();
+        context.Services.AddScoped<IProjectManagementSyncHistoryService, ProjectManagementSyncHistoryService>();
         context.Services.AddScoped<IProjectManagementFileStore, ProjectManagementFileStore>();
         context.Services.AddScoped<IProjectManagementTaskCommentService, ProjectManagementTaskCommentService>();
         context.Services.AddScoped<IProjectManagementTaskAttachmentService, ProjectManagementTaskAttachmentService>();
@@ -122,6 +123,7 @@ public sealed class AsterErpProjectManagementModule : AbpModule
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementSavedViewEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementSyncJournalEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementSyncDeviceEntity));
+        registry.RegisterProjectManagementFilter(typeof(ProjectManagementSyncHistoryEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementMaintenanceLockEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementBackupEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementOperationEntity));

@@ -61,6 +61,42 @@ public sealed class ProjectManagementSyncController(IProjectManagementSyncServic
         return ApiOk(await service.ImportAsync(stream, new ProjectManagementSyncImportRequest(currentPassword, confirmRisk, conflictStrategy, idempotencyKey, deviceId), cancellationToken));
     }
 
+    [HttpGet("history")]
+    [Permission(PermissionCodes.ProjectManagementSyncImport)]
+    public async Task<IActionResult> HistoryAsync([FromQuery] ProjectManagementSyncHistoryQuery query, CancellationToken cancellationToken)
+        => ApiOk(await service.GetHistoryAsync(query, cancellationToken));
+
+    [HttpGet("history/{id}")]
+    [Permission(PermissionCodes.ProjectManagementSyncImport)]
+    public async Task<IActionResult> HistoryDetailAsync(string id, CancellationToken cancellationToken)
+        => ApiOk(await service.GetHistoryDetailAsync(id, cancellationToken));
+
+    [HttpGet("history/{id}/report")]
+    [Permission(PermissionCodes.ProjectManagementSyncImport)]
+    public async Task<IActionResult> DownloadHistoryReportAsync(string id, CancellationToken cancellationToken)
+    {
+        var result = await service.DownloadHistoryReportAsync(id, cancellationToken);
+        return File(result.Content, "text/csv; charset=utf-8", result.FileName);
+    }
+
+    [HttpPost("history/{id}/retry")]
+    [Permission(PermissionCodes.ProjectManagementSyncImport)]
+    public async Task<IActionResult> RetryAsync(
+        string id,
+        IFormFile file,
+        [FromForm] string currentPassword,
+        [FromForm] bool confirmRisk,
+        [FromForm] string conflictStrategy,
+        [FromForm] string? idempotencyKey,
+        [FromForm] string? deviceId,
+        CancellationToken cancellationToken)
+    {
+        var validationError = ValidatePackageFile(file);
+        if (validationError is not null) return validationError;
+        await using var stream = file.OpenReadStream();
+        return ApiOk(await service.RetryAsync(id, stream, new ProjectManagementSyncImportRequest(currentPassword, confirmRisk, conflictStrategy, idempotencyKey, deviceId), cancellationToken));
+    }
+
     private static IActionResult? ValidatePackageFile(IFormFile? file)
     {
         if (file is null || file.Length <= 0) return new BadRequestObjectResult("同步包不能为空");

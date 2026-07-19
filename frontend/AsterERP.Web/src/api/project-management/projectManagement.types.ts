@@ -907,6 +907,44 @@ export interface ProjectManagementSyncImportResponse {
   replayed: boolean;
   conflictCount: number;
   conflicts?: ProjectManagementSyncConflict[] | null;
+  deleted: number;
+  failed: number;
+}
+
+export interface ProjectManagementSyncHistoryItem {
+  id: string;
+  operationType: 'Import' | 'Export' | string;
+  packageId: string;
+  sourceTenantId: string;
+  sourceAppCode: string;
+  sourceDeviceId?: string | null;
+  targetTenantId: string;
+  targetAppCode: string;
+  actorUserId: string;
+  status: 'Succeeded' | 'Failed' | string;
+  inserted: number;
+  updated: number;
+  deleted: number;
+  skipped: number;
+  conflictCount: number;
+  failed: number;
+  attachmentsImported: number;
+  traceId: string;
+  errorMessage?: string | null;
+  retryOfHistoryId?: string | null;
+  occurredAt: string;
+}
+
+export interface ProjectManagementSyncHistoryDetail {
+  item: ProjectManagementSyncHistoryItem;
+  strategy: string;
+  warnings: string[];
+  conflicts: ProjectManagementSyncConflict[];
+}
+
+export interface ProjectManagementSyncHistoryPage {
+  total: number;
+  items: ProjectManagementSyncHistoryItem[];
 }
 
 export interface ProjectManagementSavedView {
