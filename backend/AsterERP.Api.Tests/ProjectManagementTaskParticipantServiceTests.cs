@@ -231,6 +231,7 @@ public sealed class ProjectManagementTaskParticipantServiceTests
     {
         private readonly HashSet<string> selectable = selectableUserIds.ToHashSet(StringComparer.Ordinal);
         public Task<bool> IsSelectableAsync(string userId, CancellationToken cancellationToken = default) => Task.FromResult(selectable.Contains(userId));
+        public Task<bool> IsSelectableAsync(string userId, string? employmentId, CancellationToken cancellationToken = default) => IsSelectableAsync(userId, cancellationToken);
         public Task<GridPageResult<ProjectManagementMemberCandidateResponse>> QueryAsync(ProjectManagementMemberCandidateQuery query, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 

@@ -40,7 +40,8 @@ public sealed class ProjectManagementMemberService(
         await AccessPolicy.EnsureCanManageMembersAsync(projectId, cancellationToken);
         var userId = NormalizeRequired(request.UserId, "成员用户不能为空");
         var roleCode = NormalizeRole(request.RoleCode);
-        if (!await candidateService.IsSelectableAsync(userId, cancellationToken))
+        var employmentId = NormalizeOptional(request.EmploymentId);
+        if (!await candidateService.IsSelectableAsync(userId, employmentId, cancellationToken))
             throw new ValidationException("成员必须来自当前租户和应用的启用用户/任职");
         var db = databaseAccessor.GetCurrentDb();
         var tenantId = RequireTenantId();
@@ -64,7 +65,7 @@ public sealed class ProjectManagementMemberService(
             CreatedBy = RequireUserId(),
             CreatedTime = now
         };
-        entity.EmploymentId = NormalizeOptional(request.EmploymentId);
+        entity.EmploymentId = employmentId;
         entity.RoleCode = roleCode;
         entity.ScopeRootTaskId = await NormalizeScopeRootTaskIdAsync(projectId, roleCode, request.ScopeRootTaskId, cancellationToken);
         entity.IsActive = true;
@@ -98,7 +99,8 @@ public sealed class ProjectManagementMemberService(
         await AccessPolicy.EnsureCanManageMembersAsync(projectId, cancellationToken);
         EnsureVersion(entity.VersionNo, request.VersionNo);
         var nextUserId = NormalizeRequired(request.UserId, "成员用户不能为空");
-        if (!await candidateService.IsSelectableAsync(nextUserId, cancellationToken))
+        var nextEmploymentId = NormalizeOptional(request.EmploymentId);
+        if (!await candidateService.IsSelectableAsync(nextUserId, nextEmploymentId, cancellationToken))
             throw new ValidationException("成员必须来自当前租户和应用的启用用户/任职");
         var nextRole = NormalizeRole(request.RoleCode);
         var db = databaseAccessor.GetCurrentDb();
@@ -109,7 +111,7 @@ public sealed class ProjectManagementMemberService(
         await EnsureOwnerWillRemainAsync(entity, nextRole, cancellationToken);
         var before = MemberActivitySnapshot.From(entity);
         entity.UserId = nextUserId;
-        entity.EmploymentId = NormalizeOptional(request.EmploymentId);
+        entity.EmploymentId = nextEmploymentId;
         entity.RoleCode = nextRole;
         entity.ScopeRootTaskId = await NormalizeScopeRootTaskIdAsync(projectId, nextRole, request.ScopeRootTaskId, cancellationToken);
         entity.VersionNo++;

@@ -130,6 +130,7 @@ public sealed class ProjectManagementExcelImportTests
     private sealed class SelectableCandidateService : IProjectManagementMemberCandidateService
     {
         public Task<bool> IsSelectableAsync(string userId, CancellationToken cancellationToken = default) => Task.FromResult(userId == "user-a");
+        public Task<bool> IsSelectableAsync(string userId, string? employmentId, CancellationToken cancellationToken = default) => IsSelectableAsync(userId, cancellationToken);
 
         public Task<GridPageResult<ProjectManagementMemberCandidateResponse>> QueryAsync(ProjectManagementMemberCandidateQuery query, CancellationToken cancellationToken = default) =>
             Task.FromResult(new GridPageResult<ProjectManagementMemberCandidateResponse> { Total = 0, Items = [] });

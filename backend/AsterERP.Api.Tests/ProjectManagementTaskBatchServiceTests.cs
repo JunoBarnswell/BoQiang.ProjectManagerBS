@@ -288,6 +288,7 @@ public sealed class ProjectManagementTaskBatchServiceTests
     private sealed class CandidateService : IProjectManagementMemberCandidateService
     {
         public Task<bool> IsSelectableAsync(string userId, CancellationToken cancellationToken = default) => Task.FromResult(true);
+        public Task<bool> IsSelectableAsync(string userId, string? employmentId, CancellationToken cancellationToken = default) => Task.FromResult(true);
         public Task<GridPageResult<ProjectManagementMemberCandidateResponse>> QueryAsync(ProjectManagementMemberCandidateQuery query, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 

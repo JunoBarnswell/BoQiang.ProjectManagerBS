@@ -7,6 +7,7 @@ import {
   deleteProjectManagementMember,
   getProjectManagementMemberCandidates,
   getProjectManagementMembers,
+  getProjectManagementTasks,
   updateProjectManagementMember,
 } from "../../api/project-management/projectManagement.api";
 import type {
@@ -27,6 +28,8 @@ import { PageLoading } from "../../shared/status/PageLoading";
 import { getErrorMessage } from "../../shared/utils/errorMessage";
 
 const emptyForm: ProjectManagementMemberUpsertRequest = { userId: "", roleCode: "Member", versionNo: 0 };
+const projectMemberRoles = ["Owner", "Manager", "Lead", "Member", "Viewer"] as const;
+
 export function ProjectManagementMembersPage() {
   const scope = useProjectManagementWorkspaceScope();
   const { projectId = "" } = useParams<{ projectId: string }>();
@@ -43,6 +46,31 @@ export function ProjectManagementMembersPage() {
   const candidatesQuery = useQuery({
     queryKey: projectManagementQueryKeys.memberCandidates(scope, { pageIndex: 1, pageSize: 100 }),
     queryFn: ({ signal }) => getProjectManagementMemberCandidates({ pageIndex: 1, pageSize: 100 }, signal),
+    enabled: scope.isAvailable && Boolean(projectId),
+  });
+  const topicRootsQuery = useQuery({
+    queryKey: projectManagementQueryKeys.tasks(scope, {
+      projectId,
+      pageIndex: 1,
+      pageSize: 200,
+      viewKey: "tree",
+      sortBy: "tree",
+      sortDirection: "asc",
+      includeCompleted: true,
+    }),
+    queryFn: ({ signal }) =>
+      getProjectManagementTasks(
+        {
+          projectId,
+          pageIndex: 1,
+          pageSize: 200,
+          viewKey: "tree",
+          sortBy: "tree",
+          sortDirection: "asc",
+          includeCompleted: true,
+        },
+        signal,
+      ),
     enabled: scope.isAvailable && Boolean(projectId),
   });
 
@@ -97,6 +125,13 @@ export function ProjectManagementMembersPage() {
   }
   const members = membersQuery.data?.data ?? [];
   const candidates = candidatesQuery.data?.data?.items ?? [];
+  const userCandidates = Array.from(candidates.reduce((byUser, candidate) => {
+    const current = byUser.get(candidate.userId);
+    if (!current || candidate.isSelectable && !current.isSelectable) byUser.set(candidate.userId, candidate);
+    return byUser;
+  }, new Map<string, (typeof candidates)[number]>()).values());
+  const employmentCandidates = candidates.filter((candidate) => candidate.userId === form.userId);
+  const topicRoots = (topicRootsQuery.data?.data?.items ?? []).filter((task) => !task.parentTaskId);
   const updateForm = (next: ProjectManagementMemberUpsertRequest) => {
     setForm(next);
     setDirty(true);
@@ -107,15 +142,18 @@ export function ProjectManagementMembersPage() {
       <PermissionGuard code="project-management:member:manage" fallback={null}>
         <section className="mb-4 rounded-lg border border-gray-200 p-4">
           <h2 className="mb-3 font-semibold">{editingId ? "编辑成员" : "添加成员"}</h2>
-          <div className="grid gap-2 md:grid-cols-3">
+          <div className="grid gap-2 md:grid-cols-4">
             <select
               aria-label="成员用户"
               value={form.userId}
               disabled={Boolean(editingId)}
-              onChange={(event) => updateForm({ ...form, userId: event.target.value })}
+              onChange={(event) => updateForm({ ...form, userId: event.target.value, employmentId: undefined })}
             >
               <option value="">选择用户</option>
-              {candidates
+              {form.userId && !userCandidates.some((candidate) => candidate.userId === form.userId) ? (
+                <option value={form.userId}>{form.userId}</option>
+              ) : null}
+              {userCandidates
                 .filter((candidate) => candidate.isSelectable || candidate.userId === form.userId)
                 .map((candidate) => (
                   <option key={candidate.userId} value={candidate.userId}>
@@ -123,23 +161,59 @@ export function ProjectManagementMembersPage() {
                   </option>
                 ))}
             </select>
-            <input
+            <select
+              aria-label="成员任职"
+              value={form.employmentId ?? ""}
+              disabled={!form.userId || candidatesQuery.isLoading || candidatesQuery.isError}
+              onChange={(event) => {
+                const employmentId = event.target.value;
+                const candidate = employmentCandidates.find((item) => item.employmentId === employmentId);
+                updateForm({ ...form, employmentId: candidate?.employmentId });
+              }}
+            >
+              <option value="">选择任职关系</option>
+              {form.employmentId && !employmentCandidates.some((candidate) => candidate.employmentId === form.employmentId) ? (
+                <option value={form.employmentId}>{form.employmentId}</option>
+              ) : null}
+              {employmentCandidates
+                .filter((candidate) => candidate.isSelectable || candidate.employmentId === form.employmentId)
+                .map((candidate) => (
+                  <option key={candidate.employmentId} value={candidate.employmentId}>
+                    {candidate.employmentName || candidate.positionName || "默认任职"} · {candidate.employmentId}
+                  </option>
+                ))}
+            </select>
+            <select
               aria-label="成员角色"
               value={form.roleCode ?? ""}
-              onChange={(event) => updateForm({ ...form, roleCode: event.target.value })}
-              placeholder="角色编码"
-            />
-            <input
-              aria-label="任务范围根节点"
+              onChange={(event) => {
+                const roleCode = event.target.value;
+                updateForm({ ...form, roleCode, scopeRootTaskId: roleCode === "Lead" ? form.scopeRootTaskId : undefined });
+              }}
+            >
+              {projectMemberRoles.map((roleCode) => (
+                <option key={roleCode} value={roleCode}>{roleCode}</option>
+              ))}
+            </select>
+            <select
+              aria-label="根主题任务范围"
               value={form.scopeRootTaskId ?? ""}
+              disabled={form.roleCode !== "Lead" || topicRootsQuery.isLoading || topicRootsQuery.isError}
               onChange={(event) => updateForm({ ...form, scopeRootTaskId: event.target.value || undefined })}
-              placeholder="任务范围根节点（可选）"
-            />
+            >
+              <option value="">整个项目（可选）</option>
+              {form.scopeRootTaskId && !topicRoots.some((task) => task.id === form.scopeRootTaskId) ? (
+                <option value={form.scopeRootTaskId}>{form.scopeRootTaskId}</option>
+              ) : null}
+              {topicRoots.map((task) => (
+                <option key={task.id} value={task.id}>{task.taskCode} · {task.title}</option>
+              ))}
+            </select>
           </div>
           <div className="mt-3 flex gap-2">
             <PermissionButton
               code="project-management:member:manage"
-              disabled={!form.userId.trim() || saveMutation.isPending}
+              disabled={!form.userId.trim() || !form.employmentId || saveMutation.isPending}
               onClick={() => saveMutation.mutate()}
             >
               {saveMutation.isPending ? "提交中…" : editingId ? "保存修改" : "添加成员"}
@@ -158,7 +232,16 @@ export function ProjectManagementMembersPage() {
             ) : null}
           </div>
           {candidatesQuery.isError ? (
-            <p className="mt-2 text-sm text-amber-700">成员候选人加载失败，无法新增成员；现有成员仍可查看。</p>
+            <p className="mt-2 text-sm text-amber-700">
+              成员候选人加载失败，无法保存成员任职；现有成员仍可查看。
+              <button type="button" className="ml-2 underline" onClick={() => void candidatesQuery.refetch()}>重试</button>
+            </p>
+          ) : null}
+          {topicRootsQuery.isError ? (
+            <p className="mt-2 text-sm text-amber-700">
+              根主题任务加载失败，Lead 只能保存为整个项目范围。
+              <button type="button" className="ml-2 underline" onClick={() => void topicRootsQuery.refetch()}>重试</button>
+            </p>
           ) : null}
         </section>
       </PermissionGuard>

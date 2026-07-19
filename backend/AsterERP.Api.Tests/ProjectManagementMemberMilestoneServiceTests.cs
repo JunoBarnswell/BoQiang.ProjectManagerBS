@@ -76,6 +76,47 @@ public sealed class ProjectManagementMemberMilestoneServiceTests
     }
 
     [Fact]
+    public async Task Member_service_rejects_a_mismatched_employment_without_mutating_the_member()
+    {
+        using var db = CreateDb("member-employment");
+        await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
+        await db.Insertable(new ProjectManagementProjectEntity
+        {
+            Id = "project-a",
+            TenantId = "tenant-a",
+            AppCode = "SYSTEM",
+            ProjectCode = "A",
+            ProjectName = "A",
+            OwnerUserId = "operator"
+        }).ExecuteCommandAsync();
+        var service = new ProjectManagementMemberService(
+            new TestWorkspaceDatabaseAccessor(db),
+            CreateUser(),
+            new ExactCandidateService("user-a", "employment-a"));
+
+        await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() =>
+            service.AddAsync("project-a", new ProjectManagementMemberUpsertRequest("user-a", "employment-wrong", "Member")));
+
+        var member = await service.AddAsync(
+            "project-a",
+            new ProjectManagementMemberUpsertRequest("user-a", "employment-a", "Member"));
+        Assert.Equal("employment-a", member.EmploymentId);
+
+        await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() =>
+            service.UpdateAsync(
+                "project-a",
+                member.Id,
+                new ProjectManagementMemberUpsertRequest("user-a", "employment-wrong", "Lead", VersionNo: member.VersionNo)));
+
+        var persisted = Assert.Single(await db.Queryable<ProjectManagementProjectMemberEntity>()
+            .Where(item => item.Id == member.Id)
+            .ToListAsync());
+        Assert.Equal("employment-a", persisted.EmploymentId);
+        Assert.Equal("Member", persisted.RoleCode);
+        Assert.Equal(member.VersionNo, persisted.VersionNo);
+    }
+
+    [Fact]
     public async Task Milestones_validate_dates_and_soft_delete_with_version()
     {
         using var db = CreateDb("milestones");
@@ -165,7 +206,22 @@ public sealed class ProjectManagementMemberMilestoneServiceTests
     private sealed class AlwaysCandidateService : IProjectManagementMemberCandidateService
     {
         public Task<bool> IsSelectableAsync(string userId, CancellationToken cancellationToken = default) => Task.FromResult(true);
+        public Task<bool> IsSelectableAsync(string userId, string? employmentId, CancellationToken cancellationToken = default) => Task.FromResult(true);
         public Task<GridPageResult<ProjectManagementMemberCandidateResponse>> QueryAsync(ProjectManagementMemberCandidateQuery query, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
+    private sealed class ExactCandidateService(string userId, string employmentId) : IProjectManagementMemberCandidateService
+    {
+        public Task<bool> IsSelectableAsync(string candidateUserId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(string.Equals(candidateUserId, userId, StringComparison.Ordinal));
+
+        public Task<bool> IsSelectableAsync(string candidateUserId, string? candidateEmploymentId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(
+                string.Equals(candidateUserId, userId, StringComparison.Ordinal) &&
+                string.Equals(candidateEmploymentId, employmentId, StringComparison.Ordinal));
+
+        public Task<GridPageResult<ProjectManagementMemberCandidateResponse>> QueryAsync(ProjectManagementMemberCandidateQuery query, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 
     private sealed class RecordingActivityWriter : IProjectManagementActivityWriter

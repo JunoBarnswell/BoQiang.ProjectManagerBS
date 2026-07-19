@@ -8,6 +8,7 @@ using AsterERP.Api.Modules.System.Organizations;
 using AsterERP.Api.Modules.System.Users;
 using AsterERP.Contracts.ProjectManagement;
 using AsterERP.Shared;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using SqlSugar;
 using Volo.Abp;
@@ -22,6 +23,7 @@ public sealed class ProjectManagementMemberCandidateTests
     public void Project_management_module_registers_member_candidate_service()
     {
         var services = new ServiceCollection();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
 
         new AsterErpProjectManagementModule().ConfigureServices(new ServiceConfigurationContext(services));
 
@@ -126,5 +128,45 @@ public sealed class ProjectManagementMemberCandidateTests
         Assert.Equal("项目部", candidate.DeptName);
         Assert.Equal("项目负责人", candidate.PositionName);
         Assert.True(candidate.IsSelectable);
+    }
+
+    [Fact]
+    public async Task Candidate_selection_validates_the_exact_enabled_user_employment_pair()
+    {
+        using var db = new SqlSugarClient(new ConnectionConfig
+        {
+            ConnectionString = $"Data Source=file:project-management-candidate-selection-{Guid.NewGuid():N};Mode=Memory;Cache=Shared",
+            DbType = DbType.Sqlite,
+            IsAutoCloseConnection = false
+        });
+        db.CodeFirst.InitTables<SystemUserEntity, SystemUserTenantMembershipEntity>();
+        await db.Insertable(new[]
+        {
+            new SystemUserEntity { Id = "user-a", UserName = "alice", DisplayName = "Alice", Status = "Enabled" },
+            new SystemUserEntity { Id = "user-b", UserName = "bob", DisplayName = "Bob", Status = "Enabled" }
+        }).ExecuteCommandAsync();
+        await db.Insertable(new[]
+        {
+            new SystemUserTenantMembershipEntity { Id = "employment-a", UserId = "user-a", TenantId = "tenant-a", Status = "Enabled" },
+            new SystemUserTenantMembershipEntity { Id = "employment-b", UserId = "user-b", TenantId = "tenant-a", Status = "Enabled" },
+            new SystemUserTenantMembershipEntity { Id = "employment-disabled", UserId = "user-a", TenantId = "tenant-a", Status = "Disabled" },
+            new SystemUserTenantMembershipEntity { Id = "employment-other-tenant", UserId = "user-a", TenantId = "tenant-b", Status = "Enabled" }
+        }).ExecuteCommandAsync();
+
+        var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(AsterErpClaimTypes.UserId, "operator"),
+            new Claim(AsterErpClaimTypes.TenantId, "tenant-a"),
+            new Claim(AsterErpClaimTypes.AppCode, "SYSTEM")
+        }, "test"));
+        var service = new ProjectManagementMemberCandidateService(
+            new TestWorkspaceDatabaseAccessor(db),
+            new FixedAsterErpCurrentUser(user));
+
+        Assert.True(await service.IsSelectableAsync("user-a", "employment-a"));
+        Assert.False(await service.IsSelectableAsync("user-a", "employment-b"));
+        Assert.False(await service.IsSelectableAsync("user-a", "employment-disabled"));
+        Assert.False(await service.IsSelectableAsync("user-a", "employment-other-tenant"));
+        Assert.False(await service.IsSelectableAsync("user-a", "employment-missing"));
     }
 }
