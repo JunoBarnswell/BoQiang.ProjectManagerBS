@@ -9,11 +9,13 @@ import type { ProjectManagementWorkspaceScope } from '../state/projectManagement
 import { TaskCard, type TaskCardDragHandlers } from './TaskCardProjection';
 import { groupTaskCards, type TaskCardGroup } from './taskCardProjectionModel';
 import { buildTaskBoardColumnQuery, type TaskBoardStatus } from './taskBoardProjectionModel';
+import type { TaskGroupBy } from './taskMoveIntent';
 
 interface TaskBoardColumnProjectionProps {
   baseQuery: ProjectManagementTaskQuery;
   drag: TaskCardDragHandlers;
   groupBy?: ProjectManagementTaskQuery['groupBy'];
+  groupDropBy?: TaskGroupBy;
   milestoneLabels?: Readonly<Record<string, string>>;
   onAddChildTask?: (task: ProjectManagementTaskListItem) => void;
   onCompleteTask?: (task: ProjectManagementTaskListItem) => void;
@@ -33,7 +35,7 @@ type BoardVirtualItem =
   | { kind: 'lane'; lane: TaskCardGroup }
   | { kind: 'task'; laneKey: string; task: ProjectManagementTaskListItem };
 
-export function TaskBoardColumnProjection({ baseQuery, drag, groupBy, milestoneLabels, onAddChildTask, onCompleteTask, onDeleteTask, onMetricChange, onRowsLoaded, onSelectTask, onToggleTaskSelection, participantLabels, pendingTaskId, scope, selectedTaskIds, status }: TaskBoardColumnProjectionProps) {
+export function TaskBoardColumnProjection({ baseQuery, drag, groupBy, groupDropBy, milestoneLabels, onAddChildTask, onCompleteTask, onDeleteTask, onMetricChange, onRowsLoaded, onSelectTask, onToggleTaskSelection, participantLabels, pendingTaskId, scope, selectedTaskIds, status }: TaskBoardColumnProjectionProps) {
   const [pageIndex, setPageIndex] = useState(1);
   const [loadedRows, setLoadedRows] = useState<Map<string, ProjectManagementTaskListItem>>(() => new Map());
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -103,7 +105,13 @@ export function TaskBoardColumnProjection({ baseQuery, drag, groupBy, milestoneL
           if (!item) return null;
           return <div className="pm-board-column__virtual-item" data-index={virtualRow.index} key={`${item.kind}-${item.kind === 'lane' ? item.lane.key : item.task.id}`} ref={virtualizer.measureElement} style={{ position: 'absolute', left: 0, right: 0, top: 0, transform: `translateY(${virtualRow.start}px)` }}>
             {item.kind === 'lane'
-              ? <div className="pm-board-lane__heading"><strong>{item.lane.label}</strong><span>{item.lane.rows.length}</span></div>
+              ? <div
+                className="pm-board-lane__heading"
+                onDragOver={groupDropBy ? drag.onDragOver : undefined}
+                onDrop={groupDropBy ? (event) => drag.onDrop(event, { kind: 'group', groupBy: groupDropBy, groupValue: item.lane.key, status }) : undefined}
+              >
+                <strong>{item.lane.label}</strong><span>{item.lane.rows.length}</span>
+              </div>
               : <TaskCard drag={drag} milestoneLabels={milestoneLabels} onAddChildTask={onAddChildTask} onCompleteTask={onCompleteTask} onDeleteTask={onDeleteTask} onSelectTask={onSelectTask} onToggleTaskSelection={onToggleTaskSelection} participantLabels={participantLabels} pending={pendingTaskId === item.task.id} selected={selectedTaskIds.has(item.task.id)} task={item.task} />}
           </div>;
         })}

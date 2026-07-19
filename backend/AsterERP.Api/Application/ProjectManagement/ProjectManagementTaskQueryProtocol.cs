@@ -13,7 +13,7 @@ public static class ProjectManagementTaskQueryProtocol
 {
     private static readonly string[] ViewKeys = ["tree", "list", "card", "board", "gantt", "calendar"];
     private static readonly string[] SortFields = ["tree", "dueDate", "priority", "status", "updated"];
-    private static readonly string[] GroupFields = ["status", "priority", "assignee", "milestone", "parent"];
+    private static readonly string[] GroupFields = ["status", "priority", "assignee", "milestone", "parent", "label"];
 
     public static ProjectManagementTaskQuery Normalize(ProjectManagementTaskQuery query)
     {

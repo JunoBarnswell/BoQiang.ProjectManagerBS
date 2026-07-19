@@ -22,7 +22,7 @@ export interface TaskWorkspaceState {
 }
 
 const views: readonly ProjectManagementTaskView[] = ['tree', 'list', 'card', 'board', 'gantt', 'calendar'];
-const groupByValues: readonly TaskWorkspaceGroupBy[] = ['status', 'priority', 'assignee', 'milestone', 'parent'];
+const groupByValues: readonly TaskWorkspaceGroupBy[] = ['status', 'priority', 'assignee', 'milestone', 'parent', 'label'];
 const sortByValues: readonly TaskWorkspaceSortBy[] = ['tree', 'dueDate', 'priority', 'status', 'updated'];
 
 export function createTaskWorkspaceState(viewKey: ProjectManagementTaskView): TaskWorkspaceState {

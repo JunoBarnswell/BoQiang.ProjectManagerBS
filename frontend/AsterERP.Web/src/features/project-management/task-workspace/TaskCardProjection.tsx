@@ -1,16 +1,20 @@
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { useMemo, useRef, type DragEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 
 import type { ProjectManagementTaskListItem } from '../../../api/project-management/projectManagement.types';
+import { useAuthStore } from '../../../core/state';
 import { PermissionButton } from '../../../shared/auth/PermissionButton';
+import { useProjectManagementWorkspaceScope } from '../state/projectManagementWorkspaceScope';
+import type { TaskGroupDropTarget } from './taskMoveIntent';
 import { groupTaskCards, getTaskCardRisks, type TaskCardGroupBy } from './taskCardProjectionModel';
+import { moveTaskGroup, orderTaskGroups, readTaskGroupPreference, taskGroupPreferenceKey, toggleTaskGroup, writeTaskGroupPreference, type TaskGroupPreference } from './taskGroupPreferenceModel';
 
 export interface TaskCardDragHandlers {
   draggedTaskId?: string;
   onDragEnd: () => void;
   onDragOver: (event: DragEvent<HTMLElement>) => void;
   onDragStart: (event: DragEvent<HTMLElement>, task: ProjectManagementTaskListItem) => void;
-  onDrop: (event: DragEvent<HTMLElement>, target: { kind: 'before' | 'child'; task: ProjectManagementTaskListItem } | { kind: 'root' } | { kind: 'status'; status: string }) => void;
+  onDrop: (event: DragEvent<HTMLElement>, target: { kind: 'before' | 'child'; task: ProjectManagementTaskListItem } | { kind: 'root' } | { kind: 'status'; status: string } | TaskGroupDropTarget) => void;
 }
 
 interface TaskCardActions {
@@ -25,19 +29,31 @@ interface TaskCardProjectionProps extends TaskCardActions {
   milestoneLabels?: Readonly<Record<string, string>>;
   onSelectTask: (taskId: string) => void;
   onToggleTaskSelection: (taskId: string) => void;
+  projectId: string;
   participantLabels?: Readonly<Record<string, string>>;
   rows: ProjectManagementTaskListItem[];
   selectedTaskIds: ReadonlySet<string>;
   groupBy?: TaskCardGroupBy;
 }
 
-export function TaskCardProjection({ drag, groupBy, milestoneLabels, onAddChildTask, onCompleteTask, onDeleteTask, onSelectTask, onToggleTaskSelection, participantLabels, pendingTaskId, rows, selectedTaskIds }: TaskCardProjectionProps) {
-  const groups = useMemo(() => groupTaskCards(rows, groupBy), [groupBy, rows]);
+export function TaskCardProjection({ drag, groupBy, milestoneLabels, onAddChildTask, onCompleteTask, onDeleteTask, onSelectTask, onToggleTaskSelection, participantLabels, pendingTaskId, projectId, rows, selectedTaskIds }: TaskCardProjectionProps) {
+  const scope = useProjectManagementWorkspaceScope();
+  const userId = useAuthStore((current) => current.user?.userId ?? '');
+  const preferenceKey = useMemo(() => groupBy && userId && scope.tenantId && scope.appCode && projectId
+    ? taskGroupPreferenceKey(userId, scope.tenantId, scope.appCode, projectId, 'card', groupBy)
+    : '', [groupBy, projectId, scope.appCode, scope.tenantId, userId]);
+  const [preference, setPreference] = useState<TaskGroupPreference>(() => readTaskGroupPreference(''));
+  useEffect(() => setPreference(readTaskGroupPreference(preferenceKey)), [preferenceKey]);
+  useEffect(() => {
+    if (preferenceKey) writeTaskGroupPreference(preferenceKey, preference);
+  }, [preference, preferenceKey]);
+  const groups = useMemo(() => orderTaskGroups(groupTaskCards(rows, groupBy), preference), [groupBy, preference, rows]);
   const virtualRows = useMemo(() => groups.flatMap((group) => {
-    const chunks: Array<{ kind: 'cards'; groupKey: string; rows: ProjectManagementTaskListItem[] } | { kind: 'header'; groupKey: string; label: string; count: number }> = [{ kind: 'header', groupKey: group.key, label: group.label, count: group.rows.length }];
+    const chunks: Array<{ kind: 'cards'; groupKey: string; rows: ProjectManagementTaskListItem[] } | { kind: 'header'; groupKey: string; label: string; count: number; collapsed: boolean }> = [{ kind: 'header', groupKey: group.key, label: group.label, count: group.rows.length, collapsed: preference.collapsedKeys.includes(group.key) }];
+    if (preference.collapsedKeys.includes(group.key)) return chunks;
     for (let index = 0; index < group.rows.length; index += 3) chunks.push({ kind: 'cards', groupKey: group.key, rows: group.rows.slice(index, index + 3) });
     return chunks;
-  }), [groups]);
+  }), [groups, preference.collapsedKeys]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const virtualizer = useVirtualizer({
     count: virtualRows.length,
@@ -55,7 +71,11 @@ export function TaskCardProjection({ drag, groupBy, milestoneLabels, onAddChildT
         if (!item) return null;
         return <div data-index={virtualRow.index} key={`${item.groupKey}-${virtualRow.index}`} ref={virtualizer.measureElement} role="presentation" style={{ position: 'absolute', left: 0, right: 0, top: 0, transform: `translateY(${virtualRow.start}px)` }}>
           {item.kind === 'header'
-            ? <div aria-label={`${item.label}，${item.count} 项`} className="pm-task-card-group-heading"><strong>{item.label}</strong><span>{item.count} 项</span></div>
+            ? <div className="pm-task-card-group-heading" onDragOver={drag?.onDragOver} onDrop={groupBy && groupBy !== 'status' && groupBy !== 'priority' ? (event) => drag?.onDrop(event, { kind: 'group', groupBy, groupValue: item.groupKey }) : undefined}>
+              <button aria-expanded={!item.collapsed} aria-label={`${item.collapsed ? '展开' : '折叠'}分组 ${item.label}`} className="pm-task-card-group-heading__toggle" onClick={() => setPreference((current) => toggleTaskGroup(current, item.groupKey))} type="button">{item.collapsed ? '▸' : '▾'}</button>
+              <strong>{item.label}</strong><span aria-label={`${item.count} 项${groupBy === 'label' ? '，多标签任务可能在多个分组展示' : ''}`}>{item.count} 项</span>
+              {groupBy ? <span className="pm-task-card-group-heading__actions"><button aria-label={`上移分组 ${item.label}`} onClick={() => setPreference((current) => moveTaskGroup(current, item.groupKey, groups[Math.max(0, groups.findIndex((group) => group.key === item.groupKey) - 1)]?.key))} type="button">↑</button><button aria-label={`下移分组 ${item.label}`} onClick={() => setPreference((current) => moveTaskGroup(current, item.groupKey, groups[groups.findIndex((group) => group.key === item.groupKey) + 2]?.key))} type="button">↓</button></span> : null}
+            </div>
             : <div className="pm-task-grid pm-task-grid--virtual">{item.rows.map((task) => <TaskCard
               drag={drag}
               key={task.id}

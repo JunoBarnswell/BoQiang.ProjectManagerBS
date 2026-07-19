@@ -5,6 +5,14 @@ export type TaskMoveDropTarget =
   | { kind: 'child'; task: ProjectManagementTaskListItem }
   | { kind: 'root' };
 
+export type TaskGroupBy = 'assignee' | 'milestone' | 'parent' | 'label';
+export interface TaskGroupDropTarget {
+  kind: 'group';
+  groupBy: TaskGroupBy;
+  groupValue: string;
+  status?: string;
+}
+
 export interface ProjectManagementTaskMoveRequest {
   beforeTaskId?: string;
   parentTaskId?: string;

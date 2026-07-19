@@ -376,7 +376,7 @@ export interface ProjectManagementTaskQuery {
   status?: string;
   assigneeUserId?: string;
   viewKey?: ProjectManagementTaskView;
-  groupBy?: "status" | "priority" | "assignee" | "milestone" | "parent";
+  groupBy?: "status" | "priority" | "assignee" | "milestone" | "parent" | "label";
   sortBy?: "tree" | "dueDate" | "priority" | "status" | "updated";
   sortDirection?: "asc" | "desc";
   milestoneId?: string;

@@ -1,6 +1,6 @@
 import type { ProjectManagementTaskListItem } from '../../../api/project-management/projectManagement.types';
 
-export type TaskCardGroupBy = 'status' | 'priority' | 'assignee' | 'milestone' | 'parent';
+export type TaskCardGroupBy = 'status' | 'priority' | 'assignee' | 'milestone' | 'parent' | 'label';
 export type TaskCardRisk = 'overdue' | 'urgent' | 'blocked' | 'done';
 
 export interface TaskCardGroup {
@@ -12,6 +12,7 @@ export interface TaskCardGroup {
 export function groupTaskCards(rows: ProjectManagementTaskListItem[], groupBy?: TaskCardGroupBy): TaskCardGroup[] {
   if (!rows.length) return [{ key: 'all', label: '全部任务', rows: [] }];
   if (!groupBy) return [{ key: 'all', label: '全部任务', rows }];
+  if (groupBy === 'label') return groupTaskCardsByLabel(rows);
   const groups = new Map<string, TaskCardGroup>();
   rows.forEach((row) => {
     const key = taskGroupValue(row, groupBy);
@@ -44,6 +45,20 @@ function taskGroupValue(task: ProjectManagementTaskListItem, groupBy: TaskCardGr
   if (groupBy === 'assignee') return task.assigneeUserId || 'unassigned';
   if (groupBy === 'milestone') return task.milestoneId || 'unassigned';
   return task.parentTaskId || 'root';
+}
+
+function groupTaskCardsByLabel(rows: ProjectManagementTaskListItem[]): TaskCardGroup[] {
+  const groups = new Map<string, TaskCardGroup>();
+  rows.forEach((row) => {
+    const labels = row.labels?.length ? row.labels : [{ id: 'unassigned', labelName: '未设置标签' }];
+    const uniqueLabels = new Map(labels.map((label) => [label.id, label]));
+    uniqueLabels.forEach((label) => {
+      const group = groups.get(label.id) ?? { key: label.id, label: label.labelName, rows: [] };
+      group.rows.push(row);
+      groups.set(label.id, group);
+    });
+  });
+  return [...groups.values()];
 }
 
 function taskGroupLabel(value: string, groupBy: TaskCardGroupBy): string {
