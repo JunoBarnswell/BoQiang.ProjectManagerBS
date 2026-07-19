@@ -355,6 +355,14 @@ CREATE TABLE IF NOT EXISTS pm_backups (
     UpdatedBy TEXT NULL, UpdatedTime TEXT NULL, DeletedBy TEXT NULL, DeletedTime TEXT NULL,
     IsDeleted INTEGER NOT NULL DEFAULT 0, Remark TEXT NULL
 );
+CREATE TABLE IF NOT EXISTS pm_data_space_exports (
+    Id TEXT NOT NULL PRIMARY KEY, TenantId TEXT NOT NULL, AppCode TEXT NOT NULL, OperationId TEXT NOT NULL,
+    PackageName TEXT NOT NULL, StoragePath TEXT NOT NULL DEFAULT '', PackageSha256 TEXT NOT NULL DEFAULT '', PackageSize INTEGER NOT NULL DEFAULT 0,
+    DatabaseSha256 TEXT NOT NULL DEFAULT '', ManifestJson TEXT NOT NULL DEFAULT '{}', EncryptionKeyCipherText TEXT NOT NULL DEFAULT '', Status TEXT NOT NULL,
+    CreatedByUserId TEXT NOT NULL, DownloadExpiresAt TEXT NOT NULL, DownloadCount INTEGER NOT NULL DEFAULT 0, MaxDownloadCount INTEGER NOT NULL DEFAULT 3,
+    LastDownloadedAt TEXT NULL, CompletedAt TEXT NULL, CreatedBy TEXT NULL, CreatedTime TEXT NOT NULL, UpdatedBy TEXT NULL, UpdatedTime TEXT NULL,
+    DeletedBy TEXT NULL, DeletedTime TEXT NULL, IsDeleted INTEGER NOT NULL DEFAULT 0, Remark TEXT NULL
+);
 CREATE TABLE IF NOT EXISTS pm_operations (
     Id TEXT NOT NULL PRIMARY KEY, TenantId TEXT NOT NULL, AppCode TEXT NOT NULL, OperationType TEXT NOT NULL,
     Status TEXT NOT NULL, Phase TEXT NOT NULL DEFAULT 'Pending', ProgressPercent INTEGER NOT NULL DEFAULT 0, VersionNo INTEGER NOT NULL DEFAULT 1,
@@ -414,6 +422,16 @@ CREATE TABLE IF NOT EXISTS pm_reversible_commands (
         schema.EnsureColumn("pm_task_comments", "MentionUserIdsJson", "TEXT NULL");
         schema.EnsureColumn("pm_sync_history", "Deleted", "INTEGER NOT NULL DEFAULT 0");
         schema.EnsureColumn("pm_sync_history", "Failed", "INTEGER NOT NULL DEFAULT 0");
+        schema.EnsureColumn("pm_data_space_exports", "StoragePath", "TEXT NOT NULL DEFAULT ''");
+        schema.EnsureColumn("pm_data_space_exports", "PackageSha256", "TEXT NOT NULL DEFAULT ''");
+        schema.EnsureColumn("pm_data_space_exports", "PackageSize", "INTEGER NOT NULL DEFAULT 0");
+        schema.EnsureColumn("pm_data_space_exports", "DatabaseSha256", "TEXT NOT NULL DEFAULT ''");
+        schema.EnsureColumn("pm_data_space_exports", "ManifestJson", "TEXT NOT NULL DEFAULT '{}'");
+        schema.EnsureColumn("pm_data_space_exports", "EncryptionKeyCipherText", "TEXT NOT NULL DEFAULT ''");
+        schema.EnsureColumn("pm_data_space_exports", "DownloadExpiresAt", "TEXT NOT NULL DEFAULT ''");
+        schema.EnsureColumn("pm_data_space_exports", "DownloadCount", "INTEGER NOT NULL DEFAULT 0");
+        schema.EnsureColumn("pm_data_space_exports", "MaxDownloadCount", "INTEGER NOT NULL DEFAULT 3");
+        schema.EnsureColumn("pm_data_space_exports", "LastDownloadedAt", "TEXT NULL");
     }
 
     private static void CreateIndexes(SqliteSchemaExecutor schema)
@@ -465,6 +483,8 @@ CREATE TABLE IF NOT EXISTS pm_reversible_commands (
         schema.Execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_pm_maintenance_locks_active ON pm_maintenance_locks(TenantId, AppCode, LockKey) WHERE IsDeleted = 0;");
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_maintenance_locks_expiry ON pm_maintenance_locks(TenantId, AppCode, ExpiresAt, IsDeleted);");
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_backups_created ON pm_backups(TenantId, AppCode, CreatedTime, IsDeleted);");
+        schema.Execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_pm_data_space_exports_operation ON pm_data_space_exports(TenantId, AppCode, OperationId) WHERE IsDeleted = 0;");
+        schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_data_space_exports_created ON pm_data_space_exports(TenantId, AppCode, CreatedTime, IsDeleted);");
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_operations_status_time ON pm_operations(TenantId, AppCode, Status, StartedTime, IsDeleted);");
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_webhook_subscriptions_project ON pm_webhook_subscriptions(TenantId, AppCode, ProjectId, IsEnabled, IsDeleted);");
         schema.Execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_pm_purge_file_deletions_operation_file ON pm_purge_file_deletions(TenantId, AppCode, OperationId, FileId) WHERE IsDeleted = 0;");

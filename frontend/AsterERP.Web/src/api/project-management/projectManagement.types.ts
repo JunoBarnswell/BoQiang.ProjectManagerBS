@@ -142,6 +142,34 @@ export interface ProjectManagementBackupRestorePreview {
   successfulRestoreRollbackHint: string;
 }
 
+export interface ProjectManagementDataSpaceExportManifest {
+  formatVersion: number;
+  tenantId: string;
+  appCode: string;
+  databaseProvider: string;
+  snapshotMode: string;
+  schemaVersion: number;
+  snapshotAt: string;
+  schemaObjects: string[];
+  databaseSha256: string;
+  encryptionAlgorithm: string;
+}
+
+export interface ProjectManagementDataSpaceExport {
+  id: string;
+  packageName: string;
+  status: string;
+  operationId: string;
+  packageSize: number;
+  packageSha256: string;
+  createdTime: string;
+  completedAt?: string;
+  downloadExpiresAt: string;
+  downloadCount: number;
+  maxDownloadCount: number;
+  manifest?: ProjectManagementDataSpaceExportManifest;
+}
+
 export interface ProjectManagementMemberCandidateQuery {
   pageIndex?: number;
   pageSize?: number;

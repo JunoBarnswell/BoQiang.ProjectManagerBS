@@ -35,6 +35,7 @@ public sealed class AsterErpProjectManagementModule : AbpModule
         context.Services.AddScoped<ProjectManagementWipCoordinator>();
         context.Services.AddScoped<IProjectManagementRiskConfirmationService, ProjectManagementRiskConfirmationService>();
         context.Services.AddScoped<IProjectManagementBackupService, ProjectManagementBackupService>();
+        context.Services.AddScoped<IProjectManagementDataSpaceExportService, ProjectManagementDataSpaceExportService>();
         context.Services.AddScoped<IProjectManagementRealtimeTransport, ProjectManagementRealtimeTransport>();
         context.Services.AddScoped<IProjectManagementOperationProgressPublisher, ProjectManagementOperationProgressPublisher>();
         context.Services.AddScoped<IProjectManagementOperationWriter, ProjectManagementOperationWriter>();
@@ -45,6 +46,7 @@ public sealed class AsterErpProjectManagementModule : AbpModule
         context.Services.AddScoped<IProjectManagementReversibleCommandHandler, ProjectManagementReversibleCommandHandler>();
         context.Services.AddScoped<ProjectManagementWorkspaceValidationExecutor>();
         context.Services.AddScoped<ProjectManagementReportSnapshotExecutor>();
+        context.Services.AddScoped<ProjectManagementDataSpaceExportExecutor>();
         context.Services.AddScoped<ProjectManagementPurgeFileDeletionExecutor>();
         context.Services.AddScoped<IProjectManagementPurgeFileDeletionService, ProjectManagementPurgeFileDeletionService>();
         context.Services.AddTransient<ProjectManagementOperationRunner>();
@@ -129,6 +131,7 @@ public sealed class AsterErpProjectManagementModule : AbpModule
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementSyncHistoryEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementMaintenanceLockEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementBackupEntity));
+        registry.RegisterProjectManagementFilter(typeof(ProjectManagementDataSpaceExportEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementOperationEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementReversibleCommandEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementImConversationLinkEntity));

@@ -41,6 +41,7 @@ public static partial class PermissionCodes
     public const string ProjectManagementSyncImport = "project-management:sync:import";
     public const string ProjectManagementSyncExport = "project-management:sync:export";
     public const string ProjectManagementBackupManage = "project-management:backup:manage";
+    public const string ProjectManagementDataSpaceExport = "project-management:data-space:export";
     public const string ProjectManagementAuditView = "project-management:audit:view";
     public const string ProjectManagementAuditExport = "project-management:audit:export";
     public const string ProjectManagementOperationView = "project-management:operation:view";
@@ -86,6 +87,7 @@ public static partial class PermissionCodes
         ProjectManagementSyncImport,
         ProjectManagementSyncExport,
         ProjectManagementBackupManage,
+        ProjectManagementDataSpaceExport,
         ProjectManagementAuditView,
         ProjectManagementAuditExport,
         ProjectManagementOperationView,

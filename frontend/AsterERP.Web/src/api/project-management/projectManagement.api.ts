@@ -32,6 +32,7 @@ import type {
   ProjectManagementReversibleCommandStack,
   ProjectManagementBackup,
   ProjectManagementBackupRestorePreview,
+  ProjectManagementDataSpaceExport,
   ProjectManagementRecyclePurgePreview,
   ProjectManagementRecycleTaskPurgePreview,
   ProjectManagementTaskUpsertRequest,
@@ -911,6 +912,22 @@ export function restoreProjectManagementBackup(
 
 export function previewProjectManagementBackupRestore(id: string): Promise<ApiEnvelope<ProjectManagementBackupRestorePreview>> {
   return httpClient.get<ProjectManagementBackupRestorePreview>(`/project-management/backups/${id}/restore-preview`);
+}
+
+export function getProjectManagementDataSpaceExports(): Promise<ApiEnvelope<ProjectManagementDataSpaceExport[]>> {
+  return httpClient.get<ProjectManagementDataSpaceExport[]>('/project-management/data-space-exports');
+}
+
+export function startProjectManagementDataSpaceExport(request: {
+  currentPassword: string;
+  confirmRisk: boolean;
+  reason?: string;
+}): Promise<ApiEnvelope<ProjectManagementDataSpaceExport>> {
+  return httpClient.post<ProjectManagementDataSpaceExport, typeof request>('/project-management/data-space-exports', request);
+}
+
+export function downloadProjectManagementDataSpaceExport(id: string): Promise<{ blob: Blob; fileName: string }> {
+  return httpClient.downloadBlob(`/project-management/data-space-exports/${id}/download`, { timeoutMs: 120_000 });
 }
 
 export function getProjectManagementSavedViews(

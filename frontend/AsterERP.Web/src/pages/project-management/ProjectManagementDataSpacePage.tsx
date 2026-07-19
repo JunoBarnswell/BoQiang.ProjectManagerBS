@@ -4,11 +4,14 @@ import { Link } from 'react-router-dom';
 
 import {
   createProjectManagementBackup,
+  downloadProjectManagementDataSpaceExport,
   exportProjectManagementSync,
   getProjectManagementBackups,
+  getProjectManagementDataSpaceExports,
   getProjectManagementDataSpaceSummary,
   previewProjectManagementBackupRestore,
-  restoreProjectManagementBackup
+  restoreProjectManagementBackup,
+  startProjectManagementDataSpaceExport,
 } from '../../api/project-management/projectManagement.api';
 import { usePermission } from '../../core/auth/usePermission';
 import { isHttpError } from '../../core/http/httpError';
@@ -39,6 +42,7 @@ export function ProjectManagementDataSpacePage() {
   const [operationResult, setOperationResult] = useState<string | null>(null);
   const [restorePreview, setRestorePreview] = useState<NonNullable<Awaited<ReturnType<typeof previewProjectManagementBackupRestore>>['data']> | null>(null);
   const { hasPermission: canManageBackup } = usePermission('project-management:backup:manage');
+  const { hasPermission: canExportDatabase } = usePermission('project-management:data-space:export');
   const summaryQuery = useQuery({
     enabled: scope.isAvailable,
     queryKey: queryKeys.projectManagement.dataSpaceSummary(scope),
@@ -48,6 +52,34 @@ export function ProjectManagementDataSpacePage() {
     queryKey: queryKeys.projectManagement.backups(scope),
     queryFn: () => getProjectManagementBackups(),
     enabled: scope.isAvailable && canManageBackup,
+  });
+  const databaseExportsQuery = useQuery({
+    queryKey: [...queryKeys.projectManagement.backups(scope), 'database-exports'],
+    queryFn: () => getProjectManagementDataSpaceExports(),
+    enabled: scope.isAvailable && canExportDatabase,
+  });
+  const databaseExportMutation = useApiMutation({
+    mutationFn: () => startProjectManagementDataSpaceExport({ currentPassword: password, confirmRisk, reason: '项目管理数据空间整库导出' }),
+    onError: (error) => message.error(getErrorMessage(error, '整库导出任务创建失败')),
+    onSuccess: (result) => {
+      const exportTask = result.data;
+      setOperationId(exportTask?.operationId ?? null);
+      setOperationResult(exportTask ? `整库导出已进入后台队列，下载有效至 ${new Date(exportTask.downloadExpiresAt).toLocaleString()}。` : '整库导出已进入后台队列。');
+      void queryClient.invalidateQueries({ queryKey: [...queryKeys.projectManagement.backups(scope), 'database-exports'] });
+    },
+  });
+  const databaseExportDownloadMutation = useApiMutation({
+    mutationFn: (id: string) => downloadProjectManagementDataSpaceExport(id),
+    onError: (error) => message.error(getErrorMessage(error, '导出包下载失败')),
+    onSuccess: ({ blob, fileName }) => {
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = fileName;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      void databaseExportsQuery.refetch();
+    },
   });
   const backupMutation = useApiMutation({
     mutationFn: () => createProjectManagementBackup({ currentPassword: password, confirmRisk, reason: '项目管理数据空间手动备份' }),
@@ -115,6 +147,14 @@ export function ProjectManagementDataSpacePage() {
           ['附件', summary.attachmentCount]
         ].map(([label, value]) => <div className="rounded-lg border border-gray-200 p-4" key={label}><div className="text-sm text-gray-500">{label}</div><div className="mt-1 text-2xl font-semibold">{value}</div></div>)}
       </div>
+      <section className="mt-4 rounded-lg border border-gray-200 p-4">
+        <h2 className="font-semibold">整库导出</h2>
+        <p className="mt-1 text-sm text-gray-500">后台使用 SQLite 在线一致性快照，不进入维护模式；生成的 .bqdbx 包已加密，包含架构清单、租户/应用、版本、时间和校验摘要。包默认 24 小时有效，最多下载 3 次。</p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <PermissionButton code="project-management:data-space:export" disabled={!password || !confirmRisk || databaseExportMutation.isPending} onClick={() => databaseExportMutation.mutate()}>{databaseExportMutation.isPending ? '正在入队…' : '创建整库导出'}</PermissionButton>
+        </div>
+        {databaseExportsQuery.isLoading ? <div className="mt-3 text-sm text-gray-500">整库导出记录加载中…</div> : databaseExportsQuery.data?.data?.length ? <div className="mt-3 space-y-2">{databaseExportsQuery.data.data.map((item) => <div className="flex flex-wrap items-center justify-between gap-2 rounded border border-gray-100 p-3 text-sm" key={item.id}><span>{item.packageName} · {item.status} · 下载 {item.downloadCount}/{item.maxDownloadCount} · 有效至 {new Date(item.downloadExpiresAt).toLocaleString()}{item.manifest ? ` · schema v${item.manifest.schemaVersion}` : ''}</span><PermissionButton code="project-management:data-space:export" disabled={item.status !== 'Ready' || databaseExportDownloadMutation.isPending} onClick={() => databaseExportDownloadMutation.mutate(item.id)}>{databaseExportDownloadMutation.isPending ? '下载中…' : '下载加密包'}</PermissionButton></div>)}</div> : <div className="mt-3 text-sm text-gray-500">暂无整库导出记录</div>}
+      </section>
       <section className="mt-4 rounded-lg border border-gray-200 p-4">
         <h2 className="font-semibold">同步包</h2>
         <p className="mt-1 text-sm text-gray-500">导出只包含当前用户有权访问的项目数据；导入前必须经过包校验、冲突预览和高风险确认。</p>
