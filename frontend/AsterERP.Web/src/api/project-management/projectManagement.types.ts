@@ -230,6 +230,13 @@ export interface ProjectManagementDataSpaceExport {
   manifest?: ProjectManagementDataSpaceExportManifest;
 }
 
+export interface ProjectManagementDataSpaceImport {
+  operationId: string;
+  exportId: string;
+  status: string;
+  requestedAt: string;
+}
+
 export interface ProjectManagementMemberCandidateQuery {
   pageIndex?: number;
   pageSize?: number;

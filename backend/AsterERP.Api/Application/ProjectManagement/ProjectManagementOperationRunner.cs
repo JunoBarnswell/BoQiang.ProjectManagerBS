@@ -14,6 +14,7 @@ public sealed class ProjectManagementOperationRunner(
     IProjectManagementSearchService? searchService = null,
     ProjectManagementReportSnapshotExecutor? reportSnapshotExecutor = null,
     ProjectManagementDataSpaceExportExecutor? dataSpaceExportExecutor = null,
+    ProjectManagementDataSpaceImportExecutor? dataSpaceImportExecutor = null,
     ProjectManagementPurgeFileDeletionExecutor? purgeFileDeletionExecutor = null)
 {
     public async Task ExecuteAsync(ProjectManagementOperationJobArgs args)
@@ -27,6 +28,7 @@ public sealed class ProjectManagementOperationRunner(
             if (searchService is not null && await searchService.TryExecuteIndexOperationAsync(args, CancellationToken.None)) return;
             if (reportSnapshotExecutor is not null && await reportSnapshotExecutor.TryExecuteAsync(args, CancellationToken.None)) return;
             if (dataSpaceExportExecutor is not null && await dataSpaceExportExecutor.TryExecuteAsync(args, CancellationToken.None)) return;
+            if (dataSpaceImportExecutor is not null && await dataSpaceImportExecutor.TryExecuteAsync(args, CancellationToken.None)) return;
             if (purgeFileDeletionExecutor is not null && await purgeFileDeletionExecutor.TryExecuteAsync(args, CancellationToken.None)) return;
             await workspaceValidationExecutor.ExecuteAsync(args, CancellationToken.None);
         }
@@ -49,7 +51,8 @@ public sealed class ProjectManagementOperationRunner(
             new Claim(AsterErpClaimTypes.PermissionCode, PermissionCodes.ProjectManagementReportExport),
             new Claim(AsterErpClaimTypes.PermissionCode, PermissionCodes.ProjectManagementOperationView),
             new Claim(AsterErpClaimTypes.PermissionCode, PermissionCodes.ProjectManagementOperationManage),
-            new Claim(AsterErpClaimTypes.PermissionCode, PermissionCodes.ProjectManagementDataSpaceExport)
+            new Claim(AsterErpClaimTypes.PermissionCode, PermissionCodes.ProjectManagementDataSpaceExport),
+            new Claim(AsterErpClaimTypes.PermissionCode, PermissionCodes.ProjectManagementDataSpaceImport)
         };
         return new ClaimsPrincipal(new ClaimsIdentity(claims, AsterErpClaimsPrincipalFactory.AuthenticationType, AbpClaimTypes.UserName, AbpClaimTypes.Role));
     }
