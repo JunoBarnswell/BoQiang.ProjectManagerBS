@@ -2,7 +2,7 @@ import { useQueries } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from 'react';
 
 import { getProjectManagementTasks } from '../../../api/project-management/projectManagement.api';
-import type { ProjectManagementTaskLabelFilter, ProjectManagementTaskListItem, ProjectManagementTaskQuery } from '../../../api/project-management/projectManagement.types';
+import type { ProjectManagementMilestone, ProjectManagementTaskDependency, ProjectManagementTaskLabelFilter, ProjectManagementTaskListItem, ProjectManagementTaskQuery } from '../../../api/project-management/projectManagement.types';
 import { useAuthStore } from '../../../core/state';
 import { queryKeys } from '../../../core/query/queryKeys';
 import { DataTable } from '../../../shared/table/DataTable';
@@ -25,6 +25,7 @@ import type { TaskGroupDropTarget, TaskMoveDropTarget } from './taskMoveIntent';
 import { TaskCardProjection, type TaskCardDragHandlers } from './TaskCardProjection';
 import { TaskBoardColumnProjection } from './TaskBoardColumnProjection';
 import { summarizeTaskBoardColumns, taskBoardStatuses, type TaskBoardStatus } from './taskBoardProjectionModel';
+import { TaskCalendarScheduleProjection, TaskGanttScheduleProjection } from './TaskScheduleProjections';
 
 interface TaskWorkspaceProjectionProps {
   labelFilter?: ProjectManagementTaskLabelFilter;
@@ -32,6 +33,7 @@ interface TaskWorkspaceProjectionProps {
   onAddChildTask?: (task: ProjectManagementTaskListItem) => void;
   onCompleteTask?: (task: ProjectManagementTaskListItem) => void;
   onChangeTaskStatus?: (task: ProjectManagementTaskListItem, status: string) => void;
+  onChangeTaskSchedule?: (task: ProjectManagementTaskListItem, startDate: string | undefined, dueDate: string | undefined) => void;
   onDeleteTask?: (task: ProjectManagementTaskListItem) => void;
   onBoardRowsLoaded?: (rows: ProjectManagementTaskListItem[]) => void;
   participantLabels?: Readonly<Record<string, string>>;
@@ -41,13 +43,15 @@ interface TaskWorkspaceProjectionProps {
   onMoveTask: (task: ProjectManagementTaskListItem, target: TaskMoveDropTarget) => void;
   onMoveTaskGroup?: (task: ProjectManagementTaskListItem, target: TaskGroupDropTarget) => void;
   onToggleTaskSelection: (taskId: string) => void;
+  dependencies?: readonly ProjectManagementTaskDependency[];
+  milestones?: readonly ProjectManagementMilestone[];
   optimisticBoardRows?: Readonly<Record<string, ProjectManagementTaskListItem>>;
   rows: ProjectManagementTaskListItem[];
   selectedTaskIds: ReadonlySet<string>;
   state: TaskWorkspaceState;
 }
 
-export function TaskWorkspaceProjection({ labelFilter, milestoneLabels, onAddChildTask, onBoardRowsLoaded, onChangeTaskStatus, onCompleteTask, onDeleteTask, onMoveTask, onMoveTaskGroup, onSelectTask, onToggleTaskSelection, optimisticBoardRows, participantLabels, pendingTaskId, projectId, rows, selectedTaskIds, state }: TaskWorkspaceProjectionProps) {
+export function TaskWorkspaceProjection({ dependencies, labelFilter, milestoneLabels, milestones, onAddChildTask, onBoardRowsLoaded, onChangeTaskSchedule, onChangeTaskStatus, onCompleteTask, onDeleteTask, onMoveTask, onMoveTaskGroup, onSelectTask, onToggleTaskSelection, optimisticBoardRows, participantLabels, pendingTaskId, projectId, rows, selectedTaskIds, state }: TaskWorkspaceProjectionProps) {
   const scope = useProjectManagementWorkspaceScope();
   const userId = useAuthStore((current) => current.user?.userId ?? '');
   const expansionKey = useMemo(
@@ -202,8 +206,8 @@ export function TaskWorkspaceProjection({ labelFilter, milestoneLabels, onAddChi
 
   if (state.viewKey === 'board') return <>{dragHelp}<TaskBoardProjection baseQuery={{ ...taskWorkspaceStateToQuery(projectId, state), labelFilter: labelFilter?.labelIds.length ? labelFilter : undefined }} drag={drag} groupBy={state.groupBy} milestoneLabels={milestoneLabels} onAddChildTask={onAddChildTask} onBoardRowsLoaded={onBoardRowsLoaded} onChangeTaskStatus={onChangeTaskStatus} onCompleteTask={onCompleteTask} onDeleteTask={onDeleteTask} optimisticBoardRows={optimisticBoardRows} participantLabels={participantLabels} pendingTaskId={pendingTaskId} onSelectTask={onSelectTask} onToggleTaskSelection={onToggleTaskSelection} selectedTaskIds={selectedTaskIds} />;</>;
   if (state.viewKey === 'card') return <>{dragHelp}{rootDropZone}<TaskCardProjection drag={drag} groupBy={state.groupBy} milestoneLabels={milestoneLabels} onAddChildTask={onAddChildTask} onCompleteTask={onCompleteTask} onDeleteTask={onDeleteTask} onSelectTask={onSelectTask} onToggleTaskSelection={onToggleTaskSelection} participantLabels={participantLabels} pendingTaskId={pendingTaskId} projectId={projectId} rows={rows} selectedTaskIds={selectedTaskIds} /></>;
-  if (state.viewKey === 'gantt') return <TaskGanttProjection rows={rows} onSelectTask={onSelectTask} onToggleTaskSelection={onToggleTaskSelection} selectedTaskIds={selectedTaskIds} />;
-  if (state.viewKey === 'calendar') return <TaskCalendarProjection rows={rows} onSelectTask={onSelectTask} onToggleTaskSelection={onToggleTaskSelection} selectedTaskIds={selectedTaskIds} />;
+  if (state.viewKey === 'gantt') return <TaskGanttScheduleProjection dependencies={dependencies} milestones={milestones} onChangeTaskSchedule={onChangeTaskSchedule} rows={rows} onSelectTask={onSelectTask} onToggleTaskSelection={onToggleTaskSelection} selectedTaskIds={selectedTaskIds} />;
+  if (state.viewKey === 'calendar') return <TaskCalendarScheduleProjection dependencies={dependencies} onSelectTask={onSelectTask} onToggleTaskSelection={onToggleTaskSelection} rows={rows} selectedTaskIds={selectedTaskIds} />;
   return <>{rootDropZone}<TaskTableProjection childStateByParent={loadedChildren} expandedTaskIds={new Set(expandedTaskIds)} onLoadMoreChildren={loadMoreChildren} onToggleTaskExpansion={toggleExpansion} drag={drag} rows={visibleRows} onSelectTask={onSelectTask} onToggleTaskSelection={onToggleTaskSelection} selectedTaskIds={selectedTaskIds} state={state} /></>;
 }
 
@@ -290,50 +294,6 @@ function isMovableTaskGroupBy(value: TaskWorkspaceState['groupBy']): value is 'a
   return value === 'assignee' || value === 'milestone' || value === 'parent' || value === 'label';
 }
 
-function TaskGanttProjection({ onSelectTask, onToggleTaskSelection, rows, selectedTaskIds }: Pick<TaskWorkspaceProjectionProps, 'onSelectTask' | 'onToggleTaskSelection' | 'rows' | 'selectedTaskIds'>) {
-  const datedRows = rows.filter((task) => task.startDate || task.dueDate);
-  const [rangeDays, setRangeDays] = useState(56);
-  const range = useMemo(() => createGanttRange(datedRows, rangeDays), [datedRows, rangeDays]);
-
-  return <div className="pm-gantt">
-    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-      <p className="pm-prototype-note">基于真实开始/截止日期的只读计划时间轴。日期调整仍须从任务详情保存，避免将层级拖动误当作排期。</p>
-      <div aria-label="甘特时间轴密度" className="flex gap-2">
-        {[28, 56, 84].map((days) => <button aria-pressed={rangeDays === days} className={rangeDays === days ? 'rounded bg-blue-600 px-2 py-1 text-xs text-white' : 'rounded border border-gray-300 px-2 py-1 text-xs'} key={days} onClick={() => setRangeDays(days)} type="button">{days / 7} 周</button>)}
-      </div>
-    </div>
-    {!datedRows.length ? <p className="pm-projection-empty">没有包含计划日期的任务。请在任务详情填写开始日期或截止日期。</p> : <div className="overflow-x-auto rounded border border-gray-200"><div className="min-w-[920px]">
-      <div className="grid border-b border-gray-200 bg-gray-50 text-xs text-gray-500" style={{ gridTemplateColumns: `minmax(220px, 1fr) repeat(${range.days.length}, minmax(20px, 1fr))` }}><div className="p-2 font-medium">任务 / {formatDateOnly(range.start)} 起</div>{range.days.map((day) => <div className={day.getDay() === 0 || day.getDay() === 6 ? 'border-l border-gray-100 bg-gray-100 p-1 text-center' : 'border-l border-gray-100 p-1 text-center'} key={toDateKey(day)}>{day.getDate()}</div>)}</div>
-      {datedRows.map((task) => {
-        const placement = getGanttPlacement(task, range);
-        return <div className="grid min-h-14 border-b border-gray-100 last:border-b-0" key={task.id} style={{ gridTemplateColumns: `minmax(220px, 1fr) repeat(${range.days.length}, minmax(20px, 1fr))` }}>
-          <div className="flex items-center gap-2 p-2"><input aria-label={`选择任务 ${task.title}`} checked={selectedTaskIds.has(task.id)} type="checkbox" onChange={() => onToggleTaskSelection(task.id)} /><button className="truncate text-left text-sm hover:underline" onClick={() => onSelectTask(task.id)} title={task.title} type="button">{task.title}</button></div>
-          {placement ? <button className="my-3 min-w-0 rounded bg-blue-600 px-2 text-left text-xs text-white hover:bg-blue-700" onClick={() => onSelectTask(task.id)} style={{ gridColumn: `${placement.startColumn} / span ${placement.span}` }} title={`${task.title} · ${formatDate(task.startDate)} — ${formatDate(task.dueDate)}`} type="button">{task.taskCode}</button> : null}
-        </div>;
-      })}
-    </div></div>}
-  </div>;
-}
-
-function TaskCalendarProjection({ onSelectTask, onToggleTaskSelection, rows, selectedTaskIds }: Pick<TaskWorkspaceProjectionProps, 'onSelectTask' | 'onToggleTaskSelection' | 'rows' | 'selectedTaskIds'>) {
-  const [mode, setMode] = useState<'month' | 'week'>('month');
-  const [anchorDate, setAnchorDate] = useState(() => firstDueDate(rows) ?? new Date());
-  const groups = rows.filter((task) => task.dueDate).reduce<Record<string, ProjectManagementTaskListItem[]>>((result, task) => {
-    const key = task.dueDate?.slice(0, 10) ?? '';
-    result[key] = [...(result[key] ?? []), task];
-    return result;
-  }, {});
-  const calendar = useMemo(() => createCalendarRange(anchorDate, mode), [anchorDate, mode]);
-
-  return <div className="pm-calendar">
-    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-      <p className="pm-prototype-note">按真实截止日期呈现的只读{mode === 'month' ? '月' : '周'}视图；日期调整请从任务详情保存，日历中不支持拖放排期。</p>
-      <div className="flex items-center gap-2"><button className="rounded border border-gray-300 px-2 py-1 text-sm" onClick={() => setAnchorDate((value) => moveCalendarPeriod(value, mode, -1))} type="button">上一{mode === 'month' ? '月' : '周'}</button><button className="rounded border border-gray-300 px-2 py-1 text-sm" onClick={() => setAnchorDate(firstDueDate(rows) ?? new Date())} type="button">回到有任务日期</button><button className="rounded border border-gray-300 px-2 py-1 text-sm" onClick={() => setAnchorDate((value) => moveCalendarPeriod(value, mode, 1))} type="button">下一{mode === 'month' ? '月' : '周'}</button><select aria-label="日历视图" onChange={(event) => setMode(event.target.value as 'month' | 'week')} value={mode}><option value="month">月视图</option><option value="week">周视图</option></select></div>
-    </div>
-    <div className="grid grid-cols-7 overflow-hidden rounded border border-gray-200"><div className="col-span-7 grid grid-cols-7 border-b border-gray-200 bg-gray-50 text-center text-xs text-gray-500">{['日', '一', '二', '三', '四', '五', '六'].map((day) => <div className="p-2" key={day}>周{day}</div>)}</div>{calendar.days.map((day) => { const key = toDateKey(day); const isCurrentPeriod = mode === 'week' || day.getMonth() === anchorDate.getMonth(); const tasks = groups[key] ?? []; return <section className={`min-h-28 border-b border-r border-gray-100 p-2 ${isCurrentPeriod ? 'bg-white' : 'bg-gray-50 text-gray-400'}`} key={key}><div className="mb-1 flex items-center justify-between text-xs"><span>{day.getDate()}</span>{tasks.length ? <span>{tasks.length} 项</span> : null}</div><div className="space-y-1">{tasks.map((task) => <div className="flex items-center gap-1" key={task.id}><input aria-label={`选择任务 ${task.title}`} checked={selectedTaskIds.has(task.id)} type="checkbox" onChange={() => onToggleTaskSelection(task.id)} /><button className="truncate rounded bg-blue-50 px-1 py-0.5 text-left text-xs text-blue-800 hover:bg-blue-100" onClick={() => onSelectTask(task.id)} title={task.title} type="button">{task.title}</button></div>)}</div></section>; })}</div>
-  </div>;
-}
-
 function StatusBadge({ label, status }: { label?: string; status: string }) {
   return <span className={`pm-status-badge pm-status-badge--${toKebabCase(status)}`}>{label ?? statusLabel(status)}</span>;
 }
@@ -356,72 +316,6 @@ function priorityLabel(priority: string): string {
 
 function formatDate(value: string | undefined): string {
   return value ? new Date(value).toLocaleDateString() : '未设置';
-}
-
-function createGanttRange(rows: ProjectManagementTaskListItem[], dayCount: number) {
-  const dates = rows.flatMap((task) => [task.startDate, task.dueDate]).flatMap((value) => value ? [toLocalDate(value)] : []).filter((value): value is Date => Boolean(value));
-  const first = dates.length ? new Date(Math.min(...dates.map((value) => value.getTime()))) : new Date();
-  const start = startOfDay(first);
-  return { start, days: Array.from({ length: dayCount }, (_, index) => addCalendarDays(start, index)) };
-}
-
-function getGanttPlacement(task: ProjectManagementTaskListItem, range: ReturnType<typeof createGanttRange>) {
-  const start = toLocalDate(task.startDate ?? task.dueDate);
-  const end = toLocalDate(task.dueDate ?? task.startDate);
-  if (!start || !end) return undefined;
-  const startOffset = Math.floor((start.getTime() - range.start.getTime()) / 86_400_000);
-  const endOffset = Math.floor((end.getTime() - range.start.getTime()) / 86_400_000);
-  const visibleStart = Math.max(0, startOffset);
-  const visibleEnd = Math.min(range.days.length - 1, Math.max(visibleStart, endOffset));
-  if (visibleStart > range.days.length - 1 || visibleEnd < 0) return undefined;
-  return { span: Math.max(1, visibleEnd - visibleStart + 1), startColumn: visibleStart + 2 };
-}
-
-function createCalendarRange(anchor: Date, mode: 'month' | 'week') {
-  const normalized = startOfDay(anchor);
-  const start = mode === 'week'
-    ? addCalendarDays(normalized, -normalized.getDay())
-    : addCalendarDays(new Date(normalized.getFullYear(), normalized.getMonth(), 1), -new Date(normalized.getFullYear(), normalized.getMonth(), 1).getDay());
-  return { days: Array.from({ length: mode === 'week' ? 7 : 42 }, (_, index) => addCalendarDays(start, index)) };
-}
-
-function firstDueDate(rows: ProjectManagementTaskListItem[]): Date | undefined {
-  const values = rows.flatMap((task) => task.dueDate ? [toLocalDate(task.dueDate)] : []).filter((value): value is Date => Boolean(value));
-  return values.length ? new Date(Math.min(...values.map((value) => value.getTime()))) : undefined;
-}
-
-function toLocalDate(value: string | undefined): Date | undefined {
-  if (!value) return undefined;
-  const date = new Date(`${value.slice(0, 10)}T00:00:00`);
-  return Number.isNaN(date.getTime()) ? undefined : date;
-}
-
-function startOfDay(value: Date): Date {
-  return new Date(value.getFullYear(), value.getMonth(), value.getDate());
-}
-
-function addCalendarDays(value: Date, days: number): Date {
-  const next = new Date(value);
-  next.setDate(next.getDate() + days);
-  return next;
-}
-
-function moveCalendarPeriod(value: Date, mode: 'month' | 'week', direction: -1 | 1): Date {
-  if (mode === 'week') return addCalendarDays(value, direction * 7);
-  const next = new Date(value);
-  next.setMonth(next.getMonth() + direction);
-  return next;
-}
-
-function toDateKey(value: Date): string {
-  const year = value.getFullYear();
-  const month = String(value.getMonth() + 1).padStart(2, '0');
-  const day = String(value.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
-function formatDateOnly(value: Date): string {
-  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
 }
 
 function toKebabCase(value: string): string {
