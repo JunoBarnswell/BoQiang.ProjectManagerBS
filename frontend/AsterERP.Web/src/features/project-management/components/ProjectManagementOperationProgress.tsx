@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 
 import { cancelProjectManagementOperation, getProjectManagementOperation } from '../../../api/project-management/projectManagement.api';
+import type { ProjectManagementOperation } from '../../../api/project-management/projectManagement.types';
 import { useApiMutation } from '../../../core/query/useApiMutation';
 import { projectManagementQueryKeys } from '../../../core/query/projectManagementQueryKeys';
 import { PermissionButton } from '../../../shared/auth/PermissionButton';
@@ -11,7 +12,7 @@ import { isHttpError } from '../../../core/http/httpError';
 import { useProjectManagementOperationRealtime } from '../hooks/useProjectManagementOperationRealtime';
 import { useProjectManagementWorkspaceScope } from '../state/projectManagementWorkspaceScope';
 
-export function ProjectManagementOperationProgress({ operationId, onChanged, onTrackingEnded }: { operationId: string; onChanged?: () => void; onTrackingEnded?: () => void }) {
+export function ProjectManagementOperationProgress({ operationId, clearOnTerminal = true, onChanged, onTerminal, onTrackingEnded }: { operationId: string; clearOnTerminal?: boolean; onChanged?: () => void; onTerminal?: (operation: ProjectManagementOperation) => void; onTrackingEnded?: () => void }) {
   const scope = useProjectManagementWorkspaceScope();
   const queryClient = useQueryClient();
   const message = useMessage();
@@ -33,8 +34,13 @@ export function ProjectManagementOperationProgress({ operationId, onChanged, onT
   });
   const operation = operationQuery.data?.data;
   useEffect(() => {
-    if ((operation && !['Pending', 'Running'].includes(operation.status)) || (operationQuery.isError && isHttpError(operationQuery.error) && operationQuery.error.status === 404)) onTrackingEnded?.();
-  }, [onTrackingEnded, operation, operationQuery.error, operationQuery.isError]);
+    if (operation && !['Pending', 'Running'].includes(operation.status)) {
+      onTerminal?.(operation);
+      if (clearOnTerminal) onTrackingEnded?.();
+      return;
+    }
+    if (operationQuery.isError && isHttpError(operationQuery.error) && operationQuery.error.status === 404) onTrackingEnded?.();
+  }, [clearOnTerminal, onTerminal, onTrackingEnded, operation, operationQuery.error, operationQuery.isError]);
   if (operationQuery.isLoading) return <p role="status" className="text-sm text-gray-500">正在加载长任务状态…</p>;
   if (operationQuery.isError || !operation) {
     const description = isHttpError(operationQuery.error) && operationQuery.error.status === 403 ? '无权查看该长任务。'

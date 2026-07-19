@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using System.Text.Json;
 using AsterERP.Api.Infrastructure.Database;
 using AsterERP.Api.Infrastructure.Security;
 using AsterERP.Api.Modules.ProjectManagement;
@@ -7,6 +8,7 @@ using AsterERP.Contracts.ProjectManagement;
 using AsterERP.Shared.Exceptions;
 using ClosedXML.Excel;
 using SqlSugar;
+using Volo.Abp.BackgroundJobs;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Users;
 
@@ -14,7 +16,10 @@ namespace AsterERP.Api.Application.ProjectManagement;
 
 public sealed class ProjectManagementReportService(
     IWorkspaceDatabaseAccessor databaseAccessor,
-    ICurrentUser currentUser) : IProjectManagementReportService, ITransientDependency
+    ICurrentUser currentUser,
+    IProjectManagementOperationWriter operationWriter,
+    IBackgroundJobManager backgroundJobManager,
+    IHostEnvironment environment) : IProjectManagementReportService, ITransientDependency
 {
     private const int MaxPageSize = 500;
     private const int MaxExportRows = 5000;
@@ -24,6 +29,8 @@ public sealed class ProjectManagementReportService(
         "ProjectCode", "ProjectName", "Status", "Priority", "OwnerUserId",
         "ProgressPercent", "TaskCount", "StartDate", "DueDate", "CreatedTime"
     ];
+
+    private static readonly JsonSerializerOptions SnapshotJsonOptions = new(JsonSerializerDefaults.Web);
 
     public async Task<ProjectManagementReportFile> ExportCsvAsync(
         ProjectManagementReportQuery query,
@@ -80,6 +87,101 @@ public sealed class ProjectManagementReportService(
             $"project-management-report-{DateTime.UtcNow:yyyyMMddHHmmss}.xlsx",
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             stream.ToArray(),
+            rows.Count);
+    }
+
+    public async Task<ProjectManagementReportSnapshotStartResponse> StartSnapshotAsync(
+        ProjectManagementReportSnapshotRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var format = NormalizeFormat(request.Format);
+        var operationId = Guid.NewGuid().ToString("N");
+        var traceId = global::System.Diagnostics.Activity.Current?.Id ?? operationId;
+        var impact = new SnapshotImpact(format, request.Query ?? new ProjectManagementReportQuery(), null, null, null, null);
+        await operationWriter.CreatePendingAsync(operationId, "report.snapshot", JsonSerializer.Serialize(impact, SnapshotJsonOptions), traceId, cancellationToken);
+        try
+        {
+            await backgroundJobManager.EnqueueAsync(new ProjectManagementOperationJobArgs(operationId, Tenant(), App(), UserId(), traceId));
+        }
+        catch (Exception exception)
+        {
+            await operationWriter.FailAsync(operationId, $"报表快照入队失败：{exception.Message}", CancellationToken.None);
+            throw;
+        }
+
+        return new ProjectManagementReportSnapshotStartResponse(operationId);
+    }
+
+    public async Task ExecuteSnapshotAsync(string operationId, CancellationToken cancellationToken = default)
+    {
+        var operation = await GetOwnedSnapshotOperationAsync(operationId, cancellationToken);
+        var impact = DeserializeSnapshotImpact(operation.ImpactJson);
+        var path = GetSnapshotPath(operation.Id, impact.Format);
+        try
+        {
+            await operationWriter.StartAsync(operation.Id, "report.snapshot", operation.ImpactJson, operation.TraceId, cancellationToken);
+            if (!await operationWriter.ReportProgressAsync(operation.Id, "正在读取授权范围内的数据", 15, cancellationToken)) return;
+            var report = await GenerateFileAsync(impact.Format, impact.Query, cancellationToken);
+            if (!await operationWriter.ReportProgressAsync(operation.Id, "正在写入快照文件", 80, cancellationToken)) return;
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            await File.WriteAllBytesAsync(path, report.Content, cancellationToken);
+            if (await operationWriter.IsCancellationRequestedAsync(operation.Id, cancellationToken))
+            {
+                TryDelete(path);
+                await operationWriter.CancelAsync(operation.Id, cancellationToken);
+                return;
+            }
+
+            var completed = impact with
+            {
+                FileName = report.FileName,
+                ContentType = report.ContentType,
+                RowCount = report.RowCount,
+                DownloadReady = true
+            };
+            await operationWriter.CompleteWithImpactAsync(operation.Id, JsonSerializer.Serialize(completed, SnapshotJsonOptions), cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            TryDelete(path);
+            throw;
+        }
+        catch (Exception exception)
+        {
+            TryDelete(path);
+            await operationWriter.FailAsync(operation.Id, $"报表快照生成失败：{exception.Message}", CancellationToken.None);
+        }
+    }
+
+    public async Task<ProjectManagementReportFile> DownloadSnapshotAsync(string operationId, CancellationToken cancellationToken = default)
+    {
+        var operation = await GetOwnedSnapshotOperationAsync(operationId, cancellationToken);
+        if (!string.Equals(operation.Status, "Succeeded", StringComparison.Ordinal)) throw new ValidationException("报表快照尚未生成完成");
+        var impact = DeserializeSnapshotImpact(operation.ImpactJson);
+        if (impact is not { DownloadReady: true } || string.IsNullOrWhiteSpace(impact.FileName) || string.IsNullOrWhiteSpace(impact.ContentType))
+            throw new ValidationException("报表快照产物不可用");
+
+        var path = GetSnapshotPath(operation.Id, impact.Format);
+        if (!File.Exists(path)) throw new NotFoundException("报表快照文件不存在", ErrorCodes.PlatformResourceNotFound);
+        return new ProjectManagementReportFile(impact.FileName, impact.ContentType, await File.ReadAllBytesAsync(path, cancellationToken), impact.RowCount ?? 0);
+    }
+
+    private async Task<ProjectManagementReportFile> GenerateFileAsync(string format, ProjectManagementReportQuery query, CancellationToken cancellationToken) =>
+        NormalizeFormat(format) switch
+        {
+            "csv" => await ExportCsvAsync(query, cancellationToken),
+            "xlsx" => await ExportExcelAsync(query, cancellationToken),
+            "pdf" => await ExportPdfAsync(query, cancellationToken),
+            _ => throw new ValidationException("不支持的报表格式")
+        };
+
+    private async Task<ProjectManagementReportFile> ExportPdfAsync(ProjectManagementReportQuery query, CancellationToken cancellationToken)
+    {
+        var rows = await QueryRowsAsync(query, cancellationToken);
+        return new ProjectManagementReportFile(
+            $"project-management-report-{DateTime.UtcNow:yyyyMMddHHmmss}.pdf",
+            "application/pdf",
+            ProjectManagementPdfReportRenderer.Render(Headers, rows.Select(ToValues).ToList()),
             rows.Count);
     }
 
@@ -144,6 +246,49 @@ public sealed class ProjectManagementReportService(
 
     private string RequireAppCode() => currentUser.GetAsterErpAppCode()?.Trim().ToUpperInvariant() ?? throw new ValidationException("当前会话缺少应用");
 
+    private string Tenant() => RequireTenantId();
+    private string App() => RequireAppCode();
+    private string UserId() => currentUser.GetAsterErpUserId()?.Trim() ?? throw new ValidationException("当前会话缺少用户");
+
+    private async Task<ProjectManagementOperationEntity> GetOwnedSnapshotOperationAsync(string operationId, CancellationToken cancellationToken) =>
+        (await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementOperationEntity>()
+            .Where(item => item.Id == operationId.Trim() && item.TenantId == Tenant() && item.AppCode == App() && item.ActorUserId == UserId() && item.OperationType == "report.snapshot" && !item.IsDeleted)
+            .Take(1)
+            .ToListAsync(cancellationToken))
+            .FirstOrDefault()
+        ?? throw new NotFoundException("报表快照任务不存在或无权访问", ErrorCodes.PlatformResourceNotFound);
+
+    private SnapshotImpact DeserializeSnapshotImpact(string json)
+    {
+        try { return JsonSerializer.Deserialize<SnapshotImpact>(json, SnapshotJsonOptions) ?? throw new JsonException(); }
+        catch (JsonException) { throw new ValidationException("报表快照任务数据损坏"); }
+    }
+
+    private string GetSnapshotPath(string operationId, string format)
+    {
+        var extension = NormalizeFormat(format);
+        var root = Path.GetFullPath(Path.Combine(environment.ContentRootPath, "data", "project-management-reports", Tenant(), App()));
+        var path = Path.GetFullPath(Path.Combine(root, $"{operationId}.{extension}"));
+        var relative = Path.GetRelativePath(root, path);
+        if (relative == ".." || relative.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal) || Path.IsPathRooted(relative))
+            throw new ValidationException("报表快照路径不合法");
+        return path;
+    }
+
+    private static string NormalizeFormat(string? value) => value?.Trim().ToLowerInvariant() switch
+    {
+        "csv" => "csv",
+        "xlsx" or "excel" => "xlsx",
+        "pdf" => "pdf",
+        _ => throw new ValidationException("报表格式仅支持 CSV、Excel 或 PDF")
+    };
+
+    private static void TryDelete(string path)
+    {
+        try { if (File.Exists(path)) File.Delete(path); }
+        catch { }
+    }
+
     private static string? NormalizeOptional(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private static string[] ToValues(ProjectManagementReportRow row) =>
@@ -184,4 +329,12 @@ public sealed class ProjectManagementReportService(
         public string ProjectId { get; set; } = string.Empty;
         public int TaskCount { get; set; }
     }
+
+    private sealed record SnapshotImpact(
+        string Format,
+        ProjectManagementReportQuery Query,
+        string? FileName,
+        string? ContentType,
+        int? RowCount,
+        bool? DownloadReady);
 }

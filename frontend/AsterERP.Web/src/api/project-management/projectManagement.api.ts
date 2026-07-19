@@ -52,6 +52,8 @@ import type {
   ProjectManagementLabel,
   ProjectManagementActivity,
   ProjectManagementReportQuery,
+  ProjectManagementReportSnapshotRequest,
+  ProjectManagementReportSnapshotStartResponse,
   ProjectManagementSearchQuery,
   ProjectManagementSearchResponse,
   ProjectManagementSyncJournalItem,
@@ -518,6 +520,19 @@ export function exportProjectManagementReportExcel(
     `/project-management/reports/projects.xlsx${buildQueryString(query)}`,
     { timeoutMs: 120_000 },
   );
+}
+
+export function startProjectManagementReportSnapshot(
+  request: ProjectManagementReportSnapshotRequest,
+): Promise<ApiEnvelope<ProjectManagementReportSnapshotStartResponse>> {
+  return httpClient.post<ProjectManagementReportSnapshotStartResponse, ProjectManagementReportSnapshotRequest>(
+    '/project-management/reports/snapshots',
+    request,
+  );
+}
+
+export function downloadProjectManagementReportSnapshot(operationId: string): Promise<{ blob: Blob; fileName: string }> {
+  return httpClient.downloadBlob(`/project-management/reports/snapshots/${encodeURIComponent(operationId)}/download`, { timeoutMs: 120_000 });
 }
 
 export function exportProjectManagementSync(request: {

@@ -537,6 +537,17 @@ export interface ProjectManagementReportQuery {
   status?: string;
 }
 
+export type ProjectManagementReportSnapshotFormat = 'csv' | 'xlsx' | 'pdf';
+
+export interface ProjectManagementReportSnapshotRequest {
+  format: ProjectManagementReportSnapshotFormat;
+  query: ProjectManagementReportQuery;
+}
+
+export interface ProjectManagementReportSnapshotStartResponse {
+  operationId: string;
+}
+
 export interface ProjectManagementSyncWatermark {
   deviceId: string;
   currentSequenceNo: number;
