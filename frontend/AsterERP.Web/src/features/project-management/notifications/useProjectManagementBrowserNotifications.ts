@@ -4,13 +4,16 @@ import type { ProjectManagementNotification } from '../../../api/project-managem
 import type { ProjectManagementWorkspaceScope } from '../state/projectManagementWorkspaceScope';
 
 const highValueNotificationTypes = new Set([
-  'task.reminder.sent',
+  'task.reminder',
   'task.comment.mentioned',
   'task.assigned',
-  'task.participant.changed',
-  'task.schedule.changed',
-  'milestone.at-risk',
-  'sync.failed',
+  'task.participant.added',
+  'task.participant.removed',
+  'task.status.changed',
+  'task.due-date.changed',
+  'milestone.risk.detected',
+  'sync.import',
+  'sync.export',
   'operation.failed',
 ]);
 
@@ -23,6 +26,10 @@ interface BrowserNotificationOptions {
 
 function isSupported() {
   return typeof window !== 'undefined' && 'Notification' in window;
+}
+
+export function isHighValueProjectManagementNotification(notificationType: string): boolean {
+  return highValueNotificationTypes.has(notificationType);
 }
 
 function storageKey(scope: ProjectManagementWorkspaceScope, userId: string) {
@@ -91,7 +98,7 @@ export function useProjectManagementBrowserNotifications({ notifications, onOpen
       return;
     }
     const channel = supported && typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel(key) : undefined;
-    notifications.filter((item) => !item.isRead && highValueNotificationTypes.has(item.notificationType) && !seen.current.has(item.id)).forEach((item) => {
+    notifications.filter((item) => !item.isRead && isHighValueProjectManagementNotification(item.notificationType) && !seen.current.has(item.id)).forEach((item) => {
       seen.current.add(item.id);
       channel?.postMessage(item.id);
       if (permission === 'granted' && document.visibilityState !== 'visible') {

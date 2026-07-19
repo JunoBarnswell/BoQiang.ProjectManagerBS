@@ -125,7 +125,7 @@ function ProjectManagementNotificationEntryContent() {
             </div>
           </div>
           {realtimeState !== 'connected' ? <p className="mb-2 text-xs text-amber-700">实时连接暂不可用，通知仍会保存在站内；连接恢复后自动刷新。</p> : null}
-          {browser.canRequestPermission ? <button className="mb-2 text-sm text-blue-700 underline" onClick={() => { void browser.requestPermission(); }} type="button">启用浏览器通知</button> : null}
+          {browser.canRequestPermission ? <button className="mb-2 text-sm text-blue-700 underline" onClick={() => { void browser.requestPermission(); }} type="button">启用任务提醒和高价值通知</button> : null}
           {browser.supported && browser.permission === 'denied' ? <p className="mb-2 text-xs text-gray-500">浏览器通知已被拒绝，将仅显示站内通知。</p> : null}
           {notifications.isLoading ? <div className="py-4 text-sm text-gray-500">正在加载通知…</div> : null}
           {notifications.isError ? <div className="py-4 text-sm text-red-600">通知加载失败。<button className="ml-2 underline" onClick={() => void notifications.refetch()} type="button">重试</button></div> : null}
