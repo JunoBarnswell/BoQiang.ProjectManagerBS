@@ -14,8 +14,10 @@ import { ProjectManagementMarkdownContent } from '../collaboration/projectManage
 import { ProjectManagementMarkdownEditor } from '../collaboration/ProjectManagementMarkdownEditor';
 
 import { TaskWorkspaceReminderPanel } from './TaskWorkspaceReminderPanel';
+import type { TaskDetailSection } from './taskDetailDrawerModel';
 
 interface TaskWorkspaceSelectionPanelProps {
+  activeSection?: TaskDetailSection;
   attachments: ProjectManagementTaskAttachment[];
   attachmentsError: boolean;
   attachmentDownloadError?: string;
@@ -71,6 +73,7 @@ interface TaskWorkspaceSelectionPanelProps {
 }
 
 export function TaskWorkspaceSelectionPanel({
+  activeSection = 'basic',
   attachments,
   attachmentsError,
   attachmentDownloadError,
@@ -125,11 +128,12 @@ export function TaskWorkspaceSelectionPanel({
   selectedTask,
 }: TaskWorkspaceSelectionPanelProps) {
   if (!creating && !selectedTask) return null;
+  if (!creating && selectedTask && !['basic', 'comments', 'attachments', 'reminders'].includes(activeSection)) return null;
   const actionPermission = creating ? 'project-management:task:add' : 'project-management:task:edit';
 
   return (
     <aside className="mb-4 space-y-4 rounded-lg border border-gray-200 p-4">
-      <section>
+      {(creating || activeSection === 'basic') ? <section>
         <div className="mb-3 text-sm font-semibold">{creating ? '新建任务' : `编辑任务 · ${selectedTask?.taskCode}`}</div>
         <div className="grid gap-2 md:grid-cols-5">
           <input aria-label="任务编码" onChange={(event) => onFormChange({ ...form, taskCode: event.target.value })} placeholder="任务编码" value={form.taskCode} />
@@ -155,8 +159,9 @@ export function TaskWorkspaceSelectionPanel({
           <PermissionButton code={actionPermission} disabled={!form.taskCode.trim() || !form.title.trim() || saving} onClick={onSubmit}>{saving ? '保存中…' : creating ? '创建任务' : '保存修改'}</PermissionButton>
           <button type="button" onClick={onCancel}>取消</button>
         </div>
-      </section>
+      </section> : null}
       {!creating && selectedTask ? <TaskCollaborationPanel
+        activeSection={activeSection}
         attachments={attachments}
         attachmentsError={attachmentsError}
         attachmentDownloadError={attachmentDownloadError}
@@ -212,6 +217,7 @@ function toDateInputValue(value?: string): string {
 }
 
 function TaskCollaborationPanel({
+  activeSection,
   attachments,
   attachmentsError,
   attachmentDownloadError,
@@ -259,7 +265,7 @@ function TaskCollaborationPanel({
   onRetryPreviewAttachment,
 }: Omit<TaskWorkspaceSelectionPanelProps, 'creating' | 'form' | 'onCancel' | 'onFormChange' | 'onSubmit' | 'saving' | 'selectedTask'>) {
   return <div className="grid gap-4 lg:grid-cols-2">
-    <section>
+    {activeSection === 'comments' ? <section>
       <div className="mb-2 flex items-center justify-between font-semibold"><span>任务评论</span><span className="text-xs font-normal text-gray-500">共 {commentsTotal} 条</span></div>
       {commentsError ? <div className="rounded bg-amber-50 p-2 text-sm text-amber-800">评论加载失败，请重新选择任务重试。</div> : <div className="mb-3 space-y-2">
         {comments.length === 0 ? <div className="text-sm text-gray-500">暂无评论</div> : comments.map((comment) => <article className="rounded border border-gray-100 p-2" key={comment.id}>
@@ -275,8 +281,8 @@ function TaskCollaborationPanel({
       {commentsTotal > commentPageSize ? <div className="mb-3 flex items-center justify-between text-xs"><button disabled={commentPageIndex <= 1} type="button" onClick={() => onCommentPageChange(commentPageIndex - 1)}>上一页</button><span>第 {commentPageIndex} 页</span><button disabled={commentPageIndex * commentPageSize >= commentsTotal} type="button" onClick={() => onCommentPageChange(commentPageIndex + 1)}>下一页</button></div> : null}
       <ProjectManagementMarkdownEditor ariaLabel="评论内容" onChange={(markdown) => onCommentChange({ markdown })} placeholder="支持安全 Markdown 评论" rows={4} value={commentForm.markdown} />
       <div className="mt-2"><PermissionButton code="project-management:comment:add" disabled={!commentForm.markdown.trim() || commentSubmitting} onClick={onCommentSubmit}>{commentSubmitting ? '发布中…' : '发布评论'}</PermissionButton></div>
-    </section>
-    <section>
+    </section> : null}
+    {activeSection === 'attachments' ? <section>
       <div className="mb-2 font-semibold">任务附件</div>
       {attachmentsError ? <div className="mb-2 rounded bg-amber-50 p-2 text-sm text-amber-800">附件列表加载失败。<button className="ml-2 underline" type="button" onClick={onRetryAttachments}>重试</button></div> : <div className="mb-2 space-y-2">
         {attachments.length === 0 ? <div className="text-sm text-gray-500">暂无附件</div> : attachments.map((attachment) => <div className="rounded border border-gray-100 p-2" key={attachment.id}>
@@ -289,7 +295,7 @@ function TaskCollaborationPanel({
         </div>)}
       </div>}
       <PermissionGuard code="project-management:attachment:manage" fallback={null}><div className="rounded border border-dashed border-gray-300 p-3 text-sm text-gray-600" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); const file = event.dataTransfer.files[0]; if (file && !attachmentUploading) onUpload(file); }}><div>拖拽文件到此处，或选择文件</div><input aria-label="上传任务附件" disabled={attachmentUploading} onChange={(event) => { const file = event.target.files?.[0]; if (file && !attachmentUploading) onUpload(file); event.currentTarget.value = ''; }} type="file" />{attachmentUploading ? <div className="mt-2"><progress aria-label="附件上传进度" className="w-full" max={100} value={attachmentUploadProgress} /><div className="flex items-center justify-between text-xs"><span>{attachmentUploadProgress}%</span><button type="button" onClick={onCancelUpload}>取消上传</button></div></div> : null}{attachmentUploadError ? <div className="mt-2 flex items-center justify-between text-xs text-amber-700"><span>{attachmentUploadError}</span><button type="button" onClick={onRetryUpload}>重试上传</button></div> : null}</div></PermissionGuard>
-    </section>
-    <TaskWorkspaceReminderPanel creating={reminderCreating} error={remindersError} loading={remindersLoading} members={reminderMembers} onCreate={onCreateReminder} onCancel={onCancelReminder} onDelete={onDeleteReminder} reminders={reminders} />
+    </section> : null}
+    {activeSection === 'reminders' ? <TaskWorkspaceReminderPanel creating={reminderCreating} error={remindersError} loading={remindersLoading} members={reminderMembers} onCreate={onCreateReminder} onCancel={onCancelReminder} onDelete={onDeleteReminder} reminders={reminders} /> : null}
   </div>;
 }

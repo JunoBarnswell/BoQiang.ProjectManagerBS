@@ -338,6 +338,7 @@ public sealed class ProjectManagementTaskService(
         var before = ProjectManagementReversibleCommandHandler.ToUpsert(await MapDetailAsync(entity, cancellationToken));
         Validate(request);
         EnsureVersion(entity.VersionNo, request.VersionNo);
+        var localValues = ProjectManagementTaskConflictLocalValues.FromUpdate(request);
         var state = StateMachine.Resolve(entity.Status, request.Status, request.ProgressPercent, entity.ActualStartAt, entity.ActualEndAt, DateTime.UtcNow);
         var db = databaseAccessor.GetCurrentDb();
         var placement = await TaskHierarchy.ResolvePlacementAsync(db, entity.ProjectId, request.ParentTaskId, entity.Id, cancellationToken);
@@ -383,7 +384,7 @@ public sealed class ProjectManagementTaskService(
             var wipOverride = await EnsureWipAsync(db, entity.ProjectId, entersInProgress, request.OverrideWip, request.OverrideWipReason, cancellationToken, entity.Id);
             await TaskHierarchy.UpdateDescendantDepthsAsync(
                 db, placement, entity.UpdatedTime ?? DateTime.UtcNow, entity.UpdatedBy ?? RequireUserId(), cancellationToken);
-            await UpdateTaskWithExpectedVersionAsync(db, entity, expectedVersion, cancellationToken);
+            await UpdateTaskWithExpectedVersionAsync(db, entity, expectedVersion, cancellationToken, localValues);
             if (dependencyService is not null) await dependencyService.RefreshBlockedStatesAsync(entity.ProjectId, cancellationToken);
             await RefreshProgressProjectionsAsync(entity.ProjectId, cancellationToken);
             await WriteActivityAsync(entity, "updated", $"更新任务 {entity.Title}", cancellationToken);
@@ -669,17 +670,72 @@ public sealed class ProjectManagementTaskService(
         throw new ValidationException("任务负责人必须是项目负责人或有效项目成员");
     }
 
-    private static async Task UpdateTaskWithExpectedVersionAsync(
+    private async Task UpdateTaskWithExpectedVersionAsync(
         ISqlSugarClient db,
         ProjectManagementTaskEntity entity,
         long expectedVersion,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        ProjectManagementTaskConflictLocalValues? localValues = null)
     {
         if (await db.Updateable(entity)
-            .Where(item => item.Id == entity.Id && item.VersionNo == expectedVersion)
-            .ExecuteCommandAsync(cancellationToken) != 1)
+                .Where(item => item.Id == entity.Id && item.VersionNo == expectedVersion)
+                .ExecuteCommandAsync(cancellationToken) == 1)
+            return;
+
+        var server = (await db.Queryable<ProjectManagementTaskEntity>()
+                .Where(item => item.Id == entity.Id)
+                .Take(1)
+                .ToListAsync(cancellationToken))
+            .FirstOrDefault();
+        if (server is null || server.IsDeleted)
+            throw new NotFoundException("任务已不存在", ErrorCodes.PlatformResourceNotFound);
+
+        if (localValues is null)
             throw new ValidationException("任务已被其他用户修改，请刷新后重试", ErrorCodes.ApplicationDevelopmentPageRevisionConflict);
+
+        var serverValues = await MapDetailAsync(server, cancellationToken);
+        throw new ProjectManagementTaskVersionConflictException(
+            new ProjectManagementTaskVersionConflictResponse(
+                serverValues,
+                localValues,
+                CreateVersionConflictFields(serverValues, localValues)));
     }
+
+    private static IReadOnlyList<ProjectManagementTaskConflictField> CreateVersionConflictFields(
+        ProjectManagementTaskDetailResponse server,
+        ProjectManagementTaskConflictLocalValues local)
+    {
+        var fields = new List<ProjectManagementTaskConflictField>();
+        foreach (var field in local.SubmittedFields)
+        {
+            var conflict = field switch
+            {
+                "VersionNo" => CreateVersionConflictField(field, "版本号", server.VersionNo, local.VersionNo),
+                "TaskCode" => CreateVersionConflictField(field, "任务编码", server.TaskCode, local.TaskCode),
+                "Title" => CreateVersionConflictField(field, "任务标题", server.Title, local.Title),
+                "Description" => CreateVersionConflictField(field, "描述", server.Description, local.Description),
+                "Status" => CreateVersionConflictField(field, "状态", server.Status, local.Status),
+                "Priority" => CreateVersionConflictField(field, "优先级", server.Priority, local.Priority),
+                "MilestoneId" => CreateVersionConflictField(field, "里程碑", server.MilestoneId, local.MilestoneId),
+                "ParentTaskId" => CreateVersionConflictField(field, "父任务", server.ParentTaskId, local.ParentTaskId),
+                "AssigneeUserId" => CreateVersionConflictField(field, "负责人", server.AssigneeUserId, local.AssigneeUserId),
+                "AssigneeEmploymentId" => CreateVersionConflictField(field, "负责人任职", server.AssigneeEmploymentId, local.AssigneeEmploymentId),
+                "StartDate" => CreateVersionConflictField(field, "开始日期", server.StartDate, local.StartDate),
+                "DueDate" => CreateVersionConflictField(field, "截止日期", server.DueDate, local.DueDate),
+                "ProgressPercent" => CreateVersionConflictField(field, "进度", server.ProgressPercent, local.ProgressPercent),
+                "Weight" => CreateVersionConflictField(field, "进度权重", server.Weight, local.Weight),
+                "EstimateMinutes" => CreateVersionConflictField(field, "预计工时", server.EstimateMinutes, local.EstimateMinutes),
+                "Markdown" => CreateVersionConflictField(field, "Markdown", server.Markdown, local.Markdown),
+                "Summary" => CreateVersionConflictField(field, "摘要", server.Summary, local.Summary),
+                _ => null
+            };
+            if (conflict is not null) fields.Add(conflict);
+        }
+        return fields;
+    }
+
+    private static ProjectManagementTaskConflictField? CreateVersionConflictField(string field, string displayName, object? serverValue, object? localValue) =>
+        Equals(serverValue, localValue) ? null : new ProjectManagementTaskConflictField(field, displayName, serverValue, localValue);
 
     private async Task EnsureMilestoneAsync(string projectId, string? milestoneId, CancellationToken cancellationToken)
     {

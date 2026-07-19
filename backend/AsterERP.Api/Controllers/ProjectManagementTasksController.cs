@@ -27,7 +27,16 @@ public sealed class ProjectManagementTasksController(IProjectManagementTaskServi
     [HttpPut("{id}")]
     [Permission(PermissionCodes.ProjectManagementTaskEdit)]
     public async Task<IActionResult> UpdateAsync(string id, [FromBody] ProjectManagementTaskUpsertRequest request, CancellationToken cancellationToken)
-        => ApiOk(await service.UpdateAsync(id, request, cancellationToken));
+    {
+        try
+        {
+            return ApiOk(await service.UpdateAsync(id, request, cancellationToken));
+        }
+        catch (ProjectManagementTaskVersionConflictException exception)
+        {
+            return StatusCode(StatusCodes.Status409Conflict, ApiResultFactory.Ok(exception.Conflict, HttpContext.TraceIdentifier, exception.Message));
+        }
+    }
 
     [HttpPost("{id}/force-start")]
     [Permission(PermissionCodes.ProjectManagementTaskManageDependency)]

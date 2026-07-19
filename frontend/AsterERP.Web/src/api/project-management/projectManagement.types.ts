@@ -423,6 +423,35 @@ export interface ProjectManagementTaskDetail extends ProjectManagementTaskListIt
   updatedTime?: string;
 }
 
+export interface ProjectManagementTaskConflictLocalValues extends ProjectManagementTaskUpsertRequest {
+  operation: string;
+  versionNo: number;
+  submittedFields: string[];
+}
+
+export interface ProjectManagementTaskConflictField {
+  field: string;
+  displayName: string;
+  serverValue?: unknown;
+  localValue?: unknown;
+}
+
+export interface ProjectManagementTaskVersionConflictResponse {
+  serverValues: ProjectManagementTaskDetail;
+  localValues: ProjectManagementTaskConflictLocalValues;
+  fieldConflicts: ProjectManagementTaskConflictField[];
+}
+
+export interface ProjectManagementTaskDependency {
+  id: string;
+  projectId: string;
+  predecessorTaskId: string;
+  successorTaskId: string;
+  dependencyType: string;
+  lagMinutes: number;
+  versionNo: number;
+}
+
 // 我的任务、批量命令等既有载荷继续使用完整任务；工作台列表使用 ProjectManagementTaskListItem。
 export type ProjectManagementTask = ProjectManagementTaskDetail;
 
@@ -445,6 +474,7 @@ export interface ProjectManagementTaskUpsertRequest {
   versionNo?: number;
   overrideWip?: boolean;
   overrideWipReason?: string;
+  summary?: string;
 }
 
 export interface ProjectManagementTaskBatchUpdateRequest {
@@ -722,6 +752,34 @@ export interface ProjectManagementExcelImportPreview {
   skippedRows: number;
   errors: ProjectManagementExcelImportRowError[];
   errorsTruncated: boolean;
+}
+
+export type ProjectManagementExcelImportResultStatus = 'Succeeded' | 'Failed' | 'Replayed';
+
+export interface ProjectManagementExcelImportRowResult {
+  sheetName: string;
+  rowNumber: number;
+  stableId?: string;
+  status: 'Added' | 'Updated' | 'Skipped' | 'Failed' | 'Conflict' | 'Warning' | string;
+  message?: string | null;
+  versionNo?: number | null;
+}
+
+export interface ProjectManagementExcelImportResult {
+  importId: string;
+  previewId: string;
+  idempotencyKey: string;
+  status: ProjectManagementExcelImportResultStatus;
+  traceId: string;
+  completedAt: string;
+  addedRows: number;
+  updatedRows: number;
+  skippedRows: number;
+  failedRows: number;
+  conflictRows: number;
+  warningRows: number;
+  rows: ProjectManagementExcelImportRowResult[];
+  replayed: boolean;
 }
 
 export interface ProjectManagementSyncWatermark {

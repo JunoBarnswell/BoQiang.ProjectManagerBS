@@ -15,7 +15,8 @@ import type {
   ProjectManagementMyWorkItem,
   ProjectManagementMyWorkQuery,
     ProjectManagementTask,
-    ProjectManagementTaskDetail,
+  ProjectManagementTaskDetail,
+  ProjectManagementTaskDependency,
     ProjectManagementTaskListItem,
   ProjectManagementTaskBatchUpdateRequest,
   ProjectManagementTaskQuery,
@@ -68,6 +69,7 @@ import type {
   ProjectManagementReportSnapshotRequest,
   ProjectManagementReportSnapshotStartResponse,
   ProjectManagementExcelImportPreview,
+  ProjectManagementExcelImportResult,
   ProjectManagementSearchQuery,
   ProjectManagementSearchResponse,
   ProjectManagementSearchIndexStatus,
@@ -414,6 +416,17 @@ export function getProjectManagementTask(
   return httpClient.get<ProjectManagementTaskDetail>(`/project-management/tasks/${id}`, undefined, signal);
 }
 
+export function getProjectManagementTaskDependencies(
+  projectId: string,
+  signal?: AbortSignal,
+): Promise<ApiEnvelope<ProjectManagementTaskDependency[]>> {
+  return httpClient.get<ProjectManagementTaskDependency[]>(
+    `/project-management/projects/${projectId}/task-dependencies`,
+    undefined,
+    signal,
+  );
+}
+
 export function createProjectManagementTask(
   projectId: string,
   request: ProjectManagementTaskUpsertRequest,
@@ -686,6 +699,25 @@ export function previewProjectManagementExcel(
   const formData = new FormData();
   formData.append('file', file);
   return httpClient.postForm<ProjectManagementExcelImportPreview>('/project-management/excel-import/preview', formData, { timeoutMs: 120_000 }, signal);
+}
+
+export function confirmProjectManagementExcel(
+  file: File,
+  request: { previewId: string; idempotencyKey: string },
+  signal?: AbortSignal,
+): Promise<ApiEnvelope<ProjectManagementExcelImportResult>> {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('previewId', request.previewId);
+  formData.append('idempotencyKey', request.idempotencyKey);
+  return httpClient.postForm<ProjectManagementExcelImportResult>('/project-management/excel-import/confirm', formData, { timeoutMs: 120_000 }, signal);
+}
+
+export function getProjectManagementExcelImportResult(
+  importId: string,
+  signal?: AbortSignal,
+): Promise<ApiEnvelope<ProjectManagementExcelImportResult>> {
+  return httpClient.get<ProjectManagementExcelImportResult>(`/project-management/excel-import/results/${encodeURIComponent(importId)}`, undefined, signal);
 }
 
 export function exportProjectManagementSync(request: {

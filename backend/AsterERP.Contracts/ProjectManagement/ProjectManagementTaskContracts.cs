@@ -134,6 +134,72 @@ public sealed record ProjectManagementTaskDetailResponse(
     string? Summary = null,
     string? Markdown = null);
 
+/// <summary>
+/// 任务编辑发生乐观并发冲突时，保留客户端提交的字段，供详情抽屉逐字段比较。
+/// </summary>
+public sealed record ProjectManagementTaskConflictLocalValues(
+    string Operation,
+    long VersionNo,
+    IReadOnlyList<string> SubmittedFields,
+    string TaskCode,
+    string Title,
+    string? Description,
+    string Status,
+    string Priority,
+    string? MilestoneId,
+    string? ParentTaskId,
+    string? AssigneeUserId,
+    string? AssigneeEmploymentId,
+    DateTime? StartDate,
+    DateTime? DueDate,
+    decimal ProgressPercent,
+    decimal? Weight,
+    int? EstimateMinutes,
+    bool OverrideWip,
+    bool ForceComplete,
+    string? Markdown,
+    string? Summary)
+{
+    public static ProjectManagementTaskConflictLocalValues FromUpdate(ProjectManagementTaskUpsertRequest request) => new(
+        "update",
+        request.VersionNo,
+        [
+            "VersionNo", "TaskCode", "Title", "Description", "Status", "Priority", "MilestoneId", "ParentTaskId",
+            "AssigneeUserId", "AssigneeEmploymentId", "StartDate", "DueDate", "ProgressPercent", "Weight",
+            "EstimateMinutes", "OverrideWip", "ForceComplete", "Markdown", "Summary"
+        ],
+        request.TaskCode,
+        request.Title,
+        request.Description,
+        request.Status,
+        request.Priority,
+        request.MilestoneId,
+        request.ParentTaskId,
+        request.AssigneeUserId,
+        request.AssigneeEmploymentId,
+        request.StartDate,
+        request.DueDate,
+        request.ProgressPercent,
+        request.Weight,
+        request.EstimateMinutes,
+        request.OverrideWip,
+        request.ForceComplete,
+        request.Markdown,
+        request.Summary);
+}
+
+public sealed record ProjectManagementTaskConflictField(
+    string Field,
+    string DisplayName,
+    object? ServerValue,
+    object? LocalValue);
+
+/// <summary>任务 PUT 版本冲突的结构化载荷；服务端值和本地值都保留，客户端可显式重载或覆盖。</summary>
+public sealed record ProjectManagementTaskVersionConflictResponse(
+    ProjectManagementTaskDetailResponse ServerValues,
+    ProjectManagementTaskConflictLocalValues LocalValues,
+    IReadOnlyList<ProjectManagementTaskConflictField> FieldConflicts);
+
 /// <summary>保留给既有批量、模板和我的任务契约的完整任务载荷。</summary>
 public sealed record ProjectManagementTaskResponse(
     string Id,

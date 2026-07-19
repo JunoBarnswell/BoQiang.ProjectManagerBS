@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 
 import {
@@ -23,6 +23,7 @@ import {
   getProjectManagementTaskAttachments,
   getProjectManagementTaskComments,
   getProjectManagementTask,
+  getProjectManagementTaskDependencies,
   getProjectManagementTaskReminders,
   getProjectManagementTasks,
   previewProjectManagementTaskAttachment,
@@ -63,6 +64,8 @@ import { TaskWorkspaceImConversationPanel } from '../../features/project-managem
 import { TaskWorkspaceLabelManager } from '../../features/project-management/task-workspace/TaskWorkspaceLabelManager';
 import { TaskWorkspaceProjection } from '../../features/project-management/task-workspace/TaskWorkspaceProjection';
 import { TaskWorkspaceSelectionPanel } from '../../features/project-management/task-workspace/TaskWorkspaceSelectionPanel';
+import { TaskDetailChildrenSection, TaskDetailDependenciesSection, TaskDetailDrawer } from '../../features/project-management/task-workspace/TaskDetailDrawer';
+import { readProjectManagementTaskConflict, taskDetailToForm, type TaskDetailSection } from '../../features/project-management/task-workspace/taskDetailDrawerModel';
 import { TaskWorkspaceToolbar } from '../../features/project-management/task-workspace/TaskWorkspaceToolbar';
 import { ProjectManagementTaskAttachmentPreviewDialog } from '../../features/project-management/task-workspace/ProjectManagementTaskAttachmentPreviewDialog';
 import { uploadProjectManagementTaskAttachmentWithProgress } from '../../features/project-management/task-workspace/taskAttachmentUpload.api';
@@ -138,6 +141,8 @@ export function ProjectManagementTaskWorkspacePage() {
   const { hasPermission: canViewTaskActivities } = usePermission('project-management:audit:view');
   const openImConversation = useOpenImConversation();
   const [creating, setCreating] = useState(false);
+  const [detailSection, setDetailSection] = useState<TaskDetailSection>('basic');
+  const [taskConflict, setTaskConflict] = useState<ReturnType<typeof readProjectManagementTaskConflict>>(null);
   const [batchOpen, setBatchOpen] = useState(false);
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(() => new Set());
   const [openingConversationScope, setOpeningConversationScope] = useState<'project' | 'task' | null>(null);
@@ -182,7 +187,7 @@ export function ProjectManagementTaskWorkspacePage() {
     queryKey: queryKeys.projectManagement.task(scope, projectId, selectedTaskId),
   });
   const taskActivitiesQuery = useQuery({
-    enabled: scope.isAvailable && canViewTaskActivities && Boolean(projectId && selectedTaskId),
+    enabled: scope.isAvailable && canViewTaskActivities && Boolean(projectId && selectedTaskId) && detailSection === 'activity',
     queryFn: ({ signal }) => getProjectManagementTaskActivities(selectedTaskId, taskActivityQuery, signal),
     queryKey: ['project-management-task-activities', scope.tenantId, scope.appCode, selectedTaskId, taskActivityQuery],
   });
@@ -197,7 +202,7 @@ export function ProjectManagementTaskWorkspacePage() {
     queryKey: queryKeys.projectManagement.imConversation(scope, projectId, selectedTaskId),
   });
   const commentsQuery = useQuery({
-    enabled: scope.isAvailable && Boolean(projectId && selectedTaskId),
+    enabled: scope.isAvailable && Boolean(projectId && selectedTaskId) && detailSection === 'comments',
     queryFn: ({ signal }) => getProjectManagementTaskComments(selectedTaskId, { pageIndex: commentPageIndex, pageSize: 50, sort: 'timeline' }, signal),
     queryKey: queryKeys.projectManagement.taskComments(scope, projectId, selectedTaskId),
   });
@@ -217,19 +222,21 @@ export function ProjectManagementTaskWorkspacePage() {
     setTaskActivityQuery({ pageIndex: 1, pageSize: 20 });
     setEditingComment(null);
     setCommentEditForm({ markdown: '' });
+    setDetailSection('basic');
+    setTaskConflict(null);
   }, [selectedTaskId]);
   const attachmentsQuery = useQuery({
-    enabled: scope.isAvailable && Boolean(projectId && selectedTaskId),
+    enabled: scope.isAvailable && Boolean(projectId && selectedTaskId) && detailSection === 'attachments',
     queryFn: ({ signal }) => getProjectManagementTaskAttachments(selectedTaskId, signal),
     queryKey: queryKeys.projectManagement.taskAttachments(scope, projectId, selectedTaskId),
   });
   const remindersQuery = useQuery({
-    enabled: scope.isAvailable && Boolean(projectId && selectedTaskId),
+    enabled: scope.isAvailable && Boolean(projectId && selectedTaskId) && detailSection === 'reminders',
     queryFn: ({ signal }) => getProjectManagementTaskReminders(selectedTaskId, signal),
     queryKey: queryKeys.projectManagement.taskReminders(scope, projectId, selectedTaskId),
   });
   const membersQuery = useQuery({
-    enabled: scope.isAvailable && Boolean(projectId && selectedTaskId),
+    enabled: scope.isAvailable && Boolean(projectId && selectedTaskId) && detailSection === 'reminders',
     queryFn: ({ signal }) => getProjectManagementMembers(projectId, signal),
     queryKey: queryKeys.projectManagement.members(scope, projectId),
   });
@@ -253,12 +260,31 @@ export function ProjectManagementTaskWorkspacePage() {
     queryFn: ({ signal }) => getProjectManagementMemberCandidates({ pageIndex: 1, pageSize: 200 }, signal),
     queryKey: queryKeys.projectManagement.memberCandidates(scope, { pageIndex: 1, pageSize: 200 }),
   });
+  const childTasksQuery = useQuery({
+    enabled: scope.isAvailable && Boolean(projectId && selectedTaskId) && detailSection === 'children',
+    queryFn: ({ signal }) => getProjectManagementTasks({ projectId, pageIndex: 1, pageSize: 100, parentTaskId: selectedTaskId, viewKey: 'list', sortBy: 'tree', sortDirection: 'asc' }, signal),
+    queryKey: queryKeys.projectManagement.tasks(scope, { projectId, pageIndex: 1, pageSize: 100, parentTaskId: selectedTaskId, viewKey: 'list', sortBy: 'tree', sortDirection: 'asc' }),
+  });
+  const dependenciesQuery = useQuery({
+    enabled: scope.isAvailable && Boolean(projectId && selectedTaskId) && detailSection === 'dependencies',
+    queryFn: ({ signal }) => getProjectManagementTaskDependencies(projectId, signal),
+    queryKey: ['project-management-task-dependencies', scope.tenantId, scope.appCode, projectId],
+  });
   const rows = useMemo(() => tasksQuery.data?.data?.items ?? [], [tasksQuery.data?.data?.items]);
   const participantLabels = useMemo(() => Object.fromEntries((memberCandidatesQuery.data?.data?.items ?? []).map((candidate) => [candidate.userId, candidate.displayName || candidate.userName])), [memberCandidatesQuery.data?.data?.items]);
   const milestoneLabels = useMemo(() => Object.fromEntries((milestonesQuery.data?.data ?? []).map((milestone) => [milestone.id, milestone.milestoneName])), [milestonesQuery.data?.data]);
   const selectedListTask = rows.find((task) => task.id === selectedTaskId);
   const selectedTask = taskDetailQuery.data?.data;
   const selectedTasks = useMemo(() => rows.filter((task) => selectedTaskIds.has(task.id)), [rows, selectedTaskIds]);
+  const childTasks = childTasksQuery.data?.data?.items ?? [];
+  const dependencyLabels = useMemo(() => Object.fromEntries(rows.map((task) => [task.id, `${task.taskCode} · ${task.title}`])), [rows]);
+  const taskDetailErrorMessage = taskDetailQuery.error
+    ? isHttpError(taskDetailQuery.error) && taskDetailQuery.error.status === 403
+      ? '没有查看该任务详情的权限。'
+      : isHttpError(taskDetailQuery.error) && taskDetailQuery.error.status === 404
+        ? '任务不存在、已删除或已归档。'
+        : '任务详情加载失败。'
+    : undefined;
 
   useEffect(() => {
     if (selectedTaskId && tasksQuery.isSuccess && !selectedListTask) {
@@ -277,23 +303,7 @@ export function ProjectManagementTaskWorkspacePage() {
 
   useEffect(() => {
     if (!selectedTask || creating) return;
-    setForm({
-      assigneeEmploymentId: selectedTask.assigneeEmploymentId,
-      assigneeUserId: selectedTask.assigneeUserId,
-      description: selectedTask.markdown ?? selectedTask.description,
-      dueDate: selectedTask.dueDate,
-      estimateMinutes: selectedTask.estimateMinutes,
-      milestoneId: selectedTask.milestoneId,
-      parentTaskId: selectedTask.parentTaskId,
-      priority: selectedTask.priority,
-      progressPercent: selectedTask.progressPercent,
-      startDate: selectedTask.startDate,
-      status: selectedTask.status,
-      taskCode: selectedTask.taskCode,
-      title: selectedTask.title,
-      versionNo: selectedTask.versionNo,
-      weight: selectedTask.weight,
-    });
+    setForm(taskDetailToForm(selectedTask));
   }, [creating, selectedTask]);
 
   const invalidateProjectTaskViews = async () => {
@@ -321,14 +331,27 @@ export function ProjectManagementTaskWorkspacePage() {
   };
 
   const saveMutation = useApiMutation({
-    mutationFn: () => selectedTask && !creating ? updateProjectManagementTask(selectedTask.id, form) : createProjectManagementTask(projectId, form),
-    onError: (error) => message.error(getErrorMessage(error, selectedTask && !creating ? '任务保存失败' : '任务创建失败')),
+    mutationFn: ({ overwriteVersionNo }: { overwriteVersionNo?: number } = {}) => {
+      const request = overwriteVersionNo === undefined ? form : { ...form, versionNo: overwriteVersionNo };
+      return selectedTask && !creating ? updateProjectManagementTask(selectedTask.id, request) : createProjectManagementTask(projectId, request);
+    },
+    onError: (error) => {
+      const conflict = readProjectManagementTaskConflict(error);
+      if (conflict) {
+        setTaskConflict(conflict);
+        message.error('任务保存发生并发冲突，请比较服务器值和本地值后处理');
+        return;
+      }
+      message.error(getErrorMessage(error, selectedTask && !creating ? '任务保存失败' : '任务创建失败'));
+    },
     onSuccess: async (result) => {
       const task = result.data;
       message.success(creating ? '任务已创建' : '任务已更新');
+      setTaskConflict(null);
       setCreating(false);
-      setForm(emptyForm);
+      setForm(taskDetailToForm(task));
       setState({ selectedTaskId: task?.id }, { replace: true });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.projectManagement.task(scope, projectId, task.id) });
       await invalidateProjectTaskViews();
     },
   });
@@ -511,6 +534,23 @@ export function ProjectManagementTaskWorkspacePage() {
     onError: (error) => message.error(getErrorMessage(error, '保存视图删除失败')),
     onSuccess: async () => { message.success('保存视图已删除'); await savedViewsQuery.refetch(); },
   });
+  const closeTaskDetail = useCallback(() => {
+    setCreating(false);
+    setTaskConflict(null);
+    setState({ selectedTaskId: undefined });
+  }, [setState]);
+  const reloadTaskDetail = useCallback(async () => {
+    const result = await taskDetailQuery.refetch();
+    if (result.data?.data) setForm(taskDetailToForm(result.data.data));
+    setTaskConflict(null);
+  }, [taskDetailQuery, setForm]);
+  const detailSectionContent = detailSection === 'children'
+    ? <TaskDetailChildrenSection error={childTasksQuery.isError} loading={childTasksQuery.isLoading} onRetry={() => void childTasksQuery.refetch()} onSelect={(taskId) => { setState({ selectedTaskId: taskId }); setDetailSection('basic'); }} tasks={childTasks} />
+    : detailSection === 'dependencies'
+      ? <TaskDetailDependenciesSection dependencies={(dependenciesQuery.data?.data ?? []).filter((item) => item.predecessorTaskId === selectedTaskId || item.successorTaskId === selectedTaskId)} error={dependenciesQuery.isError} labels={dependencyLabels} loading={dependenciesQuery.isLoading} onRetry={() => void dependenciesQuery.refetch()} />
+      : detailSection === 'activity'
+        ? <TaskActivityTimeline canView={canViewTaskActivities} isError={taskActivitiesQuery.isError} isLoading={taskActivitiesQuery.isLoading} onQueryChange={setTaskActivityQuery} page={taskActivitiesQuery.data?.data} query={taskActivityQuery} />
+        : undefined;
 
   if (!scope.isAvailable) return <PageError description="当前会话没有可用的租户和应用工作区" />;
   if (tasksQuery.isLoading) return <PageLoading />;
@@ -567,8 +607,24 @@ export function ProjectManagementTaskWorkspacePage() {
         <span>{selectedTasks.length ? `已选择 ${selectedTasks.length} 个任务，可批量更新。` : '选择任务可打开详情、协作、附件与提醒。'}</span>
       </section>
       {activeView.note ? <p className="pm-prototype-note" role="status">{activeView.note}</p> : null}
-      <section className="pm-detail-region" aria-label={creating ? '新建任务' : selectedTask ? '任务详情' : '任务详情占位区域'}>
+      <TaskDetailDrawer
+        activeSection={detailSection}
+        conflict={taskConflict}
+        conflictPending={saveMutation.isPending}
+        creating={creating}
+        errorMessage={taskDetailErrorMessage}
+        loading={taskDetailQuery.isLoading}
+        onClose={closeTaskDetail}
+        onKeepLocal={() => setTaskConflict(null)}
+        onOverwrite={() => taskConflict && saveMutation.mutate({ overwriteVersionNo: taskConflict.serverValues.versionNo })}
+        onReload={() => void reloadTaskDetail()}
+        onSectionChange={setDetailSection}
+        open={Boolean(selectedTaskId || creating)}
+        sectionContent={detailSectionContent}
+        selectedTask={selectedTask}
+      >
         <TaskWorkspaceSelectionPanel
+          activeSection={detailSection}
           attachments={attachmentsQuery.data?.data ?? []}
           attachmentsError={attachmentsQuery.isError}
           attachmentDownloadError={attachmentDownloadError}
@@ -591,9 +647,8 @@ export function ProjectManagementTaskWorkspacePage() {
           creating={creating}
           form={form}
           onCancel={() => {
-            setCreating(false);
+            closeTaskDetail();
             setForm(emptyForm);
-            setState({ selectedTaskId: undefined });
           }}
           onCommentChange={setCommentForm}
           onCommentSubmit={() => commentMutation.mutate()}
@@ -615,7 +670,7 @@ export function ProjectManagementTaskWorkspacePage() {
           onCancelReminder={(reminder) => confirm({ title: '取消任务提醒', content: '取消后不会再向接收人投递该提醒。', confirmText: '取消提醒', onConfirm: () => reminderCancelMutation.mutate(reminder) })}
           onDeleteReminder={(reminder) => confirm({ title: '删除提醒记录', content: '删除后不再保留该提醒的历史记录。', confirmText: '删除记录', onConfirm: () => reminderDeleteMutation.mutate(reminder) })}
           onFormChange={setForm}
-          onSubmit={() => saveMutation.mutate()}
+          onSubmit={() => saveMutation.mutate({})}
           onCancelUpload={() => attachmentAbortController.current?.abort()}
           onRetryUpload={() => attachmentUploadFile && attachmentMutation.mutate(attachmentUploadFile)}
           onRetryAttachments={() => void attachmentsQuery.refetch()}
@@ -645,15 +700,7 @@ export function ProjectManagementTaskWorkspacePage() {
           previewFile={attachmentPreviewState.previewFile}
           onClose={closeAttachmentPreview}
         />
-        {selectedTask && !creating ? <TaskActivityTimeline
-          canView={canViewTaskActivities}
-          isError={taskActivitiesQuery.isError}
-          isLoading={taskActivitiesQuery.isLoading}
-          onQueryChange={setTaskActivityQuery}
-          page={taskActivitiesQuery.data?.data}
-          query={taskActivityQuery}
-        /> : null}
-      </section>
+      </TaskDetailDrawer>
       {selectedTask && !creating ? (
         <TaskWorkspaceImConversationPanel
           conversation={taskConversationQuery.data?.data}
