@@ -267,8 +267,8 @@ CREATE TABLE IF NOT EXISTS pm_activities (
     AggregateType TEXT NOT NULL, AggregateId TEXT NOT NULL, ActivityType TEXT NOT NULL, Summary TEXT NULL,
     TraceId TEXT NOT NULL, ActorUserId TEXT NOT NULL, CreatedBy TEXT NULL, CreatedTime TEXT NOT NULL,
     UpdatedBy TEXT NULL, UpdatedTime TEXT NULL, DeletedBy TEXT NULL, DeletedTime TEXT NULL,
-    IsDeleted INTEGER NOT NULL DEFAULT 0, Remark TEXT NULL
-);
+     IsDeleted INTEGER NOT NULL DEFAULT 0, Remark TEXT NULL, ArchivedTime TEXT NULL
+ );
 CREATE TABLE IF NOT EXISTS pm_task_comments (
     Id TEXT NOT NULL PRIMARY KEY, TenantId TEXT NOT NULL, AppCode TEXT NOT NULL, ProjectId TEXT NOT NULL, TaskId TEXT NOT NULL,
     ParentCommentId TEXT NULL, Markdown TEXT NOT NULL, MentionUserIdsJson TEXT NULL, AuthorUserId TEXT NOT NULL,
@@ -436,6 +436,7 @@ CREATE TABLE IF NOT EXISTS pm_reversible_commands (
 
     private static void CreateIndexes(SqliteSchemaExecutor schema)
     {
+        schema.EnsureColumn("pm_activities", "ArchivedTime", "TEXT NULL");
         schema.Execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_pm_projects_code ON pm_projects(TenantId, AppCode, ProjectCode) WHERE IsDeleted = 0;");
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_projects_workspace_status ON pm_projects(TenantId, AppCode, Status, IsDeleted);");
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_projects_owner ON pm_projects(TenantId, AppCode, OwnerUserId, IsDeleted);");

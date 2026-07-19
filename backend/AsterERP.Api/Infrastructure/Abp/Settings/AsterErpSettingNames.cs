@@ -43,4 +43,8 @@ public static class AsterErpSettingNames
     public const string AuditQueueCapacity = "AsterERP.Audit.QueueCapacity";
 
     public const string ProjectManagementTaskHierarchyMaxDepth = "AsterERP.ProjectManagement.TaskHierarchy.MaxDepth";
+    public const string ProjectManagementAuditActiveRetentionDays = "AsterERP.ProjectManagement.Audit.ActiveRetentionDays";
+    public const string ProjectManagementAuditArchiveRetentionDays = "AsterERP.ProjectManagement.Audit.ArchiveRetentionDays";
+    public const string ProjectManagementAuditCleanupBatchSize = "AsterERP.ProjectManagement.Audit.CleanupBatchSize";
+    public const string ProjectManagementAuditCapacityLimit = "AsterERP.ProjectManagement.Audit.CapacityLimit";
 }

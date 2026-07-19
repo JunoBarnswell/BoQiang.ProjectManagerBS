@@ -14,6 +14,7 @@ public sealed class ProjectManagementOperationRunner(
     IProjectManagementSearchService? searchService = null,
     ProjectManagementReportSnapshotExecutor? reportSnapshotExecutor = null,
     ProjectManagementAuditExportExecutor? auditExportExecutor = null,
+    ProjectManagementAuditGovernanceExecutor? auditGovernanceExecutor = null,
     ProjectManagementDataSpaceExportExecutor? dataSpaceExportExecutor = null,
     ProjectManagementDataSpaceImportExecutor? dataSpaceImportExecutor = null,
     ProjectManagementPurgeFileDeletionExecutor? purgeFileDeletionExecutor = null)
@@ -29,6 +30,7 @@ public sealed class ProjectManagementOperationRunner(
             if (searchService is not null && await searchService.TryExecuteIndexOperationAsync(args, CancellationToken.None)) return;
             if (reportSnapshotExecutor is not null && await reportSnapshotExecutor.TryExecuteAsync(args, CancellationToken.None)) return;
             if (auditExportExecutor is not null && await auditExportExecutor.TryExecuteAsync(args, CancellationToken.None)) return;
+            if (auditGovernanceExecutor is not null && await auditGovernanceExecutor.TryExecuteAsync(args, CancellationToken.None)) return;
             if (dataSpaceExportExecutor is not null && await dataSpaceExportExecutor.TryExecuteAsync(args, CancellationToken.None)) return;
             if (dataSpaceImportExecutor is not null && await dataSpaceImportExecutor.TryExecuteAsync(args, CancellationToken.None)) return;
             if (purgeFileDeletionExecutor is not null && await purgeFileDeletionExecutor.TryExecuteAsync(args, CancellationToken.None)) return;

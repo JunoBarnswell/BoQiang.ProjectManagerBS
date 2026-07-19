@@ -92,6 +92,12 @@ public sealed record ProjectManagementAuditExportStartResponse(
     string TraceId,
     DateTime ExpiresAt);
 
+public sealed record ProjectManagementAuditGovernancePolicy(
+    int ActiveRetentionDays = 180,
+    int ArchiveRetentionDays = 2555,
+    int CleanupBatchSize = 1000,
+    int CapacityLimit = 100_000);
+
 public sealed record ProjectManagementOperationQuery(
     int PageIndex = 1,
     int PageSize = 50,

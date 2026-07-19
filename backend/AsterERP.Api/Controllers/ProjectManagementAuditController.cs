@@ -8,7 +8,7 @@ namespace AsterERP.Api.Controllers;
 
 [Route("api/project-management/audit")]
 [Permission(PermissionCodes.ProjectManagementAuditView)]
-public sealed class ProjectManagementAuditController(IProjectManagementAuditService service) : BaseApiController
+public sealed class ProjectManagementAuditController(IProjectManagementAuditService service, IProjectManagementAuditGovernanceService governanceService) : BaseApiController
 {
     [HttpGet]
     public async Task<IActionResult> QueryAsync([FromQuery] ProjectManagementAuditQuery query, CancellationToken cancellationToken)
@@ -34,4 +34,14 @@ public sealed class ProjectManagementAuditController(IProjectManagementAuditServ
         var result = await service.DownloadExportAsync(operationId, cancellationToken);
         return File(result.Content, "text/csv; charset=utf-8", result.FileName);
     }
+
+    [HttpGet("governance/policy")]
+    [Permission(PermissionCodes.ProjectManagementOperationManage)]
+    public async Task<IActionResult> GovernancePolicyAsync(CancellationToken cancellationToken)
+        => ApiOk(await governanceService.GetPolicyAsync(cancellationToken));
+
+    [HttpPost("governance/cleanup")]
+    [Permission(PermissionCodes.ProjectManagementOperationManage)]
+    public async Task<IActionResult> StartGovernanceCleanupAsync(CancellationToken cancellationToken)
+        => ApiOk(await governanceService.StartCleanupAsync(cancellationToken));
 }

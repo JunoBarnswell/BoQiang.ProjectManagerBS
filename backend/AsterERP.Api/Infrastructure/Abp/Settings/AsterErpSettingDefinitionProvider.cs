@@ -51,7 +51,11 @@ public sealed class AsterErpSettingDefinitionProvider : SettingDefinitionProvide
             Visible(AsterErpSettingNames.AuditOperationLogEnabled, "true"),
             Visible(AsterErpSettingNames.AuditCaptureQueryString, "true"),
             Visible(AsterErpSettingNames.AuditQueueCapacity, "2048"),
-            Visible(AsterErpSettingNames.ProjectManagementTaskHierarchyMaxDepth, "5"));
+            Visible(AsterErpSettingNames.ProjectManagementTaskHierarchyMaxDepth, "5"),
+            Visible(AsterErpSettingNames.ProjectManagementAuditActiveRetentionDays, "180"),
+            Visible(AsterErpSettingNames.ProjectManagementAuditArchiveRetentionDays, "2555"),
+            Visible(AsterErpSettingNames.ProjectManagementAuditCleanupBatchSize, "1000"),
+            Visible(AsterErpSettingNames.ProjectManagementAuditCapacityLimit, "100000"));
     }
 
     private static SettingDefinition Visible(string name, string? defaultValue = null) =>
