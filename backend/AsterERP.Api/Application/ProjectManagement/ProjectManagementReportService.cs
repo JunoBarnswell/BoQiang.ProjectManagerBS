@@ -29,6 +29,8 @@ public sealed class ProjectManagementReportService(
     private const int MaxSnapshotProjects = 500;
     private const int MaxSnapshotComments = 200;
     private const int MaxSnapshotAttachments = 500;
+    private const int WorkbookProjectBatchSize = 200;
+    private const int WorkbookSchemaVersion = 1;
 
     private static readonly string[] Headers =
     [
@@ -70,6 +72,12 @@ public sealed class ProjectManagementReportService(
     public async Task<ProjectManagementReportFile> ExportExcelAsync(
         ProjectManagementReportQuery query,
         CancellationToken cancellationToken = default)
+        => await ExportExcelAsync(query, cancellationToken, null);
+
+    private async Task<ProjectManagementReportFile> ExportExcelAsync(
+        ProjectManagementReportQuery query,
+        CancellationToken cancellationToken,
+        Func<string, int, Task>? reportProgress)
     {
         var rows = await QueryRowsAsync(query, cancellationToken);
         using var workbook = new XLWorkbook();
@@ -96,6 +104,7 @@ public sealed class ProjectManagementReportService(
 
         worksheet.Row(1).Style.Font.Bold = true;
         worksheet.Columns().AdjustToContents(1, 40);
+        await AppendWorkbookSnapshotAsync(workbook, query, cancellationToken, reportProgress);
         using var stream = new MemoryStream();
         workbook.SaveAs(stream);
         return new ProjectManagementReportFile(
@@ -104,6 +113,163 @@ public sealed class ProjectManagementReportService(
             stream.ToArray(),
             rows.Count);
     }
+
+    /// <summary>
+    /// 生成可用于审计与迁移的完整 Excel 快照。所有数据均从已经注册的 ORM 数据权限过滤器读取：
+    /// 普通项目经理仅看到自己拥有或参与的项目，具有 ALL/平台权限的管理员则按其授权数据范围读取。
+    /// </summary>
+    private async Task AppendWorkbookSnapshotAsync(
+        XLWorkbook workbook,
+        ProjectManagementReportQuery query,
+        CancellationToken cancellationToken,
+        Func<string, int, Task>? reportProgress)
+    {
+        RequireTenantId();
+        RequireAppCode();
+        var db = databaseAccessor.GetCurrentDb();
+        var projects = await QueryWorkbookProjectsAsync(query, cancellationToken);
+        var generatedAt = DateTime.UtcNow;
+
+        WriteWorksheet(workbook, "Schema",
+            ["Key", "Value"],
+            [
+                ["SnapshotSchema", "ProjectManagement.ExcelSnapshot"],
+                ["SchemaVersion", WorkbookSchemaVersion.ToString(CultureInfo.InvariantCulture)],
+                ["GeneratedAtUtc", FormatDate(generatedAt)],
+                ["GeneratedByUserId", UserId()],
+                ["TenantId", Tenant()],
+                ["AppCode", App()],
+                ["ProjectCount", projects.Count.ToString(CultureInfo.InvariantCulture)],
+                ["Query", JsonSerializer.Serialize(NormalizeReportQuery(query), SnapshotJsonOptions)]
+            ]);
+
+        WriteWorksheet(workbook, "Projects",
+            ["ProjectId", "ProjectCode", "ProjectName", "Status", "Priority", "OwnerUserId", "Description", "StartDateUtc", "DueDateUtc", "CompletedAtUtc", "ProgressPercent", "WipLimit", "VersionNo", "CreatedTimeUtc", "UpdatedTimeUtc", "IsDeleted"],
+            projects.Select(item => Values(item.Id, item.ProjectCode, item.ProjectName, item.Status, item.Priority, item.OwnerUserId, item.Description, FormatDate(item.StartDate), FormatDate(item.DueDate), FormatDate(item.CompletedAt), item.ProgressPercent, item.WipLimit, item.VersionNo, FormatDate(item.CreatedTime), FormatDate(item.UpdatedTime), item.IsDeleted)));
+
+        var milestoneRows = new List<string[]>();
+        var taskRows = new List<string[]>();
+        var memberRows = new List<string[]>();
+        var participantRows = new List<string[]>();
+        var tagRows = new List<string[]>();
+        var taskTagRows = new List<string[]>();
+        var dependencyRows = new List<string[]>();
+        var commentRows = new List<string[]>();
+        var progressRows = new List<string[]>();
+        var attachmentRows = new List<string[]>();
+        var reminderRows = new List<string[]>();
+        var activityRows = new List<string[]>();
+        var journalRows = new List<string[]>();
+
+        var processedProjects = 0;
+        foreach (var projectBatch in projects.Chunk(WorkbookProjectBatchSize))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (reportProgress is not null)
+            {
+                var percent = 20 + (projects.Count == 0 ? 55 : (processedProjects * 55 / projects.Count));
+                await reportProgress($"正在分块导出项目数据（{processedProjects}/{projects.Count}）", percent);
+            }
+            var projectIds = projectBatch.Select(item => item.Id).ToArray();
+            var projectNames = projectBatch.ToDictionary(item => item.Id, item => item.ProjectName, StringComparer.Ordinal);
+            var milestones = await db.Queryable<ProjectManagementMilestoneEntity>()
+                .Where(item => projectIds.Contains(item.ProjectId)).OrderBy(item => item.ProjectId).OrderBy(item => item.SortOrder).OrderBy(item => item.Id).ToListAsync(cancellationToken);
+            var tasks = await db.Queryable<ProjectManagementTaskEntity>()
+                .Where(item => projectIds.Contains(item.ProjectId)).OrderBy(item => item.ProjectId).OrderBy(item => item.SortOrder).OrderBy(item => item.Id).ToListAsync(cancellationToken);
+            var members = await db.Queryable<ProjectManagementProjectMemberEntity>()
+                .Where(item => projectIds.Contains(item.ProjectId)).OrderBy(item => item.ProjectId).OrderBy(item => item.UserId).OrderBy(item => item.Id).ToListAsync(cancellationToken);
+            var participants = await db.Queryable<ProjectManagementTaskParticipantEntity>()
+                .Where(item => projectIds.Contains(item.ProjectId)).OrderBy(item => item.ProjectId).OrderBy(item => item.TaskId).OrderBy(item => item.UserId).OrderBy(item => item.Id).ToListAsync(cancellationToken);
+            var tags = await db.Queryable<ProjectManagementLabelEntity>()
+                .Where(item => item.ProjectId != null && projectIds.Contains(item.ProjectId)).OrderBy(item => item.ProjectId).OrderBy(item => item.LabelName).OrderBy(item => item.Id).ToListAsync(cancellationToken);
+            var taskTags = await db.Queryable<ProjectManagementTaskLabelEntity>()
+                .Where(item => projectIds.Contains(item.ProjectId)).OrderBy(item => item.ProjectId).OrderBy(item => item.TaskId).OrderBy(item => item.LabelId).OrderBy(item => item.Id).ToListAsync(cancellationToken);
+            var dependencies = await db.Queryable<ProjectManagementTaskDependencyEntity>()
+                .Where(item => projectIds.Contains(item.ProjectId)).OrderBy(item => item.ProjectId).OrderBy(item => item.PredecessorTaskId).OrderBy(item => item.SuccessorTaskId).OrderBy(item => item.Id).ToListAsync(cancellationToken);
+            var comments = await db.Queryable<ProjectManagementTaskCommentEntity>()
+                .Where(item => projectIds.Contains(item.ProjectId)).OrderBy(item => item.ProjectId).OrderBy(item => item.TaskId).OrderBy(item => item.CreatedTime).OrderBy(item => item.Id).ToListAsync(cancellationToken);
+            var progressLogs = await db.Queryable<ProjectManagementTaskTimeLogEntity>()
+                .Where(item => projectIds.Contains(item.ProjectId)).OrderBy(item => item.ProjectId).OrderBy(item => item.TaskId).OrderBy(item => item.StartedAt).OrderBy(item => item.Id).ToListAsync(cancellationToken);
+            var attachments = await db.Queryable<ProjectManagementTaskAttachmentEntity>()
+                .Where(item => projectIds.Contains(item.ProjectId)).OrderBy(item => item.ProjectId).OrderBy(item => item.TaskId).OrderBy(item => item.CreatedTime).OrderBy(item => item.Id).ToListAsync(cancellationToken);
+            var reminders = await db.Queryable<ProjectManagementTaskReminderEntity>()
+                .Where(item => projectIds.Contains(item.ProjectId)).OrderBy(item => item.ProjectId).OrderBy(item => item.TaskId).OrderBy(item => item.ReminderAtUtc).OrderBy(item => item.Id).ToListAsync(cancellationToken);
+            var activities = await db.Queryable<ProjectManagementActivityEntity>()
+                .Where(item => projectIds.Contains(item.ProjectId)).OrderBy(item => item.ProjectId).OrderBy(item => item.CreatedTime).OrderBy(item => item.Id).ToListAsync(cancellationToken);
+            var journals = await db.Queryable<ProjectManagementSyncJournalEntity>()
+                .Where(item => item.ProjectId != null && projectIds.Contains(item.ProjectId)).OrderBy(item => item.SequenceNo).OrderBy(item => item.Id).ToListAsync(cancellationToken);
+
+            var milestoneNames = milestones.ToDictionary(item => item.Id, item => item.MilestoneName, StringComparer.Ordinal);
+            var taskNames = tasks.ToDictionary(item => item.Id, item => item.Title, StringComparer.Ordinal);
+            var tagNames = tags.ToDictionary(item => item.Id, item => item.LabelName, StringComparer.Ordinal);
+            milestoneRows.AddRange(milestones.Select(item => Values(item.Id, item.ProjectId, NameOf(projectNames, item.ProjectId), item.MilestoneName, item.Status, item.HealthStatus, item.OwnerUserId, item.Description, FormatDate(item.StartDate), FormatDate(item.DueDate), FormatDate(item.CompletedAt), item.ProgressPercent, item.SortOrder, item.VersionNo, FormatDate(item.CreatedTime), FormatDate(item.UpdatedTime), item.IsDeleted)));
+            taskRows.AddRange(tasks.Select(item => Values(item.Id, item.ProjectId, NameOf(projectNames, item.ProjectId), item.MilestoneId, NameOf(milestoneNames, item.MilestoneId), item.ParentTaskId, NameOf(taskNames, item.ParentTaskId), item.TaskCode, item.Title, item.Summary, item.Description, item.Status, item.Priority, item.AssigneeUserId, item.AssigneeEmploymentId, item.OccurrenceKey, FormatDate(item.StartDate), FormatDate(item.DueDate), FormatDate(item.ActualStartAt), FormatDate(item.ActualEndAt), item.ProgressPercent, item.Weight, item.EstimateMinutes, item.ActualMinutes, item.SortOrder, item.Depth, item.VersionNo, item.BlockedReason, FormatDate(item.CreatedTime), FormatDate(item.UpdatedTime), item.IsDeleted)));
+            memberRows.AddRange(members.Select(item => Values(item.Id, item.ProjectId, NameOf(projectNames, item.ProjectId), item.UserId, item.EmploymentId, item.RoleCode, item.ScopeRootTaskId, NameOf(taskNames, item.ScopeRootTaskId), item.IsActive, FormatDate(item.JoinedAt), FormatDate(item.LeftAt), item.VersionNo, FormatDate(item.CreatedTime), FormatDate(item.UpdatedTime), item.IsDeleted)));
+            participantRows.AddRange(participants.Select(item => Values(item.Id, item.ProjectId, NameOf(projectNames, item.ProjectId), item.TaskId, NameOf(taskNames, item.TaskId), item.UserId, item.EmploymentId, item.RoleCode, item.VersionNo, FormatDate(item.CreatedTime), FormatDate(item.UpdatedTime), item.IsDeleted)));
+            tagRows.AddRange(tags.Select(item => Values(item.Id, item.ProjectId, NameOf(projectNames, item.ProjectId), item.LabelName, item.Color, item.VersionNo, FormatDate(item.CreatedTime), FormatDate(item.UpdatedTime), item.IsDeleted)));
+            taskTagRows.AddRange(taskTags.Select(item => Values(item.Id, item.ProjectId, NameOf(projectNames, item.ProjectId), item.TaskId, NameOf(taskNames, item.TaskId), item.LabelId, NameOf(tagNames, item.LabelId), item.VersionNo, FormatDate(item.CreatedTime), FormatDate(item.UpdatedTime), item.IsDeleted)));
+            dependencyRows.AddRange(dependencies.Select(item => Values(item.Id, item.ProjectId, NameOf(projectNames, item.ProjectId), item.PredecessorTaskId, NameOf(taskNames, item.PredecessorTaskId), item.SuccessorTaskId, NameOf(taskNames, item.SuccessorTaskId), item.DependencyType, item.LagMinutes, item.VersionNo, FormatDate(item.CreatedTime), FormatDate(item.UpdatedTime), item.IsDeleted)));
+            commentRows.AddRange(comments.Select(item => Values(item.Id, item.ProjectId, NameOf(projectNames, item.ProjectId), item.TaskId, NameOf(taskNames, item.TaskId), item.ParentCommentId, item.AuthorUserId, item.Markdown, item.MentionUserIdsJson, item.VersionNo, FormatDate(item.EditedTime), FormatDate(item.CreatedTime), FormatDate(item.UpdatedTime), item.IsDeleted)));
+            progressRows.AddRange(progressLogs.Select(item => Values(item.Id, item.ProjectId, NameOf(projectNames, item.ProjectId), item.TaskId, NameOf(taskNames, item.TaskId), item.UserId, FormatDate(item.StartedAt), FormatDate(item.EndedAt), item.Minutes, item.Note, item.VersionNo, FormatDate(item.CreatedTime), FormatDate(item.UpdatedTime), item.IsDeleted)));
+            attachmentRows.AddRange(attachments.Select(item => Values(item.Id, item.ProjectId, NameOf(projectNames, item.ProjectId), item.TaskId, NameOf(taskNames, item.TaskId), item.FileId, item.FileName, item.ContentType, item.FileSize, item.UploadedByUserId, item.VersionNo, FormatDate(item.CreatedTime), FormatDate(item.UpdatedTime), item.IsDeleted)));
+            reminderRows.AddRange(reminders.Select(item => Values(item.Id, item.ProjectId, NameOf(projectNames, item.ProjectId), item.TaskId, NameOf(taskNames, item.TaskId), item.RecipientUserId, FormatDate(item.ReminderAtUtc), item.TimeZoneId, item.Note, item.Status, item.IdempotencyKey, item.HangfireJobId, item.AttemptCount, item.MaxAttempts, FormatDate(item.LastAttemptAt), FormatDate(item.TriggeredAt), item.LastError, item.VersionNo, FormatDate(item.CreatedTime), FormatDate(item.UpdatedTime), item.IsDeleted)));
+            activityRows.AddRange(activities.Select(item => Values(item.Id, item.ProjectId, NameOf(projectNames, item.ProjectId), item.AggregateType, item.AggregateId, item.ActivityType, item.Summary, item.TraceId, item.ActorUserId, item.Remark, FormatDate(item.CreatedTime), FormatDate(item.UpdatedTime), item.IsDeleted)));
+            journalRows.AddRange(journals.Select(item => Values(item.Id, item.SequenceNo, item.ProjectId, NameOf(projectNames, item.ProjectId), item.AggregateType, item.AggregateId, item.Operation, item.VersionNo, item.PayloadJson, item.ActorUserId, item.DeviceId, item.TraceId, FormatDate(item.CreatedTime), FormatDate(item.UpdatedTime), item.IsDeleted)));
+            processedProjects += projectBatch.Length;
+        }
+
+        WriteWorksheet(workbook, "Milestones", ["MilestoneId", "ProjectId", "ProjectName", "MilestoneName", "Status", "HealthStatus", "OwnerUserId", "Description", "StartDateUtc", "DueDateUtc", "CompletedAtUtc", "ProgressPercent", "SortOrder", "VersionNo", "CreatedTimeUtc", "UpdatedTimeUtc", "IsDeleted"], milestoneRows);
+        WriteWorksheet(workbook, "Tasks", ["TaskId", "ProjectId", "ProjectName", "MilestoneId", "MilestoneName", "ParentTaskId", "ParentTaskTitle", "TaskCode", "Title", "Summary", "Description", "Status", "Priority", "AssigneeUserId", "AssigneeEmploymentId", "OccurrenceKey", "StartDateUtc", "DueDateUtc", "ActualStartAtUtc", "ActualEndAtUtc", "ProgressPercent", "Weight", "EstimateMinutes", "ActualMinutes", "SortOrder", "Depth", "VersionNo", "BlockedReason", "CreatedTimeUtc", "UpdatedTimeUtc", "IsDeleted"], taskRows);
+        WriteWorksheet(workbook, "ProjectMembers", ["MemberId", "ProjectId", "ProjectName", "UserId", "EmploymentId", "RoleCode", "ScopeRootTaskId", "ScopeRootTaskTitle", "IsActive", "JoinedAtUtc", "LeftAtUtc", "VersionNo", "CreatedTimeUtc", "UpdatedTimeUtc", "IsDeleted"], memberRows);
+        WriteWorksheet(workbook, "Participants", ["ParticipantId", "ProjectId", "ProjectName", "TaskId", "TaskTitle", "UserId", "EmploymentId", "RoleCode", "VersionNo", "CreatedTimeUtc", "UpdatedTimeUtc", "IsDeleted"], participantRows);
+        WriteWorksheet(workbook, "Tags", ["TagId", "ProjectId", "ProjectName", "TagName", "Color", "VersionNo", "CreatedTimeUtc", "UpdatedTimeUtc", "IsDeleted"], tagRows);
+        WriteWorksheet(workbook, "TaskTags", ["TaskTagId", "ProjectId", "ProjectName", "TaskId", "TaskTitle", "TagId", "TagName", "VersionNo", "CreatedTimeUtc", "UpdatedTimeUtc", "IsDeleted"], taskTagRows);
+        WriteWorksheet(workbook, "Dependencies", ["DependencyId", "ProjectId", "ProjectName", "PredecessorTaskId", "PredecessorTaskTitle", "SuccessorTaskId", "SuccessorTaskTitle", "DependencyType", "LagMinutes", "VersionNo", "CreatedTimeUtc", "UpdatedTimeUtc", "IsDeleted"], dependencyRows);
+        WriteWorksheet(workbook, "Comments", ["CommentId", "ProjectId", "ProjectName", "TaskId", "TaskTitle", "ParentCommentId", "AuthorUserId", "Markdown", "MentionUserIdsJson", "VersionNo", "EditedTimeUtc", "CreatedTimeUtc", "UpdatedTimeUtc", "IsDeleted"], commentRows);
+        WriteWorksheet(workbook, "ProgressLogs", ["ProgressLogId", "ProjectId", "ProjectName", "TaskId", "TaskTitle", "UserId", "StartedAtUtc", "EndedAtUtc", "Minutes", "Note", "VersionNo", "CreatedTimeUtc", "UpdatedTimeUtc", "IsDeleted"], progressRows);
+        WriteWorksheet(workbook, "Attachments", ["AttachmentId", "ProjectId", "ProjectName", "TaskId", "TaskTitle", "FileId", "FileName", "ContentType", "FileSize", "UploadedByUserId", "VersionNo", "CreatedTimeUtc", "UpdatedTimeUtc", "IsDeleted"], attachmentRows);
+        WriteWorksheet(workbook, "Reminders", ["ReminderId", "ProjectId", "ProjectName", "TaskId", "TaskTitle", "RecipientUserId", "ReminderAtUtc", "TimeZoneId", "Note", "Status", "IdempotencyKey", "HangfireJobId", "AttemptCount", "MaxAttempts", "LastAttemptAtUtc", "TriggeredAtUtc", "LastError", "VersionNo", "CreatedTimeUtc", "UpdatedTimeUtc", "IsDeleted"], reminderRows);
+        WriteWorksheet(workbook, "Activities", ["ActivityId", "ProjectId", "ProjectName", "AggregateType", "AggregateId", "ActivityType", "Summary", "TraceId", "ActorUserId", "PayloadJson", "CreatedTimeUtc", "UpdatedTimeUtc", "IsDeleted"], activityRows);
+        WriteWorksheet(workbook, "ChangeJournal", ["JournalId", "SequenceNo", "ProjectId", "ProjectName", "AggregateType", "AggregateId", "Operation", "VersionNo", "PayloadJson", "ActorUserId", "DeviceId", "TraceId", "CreatedTimeUtc", "UpdatedTimeUtc", "IsDeleted"], journalRows);
+    }
+
+    private async Task<IReadOnlyList<ProjectManagementProjectEntity>> QueryWorkbookProjectsAsync(ProjectManagementReportQuery query, CancellationToken cancellationToken)
+    {
+        var normalized = NormalizeReportQuery(query);
+        var keyword = NormalizeOptional(normalized.Keyword);
+        var status = NormalizeOptional(normalized.Status);
+        var projects = databaseAccessor.GetCurrentDb().Queryable<ProjectManagementProjectEntity>().Where(item => !item.IsDeleted);
+        if (keyword is not null) projects = projects.Where(item => item.ProjectCode.Contains(keyword) || item.ProjectName.Contains(keyword) || (item.Description != null && item.Description.Contains(keyword)));
+        if (status is not null) projects = projects.Where(item => item.Status == status);
+        projects = ProjectManagementTaskLabelFilterQuery.ApplyToProjects(projects, ProjectManagementTaskLabelFilterQuery.Normalize(normalized.LabelFilter), Tenant(), App());
+        return await projects.OrderBy(item => item.ProjectCode).OrderBy(item => item.Id).ToPageListAsync(normalized.PageIndex, normalized.PageSize, new RefAsync<int>(), cancellationToken);
+    }
+
+    private static void WriteWorksheet(XLWorkbook workbook, string name, IReadOnlyList<string> headers, IEnumerable<string[]> rows)
+    {
+        var worksheet = workbook.Worksheets.Add(name);
+        for (var column = 0; column < headers.Count; column++) worksheet.Cell(1, column + 1).Value = headers[column];
+        var rowIndex = 2;
+        foreach (var values in rows)
+        {
+            for (var column = 0; column < values.Length; column++) worksheet.Cell(rowIndex, column + 1).Value = ExcelSafeForWorkbook(values[column]);
+            rowIndex++;
+        }
+        worksheet.Row(1).Style.Font.Bold = true;
+        worksheet.SheetView.FreezeRows(1);
+        worksheet.Columns().AdjustToContents(1, 40);
+    }
+
+    private static string[] Values(params object?[] values) => values.Select(FormatWorkbookValue).ToArray();
+    private static string FormatWorkbookValue(object? value) => value switch
+    {
+        null => string.Empty,
+        DateTime dateTime => FormatDate(dateTime),
+        bool boolean => boolean ? "true" : "false",
+        IFormattable formattable => formattable.ToString(null, CultureInfo.InvariantCulture) ?? string.Empty,
+        _ => value.ToString() ?? string.Empty
+    };
+    private static string NameOf(IReadOnlyDictionary<string, string> names, string? id) => id is not null && names.TryGetValue(id, out var name) ? name : string.Empty;
 
     public async Task<ProjectManagementReportFile> ExportTasksCsvAsync(
         ProjectManagementTaskQuery query,
@@ -180,7 +346,16 @@ public sealed class ProjectManagementReportService(
             await writer.StartAsync(operation.Id, "report.snapshot", operation.ImpactJson, operation.TraceId, cancellationToken);
             if (!await writer.ReportProgressAsync(operation.Id, "正在读取授权范围内的数据", 15, cancellationToken)) return;
             if (DateTime.UtcNow >= impact.ExpiresAt) throw new ValidationException("报表快照已超过有效期，请重新生成");
-            var report = await GenerateFileAsync(impact.Format, impact.Query, impact.Options, cancellationToken);
+            var report = await GenerateFileAsync(
+                impact.Format,
+                impact.Query,
+                impact.Options,
+                cancellationToken,
+                async (phase, progressPercent) =>
+                {
+                    if (!await writer.ReportProgressAsync(operation.Id, phase, progressPercent, cancellationToken))
+                        throw new OperationCanceledException("报表快照已取消", cancellationToken);
+                });
             if (!await writer.ReportProgressAsync(operation.Id, "正在写入快照文件", 80, cancellationToken)) return;
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             await File.WriteAllBytesAsync(path, report.Content, cancellationToken);
@@ -257,11 +432,16 @@ public sealed class ProjectManagementReportService(
         return new ProjectManagementReportSnapshotStartResponse(retryId, traceId, expiresAt);
     }
 
-    private async Task<ProjectManagementReportFile> GenerateFileAsync(string format, ProjectManagementReportQuery query, ProjectManagementReportSnapshotOptions options, CancellationToken cancellationToken) =>
+    private async Task<ProjectManagementReportFile> GenerateFileAsync(
+        string format,
+        ProjectManagementReportQuery query,
+        ProjectManagementReportSnapshotOptions options,
+        CancellationToken cancellationToken,
+        Func<string, int, Task>? reportProgress = null) =>
         NormalizeFormat(format) switch
         {
             "csv" => await ExportCsvAsync(query, cancellationToken),
-            "xlsx" => await ExportExcelAsync(query, cancellationToken),
+            "xlsx" => await ExportExcelAsync(query, cancellationToken, reportProgress),
             "pdf" => await ExportPdfAsync(query, options, cancellationToken),
             _ => throw new ValidationException("不支持的报表格式")
         };

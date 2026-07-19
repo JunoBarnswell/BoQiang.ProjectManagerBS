@@ -85,7 +85,7 @@ export function ProjectManagementReportsPage() {
   return <ResponsivePage
     title="项目报表"
     eyebrow="ProjectManagement / Reports"
-    description="CSV 与 Excel 直接由服务端在当前授权范围内生成；PDF、CSV、Excel 快照由后台长任务生成并持久化，页面通过 SignalR 和轮询回补显示真实状态。"
+    description="CSV 与 Excel 直接由服务端在当前授权范围内生成；完整 Excel 快照额外包含 Schema、项目、任务、成员、标签、依赖、评论、工时、附件、提醒、活动和变更日志工作表。PDF、CSV、Excel 快照由后台长任务生成并持久化，页面通过 SignalR 和轮询回补显示真实状态。"
     toolbar={<span className="text-sm text-gray-500">当前深链项目：{projectId ?? '未指定'} · 导出范围：当前授权工作区</span>}
   >
     <section className="max-w-4xl rounded-lg border border-gray-200 p-4">
@@ -107,7 +107,7 @@ export function ProjectManagementReportsPage() {
         <PermissionButton code="project-management:report:export" disabled={isDirectExportPending} onClick={() => csvMutation.mutate()}> {csvMutation.isPending ? 'CSV 导出中…' : '直接导出 CSV'} </PermissionButton>
         <PermissionButton code="project-management:report:export" disabled={isDirectExportPending} onClick={() => excelMutation.mutate()}> {excelMutation.isPending ? 'Excel 导出中…' : '直接导出 Excel'} </PermissionButton>
         <PermissionButton code="project-management:report:export" disabled={snapshotMutation.isPending || Boolean(snapshotOperationId && !completedSnapshot)} onClick={() => snapshotMutation.mutate('pdf')}>{snapshotMutation.isPending ? '正在创建快照…' : '生成 PDF 快照'}</PermissionButton>
-        <PermissionButton code="project-management:report:export" disabled={snapshotMutation.isPending || Boolean(snapshotOperationId && !completedSnapshot)} onClick={() => snapshotMutation.mutate('xlsx')}>生成 Excel 快照</PermissionButton>
+        <PermissionButton code="project-management:report:export" disabled={snapshotMutation.isPending || Boolean(snapshotOperationId && !completedSnapshot)} onClick={() => snapshotMutation.mutate('xlsx')}>生成完整 Excel 快照</PermissionButton>
         <PermissionButton code="project-management:report:export" disabled={snapshotMutation.isPending || Boolean(snapshotOperationId && !completedSnapshot)} onClick={() => snapshotMutation.mutate('csv')}>生成 CSV 快照</PermissionButton>
       </div>
     </section>
