@@ -1,23 +1,21 @@
+using System.Globalization;
 using System.Text;
 
 namespace AsterERP.Api.Application.ProjectManagement;
 
 /// <summary>
-/// 使用 PDF 标准 CJK 字体 STSong-Light 输出项目报表，避免依赖浏览器打印或临时 HTML 文件。
+/// 生成自包含、分页稳定的 PDF。STSong-Light 是 PDF 阅读器内置 CJK 字体，避免服务器依赖本地字体文件。
+/// 所有用户数据写入 UTF-16BE 十六进制字符串，不经过 PDF 模板语法，避免模板注入。
 /// </summary>
 internal static class ProjectManagementPdfReportRenderer
 {
-    private const int RowsPerPage = 32;
+    private const int RowsPerPage = 38;
 
-    public static byte[] Render(IReadOnlyList<string> headers, IReadOnlyList<string[]> rows)
+    public static byte[] Render(ProjectManagementReportPdfDocument document)
     {
-        var pages = new List<string>();
-        var documentRows = new List<string[]> { headers.ToArray() };
-        documentRows.AddRange(rows);
-        for (var index = 0; index < documentRows.Count || index == 0; index += RowsPerPage)
-        {
-            pages.Add(BuildPage(documentRows.Skip(index).Take(RowsPerPage).ToList(), index == 0));
-        }
+        var lines = BuildLines(document);
+        var pages = lines.Chunk(RowsPerPage).Select((page, index) => BuildPage(page, index == 0)).ToList();
+        if (pages.Count == 0) pages.Add(BuildPage([], true));
 
         var objects = new List<string>
         {
@@ -29,11 +27,11 @@ internal static class ProjectManagementPdfReportRenderer
         {
             var pageId = 3 + index * 2;
             var contentId = pageId + 1;
-            objects.Add($"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 {fontId} 0 R >> >> /Contents {contentId} 0 R >>");
             var content = pages[index];
+            objects.Add($"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 {fontId} 0 R >> >> /Contents {contentId} 0 R >>");
             objects.Add($"<< /Length {Encoding.ASCII.GetByteCount(content)} >>\nstream\n{content}\nendstream");
         }
-        objects.Add("<< /Type /Font /Subtype /Type0 /BaseFont /STSong-Light /Encoding /UniGB-UCS2-H /DescendantFonts [" + (fontId + 1) + " 0 R] >>");
+        objects.Add($"<< /Type /Font /Subtype /Type0 /BaseFont /STSong-Light /Encoding /UniGB-UCS2-H /DescendantFonts [{fontId + 1} 0 R] >>");
         objects.Add("<< /Type /Font /Subtype /CIDFontType0 /BaseFont /STSong-Light /CIDSystemInfo << /Registry (Adobe) /Ordering (GB1) /Supplement 5 >> >>");
 
         using var output = new MemoryStream();
@@ -51,24 +49,73 @@ internal static class ProjectManagementPdfReportRenderer
         return output.ToArray();
     }
 
-    private static string BuildPage(IReadOnlyList<string[]> rows, bool firstPage)
+    private static IReadOnlyList<string> BuildLines(ProjectManagementReportPdfDocument document)
     {
-        var content = new StringBuilder("BT\n/F1 10 Tf\n");
-        if (firstPage)
+        var lines = new List<string>
         {
-            content.Append("/F1 16 Tf\n50 805 Td\n<987976EE7BA1> Tj\n/F1 10 Tf\n");
+            "项目管理项目报告",
+            $"生成时间：{document.GeneratedAt.ToUniversalTime():yyyy-MM-dd HH:mm:ss} UTC",
+            $"租户：{document.TenantId}  应用：{document.AppCode}  生成用户：{document.UserId}",
+            $"项目数：{document.Projects.Count}  任务数：{document.Tasks.Count}  已删除选项：{(document.IncludeDeleted ? "包含" : "排除")}",
+            $"工作量：预计 {document.EstimatedMinutes.ToString(CultureInfo.InvariantCulture)} 分钟 / 实际 {document.ActualMinutes.ToString(CultureInfo.InvariantCulture)} 分钟",
+            $"未来到期：{document.FutureDueCount}  逾期：{document.OverdueCount}  阻塞：{document.BlockedCount}",
+            "任务状态分布："
+        };
+        foreach (var item in document.TaskStatusDistribution.OrderBy(item => item.Key, StringComparer.Ordinal))
+            lines.Add($"  {item.Key}：{item.Value} {new string('■', Math.Min(item.Value, 40))}");
+
+        lines.Add("关键路径：");
+        lines.AddRange(document.CriticalPath.Count == 0
+            ? ["  无可计算关键路径"]
+            : document.CriticalPath.Select(item => $"  {item.TaskCode} {item.Title}（{item.Status}，{item.DueDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? "无截止日期"}）"));
+
+        lines.Add("项目摘要：");
+        lines.AddRange(document.Projects.Select(item =>
+            $"  {item.ProjectCode} | {item.ProjectName} | {item.Status} | 进度 {item.ProgressPercent.ToString("0.##", CultureInfo.InvariantCulture)}% | 任务 {item.TaskCount} | 到期 {item.DueDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? "-"}"));
+
+        lines.Add("里程碑：");
+        lines.AddRange(document.Milestones.Count == 0
+            ? ["  无里程碑"]
+            : document.Milestones.Select(item => $"  {item.Name} | {item.Status} | 进度 {item.ProgressPercent.ToString("0.##", CultureInfo.InvariantCulture)}% | 到期 {item.DueDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? "-"}"));
+
+        lines.Add(document.IncludeGanttSnapshot ? "甘特快照（任务明细）：" : "任务明细：");
+        lines.AddRange(document.Tasks.Count == 0
+            ? ["  无任务"]
+            : document.Tasks.Select(item => $"  {new string(' ', Math.Min(item.Depth, 8) * 2)}{item.TaskCode} | {item.Title} | {item.Status} | {item.StartDate?.ToString("MM-dd", CultureInfo.InvariantCulture) ?? "-"} ~ {item.DueDate?.ToString("MM-dd", CultureInfo.InvariantCulture) ?? "-"} | 预计 {item.EstimateMinutes} / 实际 {item.ActualMinutes}{(item.IsBlocked ? " | 阻塞" : string.Empty)}"));
+
+        if (document.CommentSummaries.Count > 0)
+        {
+            lines.Add("评论摘要：");
+            lines.AddRange(document.CommentSummaries.Select(item => $"  {item}"));
         }
-        var y = firstPage ? 780 : 810;
-        foreach (var row in rows)
+        if (document.AttachmentList.Count > 0)
         {
-            content.Append($"50 {y} Td\n<{ToPdfHex(FormatRow(row))}> Tj\n");
-            y -= 22;
+            lines.Add("附件清单：");
+            lines.AddRange(document.AttachmentList.Select(item => $"  {item}"));
+        }
+        return lines.SelectMany(WrapLine).ToList();
+    }
+
+    private static IEnumerable<string> WrapLine(string value)
+    {
+        var normalized = value.Replace('\r', ' ').Replace('\n', ' ').Trim();
+        if (normalized.Length == 0) return [string.Empty];
+        return Enumerable.Range(0, (normalized.Length + 74) / 75).Select(index => normalized.Substring(index * 75, Math.Min(75, normalized.Length - index * 75)));
+    }
+
+    private static string BuildPage(IReadOnlyList<string> lines, bool firstPage)
+    {
+        var content = new StringBuilder("BT\n/F1 9 Tf\n");
+        for (var index = 0; index < lines.Count; index++)
+        {
+            var y = 805 - index * 20;
+            content.Append(firstPage && index == 0 ? "/F1 16 Tf\n" : "/F1 9 Tf\n");
+            content.Append($"1 0 0 1 40 {y} Tm\n<{ToPdfHex(lines[index])}> Tj\n");
         }
         content.Append("ET");
         return content.ToString();
     }
 
-    private static string FormatRow(IReadOnlyList<string> row) => string.Join("  |  ", row.Select(value => value.Length > 24 ? value[..24] + "…" : value));
     private static string ToPdfHex(string value) => Convert.ToHexString(Encoding.BigEndianUnicode.GetBytes(value));
     private static void Write(Stream output, string value) => output.Write(Encoding.ASCII.GetBytes(value));
 }

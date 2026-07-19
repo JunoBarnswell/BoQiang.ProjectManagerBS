@@ -741,13 +741,26 @@ export interface ProjectManagementReportQuery {
 
 export type ProjectManagementReportSnapshotFormat = 'csv' | 'xlsx' | 'pdf';
 
+export interface ProjectManagementReportSnapshotOptions {
+  includeCompleted?: boolean;
+  includeDeleted?: boolean;
+  includeCommentSummary?: boolean;
+  includeAttachmentList?: boolean;
+  includeGanttSnapshot?: boolean;
+  maxTaskRows?: number;
+  retentionHours?: number;
+}
+
 export interface ProjectManagementReportSnapshotRequest {
   format: ProjectManagementReportSnapshotFormat;
   query: ProjectManagementReportQuery;
+  options?: ProjectManagementReportSnapshotOptions;
 }
 
 export interface ProjectManagementReportSnapshotStartResponse {
   operationId: string;
+  traceId: string;
+  expiresAt: string;
 }
 
 export type ProjectManagementExcelImportPreviewStatus = 'Completed' | 'CompletedWithErrors';

@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
-import { downloadProjectManagementReportSnapshot, exportProjectManagementReportCsv, exportProjectManagementReportExcel, startProjectManagementReportSnapshot } from '../../api/project-management/projectManagement.api';
-import type { ProjectManagementOperation, ProjectManagementReportQuery, ProjectManagementReportSnapshotFormat } from '../../api/project-management/projectManagement.types';
+import { downloadProjectManagementReportSnapshot, exportProjectManagementReportCsv, exportProjectManagementReportExcel, retryProjectManagementReportSnapshot, startProjectManagementReportSnapshot } from '../../api/project-management/projectManagement.api';
+import type { ProjectManagementOperation, ProjectManagementReportQuery, ProjectManagementReportSnapshotFormat, ProjectManagementReportSnapshotOptions } from '../../api/project-management/projectManagement.types';
 import { useApiMutation } from '../../core/query/useApiMutation';
 import { useAuthStore } from '../../core/state/authStore';
 import { ProjectManagementOperationProgress } from '../../features/project-management/components/ProjectManagementOperationProgress';
@@ -23,6 +23,7 @@ export function ProjectManagementReportsPage() {
   const [keyword, setKeyword] = useState('');
   const [status, setStatus] = useState('');
   const [pageSize, setPageSize] = useState(100);
+  const [options, setOptions] = useState<ProjectManagementReportSnapshotOptions>({ maxTaskRows: 2000, retentionHours: 24 });
   const [snapshotOperationId, setSnapshotOperationId] = useState<string | null>(null);
   const [completedSnapshot, setCompletedSnapshot] = useState<ProjectManagementOperation | null>(null);
   const snapshotStorageKey = useMemo(() => {
@@ -48,7 +49,7 @@ export function ProjectManagementReportsPage() {
     onSuccess: (result) => download(result.blob, result.fileName, message),
   });
   const snapshotMutation = useApiMutation({
-    mutationFn: (format: ProjectManagementReportSnapshotFormat) => startProjectManagementReportSnapshot({ format, query }),
+    mutationFn: (format: ProjectManagementReportSnapshotFormat) => startProjectManagementReportSnapshot({ format, query, options }),
     onError: (error) => message.error(getErrorMessage(error, '报表快照启动失败')),
     onSuccess: (result) => {
       const operationId = result.data?.operationId;
@@ -60,6 +61,18 @@ export function ProjectManagementReportsPage() {
       setCompletedSnapshot(null);
       setSnapshotOperationId(operationId);
       message.success('报表快照已进入后台队列');
+    },
+  });
+  const retryMutation = useApiMutation({
+    mutationFn: () => snapshotOperationId ? retryProjectManagementReportSnapshot(snapshotOperationId) : Promise.reject(new Error('报表快照任务不存在')),
+    onError: (error) => message.error(getErrorMessage(error, '报表快照重试失败')),
+    onSuccess: (result) => {
+      const operationId = result.data?.operationId;
+      if (!operationId) return message.error('报表快照重试未返回后台任务标识');
+      writeProjectManagementOperationTracking(snapshotStorageKey, operationId);
+      setCompletedSnapshot(null);
+      setSnapshotOperationId(operationId);
+      message.success('报表快照已重新进入后台队列');
     },
   });
   const snapshotDownloadMutation = useApiMutation({
@@ -82,6 +95,13 @@ export function ProjectManagementReportsPage() {
         <label className="text-sm">项目状态<select className="mt-1 w-full" value={status} onChange={(event) => setStatus(event.target.value)}>{statuses.map((item) => <option key={item} value={item}>{item || '全部状态'}</option>)}</select></label>
         <label className="text-sm">最大导出行数<select className="mt-1 w-full" value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))}><option value={100}>100</option><option value={500}>500</option></select></label>
       </div>
+      <div className="mt-3 flex flex-wrap gap-4 text-sm">
+        <label><input type="checkbox" checked={options.includeCompleted ?? false} onChange={(event) => setOptions((current) => ({ ...current, includeCompleted: event.target.checked }))} /> 包含已完成任务</label>
+        <label><input type="checkbox" checked={options.includeDeleted ?? false} onChange={(event) => setOptions((current) => ({ ...current, includeDeleted: event.target.checked }))} /> 包含已删除项目</label>
+        <label><input type="checkbox" checked={options.includeCommentSummary ?? false} onChange={(event) => setOptions((current) => ({ ...current, includeCommentSummary: event.target.checked }))} /> 评论摘要</label>
+        <label><input type="checkbox" checked={options.includeAttachmentList ?? false} onChange={(event) => setOptions((current) => ({ ...current, includeAttachmentList: event.target.checked }))} /> 附件清单</label>
+        <label><input type="checkbox" checked={options.includeGanttSnapshot ?? false} onChange={(event) => setOptions((current) => ({ ...current, includeGanttSnapshot: event.target.checked }))} /> 甘特快照</label>
+      </div>
       <p className="mt-3 text-sm text-gray-500" role="status">服务端执行行数上限、公式前缀安全处理和数据权限过滤。后台快照完成后可重复下载，不会重新查询当前页面数据。</p>
       <div className="mt-4 flex flex-wrap gap-2">
         <PermissionButton code="project-management:report:export" disabled={isDirectExportPending} onClick={() => csvMutation.mutate()}> {csvMutation.isPending ? 'CSV 导出中…' : '直接导出 CSV'} </PermissionButton>
@@ -91,7 +111,7 @@ export function ProjectManagementReportsPage() {
         <PermissionButton code="project-management:report:export" disabled={snapshotMutation.isPending || Boolean(snapshotOperationId && !completedSnapshot)} onClick={() => snapshotMutation.mutate('csv')}>生成 CSV 快照</PermissionButton>
       </div>
     </section>
-    {snapshotOperationId ? <section className="mt-4 max-w-4xl rounded-lg border border-sky-200 p-4"><h2 className="font-semibold">后台快照任务</h2><div className="mt-3"><ProjectManagementOperationProgress clearOnTerminal={false} operationId={snapshotOperationId} onTerminal={(operation) => setCompletedSnapshot(operation)} onTrackingEnded={() => { setSnapshotOperationId(null); setCompletedSnapshot(null); }} /></div>{completedSnapshot?.status === 'Succeeded' ? <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-emerald-800"><span>快照已生成，可安全重复下载。</span><PermissionButton code="project-management:report:export" disabled={snapshotDownloadMutation.isPending} onClick={() => snapshotDownloadMutation.mutate()}>{snapshotDownloadMutation.isPending ? '下载中…' : '下载快照'}</PermissionButton></div> : null}{completedSnapshot?.status === 'Failed' ? <div className="mt-3 text-sm text-red-700">生成失败：{completedSnapshot.errorMessage ?? '后台服务未提供失败原因'}。请修正条件后重新生成。</div> : null}{completedSnapshot?.status === 'Canceled' ? <div className="mt-3 text-sm text-amber-700">该快照任务已取消，未保留可下载文件。</div> : null}</section> : null}
+    {snapshotOperationId ? <section className="mt-4 max-w-4xl rounded-lg border border-sky-200 p-4"><h2 className="font-semibold">后台快照任务</h2><div className="mt-3"><ProjectManagementOperationProgress clearOnTerminal={false} operationId={snapshotOperationId} onTerminal={(operation) => setCompletedSnapshot(operation)} onTrackingEnded={() => { setSnapshotOperationId(null); setCompletedSnapshot(null); }} /></div>{completedSnapshot?.status === 'Succeeded' ? <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-emerald-800"><span>快照已生成，可在有效期内重复下载。</span><PermissionButton code="project-management:report:export" disabled={snapshotDownloadMutation.isPending} onClick={() => snapshotDownloadMutation.mutate()}>{snapshotDownloadMutation.isPending ? '下载中…' : '下载快照'}</PermissionButton></div> : null}{completedSnapshot?.status === 'Failed' ? <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-red-700"><span>生成失败：{completedSnapshot.errorMessage ?? '后台服务未提供失败原因'}</span><PermissionButton code="project-management:report:export" disabled={retryMutation.isPending} onClick={() => retryMutation.mutate()}>{retryMutation.isPending ? '重试中…' : '重试生成'}</PermissionButton></div> : null}{completedSnapshot?.status === 'Canceled' ? <div className="mt-3 text-sm text-amber-700">该快照任务已取消，未保留可下载文件。</div> : null}</section> : null}
   </ResponsivePage>;
 }
 

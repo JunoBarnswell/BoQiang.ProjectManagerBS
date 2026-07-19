@@ -26,6 +26,9 @@ public sealed class ProjectManagementReportService(
     private const int MaxPageSize = 500;
     private const int MaxExportRows = 5000;
     private const int TaskExportPageSize = 200;
+    private const int MaxSnapshotProjects = 500;
+    private const int MaxSnapshotComments = 200;
+    private const int MaxSnapshotAttachments = 500;
 
     private static readonly string[] Headers =
     [
@@ -145,9 +148,11 @@ public sealed class ProjectManagementReportService(
         CancellationToken cancellationToken = default)
     {
         var format = NormalizeFormat(request.Format);
+        var options = NormalizeOptions(request.Options);
         var operationId = Guid.NewGuid().ToString("N");
         var traceId = global::System.Diagnostics.Activity.Current?.Id ?? operationId;
-        var impact = new SnapshotImpact(format, request.Query ?? new ProjectManagementReportQuery(), null, null, null, null);
+        var expiresAt = DateTime.UtcNow.AddHours(options.RetentionHours);
+        var impact = new SnapshotImpact(format, NormalizeReportQuery(request.Query), options, expiresAt, null, null, null, null, null);
         var writer = operationWriter ?? throw new InvalidOperationException("报表快照任务写入器未注册");
         var jobManager = backgroundJobManager ?? throw new InvalidOperationException("报表快照后台队列未注册");
         await writer.CreatePendingAsync(operationId, "report.snapshot", JsonSerializer.Serialize(impact, SnapshotJsonOptions), traceId, cancellationToken);
@@ -161,7 +166,7 @@ public sealed class ProjectManagementReportService(
             throw;
         }
 
-        return new ProjectManagementReportSnapshotStartResponse(operationId);
+        return new ProjectManagementReportSnapshotStartResponse(operationId, traceId, expiresAt);
     }
 
     public async Task ExecuteSnapshotAsync(string operationId, CancellationToken cancellationToken = default)
@@ -174,7 +179,8 @@ public sealed class ProjectManagementReportService(
         {
             await writer.StartAsync(operation.Id, "report.snapshot", operation.ImpactJson, operation.TraceId, cancellationToken);
             if (!await writer.ReportProgressAsync(operation.Id, "正在读取授权范围内的数据", 15, cancellationToken)) return;
-            var report = await GenerateFileAsync(impact.Format, impact.Query, cancellationToken);
+            if (DateTime.UtcNow >= impact.ExpiresAt) throw new ValidationException("报表快照已超过有效期，请重新生成");
+            var report = await GenerateFileAsync(impact.Format, impact.Query, impact.Options, cancellationToken);
             if (!await writer.ReportProgressAsync(operation.Id, "正在写入快照文件", 80, cancellationToken)) return;
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             await File.WriteAllBytesAsync(path, report.Content, cancellationToken);
@@ -190,7 +196,8 @@ public sealed class ProjectManagementReportService(
                 FileName = report.FileName,
                 ContentType = report.ContentType,
                 RowCount = report.RowCount,
-                DownloadReady = true
+                DownloadReady = true,
+                CompletedAt = DateTime.UtcNow
             };
             await writer.CompleteWithImpactAsync(operation.Id, JsonSerializer.Serialize(completed, SnapshotJsonOptions), cancellationToken);
         }
@@ -213,29 +220,60 @@ public sealed class ProjectManagementReportService(
         var impact = DeserializeSnapshotImpact(operation.ImpactJson);
         if (impact is not { DownloadReady: true } || string.IsNullOrWhiteSpace(impact.FileName) || string.IsNullOrWhiteSpace(impact.ContentType))
             throw new ValidationException("报表快照产物不可用");
+        if (DateTime.UtcNow >= impact.ExpiresAt)
+        {
+            TryDelete(GetSnapshotPath(operation.Id, impact.Format));
+            throw new ValidationException("报表快照已过期，请重新生成");
+        }
 
         var path = GetSnapshotPath(operation.Id, impact.Format);
         if (!File.Exists(path)) throw new NotFoundException("报表快照文件不存在", ErrorCodes.PlatformResourceNotFound);
         return new ProjectManagementReportFile(impact.FileName, impact.ContentType, await File.ReadAllBytesAsync(path, cancellationToken), impact.RowCount ?? 0);
     }
 
-    private async Task<ProjectManagementReportFile> GenerateFileAsync(string format, ProjectManagementReportQuery query, CancellationToken cancellationToken) =>
+    public async Task<ProjectManagementReportSnapshotStartResponse> RetrySnapshotAsync(string operationId, CancellationToken cancellationToken = default)
+    {
+        var writer = operationWriter ?? throw new InvalidOperationException("报表快照任务写入器未注册");
+        var operation = await GetOwnedSnapshotOperationAsync(operationId, cancellationToken);
+        if (!string.Equals(operation.Status, "Failed", StringComparison.Ordinal))
+            throw new ValidationException("只有失败的报表快照任务可以重试");
+
+        var previous = DeserializeSnapshotImpact(operation.ImpactJson);
+        var retryId = Guid.NewGuid().ToString("N");
+        var traceId = global::System.Diagnostics.Activity.Current?.Id ?? retryId;
+        var expiresAt = DateTime.UtcNow.AddHours(previous.Options.RetentionHours);
+        var impact = previous with { ExpiresAt = expiresAt, FileName = null, ContentType = null, RowCount = null, DownloadReady = false, CompletedAt = null };
+        await writer.CreatePendingAsync(retryId, "report.snapshot", JsonSerializer.Serialize(impact, SnapshotJsonOptions), traceId, cancellationToken);
+        try
+        {
+            await (backgroundJobManager ?? throw new InvalidOperationException("报表快照后台队列未注册"))
+                .EnqueueAsync(new ProjectManagementOperationJobArgs(retryId, Tenant(), App(), UserId(), traceId));
+        }
+        catch (Exception exception)
+        {
+            await writer.FailAsync(retryId, $"报表快照重试入队失败：{exception.Message}", CancellationToken.None);
+            throw;
+        }
+        return new ProjectManagementReportSnapshotStartResponse(retryId, traceId, expiresAt);
+    }
+
+    private async Task<ProjectManagementReportFile> GenerateFileAsync(string format, ProjectManagementReportQuery query, ProjectManagementReportSnapshotOptions options, CancellationToken cancellationToken) =>
         NormalizeFormat(format) switch
         {
             "csv" => await ExportCsvAsync(query, cancellationToken),
             "xlsx" => await ExportExcelAsync(query, cancellationToken),
-            "pdf" => await ExportPdfAsync(query, cancellationToken),
+            "pdf" => await ExportPdfAsync(query, options, cancellationToken),
             _ => throw new ValidationException("不支持的报表格式")
         };
 
-    private async Task<ProjectManagementReportFile> ExportPdfAsync(ProjectManagementReportQuery query, CancellationToken cancellationToken)
+    private async Task<ProjectManagementReportFile> ExportPdfAsync(ProjectManagementReportQuery query, ProjectManagementReportSnapshotOptions options, CancellationToken cancellationToken)
     {
-        var rows = await QueryRowsAsync(query, cancellationToken);
+        var document = await QueryPdfDocumentAsync(query, options, cancellationToken);
         return new ProjectManagementReportFile(
             $"project-management-report-{DateTime.UtcNow:yyyyMMddHHmmss}.pdf",
             "application/pdf",
-            ProjectManagementPdfReportRenderer.Render(Headers, rows.Select(ToValues).ToList()),
-            rows.Count);
+            ProjectManagementPdfReportRenderer.Render(document),
+            document.Tasks.Count);
     }
 
     private async Task<IReadOnlyList<ProjectManagementReportRow>> QueryRowsAsync(
@@ -313,6 +351,111 @@ public sealed class ProjectManagementReportService(
         }).ToList();
     }
 
+    private async Task<ProjectManagementReportPdfDocument> QueryPdfDocumentAsync(
+        ProjectManagementReportQuery query,
+        ProjectManagementReportSnapshotOptions options,
+        CancellationToken cancellationToken)
+    {
+        var tenantId = RequireTenantId();
+        var appCode = RequireAppCode();
+        var db = databaseAccessor.GetCurrentDb();
+        var normalizedQuery = NormalizeReportQuery(query);
+        var keyword = NormalizeOptional(normalizedQuery.Keyword);
+        var status = NormalizeOptional(normalizedQuery.Status);
+        var labelFilter = ProjectManagementTaskLabelFilterQuery.Normalize(normalizedQuery.LabelFilter);
+        var projectsQuery = db.Queryable<ProjectManagementProjectEntity>();
+        if (!options.IncludeDeleted) projectsQuery = projectsQuery.Where(item => !item.IsDeleted);
+        if (keyword is not null)
+            projectsQuery = projectsQuery.Where(item => item.ProjectCode.Contains(keyword) || item.ProjectName.Contains(keyword) || (item.Description != null && item.Description.Contains(keyword)));
+        if (status is not null) projectsQuery = projectsQuery.Where(item => item.Status == status);
+        projectsQuery = ProjectManagementTaskLabelFilterQuery.ApplyToProjects(projectsQuery, labelFilter, tenantId, appCode);
+        var projects = await projectsQuery
+            .OrderBy(item => item.UpdatedTime, OrderByType.Desc)
+            .OrderBy(item => item.CreatedTime, OrderByType.Desc)
+            .Take(MaxSnapshotProjects + 1)
+            .ToListAsync(cancellationToken);
+        if (projects.Count > MaxSnapshotProjects)
+            throw new ValidationException($"PDF 报告最多包含 {MaxSnapshotProjects} 个项目，请缩小筛选条件");
+
+        var projectIds = projects.Select(item => item.Id).ToArray();
+        var tasksQuery = db.Queryable<ProjectManagementTaskEntity>().Where(item => projectIds.Contains(item.ProjectId));
+        if (!options.IncludeDeleted) tasksQuery = tasksQuery.Where(item => !item.IsDeleted);
+        if (!options.IncludeCompleted) tasksQuery = tasksQuery.Where(item => item.Status != ProjectManagementDomainRules.TaskDone && item.Status != ProjectManagementDomainRules.TaskCancelled);
+        if (keyword is not null) tasksQuery = tasksQuery.Where(item => item.TaskCode.Contains(keyword) || item.Title.Contains(keyword) || (item.Summary != null && item.Summary.Contains(keyword)));
+        tasksQuery = ProjectManagementTaskLabelFilterQuery.ApplyToTasks(tasksQuery, labelFilter, tenantId, appCode);
+        var tasks = await tasksQuery.OrderBy(item => item.ProjectId).OrderBy(item => item.Depth).OrderBy(item => item.SortOrder).Take(options.MaxTaskRows + 1).ToListAsync(cancellationToken);
+        if (tasks.Count > options.MaxTaskRows)
+            throw new ValidationException($"PDF 报告任务数超过上限 {options.MaxTaskRows}，请缩小筛选条件或提高任务上限");
+
+        var taskIds = tasks.Select(item => item.Id).ToArray();
+        var milestonesQuery = db.Queryable<ProjectManagementMilestoneEntity>().Where(item => projectIds.Contains(item.ProjectId));
+        if (!options.IncludeDeleted) milestonesQuery = milestonesQuery.Where(item => !item.IsDeleted);
+        var milestones = await milestonesQuery.OrderBy(item => item.ProjectId).OrderBy(item => item.SortOrder).ToListAsync(cancellationToken);
+        var dependencies = taskIds.Length == 0 ? [] : await db.Queryable<ProjectManagementTaskDependencyEntity>()
+            .Where(item => taskIds.Contains(item.PredecessorTaskId) && taskIds.Contains(item.SuccessorTaskId) && !item.IsDeleted)
+            .ToListAsync(cancellationToken);
+        var taskRows = tasks.Select(item => new ProjectManagementReportPdfTask(item.Id, item.ProjectId, item.TaskCode, item.Title, item.Status, item.Priority, item.AssigneeUserId, item.StartDate, item.DueDate, item.ProgressPercent, item.EstimateMinutes ?? 0, item.ActualMinutes, item.Depth, !string.IsNullOrWhiteSpace(item.BlockedReason) || item.Status == "Blocked", item.IsDeleted)).ToList();
+        var taskById = taskRows.ToDictionary(item => item.Id, StringComparer.Ordinal);
+        var summaryByProject = taskRows.GroupBy(item => item.ProjectId, StringComparer.Ordinal).ToDictionary(group => group.Key, group => new ProjectTaskSummary { ProjectId = group.Key, TaskCount = group.Count(), EstimatedMinutes = group.Sum(item => item.EstimateMinutes), ActualMinutes = group.Sum(item => item.ActualMinutes) }, StringComparer.Ordinal);
+        var projectRows = projects.Select(item =>
+        {
+            summaryByProject.TryGetValue(item.Id, out var summary);
+            return new ProjectManagementReportRow(item.ProjectCode, item.ProjectName, item.Status, item.Priority, item.OwnerUserId, item.ProgressPercent, summary?.TaskCount ?? 0, item.StartDate, item.DueDate, item.CreatedTime, summary?.EstimatedMinutes ?? 0, summary?.ActualMinutes ?? 0);
+        }).ToList();
+
+        var comments = new List<string>();
+        if (options.IncludeCommentSummary && taskIds.Length > 0)
+        {
+            var commentRows = await db.Queryable<ProjectManagementTaskCommentEntity>().Where(item => taskIds.Contains(item.TaskId) && !item.IsDeleted).OrderBy(item => item.CreatedTime, OrderByType.Desc).Take(MaxSnapshotComments).ToListAsync(cancellationToken);
+            comments.AddRange(commentRows.Select(item => $"{taskById.GetValueOrDefault(item.TaskId)?.TaskCode ?? item.TaskId}: {SafeReportText(item.Markdown, 180)}"));
+        }
+        var attachments = new List<string>();
+        if (options.IncludeAttachmentList && taskIds.Length > 0)
+        {
+            var attachmentRows = await db.Queryable<ProjectManagementTaskAttachmentEntity>().Where(item => taskIds.Contains(item.TaskId) && !item.IsDeleted).OrderBy(item => item.CreatedTime, OrderByType.Desc).Take(MaxSnapshotAttachments).ToListAsync(cancellationToken);
+            attachments.AddRange(attachmentRows.Select(item => $"{taskById.GetValueOrDefault(item.TaskId)?.TaskCode ?? item.TaskId}: {SafeReportText(item.FileName, 140)} ({item.FileSize} bytes)"));
+        }
+
+        var now = DateTime.UtcNow;
+        var criticalPath = CalculateCriticalPath(taskRows, dependencies);
+        return new ProjectManagementReportPdfDocument(
+            now, tenantId, appCode, UserId(), projectRows,
+            milestones.Select(item => new ProjectManagementReportPdfMilestone(item.ProjectId, item.MilestoneName, item.Status, item.ProgressPercent, item.DueDate)).ToList(),
+            taskRows,
+            taskRows.GroupBy(item => item.Status, StringComparer.Ordinal).ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal),
+            taskRows.Sum(item => item.EstimateMinutes), taskRows.Sum(item => item.ActualMinutes),
+            taskRows.Count(item => item.DueDate.HasValue && item.DueDate.Value >= now),
+            taskRows.Count(item => item.DueDate.HasValue && item.DueDate.Value < now && item.Status != ProjectManagementDomainRules.TaskDone && item.Status != ProjectManagementDomainRules.TaskCancelled),
+            taskRows.Count(item => item.IsBlocked), criticalPath, comments, attachments, options.IncludeGanttSnapshot, options.IncludeDeleted);
+    }
+
+    private static IReadOnlyList<ProjectManagementReportPdfTask> CalculateCriticalPath(
+        IReadOnlyList<ProjectManagementReportPdfTask> tasks,
+        IReadOnlyList<ProjectManagementTaskDependencyEntity> dependencies)
+    {
+        var byId = tasks.ToDictionary(item => item.Id, StringComparer.Ordinal);
+        var predecessors = dependencies.GroupBy(item => item.SuccessorTaskId).ToDictionary(group => group.Key, group => group.Select(item => item.PredecessorTaskId).Where(byId.ContainsKey).Distinct(StringComparer.Ordinal).ToList(), StringComparer.Ordinal);
+        var memo = new Dictionary<string, IReadOnlyList<ProjectManagementReportPdfTask>>(StringComparer.Ordinal);
+        var visiting = new HashSet<string>(StringComparer.Ordinal);
+        IReadOnlyList<ProjectManagementReportPdfTask> Path(string id)
+        {
+            if (memo.TryGetValue(id, out var cached)) return cached;
+            if (!visiting.Add(id)) return [byId[id]];
+            var best = new List<ProjectManagementReportPdfTask>();
+            foreach (var predecessor in predecessors.GetValueOrDefault(id) ?? [])
+            {
+                var candidate = Path(predecessor);
+                if (candidate.Count > best.Count) best = candidate.ToList();
+            }
+            visiting.Remove(id);
+            best.Add(byId[id]);
+            memo[id] = best;
+            return best;
+        }
+
+        return tasks.Count == 0 ? [] : tasks.Select(item => Path(item.Id)).OrderByDescending(item => item.Count).ThenByDescending(item => item.Sum(task => task.EstimateMinutes)).First();
+    }
+
     private string RequireTenantId() => currentUser.GetAsterErpTenantId()?.Trim() ?? throw new ValidationException("当前会话缺少租户");
 
     private string RequireAppCode() => currentUser.GetAsterErpAppCode()?.Trim().ToUpperInvariant() ?? throw new ValidationException("当前会话缺少应用");
@@ -355,6 +498,25 @@ public sealed class ProjectManagementReportService(
         _ => throw new ValidationException("报表格式仅支持 CSV、Excel 或 PDF")
     };
 
+    private static ProjectManagementReportQuery NormalizeReportQuery(ProjectManagementReportQuery? query) =>
+        (query ?? new ProjectManagementReportQuery()) with
+        {
+            PageIndex = Math.Max(query?.PageIndex ?? 1, 1),
+            PageSize = Math.Clamp(query?.PageSize ?? 100, 1, MaxPageSize),
+            Keyword = NormalizeOptional(query?.Keyword),
+            Status = NormalizeOptional(query?.Status)
+        };
+
+    private static ProjectManagementReportSnapshotOptions NormalizeOptions(ProjectManagementReportSnapshotOptions? options)
+    {
+        options ??= new ProjectManagementReportSnapshotOptions();
+        return options with
+        {
+            MaxTaskRows = Math.Clamp(options.MaxTaskRows, 1, 10000),
+            RetentionHours = Math.Clamp(options.RetentionHours, 1, 168)
+        };
+    }
+
     private static void TryDelete(string path)
     {
         try { if (File.Exists(path)) File.Delete(path); }
@@ -362,6 +524,12 @@ public sealed class ProjectManagementReportService(
     }
 
     private static string? NormalizeOptional(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static string SafeReportText(string? value, int maxLength)
+    {
+        var text = string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim().Replace('\r', ' ').Replace('\n', ' ');
+        return text.Length <= maxLength ? text : text[..maxLength] + "…";
+    }
 
     private static string[] ToValues(ProjectManagementReportRow row) =>
     [
@@ -426,8 +594,11 @@ public sealed class ProjectManagementReportService(
     private sealed record SnapshotImpact(
         string Format,
         ProjectManagementReportQuery Query,
+        ProjectManagementReportSnapshotOptions Options,
+        DateTime ExpiresAt,
         string? FileName,
         string? ContentType,
         int? RowCount,
-        bool? DownloadReady);
+        bool? DownloadReady,
+        DateTime? CompletedAt);
 }

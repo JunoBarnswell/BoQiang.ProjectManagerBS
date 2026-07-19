@@ -698,6 +698,10 @@ export function downloadProjectManagementReportSnapshot(operationId: string): Pr
   return httpClient.downloadBlob(`/project-management/reports/snapshots/${encodeURIComponent(operationId)}/download`, { timeoutMs: 120_000 });
 }
 
+export function retryProjectManagementReportSnapshot(operationId: string): Promise<ApiEnvelope<ProjectManagementReportSnapshotStartResponse>> {
+  return httpClient.post<ProjectManagementReportSnapshotStartResponse, undefined>(`/project-management/reports/snapshots/${encodeURIComponent(operationId)}/retry`, undefined);
+}
+
 export function downloadProjectManagementExcelTemplate(signal?: AbortSignal): Promise<{ blob: Blob; fileName: string }> {
   return httpClient.downloadBlob('/project-management/excel-import/template', { timeoutMs: 120_000 }, signal);
 }

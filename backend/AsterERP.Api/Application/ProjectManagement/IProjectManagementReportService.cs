@@ -23,4 +23,6 @@ public interface IProjectManagementReportService
     Task ExecuteSnapshotAsync(string operationId, CancellationToken cancellationToken = default);
 
     Task<ProjectManagementReportFile> DownloadSnapshotAsync(string operationId, CancellationToken cancellationToken = default);
+
+    Task<ProjectManagementReportSnapshotStartResponse> RetrySnapshotAsync(string operationId, CancellationToken cancellationToken = default);
 }

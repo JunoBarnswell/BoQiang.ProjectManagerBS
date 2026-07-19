@@ -41,4 +41,8 @@ public sealed class ProjectManagementReportsController(IProjectManagementReportS
         var file = await service.DownloadSnapshotAsync(operationId, cancellationToken);
         return File(file.Content, file.ContentType, file.FileName);
     }
+
+    [HttpPost("snapshots/{operationId}/retry")]
+    public async Task<IActionResult> RetrySnapshotAsync(string operationId, CancellationToken cancellationToken) =>
+        ApiOk(await service.RetrySnapshotAsync(operationId, cancellationToken));
 }

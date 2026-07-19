@@ -27,8 +27,21 @@ public sealed record ProjectManagementReportFile(
     byte[] Content,
     int RowCount);
 
+public sealed record ProjectManagementReportSnapshotOptions(
+    bool IncludeCompleted = false,
+    bool IncludeDeleted = false,
+    bool IncludeCommentSummary = false,
+    bool IncludeAttachmentList = false,
+    bool IncludeGanttSnapshot = false,
+    int MaxTaskRows = 2000,
+    int RetentionHours = 24);
+
 public sealed record ProjectManagementReportSnapshotRequest(
     string Format,
-    ProjectManagementReportQuery Query);
+    ProjectManagementReportQuery Query,
+    ProjectManagementReportSnapshotOptions? Options = null);
 
-public sealed record ProjectManagementReportSnapshotStartResponse(string OperationId);
+public sealed record ProjectManagementReportSnapshotStartResponse(
+    string OperationId,
+    string TraceId,
+    DateTime ExpiresAt);
