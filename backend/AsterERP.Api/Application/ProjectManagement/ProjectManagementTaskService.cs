@@ -218,7 +218,7 @@ public sealed class ProjectManagementTaskService(
         await EnsureProjectAsync(projectId, cancellationToken);
         Validate(request);
         var db = databaseAccessor.GetCurrentDb();
-        var taskCode = NormalizeRequired(request.TaskCode, "任务编码不能为空");
+        var taskCode = await ResolveCreateTaskCodeAsync(db, projectId, request.TaskCode, cancellationToken);
         if (await db.Queryable<ProjectManagementTaskEntity>().AnyAsync(item => item.ProjectId == projectId && item.TaskCode == taskCode && !item.IsDeleted, cancellationToken))
             throw new ValidationException("项目内任务编码已存在");
         var placement = await TaskHierarchy.ResolvePlacementAsync(db, projectId, request.ParentTaskId, null, cancellationToken);
@@ -408,7 +408,7 @@ public sealed class ProjectManagementTaskService(
             await AccessPolicy.EnsureCanCompleteTasksAsync(entity.ProjectId, [entity.Id], new HashSet<string>([entity.Id], StringComparer.Ordinal), request.ForceComplete, request.ForceCompleteReason, cancellationToken);
         var depth = placement.RootDepth;
         await EnsureMilestoneAsync(entity.ProjectId, request.MilestoneId, cancellationToken);
-        var taskCode = NormalizeRequired(request.TaskCode, "任务编码不能为空");
+        var taskCode = NormalizeOptional(request.TaskCode) ?? entity.TaskCode;
         if (await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskEntity>().AnyAsync(item => item.ProjectId == entity.ProjectId && item.TaskCode == taskCode && item.Id != entity.Id && !item.IsDeleted, cancellationToken))
             throw new ValidationException("项目内任务编码已存在");
         entity.MilestoneId = NormalizeOptional(request.MilestoneId);
@@ -779,6 +779,23 @@ public sealed class ProjectManagementTaskService(
             .Where(item => item.Id == projectId && item.TenantId == tenantId && item.AppCode == appCode && !item.IsDeleted)
             .AnyAsync(cancellationToken))
             throw new NotFoundException("项目不存在", ErrorCodes.PlatformResourceNotFound);
+    }
+
+    private static async Task<string> ResolveCreateTaskCodeAsync(ISqlSugarClient db, string projectId, string? requestedTaskCode, CancellationToken cancellationToken)
+    {
+        var normalized = NormalizeOptional(requestedTaskCode);
+        if (normalized is not null) return normalized;
+
+        for (var attempt = 0; attempt < 5; attempt++)
+        {
+            var generated = $"REQ-{Guid.NewGuid():N}"[..12].ToUpperInvariant();
+            if (!await db.Queryable<ProjectManagementTaskEntity>()
+                    .Where(item => item.ProjectId == projectId && item.TaskCode == generated && !item.IsDeleted)
+                    .AnyAsync(cancellationToken))
+                return generated;
+        }
+
+        throw new ValidationException("无法生成唯一任务编码，请稍后重试");
     }
 
     private async Task<ProjectManagementTaskEntity> GetRequiredAsync(string id, CancellationToken cancellationToken)

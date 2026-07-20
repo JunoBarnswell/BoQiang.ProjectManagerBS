@@ -15,6 +15,25 @@ namespace AsterERP.Api.Tests;
 public sealed class ProjectManagementTaskServiceTests
 {
     [Fact]
+    public async Task Creating_without_a_task_code_generates_one_and_update_keeps_existing_code()
+    {
+        using var db = CreateDb("task-code-generation");
+        await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
+        await db.Insertable(new ProjectManagementProjectEntity
+        {
+            Id = "project-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "A",
+            ProjectName = "A", OwnerUserId = "operator"
+        }).ExecuteCommandAsync();
+        var service = new ProjectManagementTaskService(new TestWorkspaceDatabaseAccessor(db), CreateUser());
+
+        var created = await service.CreateAsync("project-a", new ProjectManagementTaskUpsertRequest(string.Empty, "自动编码需求"));
+        Assert.StartsWith("REQ-", created.TaskCode, StringComparison.Ordinal);
+
+        var updated = await service.UpdateAsync(created.Id, new ProjectManagementTaskUpsertRequest(string.Empty, "更新后的需求", VersionNo: created.VersionNo));
+        Assert.Equal(created.TaskCode, updated.TaskCode);
+    }
+
+    [Fact]
     public async Task Tasks_support_hierarchy_move_cycle_detection_and_optimistic_concurrency()
     {
         using var db = CreateDb("tasks");
