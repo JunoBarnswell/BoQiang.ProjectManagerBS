@@ -17,7 +17,9 @@ public sealed record ProjectManagementNotificationResponse(
     string? TaskId,
     bool IsRead,
     DateTime CreatedTime,
-    DateTime? ReadTime);
+    DateTime? ReadTime,
+    ProjectManagementLocalizedText? TitleText = null,
+    ProjectManagementLocalizedText? MessageText = null);
 
 public sealed record ProjectManagementNotificationPageResponse(
     int Total,
@@ -27,4 +29,5 @@ public sealed record ProjectManagementNotificationPageResponse(
 public sealed record ProjectManagementNotificationOpenResponse(
     bool IsAvailable,
     string? TargetRoute,
-    string? UnavailableReason);
+    string? UnavailableReason,
+    ProjectManagementLocalizedText? UnavailableReasonText = null);

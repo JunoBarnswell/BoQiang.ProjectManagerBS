@@ -5,6 +5,7 @@ using AsterERP.Contracts.ProjectManagement;
 using AsterERP.Shared;
 using AsterERP.Shared.Exceptions;
 using SqlSugar;
+using System.Text.Json;
 using Volo.Abp.Users;
 
 namespace AsterERP.Api.Application.ProjectManagement;
@@ -29,6 +30,10 @@ public sealed class ProjectManagementNotificationService(
             {
                 TenantId = Tenant(), AppCode = App(), RecipientUserId = recipient, NotificationType = Required(notification.NotificationType),
                 Title = Required(notification.Title), Message = Required(notification.Message), TargetRoute = targetRoute,
+                TitleMessageKey = Optional(notification.TitleText?.Key),
+                TitleMessageArgumentsJson = SerializeTextArguments(notification.TitleText),
+                MessageKey = Optional(notification.MessageText?.Key),
+                MessageArgumentsJson = SerializeTextArguments(notification.MessageText),
                 ProjectId = Optional(notification.ProjectId), TaskId = Optional(notification.TaskId), TraceId = Required(notification.TraceId),
                 IdempotencyKey = key, CreatedBy = User(), CreatedTime = DateTime.UtcNow
             };
@@ -98,46 +103,54 @@ public sealed class ProjectManagementNotificationService(
             return notification.TargetRoute switch
             {
                 "/project-audit-center" when currentUser.HasAsterErpPermission(PermissionCodes.ProjectManagementOperationView) => new ProjectManagementNotificationOpenResponse(true, notification.TargetRoute, null),
-                "/project-audit-center" => new ProjectManagementNotificationOpenResponse(false, null, "无权访问关联操作记录"),
+                "/project-audit-center" => Unavailable("projectManagement.api.notification.open.auditDenied"),
                 "/project-sync" when currentUser.HasAsterErpPermission(PermissionCodes.ProjectManagementSyncExport) => new ProjectManagementNotificationOpenResponse(true, notification.TargetRoute, null),
-                "/project-sync" => new ProjectManagementNotificationOpenResponse(false, null, "无权访问项目同步"),
-                _ => new ProjectManagementNotificationOpenResponse(false, null, "通知未关联可打开的项目对象")
+                "/project-sync" => Unavailable("projectManagement.api.notification.open.syncDenied"),
+                _ => Unavailable("projectManagement.api.notification.open.unavailable")
             };
         }
         try
         {
             await (accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser)).EnsureCanViewProjectAsync(notification.ProjectId, cancellationToken);
             if (!string.IsNullOrWhiteSpace(notification.TaskId) && !await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskEntity>().AnyAsync(item => item.Id == notification.TaskId && item.ProjectId == notification.ProjectId && !item.IsDeleted, cancellationToken))
-                return new ProjectManagementNotificationOpenResponse(false, null, "关联任务已删除或你已无权访问");
+                return Unavailable("projectManagement.api.notification.open.targetUnavailable");
             var route = string.IsNullOrWhiteSpace(notification.TaskId) ? $"/projects/{notification.ProjectId}/tasks" : $"/projects/{notification.ProjectId}/tasks?selectedTaskId={notification.TaskId}";
             return new ProjectManagementNotificationOpenResponse(true, route, null);
         }
         catch (ValidationException)
         {
-            return new ProjectManagementNotificationOpenResponse(false, null, "关联项目已删除或你已无权访问");
+            return Unavailable("projectManagement.api.notification.open.targetUnavailable");
         }
         catch (NotFoundException)
         {
-            return new ProjectManagementNotificationOpenResponse(false, null, "关联项目已删除或你已无权访问");
+            return Unavailable("projectManagement.api.notification.open.targetUnavailable");
         }
     }
 
     private async Task<ProjectManagementNotificationEntity> GetOwnedAsync(string id, CancellationToken cancellationToken) =>
         (await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementNotificationEntity>().Where(item => item.Id == id && item.TenantId == Tenant() && item.AppCode == App() && item.RecipientUserId == User() && !item.IsDeleted).Take(1).ToListAsync(cancellationToken)).FirstOrDefault()
-        ?? throw new NotFoundException("通知不存在", ErrorCodes.PlatformResourceNotFound);
+        ?? throw new ProjectManagementLocalizedException("projectManagement.api.notification.notFound", ErrorCodes.PlatformResourceNotFound);
     private void EnsureWorkspace(ProjectManagementNotification notification)
     {
-        if (!string.Equals(notification.TenantId?.Trim(), Tenant(), StringComparison.Ordinal) || !string.Equals(notification.AppCode?.Trim(), App(), StringComparison.OrdinalIgnoreCase)) throw new ValidationException("通知上下文与当前会话不一致", ErrorCodes.PermissionDenied);
+        if (!string.Equals(notification.TenantId?.Trim(), Tenant(), StringComparison.Ordinal) || !string.Equals(notification.AppCode?.Trim(), App(), StringComparison.OrdinalIgnoreCase)) throw new ProjectManagementLocalizedException("projectManagement.api.notification.contextMismatch", ErrorCodes.PermissionDenied);
     }
     private static string BuildIdempotencyKey(string tenantId, string appCode, string type, string recipient, string route, string traceId) =>
         string.Join('\u001f', tenantId, appCode, type, recipient, route, traceId);
     private static bool IsDuplicateNotification(Exception exception) =>
         exception.Message.Contains("pm_notifications", StringComparison.OrdinalIgnoreCase)
         && exception.Message.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase);
-    private static ProjectManagementNotificationResponse Map(ProjectManagementNotificationEntity item) => new(item.Id, item.NotificationType, item.Title, item.Message, item.TargetRoute, item.TraceId, item.ProjectId, item.TaskId, item.IsRead, item.CreatedTime, item.ReadTime);
-    private string Tenant() => currentUser.GetAsterErpTenantId()?.Trim() ?? throw new ValidationException("当前会话缺少租户", ErrorCodes.PermissionDenied);
-    private string App() => currentUser.GetAsterErpAppCode()?.Trim().ToUpperInvariant() ?? throw new ValidationException("当前会话缺少应用", ErrorCodes.PermissionDenied);
-    private string User() => currentUser.GetAsterErpUserId()?.Trim() ?? throw new ValidationException("当前会话缺少用户", ErrorCodes.PermissionDenied);
-    private static string Required(string? value) => string.IsNullOrWhiteSpace(value) ? throw new ValidationException("通知字段不能为空") : value.Trim();
+    private static ProjectManagementNotificationResponse Map(ProjectManagementNotificationEntity item) => new(item.Id, item.NotificationType, item.Title, item.Message, item.TargetRoute, item.TraceId, item.ProjectId, item.TaskId, item.IsRead, item.CreatedTime, item.ReadTime, ToText(item.TitleMessageKey, item.TitleMessageArgumentsJson, item.Title), ToText(item.MessageKey, item.MessageArgumentsJson, item.Message));
+    private string Tenant() => currentUser.GetAsterErpTenantId()?.Trim() ?? throw new ProjectManagementLocalizedException("projectManagement.api.session.tenantMissing", ErrorCodes.PermissionDenied);
+    private string App() => currentUser.GetAsterErpAppCode()?.Trim().ToUpperInvariant() ?? throw new ProjectManagementLocalizedException("projectManagement.api.session.appMissing", ErrorCodes.PermissionDenied);
+    private string User() => currentUser.GetAsterErpUserId()?.Trim() ?? throw new ProjectManagementLocalizedException("projectManagement.api.session.userMissing", ErrorCodes.PermissionDenied);
+    private static string Required(string? value) => string.IsNullOrWhiteSpace(value) ? throw new ProjectManagementLocalizedException("projectManagement.api.notification.required", ErrorCodes.ParameterInvalid) : value.Trim();
     private static string? Optional(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    private static string? SerializeTextArguments(ProjectManagementLocalizedText? text) => text?.Arguments is { Count: > 0 } arguments ? JsonSerializer.Serialize(arguments) : null;
+    private static ProjectManagementLocalizedText? ToText(string? key, string? argumentsJson, string fallback)
+    {
+        if (string.IsNullOrWhiteSpace(key)) return null;
+        try { return new ProjectManagementLocalizedText(key, string.IsNullOrWhiteSpace(argumentsJson) ? null : JsonSerializer.Deserialize<Dictionary<string, string>>(argumentsJson), fallback); }
+        catch (JsonException) { return new ProjectManagementLocalizedText(key, null, fallback); }
+    }
+    private static ProjectManagementNotificationOpenResponse Unavailable(string key) => new(false, null, ProjectManagementText.Resolve(key), new ProjectManagementLocalizedText(key));
 }

@@ -18,7 +18,8 @@ public sealed record ProjectManagementActivityResponse(
     ProjectManagementActivityBatch? Batch = null,
     string? TargetRoute = null,
     bool IsTargetDeleted = false,
-    string? ActorDisplayName = null);
+    string? ActorDisplayName = null,
+    ProjectManagementLocalizedText? SummaryText = null);
 
 public sealed record ProjectManagementActivityQuery(
     int PageIndex = 1,

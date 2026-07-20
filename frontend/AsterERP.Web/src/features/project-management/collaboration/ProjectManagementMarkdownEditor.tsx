@@ -1,12 +1,14 @@
 import { Extension, mergeAttributes, Node as TiptapNode } from '@tiptap/core';
-import Suggestion, { type SuggestionProps } from '@tiptap/suggestion';
-import { useEditor, EditorContent } from '@tiptap/react';
-import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
 import Placeholder from '@tiptap/extension-placeholder';
+import { useEditor, EditorContent } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import Suggestion, { type SuggestionProps } from '@tiptap/suggestion';
 import { useEffect, useMemo, useRef } from 'react';
 
 import type { ProjectManagementMemberCandidate } from '../../../api/project-management/projectManagement.types';
+import { useProjectManagementI18n } from '../projectManagementI18n';
+
 import { normalizeProjectManagementMarkdown, ProjectManagementMarkdownContent } from './projectManagementMarkdown';
 
 interface ProjectManagementMarkdownEditorProps {
@@ -44,7 +46,7 @@ const ProjectMentionNode = TiptapNode.create({
   ],
 });
 
-function createProjectMentionSuggestion(candidatesRef: { current: ProjectManagementMemberCandidate[] }, onMentionIdsChangeRef: { current?: (value: string[]) => void }) {
+function createProjectMentionSuggestion(candidatesRef: { current: ProjectManagementMemberCandidate[] }, onMentionIdsChangeRef: { current?: (value: string[]) => void }, textsRef: { current: Record<string, string> }) {
   return Extension.create({
     name: 'projectMentionSuggestion',
     addProseMirrorPlugins() {
@@ -77,14 +79,14 @@ function createProjectMentionSuggestion(candidatesRef: { current: ProjectManagem
             if (props.loading) {
               const loading = document.createElement('div');
               loading.className = 'pm-mention-suggestion__empty';
-              loading.textContent = '搜索成员…';
+              loading.textContent = textsRef.current.searchMembers;
               currentPopup.appendChild(loading);
               return;
             }
             if (!props.items.length) {
               const empty = document.createElement('div');
               empty.className = 'pm-mention-suggestion__empty';
-              empty.textContent = '没有匹配的项目成员';
+              empty.textContent = textsRef.current.noMembers;
               currentPopup.appendChild(empty);
               return;
             }
@@ -145,21 +147,24 @@ function createProjectMentionSuggestion(candidatesRef: { current: ProjectManagem
 }
 
 export function ProjectManagementMarkdownEditor({ ariaLabel, contentJson, mentionCandidates = [], onChange, onContentJsonChange, onMentionUserIdsChange, placeholder, value }: ProjectManagementMarkdownEditorProps) {
+  const { t } = useProjectManagementI18n();
   const candidatesRef = useRef(mentionCandidates);
   const onChangeRef = useRef(onChange);
   const onContentJsonChangeRef = useRef(onContentJsonChange);
   const onMentionIdsChangeRef = useRef(onMentionUserIdsChange);
+  const textsRef = useRef<Record<string, string>>({ searchMembers: '', noMembers: '' });
   candidatesRef.current = mentionCandidates;
   onChangeRef.current = onChange;
   onContentJsonChangeRef.current = onContentJsonChange;
   onMentionIdsChangeRef.current = onMentionUserIdsChange;
+  textsRef.current = { searchMembers: t('projectManagement.richEditor.searchMembers'), noMembers: t('projectManagement.richEditor.noMembers') };
   const extensions = useMemo(() => [
     StarterKit,
     Link.configure({ openOnClick: false, autolink: true, HTMLAttributes: { rel: 'noopener noreferrer', target: '_blank' } }),
-    Placeholder.configure({ placeholder: placeholder ?? '请输入内容' }),
+    Placeholder.configure({ placeholder: placeholder ?? t('projectManagement.richEditor.placeholder') }),
     ProjectMentionNode,
-    createProjectMentionSuggestion(candidatesRef, onMentionIdsChangeRef),
-  ], []);
+    createProjectMentionSuggestion(candidatesRef, onMentionIdsChangeRef, textsRef),
+  ], [placeholder, t]);
   const editor = useEditor({
     immediatelyRender: false,
     extensions,
@@ -184,21 +189,21 @@ export function ProjectManagementMarkdownEditor({ ariaLabel, contentJson, mentio
     }
   }, [contentJson, editor, value]);
 
-  if (!editor) return <div aria-label={ariaLabel} className="min-h-24 rounded border border-gray-200 p-3 text-sm text-gray-500">正在加载编辑器…</div>;
+  if (!editor) return <div aria-label={ariaLabel} className="min-h-24 rounded border border-gray-200 p-3 text-sm text-gray-500">{t('projectManagement.richEditor.loading')}</div>;
   return <div className="pm-rich-editor rounded border border-gray-200">
-    <div aria-label="富文本工具栏" className="pm-rich-editor-toolbar">
-      <button type="button" aria-label="段落" onClick={() => editor.chain().focus().setParagraph().run()}>段落</button>
-      <button type="button" aria-label="标题" onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}>标题</button>
-      <button type="button" aria-label="加粗" onClick={() => editor.chain().focus().toggleBold().run()}>粗体</button>
-      <button type="button" aria-label="斜体" onClick={() => editor.chain().focus().toggleItalic().run()}>斜体</button>
-      <button type="button" aria-label="删除线" onClick={() => editor.chain().focus().toggleStrike().run()}>删除线</button>
-      <button type="button" aria-label="无序列表" onClick={() => editor.chain().focus().toggleBulletList().run()}>列表</button>
-      <button type="button" aria-label="有序列表" onClick={() => editor.chain().focus().toggleOrderedList().run()}>编号</button>
-      <button type="button" aria-label="引用" onClick={() => editor.chain().focus().toggleBlockquote().run()}>引用</button>
-      <button type="button" aria-label="插入链接" onClick={() => { const href = window.prompt('链接地址'); if (href) editor.chain().focus().setLink({ href }).run(); }}>链接</button>
-      <button type="button" aria-label="提及成员" onClick={() => editor.chain().focus().insertContent('@').run()}>@成员</button>
-      <button type="button" aria-label="撤销" onClick={() => editor.chain().focus().undo().run()}>撤销</button>
-      <button type="button" aria-label="重做" onClick={() => editor.chain().focus().redo().run()}>重做</button>
+    <div aria-label={t('projectManagement.richEditor.toolbar')} className="pm-rich-editor-toolbar">
+      <button type="button" aria-label={t('projectManagement.richEditor.paragraph')} onClick={() => editor.chain().focus().setParagraph().run()}>{t('projectManagement.richEditor.paragraph')}</button>
+      <button type="button" aria-label={t('projectManagement.richEditor.heading')} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}>{t('projectManagement.richEditor.heading')}</button>
+      <button type="button" aria-label={t('projectManagement.richEditor.bold')} onClick={() => editor.chain().focus().toggleBold().run()}>{t('projectManagement.richEditor.bold')}</button>
+      <button type="button" aria-label={t('projectManagement.richEditor.italic')} onClick={() => editor.chain().focus().toggleItalic().run()}>{t('projectManagement.richEditor.italic')}</button>
+      <button type="button" aria-label={t('projectManagement.richEditor.strike')} onClick={() => editor.chain().focus().toggleStrike().run()}>{t('projectManagement.richEditor.strike')}</button>
+      <button type="button" aria-label={t('projectManagement.richEditor.bulletList')} onClick={() => editor.chain().focus().toggleBulletList().run()}>{t('projectManagement.richEditor.bulletList')}</button>
+      <button type="button" aria-label={t('projectManagement.richEditor.orderedList')} onClick={() => editor.chain().focus().toggleOrderedList().run()}>{t('projectManagement.richEditor.orderedList')}</button>
+      <button type="button" aria-label={t('projectManagement.richEditor.quote')} onClick={() => editor.chain().focus().toggleBlockquote().run()}>{t('projectManagement.richEditor.quote')}</button>
+      <button type="button" aria-label={t('projectManagement.richEditor.link')} onClick={() => { const href = window.prompt(t('projectManagement.richEditor.linkPrompt')); if (href) editor.chain().focus().setLink({ href }).run(); }}>{t('projectManagement.richEditor.link')}</button>
+      <button type="button" aria-label={t('projectManagement.richEditor.mention')} onClick={() => editor.chain().focus().insertContent('@').run()}>{t('projectManagement.richEditor.mention')}</button>
+      <button type="button" aria-label={t('projectManagement.richEditor.undo')} onClick={() => editor.chain().focus().undo().run()}>{t('projectManagement.richEditor.undo')}</button>
+      <button type="button" aria-label={t('projectManagement.richEditor.redo')} onClick={() => editor.chain().focus().redo().run()}>{t('projectManagement.richEditor.redo')}</button>
     </div>
     <EditorContent editor={editor} className="pm-rich-editor-content" />
   </div>;

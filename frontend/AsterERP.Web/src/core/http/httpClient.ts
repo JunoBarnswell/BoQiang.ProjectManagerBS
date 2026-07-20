@@ -1,6 +1,6 @@
 import { appEnv } from '../config/env';
 import { formatMessage } from '../i18n/formatMessage';
-import { translateCurrentLocale } from '../i18n/I18nProvider';
+import { getCurrentLocale, translateCurrentLocale } from '../i18n/I18nProvider';
 
 import type { ApiEnvelope } from './apiEnvelope';
 import { dispatchAuthExpired } from './authEvents';
@@ -138,7 +138,7 @@ export class HttpClient {
             code: envelope.code,
             data: envelope.data,
             kind: 'api-result',
-            message: envelope.message,
+            message: resolveEnvelopeMessage(envelope, envelope.message),
             traceId: envelope.traceId,
             status: response.status
           });
@@ -447,6 +447,10 @@ function buildRequestHeaders(options: {
     }
   }
 
+  if (!headers.has('Accept-Language')) {
+    headers.set('Accept-Language', getCurrentLocale());
+  }
+
   if (!headers.has('X-CSRF-Token')) {
     const csrfToken = readCookie('astererp_csrf');
     if (csrfToken) {
@@ -490,7 +494,7 @@ export function normalizeHttpErrorPayload(response: Response, payload: unknown, 
       code: envelope.code,
       data: envelope.data,
       kind: 'api-result',
-      message: resolveMessage(envelope.message, fallbackMessage),
+      message: resolveEnvelopeMessage(envelope, fallbackMessage),
       traceId: envelope.traceId ?? response.headers.get('X-Trace-Id') ?? ''
     };
   }
@@ -577,6 +581,17 @@ function readNumber(value: unknown): number | undefined {
 
 function resolveMessage(value: string | undefined, fallback: string): string {
   return value?.trim() || fallback;
+}
+
+function resolveEnvelopeMessage(envelope: ApiEnvelope<unknown>, fallback: string): string {
+  if (envelope.messageKey) {
+    const translated = translateCurrentLocale(envelope.messageKey);
+    if (translated !== envelope.messageKey) {
+      return formatMessage(translated, envelope.messageArguments);
+    }
+  }
+
+  return resolveMessage(envelope.message, fallback);
 }
 
 function readDetails(value: unknown): string[] {

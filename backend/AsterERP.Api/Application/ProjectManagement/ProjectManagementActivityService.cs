@@ -121,7 +121,8 @@ public sealed class ProjectManagementActivityService(
         return new ProjectManagementActivityPayload(
             NormalizeOptional(activity.Source, 64, "活动来源") ?? "Business",
             changes,
-            batch);
+            batch,
+            activity.SummaryText);
     }
 
     private static ProjectManagementActivityBatch? NormalizeBatch(ProjectManagementActivityBatch? batch)
@@ -302,7 +303,8 @@ public sealed class ProjectManagementActivityService(
             payload?.Batch,
             targetRoute,
             target?.IsDeleted ?? false,
-            displays?.User(entity.ActorUserId));
+            displays?.User(entity.ActorUserId),
+            payload?.SummaryText);
     }
 
     private static string TargetKey(string aggregateType, string aggregateId) => $"{aggregateType}\u001f{aggregateId}";

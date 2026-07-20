@@ -11,8 +11,10 @@ using AsterERP.Api.Infrastructure.Workflows;
 using FluentValidation;
 using FluentValidation.AspNetCore;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Localization;
 using Microsoft.Extensions.FileProviders;
 using Serilog;
+using System.Globalization;
 using Volo.Abp;
 
 Log.Logger = new LoggerConfiguration()
@@ -29,6 +31,15 @@ try
 {
     var builder = WebApplication.CreateBuilder(args);
     builder.Host.UseSerilog();
+
+    var supportedCultures = new[] { new CultureInfo("zh-CN"), new CultureInfo("en-US") };
+    builder.Services.Configure<RequestLocalizationOptions>(options =>
+    {
+        options.DefaultRequestCulture = new RequestCulture("zh-CN");
+        options.SupportedCultures = supportedCultures;
+        options.SupportedUICultures = supportedCultures;
+        options.RequestCultureProviders = [new AcceptLanguageHeaderRequestCultureProvider()];
+    });
 
     builder.Services.AddAsterErpInfrastructure(builder.Configuration, builder.Environment);
 
@@ -82,6 +93,13 @@ try
     var app = builder.Build();
 
     await app.InitializeApplicationAsync();
+    app.UseRequestLocalization(new RequestLocalizationOptions
+    {
+        DefaultRequestCulture = new RequestCulture("zh-CN"),
+        SupportedCultures = supportedCultures,
+        SupportedUICultures = supportedCultures,
+        RequestCultureProviders = [new AcceptLanguageHeaderRequestCultureProvider()]
+    });
     app.UseExceptionHandler("/error");
     app.UseMiddleware<RequestDiagnosticsMiddleware>();
     app.UseMiddleware<CurrentUserMiddleware>();

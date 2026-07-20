@@ -1,3 +1,4 @@
+using AsterERP.Api.Application.ProjectManagement;
 using AsterERP.Shared;
 using AsterERP.Shared.Exceptions;
 using AsterERP.Workflow.Approval.Api.Exceptions;
@@ -6,50 +7,68 @@ using AsterERP.Workflow.Api.Shared;
 
 namespace AsterERP.Api.Infrastructure.Errors;
 
+public sealed record AsterErpExceptionMapping(
+    string Message,
+    int Code,
+    int StatusCode,
+    string? MessageKey = null,
+    IReadOnlyDictionary<string, string>? MessageArguments = null);
+
 public static class AsterErpExceptionStatusMapper
 {
-    public static (string Message, int Code, int StatusCode) Map(Exception? exception) =>
+    public static AsterErpExceptionMapping Map(Exception? exception) =>
         exception switch
         {
+            ProjectManagementLocalizedException projectManagementException =>
+                new(projectManagementException.Message, projectManagementException.Code, ResolveStatusCode(projectManagementException.Code), projectManagementException.MessageKey, projectManagementException.MessageArguments),
             WorkflowApprovalException flowException =>
-                (flowException.Message, ErrorCodes.WorkflowActionInvalid, StatusCodes.Status400BadRequest),
+                new(flowException.Message, ErrorCodes.WorkflowActionInvalid, StatusCodes.Status400BadRequest),
             WorkflowEngineException workflowEngineException =>
-                (workflowEngineException.Message, ErrorCodes.WorkflowActionInvalid, StatusCodes.Status400BadRequest),
+                new(workflowEngineException.Message, ErrorCodes.WorkflowActionInvalid, StatusCodes.Status400BadRequest),
             WorkflowNotFoundException workflowNotFoundException =>
-                (workflowNotFoundException.Message, ErrorCodes.WorkflowProcessDefinitionNotFound, StatusCodes.Status404NotFound),
+                new(workflowNotFoundException.Message, ErrorCodes.WorkflowProcessDefinitionNotFound, StatusCodes.Status404NotFound),
             WorkflowForbiddenException workflowForbiddenException =>
-                (workflowForbiddenException.Message, ErrorCodes.PermissionDenied, StatusCodes.Status403Forbidden),
+                new(workflowForbiddenException.Message, ErrorCodes.PermissionDenied, StatusCodes.Status403Forbidden),
             WorkflowConflictException workflowConflictException =>
-                (workflowConflictException.Message, ErrorCodes.WorkflowActionInvalid, StatusCodes.Status409Conflict),
+                new(workflowConflictException.Message, ErrorCodes.WorkflowActionInvalid, StatusCodes.Status409Conflict),
             WorkflowApiException workflowApiException when workflowApiException.StatusCode == StatusCodes.Status401Unauthorized =>
-                (workflowApiException.Message, ErrorCodes.AuthenticationRequired, StatusCodes.Status401Unauthorized),
+                new(workflowApiException.Message, ErrorCodes.AuthenticationRequired, StatusCodes.Status401Unauthorized),
             WorkflowApiException workflowApiException when workflowApiException.StatusCode == StatusCodes.Status404NotFound =>
-                (workflowApiException.Message, ErrorCodes.WorkflowTaskNotFound, StatusCodes.Status404NotFound),
+                new(workflowApiException.Message, ErrorCodes.WorkflowTaskNotFound, StatusCodes.Status404NotFound),
             WorkflowApiException workflowApiException when workflowApiException.StatusCode == StatusCodes.Status403Forbidden =>
-                (workflowApiException.Message, ErrorCodes.PermissionDenied, StatusCodes.Status403Forbidden),
+                new(workflowApiException.Message, ErrorCodes.PermissionDenied, StatusCodes.Status403Forbidden),
             WorkflowApiException workflowApiException when workflowApiException.StatusCode == StatusCodes.Status409Conflict =>
-                (workflowApiException.Message, ErrorCodes.WorkflowActionInvalid, StatusCodes.Status409Conflict),
+                new(workflowApiException.Message, ErrorCodes.WorkflowActionInvalid, StatusCodes.Status409Conflict),
             WorkflowApiException workflowApiException when workflowApiException.StatusCode >= StatusCodes.Status500InternalServerError =>
-                (workflowApiException.Message, ErrorCodes.InternalError, StatusCodes.Status500InternalServerError),
+                new(workflowApiException.Message, ErrorCodes.InternalError, StatusCodes.Status500InternalServerError),
             WorkflowApiException workflowApiException =>
-                (workflowApiException.Message, ErrorCodes.WorkflowActionInvalid, StatusCodes.Status400BadRequest),
+                new(workflowApiException.Message, ErrorCodes.WorkflowActionInvalid, StatusCodes.Status400BadRequest),
             ValidationException validationException when validationException.Code == ErrorCodes.AuthenticationRequired =>
-                (validationException.Message, validationException.Code, StatusCodes.Status401Unauthorized),
+                new(validationException.Message, validationException.Code, StatusCodes.Status401Unauthorized),
             ValidationException validationException when validationException.Code == ErrorCodes.PasswordResetRequired =>
-                (validationException.Message, validationException.Code, StatusCodes.Status428PreconditionRequired),
+                new(validationException.Message, validationException.Code, StatusCodes.Status428PreconditionRequired),
             ValidationException validationException when validationException.Code == ErrorCodes.PermissionDenied =>
-                (validationException.Message, validationException.Code, StatusCodes.Status403Forbidden),
+                new(validationException.Message, validationException.Code, StatusCodes.Status403Forbidden),
             ValidationException validationException when validationException.Code == ErrorCodes.DesignerSchemaInvalid =>
-                (validationException.Message, validationException.Code, StatusCodes.Status422UnprocessableEntity),
+                new(validationException.Message, validationException.Code, StatusCodes.Status422UnprocessableEntity),
             ValidationException validationException when validationException.Code == ErrorCodes.SchemaOrPayloadTooLarge =>
-                (validationException.Message, validationException.Code, StatusCodes.Status413PayloadTooLarge),
+                new(validationException.Message, validationException.Code, StatusCodes.Status413PayloadTooLarge),
             ValidationException validationException =>
-                (validationException.Message, validationException.Code, StatusCodes.Status400BadRequest),
+                new(validationException.Message, validationException.Code, StatusCodes.Status400BadRequest),
             NotFoundException notFoundException =>
-                (notFoundException.Message, notFoundException.Code, StatusCodes.Status404NotFound),
+                new(notFoundException.Message, notFoundException.Code, StatusCodes.Status404NotFound),
             BusinessException businessException =>
-                (businessException.Message, businessException.Code, StatusCodes.Status400BadRequest),
+                new(businessException.Message, businessException.Code, StatusCodes.Status400BadRequest),
             _ =>
-                ("系统繁忙，请稍后重试", ErrorCodes.InternalError, StatusCodes.Status500InternalServerError)
+                new(ProjectManagementText.Resolve("projectManagement.api.internalError"), ErrorCodes.InternalError, StatusCodes.Status500InternalServerError, "projectManagement.api.internalError")
         };
+
+    private static int ResolveStatusCode(int code) => code switch
+    {
+        ErrorCodes.AuthenticationRequired => StatusCodes.Status401Unauthorized,
+        ErrorCodes.PermissionDenied => StatusCodes.Status403Forbidden,
+        ErrorCodes.PlatformResourceNotFound => StatusCodes.Status404NotFound,
+        ErrorCodes.ApplicationDevelopmentPageRevisionConflict => StatusCodes.Status409Conflict,
+        _ => StatusCodes.Status400BadRequest
+    };
 }

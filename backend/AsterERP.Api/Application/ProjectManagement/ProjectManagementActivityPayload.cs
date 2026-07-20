@@ -8,4 +8,5 @@ namespace AsterERP.Api.Application.ProjectManagement;
 internal sealed record ProjectManagementActivityPayload(
     string Source,
     IReadOnlyList<ProjectManagementActivityFieldChange> FieldChanges,
-    ProjectManagementActivityBatch? Batch);
+    ProjectManagementActivityBatch? Batch,
+    ProjectManagementLocalizedText? SummaryText = null);

@@ -898,6 +898,12 @@ export interface ProjectManagementNotificationQuery {
   notificationType?: string;
 }
 
+export interface ProjectManagementLocalizedText {
+  key: string;
+  arguments?: Record<string, string>;
+  fallback?: string;
+}
+
 export interface ProjectManagementNotification {
   id: string;
   notificationType: string;
@@ -910,6 +916,8 @@ export interface ProjectManagementNotification {
   isRead: boolean;
   createdTime: string;
   readTime?: string;
+  titleText?: ProjectManagementLocalizedText;
+  messageText?: ProjectManagementLocalizedText;
 }
 
 export interface ProjectManagementNotificationPage {
@@ -922,6 +930,7 @@ export interface ProjectManagementNotificationOpenResult {
   isAvailable: boolean;
   targetRoute?: string;
   unavailableReason?: string;
+  unavailableReasonText?: ProjectManagementLocalizedText;
 }
 
 export interface ProjectManagementTaskAttachment {
@@ -1303,6 +1312,7 @@ export interface ProjectManagementActivity {
   targetRoute?: string;
   isTargetDeleted?: boolean;
   actorDisplayName?: string;
+  summaryText?: ProjectManagementLocalizedText;
 }
 
 export interface ProjectManagementActivityQuery {

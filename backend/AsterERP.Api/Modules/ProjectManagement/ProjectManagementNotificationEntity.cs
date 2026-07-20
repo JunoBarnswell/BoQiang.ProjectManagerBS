@@ -12,6 +12,10 @@ public sealed class ProjectManagementNotificationEntity : EntityBase
     public string NotificationType { get; set; } = string.Empty;
     public string Title { get; set; } = string.Empty;
     public string Message { get; set; } = string.Empty;
+    [SugarColumn(IsNullable = true)] public string? TitleMessageKey { get; set; }
+    [SugarColumn(IsNullable = true)] public string? TitleMessageArgumentsJson { get; set; }
+    [SugarColumn(IsNullable = true)] public string? MessageKey { get; set; }
+    [SugarColumn(IsNullable = true)] public string? MessageArgumentsJson { get; set; }
     public string TargetRoute { get; set; } = string.Empty;
     [SugarColumn(IsNullable = true)] public string? ProjectId { get; set; }
     [SugarColumn(IsNullable = true)] public string? TaskId { get; set; }

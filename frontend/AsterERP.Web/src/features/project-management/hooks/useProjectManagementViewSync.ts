@@ -1,8 +1,8 @@
 import type { QueryClient } from '@tanstack/react-query';
 
+import type { ProjectManagementTaskDetail, ProjectManagementTaskListItem } from '../../../api/project-management/projectManagement.types';
 import type { ApiEnvelope } from '../../../core/http/apiEnvelope';
 import { queryKeys } from '../../../core/query/queryKeys';
-import type { ProjectManagementTaskDetail, ProjectManagementTaskListItem } from '../../../api/project-management/projectManagement.types';
 import type { ProjectManagementWorkspaceScope } from '../state/projectManagementWorkspaceScope';
 import {
   getProjectManagementViewSyncInvalidationTargets,

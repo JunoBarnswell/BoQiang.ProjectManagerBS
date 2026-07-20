@@ -1,3 +1,5 @@
+using AsterERP.Contracts.ProjectManagement;
+
 namespace AsterERP.Api.Application.ProjectManagement;
 
 public sealed record ProjectManagementNotification(
@@ -10,4 +12,6 @@ public sealed record ProjectManagementNotification(
     string TargetRoute,
     string TraceId,
     string? ProjectId = null,
-    string? TaskId = null);
+    string? TaskId = null,
+    ProjectManagementLocalizedText? TitleText = null,
+    ProjectManagementLocalizedText? MessageText = null);

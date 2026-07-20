@@ -2,7 +2,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const root = process.cwd();
-const scanRoots = [
+const projectManagementWorkbenchOnly = process.argv.includes('--project-management-workbench');
+const scanRoots = projectManagementWorkbenchOnly ? [
+  'src/features/project-management/ui',
+  'src/features/project-management/collaboration',
+  'src/features/project-management/notifications'
+] : [
   'src/pages',
   'src/features/flowise-studio',
   'src/features/ai-center',
@@ -93,4 +98,4 @@ if (findings.length > 0) {
   process.exit(1);
 }
 
-console.log('i18n coverage audit passed');
+console.log(projectManagementWorkbenchOnly ? 'project-management workbench i18n audit passed' : 'i18n coverage audit passed');

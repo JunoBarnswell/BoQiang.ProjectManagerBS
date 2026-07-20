@@ -478,6 +478,10 @@ CREATE TABLE IF NOT EXISTS pm_reversible_commands (
         schema.EnsureColumn("pm_reversible_commands", "LastReplayedTime", "TEXT NULL");
         schema.EnsureColumn("pm_notifications", "ProjectId", "TEXT NULL");
         schema.EnsureColumn("pm_notifications", "TaskId", "TEXT NULL");
+        schema.EnsureColumn("pm_notifications", "TitleMessageKey", "TEXT NULL");
+        schema.EnsureColumn("pm_notifications", "TitleMessageArgumentsJson", "TEXT NULL");
+        schema.EnsureColumn("pm_notifications", "MessageKey", "TEXT NULL");
+        schema.EnsureColumn("pm_notifications", "MessageArgumentsJson", "TEXT NULL");
         schema.EnsureColumn("pm_task_comments", "MentionUserIdsJson", "TEXT NULL");
         schema.Execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_pm_task_followers_user ON pm_task_followers(TenantId, AppCode, TaskId, UserId) WHERE IsDeleted = 0;");
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_task_drafts_owner ON pm_task_drafts(TenantId, AppCode, ProjectId, OwnerUserId, IsDeleted);");

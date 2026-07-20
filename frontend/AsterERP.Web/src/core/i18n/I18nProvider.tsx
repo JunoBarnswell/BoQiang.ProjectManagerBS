@@ -11,7 +11,7 @@ import {
 } from './messageLoader';
 import type { MessageBag } from './messageLoader';
 
-interface I18nContextValue {
+export interface I18nContextValue {
   locale: AppLocale;
   setLocale: (locale: AppLocale) => void;
   translate: (key: string) => string;

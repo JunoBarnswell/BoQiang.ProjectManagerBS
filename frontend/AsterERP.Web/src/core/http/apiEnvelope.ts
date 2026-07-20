@@ -3,4 +3,6 @@ export interface ApiEnvelope<T> {
   message: string;
   data: T;
   traceId: string;
+  messageKey?: string;
+  messageArguments?: Record<string, string>;
 }

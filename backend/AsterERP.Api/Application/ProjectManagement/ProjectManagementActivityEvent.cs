@@ -15,4 +15,5 @@ public sealed record ProjectManagementActivityEvent(
     string Source = "Business",
     IReadOnlyList<ProjectManagementActivityFieldChange>? FieldChanges = null,
     ProjectManagementActivityBatch? Batch = null,
-    DateTime? OccurredAt = null);
+    DateTime? OccurredAt = null,
+    ProjectManagementLocalizedText? SummaryText = null);

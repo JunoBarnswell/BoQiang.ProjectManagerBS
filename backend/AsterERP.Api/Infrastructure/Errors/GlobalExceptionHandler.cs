@@ -16,8 +16,8 @@ public sealed class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logge
         }
 
         var traceId = context.TraceIdentifier;
-        var (message, code, statusCode) = AsterErpExceptionStatusMapper.Map(exception);
+        var mapped = AsterErpExceptionStatusMapper.Map(exception);
 
-        return Results.Json(ApiResultFactory.Fail<object?>(message, traceId, code), statusCode: statusCode);
+        return Results.Json(ApiResultFactory.Fail<object?>(mapped.Message, traceId, mapped.Code, mapped.MessageKey, mapped.MessageArguments), statusCode: mapped.StatusCode);
     }
 }

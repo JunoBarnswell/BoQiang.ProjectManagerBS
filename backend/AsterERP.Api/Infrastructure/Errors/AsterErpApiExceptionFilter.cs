@@ -82,8 +82,8 @@ public sealed class AsterErpApiExceptionFilter(
 
     private bool TryHandleBusinessException(HttpContext httpContext, Exception exception, out IActionResult result)
     {
-        var (message, code, statusCode) = AsterErpExceptionStatusMapper.Map(exception);
-        if (statusCode == StatusCodes.Status500InternalServerError)
+        var mapped = AsterErpExceptionStatusMapper.Map(exception);
+        if (mapped.StatusCode == StatusCodes.Status500InternalServerError)
         {
             result = new EmptyResult();
             return false;
@@ -92,15 +92,17 @@ public sealed class AsterErpApiExceptionFilter(
         logger.LogWarning(
             exception,
             "Handled API business exception {Code} on {Path}",
-            code,
+            mapped.Code,
             httpContext.Request.Path);
 
         result = new ObjectResult(ApiResultFactory.Fail<object?>(
-            message,
+            mapped.Message,
             httpContext.TraceIdentifier,
-            code))
+            mapped.Code,
+            mapped.MessageKey,
+            mapped.MessageArguments))
         {
-            StatusCode = statusCode
+            StatusCode = mapped.StatusCode
         };
         return true;
     }
