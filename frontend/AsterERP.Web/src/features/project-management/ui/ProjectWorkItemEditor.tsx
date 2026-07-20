@@ -303,7 +303,7 @@ export function ProjectWorkItemEditor({
                 ) : null}
               </Stack>
               {attachments.data?.data.map((item) => (
-                <Stack alignItems="center" direction="row" justifyContent="space-between" key={item.id} sx={{ p: 1, border: '1px solid #edf0f4', borderRadius: 1 }}>
+                <Stack alignItems="center" className="pm-editor-list-item" direction="row" justifyContent="space-between" key={item.id}>
                   <Typography variant="body2">{item.fileName} · {Math.ceil(item.fileSize / 1024)} KB</Typography>
                   <Stack direction="row" spacing={1}>
                     <button className="pm-workbench-command" onClick={() => void downloadProjectManagementTaskAttachment(item).then(({ blob, fileName }) => {
@@ -337,7 +337,7 @@ export function ProjectWorkItemEditor({
                   </Stack>
                 ) : null}
                 {reminders.data?.data.length ? reminders.data.data.map((item) => (
-                  <Stack alignItems="center" direction="row" justifyContent="space-between" key={item.id} sx={{ p: 1, border: '1px solid #edf0f4', borderRadius: 1 }}>
+                  <Stack alignItems="center" className="pm-editor-list-item" direction="row" justifyContent="space-between" key={item.id}>
                     <Stack spacing={0.25}>
                       <Typography variant="body2">{dateTime(item.reminderAtUtc)} · {item.status}</Typography>
                       <Typography color="text.secondary" variant="caption">{item.note || '—'}</Typography>
@@ -366,7 +366,7 @@ export function ProjectWorkItemEditor({
                   </Stack>
                 ) : null}
                 {timeLogs.data?.data.length ? timeLogs.data.data.map((item) => (
-                  <Stack alignItems="center" direction="row" justifyContent="space-between" key={item.id} sx={{ p: 1, border: '1px solid #edf0f4', borderRadius: 1 }}>
+                  <Stack alignItems="center" className="pm-editor-list-item" direction="row" justifyContent="space-between" key={item.id}>
                     <Stack spacing={0.25}>
                       <Typography variant="body2">{item.minutes} {t('projectManagement.editor.timeLog.minutes')} · {dateTime(item.startedAt)} — {dateTime(item.endedAt)}</Typography>
                       <Typography color="text.secondary" variant="caption">{item.note || '—'}</Typography>
@@ -382,40 +382,49 @@ export function ProjectWorkItemEditor({
               <Stack className="pm-editor-tab-panel" spacing={1}>
                 <ProjectManagementProgressBar dueDate={form.dueDate} progressPercent={form.progressPercent ?? 0} status={form.status} />
                 {activities.data?.data.items.length ? activities.data.data.items.map((item) => (
-                  <Stack direction="row" key={item.id} spacing={1} sx={{ py: 0.8, borderBottom: '1px solid #f0f2f6' }}>
-                    <Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: '#3b82f6', mt: 0.8 }} />
-                    <Typography sx={{ flex: 1 }} variant="body2">{item.summaryText ? format(item.summaryText.key, item.summaryText.arguments) : item.summary ?? item.activityType}</Typography>
-                    <Typography color="text.secondary" variant="caption">{dateTime(item.createdTime)}</Typography>
-                  </Stack>
+                  <Box className="pm-overview-activity-row" key={item.id}>
+                    <span className="pm-overview-dot" style={{ background: 'var(--app-accent)', marginTop: 6 }} />
+                    <Typography className="pm-overview-activity-row__summary" component="span" variant="body2">{item.summaryText ? format(item.summaryText.key, item.summaryText.arguments) : item.summary ?? item.activityType}</Typography>
+                    <Typography className="pm-overview-activity-row__time" component="span" variant="caption">{dateTime(item.createdTime)}</Typography>
+                  </Box>
                 )) : <Typography color="text.secondary" variant="body2">{t('projectManagement.editor.activity.empty')}</Typography>}
               </Stack>
             ) : <Typography color="text.secondary" variant="caption">{t('projectManagement.editor.saveFirst')}</Typography>
           ) : null}
         </Stack>
-        <Stack className="pm-editor-properties" spacing={1.1}>
-          <Field label={t('projectManagement.editor.field.project')} value={t('projectManagement.editor.currentProject')} />
-          <SelectField label={t('projectManagement.editor.field.workItemType')} labels={enumLabels('workItemType', ['Requirement', 'UserStory', 'Task', 'Bug'])} onChange={(value) => update({ workItemType: value })} options={['Requirement', 'UserStory', 'Task', 'Bug']} value={form.workItemType ?? 'Requirement'} t={t} />
-          <SelectField label={t('projectManagement.editor.field.status')} labels={enumLabels('status', statusOptions)} onChange={(value) => update({ status: value })} options={statusOptions} value={form.status ?? 'Todo'} t={t} />
-          <Stack spacing={0.25}>
-            <Typography color="text.secondary" variant="caption">{t('projectManagement.editor.field.progress')}</Typography>
-            <Stack alignItems="center" direction="row" spacing={1}>
-              <input max={100} min={0} onChange={(event) => update({ progressPercent: Number(event.target.value) })} style={{ flex: 1 }} type="range" value={form.progressPercent ?? 0} />
-              <Typography variant="caption">{form.progressPercent ?? 0}%</Typography>
+        <Stack className="pm-editor-properties" spacing={0}>
+          <Box className="pm-editor-property-group">
+            <Typography className="pm-editor-property-group__title" component="h3">{t('projectManagement.editor.group.basic')}</Typography>
+            <Field label={t('projectManagement.editor.field.project')} value={t('projectManagement.editor.currentProject')} />
+            <SelectField label={t('projectManagement.editor.field.workItemType')} labels={enumLabels('workItemType', ['Requirement', 'UserStory', 'Task', 'Bug'])} onChange={(value) => update({ workItemType: value })} options={['Requirement', 'UserStory', 'Task', 'Bug']} value={form.workItemType ?? 'Requirement'} t={t} />
+            <SelectField label={t('projectManagement.editor.field.status')} labels={enumLabels('status', statusOptions)} onChange={(value) => update({ status: value })} options={statusOptions} value={form.status ?? 'Todo'} t={t} />
+            <Stack spacing={0.25}>
+              <Typography className="pm-editor-field-label" component="span">{t('projectManagement.editor.field.progress')}</Typography>
+              <Stack alignItems="center" direction="row" spacing={1}>
+                <input max={100} min={0} onChange={(event) => update({ progressPercent: Number(event.target.value) })} style={{ flex: 1 }} type="range" value={form.progressPercent ?? 0} />
+                <Typography variant="caption">{form.progressPercent ?? 0}%</Typography>
+              </Stack>
+              <ProjectManagementProgressBar dueDate={form.dueDate} progressPercent={form.progressPercent ?? 0} status={form.status} />
             </Stack>
-            <ProjectManagementProgressBar dueDate={form.dueDate} progressPercent={form.progressPercent ?? 0} status={form.status} />
-          </Stack>
-          <NumberField label={t('projectManagement.editor.field.estimateMinutes')} onChange={(value) => update({ estimateMinutes: value })} value={form.estimateMinutes} />
-          {taskId ? <Field label={t('projectManagement.editor.field.actualMinutes')} value={String(task.data?.data.actualMinutes ?? 0)} /> : null}
-          <SelectField label={t('projectManagement.editor.field.assignee')} labels={labels} onChange={(value) => update({ assigneeUserId: value || undefined })} options={['', ...candidateItems.map((item) => item.userId)]} value={form.assigneeUserId ?? ''} t={t} />
-          <SelectField label={t('projectManagement.editor.field.parent')} labels={Object.fromEntries(parentItems.map((item) => [item.id, `${item.taskCode} · ${item.title}`]))} onChange={(value) => update({ parentTaskId: value || undefined })} options={['', ...parentItems.map((item) => item.id)]} value={form.parentTaskId ?? ''} t={t} />
-          <SelectField label={t('projectManagement.editor.field.milestone')} labels={Object.fromEntries(milestoneItems.map((item) => [item.id, item.milestoneName]))} onChange={(value) => update({ milestoneId: value || undefined })} options={['', ...milestoneItems.map((item) => item.id)]} value={form.milestoneId ?? ''} t={t} />
-          <DateField label={t('projectManagement.editor.field.startDate')} onChange={(value) => update({ startDate: value || undefined })} value={form.startDate} />
-          <DateField label={t('projectManagement.editor.field.dueDate')} onChange={(value) => update({ dueDate: value || undefined })} value={form.dueDate} />
-          <SelectField label={t('projectManagement.editor.field.priority')} labels={enumLabels('priority', ['Low', 'Medium', 'High', 'Urgent'])} onChange={(value) => update({ priority: value })} options={['Low', 'Medium', 'High', 'Urgent']} value={form.priority ?? 'Medium'} t={t} />
-          <SelectField label={t('projectManagement.editor.field.risk')} labels={enumLabels('risk', ['None', 'Low', 'Medium', 'High'])} onChange={(value) => update({ riskLevel: value })} options={['None', 'Low', 'Medium', 'High']} value={form.riskLevel ?? 'None'} t={t} />
-          <SelectField label={t('projectManagement.editor.field.requirementType')} labels={enumLabels('requirementType', ['Feature', 'NonFunctional', 'Other'])} onChange={(value) => update({ requirementType: value || undefined })} options={['', 'Feature', 'NonFunctional', 'Other']} value={form.requirementType ?? ''} t={t} />
-          <SelectField label={t('projectManagement.editor.field.requirementSource')} labels={enumLabels('requirementSource', ['ProductPlan', 'Customer', 'Internal', 'BugConversion', 'Other'])} onChange={(value) => update({ requirementSource: value || undefined })} options={['', 'ProductPlan', 'Customer', 'Internal', 'BugConversion', 'Other']} value={form.requirementSource ?? ''} t={t} />
-          <SelectField label={t('projectManagement.editor.field.followers')} labels={labels} onChange={(value) => { if (value && !followerIds.includes(value)) { follow.mutate(value); update({ followerUserIds: [...followerIds, value] }); } }} options={['', ...candidateItems.map((item) => item.userId)]} value="" t={t} />
+            <SelectField label={t('projectManagement.editor.field.assignee')} labels={labels} onChange={(value) => update({ assigneeUserId: value || undefined })} options={['', ...candidateItems.map((item) => item.userId)]} value={form.assigneeUserId ?? ''} t={t} />
+            <SelectField label={t('projectManagement.editor.field.followers')} labels={labels} onChange={(value) => { if (value && !followerIds.includes(value)) { follow.mutate(value); update({ followerUserIds: [...followerIds, value] }); } }} options={['', ...candidateItems.map((item) => item.userId)]} value="" t={t} />
+          </Box>
+          <Box className="pm-editor-property-group">
+            <Typography className="pm-editor-property-group__title" component="h3">{t('projectManagement.editor.group.schedule')}</Typography>
+            <NumberField label={t('projectManagement.editor.field.estimateMinutes')} onChange={(value) => update({ estimateMinutes: value })} value={form.estimateMinutes} />
+            {taskId ? <Field label={t('projectManagement.editor.field.actualMinutes')} value={String(task.data?.data.actualMinutes ?? 0)} /> : null}
+            <DateField label={t('projectManagement.editor.field.startDate')} onChange={(value) => update({ startDate: value || undefined })} value={form.startDate} />
+            <DateField label={t('projectManagement.editor.field.dueDate')} onChange={(value) => update({ dueDate: value || undefined })} value={form.dueDate} />
+            <SelectField label={t('projectManagement.editor.field.parent')} labels={Object.fromEntries(parentItems.map((item) => [item.id, `${item.taskCode} · ${item.title}`]))} onChange={(value) => update({ parentTaskId: value || undefined })} options={['', ...parentItems.map((item) => item.id)]} value={form.parentTaskId ?? ''} t={t} />
+            <SelectField label={t('projectManagement.editor.field.milestone')} labels={Object.fromEntries(milestoneItems.map((item) => [item.id, item.milestoneName]))} onChange={(value) => update({ milestoneId: value || undefined })} options={['', ...milestoneItems.map((item) => item.id)]} value={form.milestoneId ?? ''} t={t} />
+          </Box>
+          <Box className="pm-editor-property-group">
+            <Typography className="pm-editor-property-group__title" component="h3">{t('projectManagement.editor.group.classification')}</Typography>
+            <SelectField label={t('projectManagement.editor.field.priority')} labels={enumLabels('priority', ['Low', 'Medium', 'High', 'Urgent'])} onChange={(value) => update({ priority: value })} options={['Low', 'Medium', 'High', 'Urgent']} value={form.priority ?? 'Medium'} t={t} />
+            <SelectField label={t('projectManagement.editor.field.risk')} labels={enumLabels('risk', ['None', 'Low', 'Medium', 'High'])} onChange={(value) => update({ riskLevel: value })} options={['None', 'Low', 'Medium', 'High']} value={form.riskLevel ?? 'None'} t={t} />
+            <SelectField label={t('projectManagement.editor.field.requirementType')} labels={enumLabels('requirementType', ['Feature', 'NonFunctional', 'Other'])} onChange={(value) => update({ requirementType: value || undefined })} options={['', 'Feature', 'NonFunctional', 'Other']} value={form.requirementType ?? ''} t={t} />
+            <SelectField label={t('projectManagement.editor.field.requirementSource')} labels={enumLabels('requirementSource', ['ProductPlan', 'Customer', 'Internal', 'BugConversion', 'Other'])} onChange={(value) => update({ requirementSource: value || undefined })} options={['', 'ProductPlan', 'Customer', 'Internal', 'BugConversion', 'Other']} value={form.requirementSource ?? ''} t={t} />
+          </Box>
         </Stack>
       </Box>
     </ResponsiveModal>
@@ -426,13 +435,13 @@ function ConflictPanel({ conflict, onKeepLocal, onOverwrite, onReload, t }: { co
   return <Box className="pm-task-conflict" role="alert"><Typography fontWeight={700}>{t('projectManagement.editor.conflictDetected')}</Typography>{conflict.fieldConflicts.map((field) => <Typography key={field.field} variant="caption">{field.displayName}: {t('projectManagement.editor.server')} {String(field.serverValue ?? '—')} / {t('projectManagement.editor.local')} {String(field.localValue ?? '—')}</Typography>)}<Stack direction="row" spacing={1}><button className="pm-workbench-command" onClick={onReload} type="button">{t('projectManagement.editor.reload')}</button><button className="pm-workbench-command" onClick={onKeepLocal} type="button">{t('projectManagement.editor.keepLocal')}</button><button className="pm-primary-button" onClick={onOverwrite} type="button">{t('projectManagement.editor.overwrite')}</button></Stack></Box>;
 }
 
-function Field({ label, value }: { label: string; value: string }) { return <Stack spacing={0.25}><Typography color="text.secondary" variant="caption">{label}</Typography><Typography className="pm-editor-readonly" variant="body2">{value || '—'}</Typography></Stack>; }
-function SelectField({ label, labels = {}, onChange, options, value, t }: { label: string; labels?: Record<string, string>; onChange: (value: string) => void; options: string[]; value: string; t: (key: string) => string }) { return <Stack spacing={0.25}><Typography color="text.secondary" variant="caption">{label}</Typography><select className="pm-editor-select" onChange={(event) => onChange(event.target.value)} value={value}>{options.map((option) => <option key={option} value={option}>{option ? labels[option] ?? option : t('projectManagement.workbench.unknown')}</option>)}</select></Stack>; }
-function DateField({ label, onChange, value }: { label: string; onChange: (value: string) => void; value?: string }) { return <Stack spacing={0.25}><Typography color="text.secondary" variant="caption">{label}</Typography><input className="pm-editor-select" onChange={(event) => onChange(event.target.value)} type="date" value={value ? value.slice(0, 10) : ''} /></Stack>; }
+function Field({ label, value }: { label: string; value: string }) { return <Stack spacing={0.25}><Typography className="pm-editor-field-label" component="span">{label}</Typography><Typography className="pm-editor-readonly" variant="body2">{value || '—'}</Typography></Stack>; }
+function SelectField({ label, labels = {}, onChange, options, value, t }: { label: string; labels?: Record<string, string>; onChange: (value: string) => void; options: string[]; value: string; t: (key: string) => string }) { return <Stack spacing={0.25}><Typography className="pm-editor-field-label" component="span">{label}</Typography><select className="pm-editor-select" onChange={(event) => onChange(event.target.value)} value={value}>{options.map((option) => <option key={option} value={option}>{option ? labels[option] ?? option : t('projectManagement.workbench.unknown')}</option>)}</select></Stack>; }
+function DateField({ label, onChange, value }: { label: string; onChange: (value: string) => void; value?: string }) { return <Stack spacing={0.25}><Typography className="pm-editor-field-label" component="span">{label}</Typography><input className="pm-editor-select" onChange={(event) => onChange(event.target.value)} type="date" value={value ? value.slice(0, 10) : ''} /></Stack>; }
 function NumberField({ label, onChange, value }: { label: string; onChange: (value: number | undefined) => void; value?: number }) {
   return (
     <Stack spacing={0.25}>
-      <Typography color="text.secondary" variant="caption">{label}</Typography>
+      <Typography className="pm-editor-field-label" component="span">{label}</Typography>
       <input className="pm-editor-select" min={0} onChange={(event) => onChange(event.target.value === '' ? undefined : Number(event.target.value))} type="number" value={value ?? ''} />
     </Stack>
   );

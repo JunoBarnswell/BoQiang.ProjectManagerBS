@@ -1,4 +1,4 @@
-import { Box, LinearProgress, Stack, Typography } from '@mui/material';
+import { Box, Typography } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -12,6 +12,14 @@ import { toProjectManagementPlatformRoute } from '../state/projectManagementPlat
 import { useProjectManagementWorkspaceScope } from '../state/projectManagementWorkspaceScope';
 
 import { ProjectScreenHeader, ProjectWorkbenchFrame } from './ProjectWorkbenchFrame';
+
+const metricTones = {
+  total: 'var(--app-primary-100)',
+  completed: 'color-mix(in srgb, var(--app-success) 18%, var(--app-white))',
+  inProgress: 'color-mix(in srgb, var(--app-warning) 16%, var(--app-white))',
+  pending: 'color-mix(in srgb, var(--app-danger) 12%, var(--app-white))',
+  storyPoints: 'color-mix(in srgb, var(--app-warning) 14%, var(--app-white))',
+} as const;
 
 export function ProjectOverviewScreen() {
   const { dateTime, format, t } = useProjectManagementI18n();
@@ -46,38 +54,124 @@ export function ProjectOverviewScreen() {
     }
   };
 
-  if (overview.isLoading) return <Box sx={{ p: 4 }}>{t('projectManagement.workbench.overview.loading')}</Box>;
-  if (!item) return <Box sx={{ p: 4 }}>{t('projectManagement.workbench.overview.notFound')}</Box>;
+  if (overview.isLoading) return <Box className="pm-overview-page" sx={{ p: 4 }}>{t('projectManagement.workbench.overview.loading')}</Box>;
+  if (!item) return <Box className="pm-overview-page" sx={{ p: 4 }}>{t('projectManagement.workbench.overview.notFound')}</Box>;
   const taskCount = item.taskCount;
   const pending = item.pendingTaskCount ?? Math.max(0, taskCount - item.completedTaskCount - item.inProgressTaskCount - item.blockedTaskCount);
   const storyPoints = item.storyPointsTotal ?? 0;
   const values: Record<string, number> = { TaskCount: taskCount, CompletedTaskCount: item.completedTaskCount, InProgressTaskCount: item.inProgressTaskCount, PendingTaskCount: pending, StoryPoints: storyPoints };
   const metricMeta = [
-    [t('projectManagement.workbench.overview.metric.total'), 'TaskCount', '#eaf0ff'], [t('projectManagement.workbench.overview.metric.completed'), 'CompletedTaskCount', '#eaf9f0'], [t('projectManagement.workbench.overview.metric.inProgress'), 'InProgressTaskCount', '#fff6e7'], [t('projectManagement.workbench.overview.metric.pending'), 'PendingTaskCount', '#fff0f0'], [t('projectManagement.workbench.overview.metric.storyPoints'), 'StoryPoints', '#fff7e8'],
+    [t('projectManagement.workbench.overview.metric.total'), 'TaskCount', 'total'],
+    [t('projectManagement.workbench.overview.metric.completed'), 'CompletedTaskCount', 'completed'],
+    [t('projectManagement.workbench.overview.metric.inProgress'), 'InProgressTaskCount', 'inProgress'],
+    [t('projectManagement.workbench.overview.metric.pending'), 'PendingTaskCount', 'pending'],
+    [t('projectManagement.workbench.overview.metric.storyPoints'), 'StoryPoints', 'storyPoints'],
   ] as const;
-  const risks = [ [t('projectManagement.workbench.risk.high'), item.riskSummary?.overdueTaskCount ?? 0, '#ef4444'], [t('projectManagement.workbench.risk.medium'), item.riskSummary?.blockedTaskCount ?? 0, '#f59e0b'], [t('projectManagement.workbench.risk.low'), item.riskSummary?.dueSoonIncompleteTaskCount ?? 0, '#22c55e'], [t('projectManagement.workbench.risk.closed'), item.completedTaskCount, '#94a3b8'] ];
+  const risks = [
+    [t('projectManagement.workbench.risk.high'), item.riskSummary?.overdueTaskCount ?? 0, 'var(--app-danger)'],
+    [t('projectManagement.workbench.risk.medium'), item.riskSummary?.blockedTaskCount ?? 0, 'var(--app-warning)'],
+    [t('projectManagement.workbench.risk.low'), item.riskSummary?.dueSoonIncompleteTaskCount ?? 0, 'var(--app-success)'],
+    [t('projectManagement.workbench.risk.closed'), item.completedTaskCount, 'var(--app-gray-400)'],
+  ];
 
-  return <ProjectWorkbenchFrame active="overview"><Box sx={{ flex: '1 1 auto', minWidth: 0, overflow: 'auto' }}>
-    <ProjectScreenHeader
-      code={item.project.projectCode}
-      name={item.project.projectName}
-      onCreateRequirement={() => navigate(toProjectManagementPlatformRoute(`projects/${encodeURIComponent(projectId)}/requirements?create=1`))}
-      onRefresh={refresh}
-      refreshing={refreshing}
-    />
-    <Box sx={{ p: { xs: 2, md: 3 }, display: 'grid', gap: 2, gridTemplateColumns: 'repeat(12, minmax(0, 1fr))' }}>
-      <Box sx={{ gridColumn: '1 / -1', display: 'grid', gap: 1.5, gridTemplateColumns: { xs: '1fr', md: 'repeat(5, minmax(0, 1fr))' } }}>{metricMeta.map(([label, key, color]) => <MetricCard key={key} color={color} label={label} value={values[key]} />)}</Box>
-      <Panel sx={{ gridColumn: { xs: '1 / -1', lg: 'span 4' } }} title={t('projectManagement.workbench.overview.milestones')}>{item.milestones.slice(0, 4).map((milestone) => <Stack key={milestone.id} spacing={0.55} sx={{ mb: 1.5 }}><Stack direction="row" justifyContent="space-between"><Typography variant="body2">{milestone.name}</Typography><Typography color="text.secondary" variant="caption">{milestone.progressPercent}%</Typography></Stack><LinearProgress sx={{ height: 5, borderRadius: 4 }} value={Number(milestone.progressPercent)} variant="determinate" /></Stack>)}</Panel>
-      <Panel sx={{ gridColumn: { xs: '1 / -1', lg: 'span 3' } }} title={t('projectManagement.workbench.overview.risk')}>{risks.map(([label, count, color]) => <Stack alignItems="center" direction="row" justifyContent="space-between" key={label as string} sx={{ py: 0.65 }}><Stack alignItems="center" direction="row" spacing={1}><Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: color }} /><Typography variant="body2">{label}</Typography></Stack><Typography fontWeight={700} variant="body2">{count}</Typography></Stack>)}</Panel>
-      <Panel sx={{ gridColumn: { xs: '1 / -1', lg: 'span 5' } }} title={t('projectManagement.workbench.overview.workload')}>{item.people.slice(0, 5).map((person) => <Stack key={person.userId} spacing={0.5} sx={{ mb: 1.25 }}><Stack direction="row" justifyContent="space-between"><Typography variant="body2">{person.displayName ?? person.userId}</Typography><Typography color="text.secondary" variant="caption">{format('projectManagement.workbench.workloadValue', { estimated: person.estimatedMinutes ?? 0, capacity: person.capacityMinutes ?? 2400 })}</Typography></Stack><LinearProgress color="primary" sx={{ height: 5, borderRadius: 4 }} value={person.workloadPercent ?? 0} variant="determinate" /></Stack>)}</Panel>
-      <Panel sx={{ gridColumn: { xs: '1 / -1', lg: 'span 8' } }} title={t('projectManagement.workbench.overview.activity')}>{activities.data?.data.items.length ? activities.data.data.items.map((activity) => <Stack direction="row" key={activity.id} spacing={1} sx={{ py: 0.8, borderBottom: '1px solid #f0f2f6' }}><Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: '#3b82f6', mt: 0.8 }} /><Typography sx={{ flex: 1 }} variant="body2">{activity.summaryText ? format(activity.summaryText.key, activity.summaryText.arguments) : activity.summary ?? activity.activityType}</Typography><Typography color="text.secondary" variant="caption">{dateTime(activity.createdTime)}</Typography></Stack>) : <Typography color="text.secondary" variant="body2">{t('projectManagement.workbench.overview.noActivity')}</Typography>}</Panel>
-      <Panel sx={{ gridColumn: { xs: '1 / -1', lg: 'span 4' } }} title={t('projectManagement.workbench.overview.distribution')}>{item.requirementTypeDistribution?.map((entry) => <Stack direction="row" justifyContent="space-between" key={entry.key} sx={{ py: 0.7 }}><Typography variant="body2">{entry.key}</Typography><Typography color="text.secondary" variant="body2">{entry.count} · {entry.percent}%</Typography></Stack>)}</Panel>
-    </Box>
-  </Box></ProjectWorkbenchFrame>;
+  return (
+    <ProjectWorkbenchFrame active="overview">
+      <Box className="pm-overview-page">
+        <ProjectScreenHeader
+          code={item.project.projectCode}
+          name={item.project.projectName}
+          onCreateRequirement={() => navigate(toProjectManagementPlatformRoute(`projects/${encodeURIComponent(projectId)}/requirements?create=1`))}
+          onRefresh={refresh}
+          refreshing={refreshing}
+        />
+        <Box className="pm-overview-grid">
+          <Box className="pm-overview-metrics">
+            {metricMeta.map(([label, key, tone]) => (
+              <MetricCard key={key} label={label} tone={tone} value={values[key]} />
+            ))}
+          </Box>
+          <Panel className="pm-overview-panel--milestones" title={t('projectManagement.workbench.overview.milestones')}>
+            {item.milestones.slice(0, 4).map((milestone) => (
+              <Box className="pm-overview-milestone" key={milestone.id}>
+                <Box className="pm-overview-milestone__head">
+                  <Typography className="pm-overview-milestone__name" component="span">{milestone.name}</Typography>
+                  <Typography className="pm-overview-milestone__percent" component="span">{milestone.progressPercent}%</Typography>
+                </Box>
+                <Box aria-hidden className="pm-overview-progress">
+                  <span style={{ width: `${Number(milestone.progressPercent)}%` }} />
+                </Box>
+              </Box>
+            ))}
+          </Panel>
+          <Panel className="pm-overview-panel--risk" title={t('projectManagement.workbench.overview.risk')}>
+            {risks.map(([label, count, color]) => (
+              <Box className="pm-overview-list-row" key={label as string}>
+                <Box className="pm-overview-list-row__label">
+                  <span className="pm-overview-dot" style={{ background: color as string }} />
+                  <Typography component="span" variant="body2">{label}</Typography>
+                </Box>
+                <Typography component="span" fontWeight={700} variant="body2">{count}</Typography>
+              </Box>
+            ))}
+          </Panel>
+          <Panel className="pm-overview-panel--workload" title={t('projectManagement.workbench.overview.workload')}>
+            {item.people.slice(0, 5).map((person) => (
+              <Box className="pm-overview-milestone" key={person.userId}>
+                <Box className="pm-overview-milestone__head">
+                  <Typography className="pm-overview-milestone__name" component="span">{person.displayName ?? person.userId}</Typography>
+                  <Typography className="pm-overview-milestone__percent" component="span">
+                    {format('projectManagement.workbench.workloadValue', { estimated: person.estimatedMinutes ?? 0, capacity: person.capacityMinutes ?? 2400 })}
+                  </Typography>
+                </Box>
+                <Box aria-hidden className="pm-overview-progress">
+                  <span style={{ width: `${person.workloadPercent ?? 0}%`, background: 'var(--app-accent)' }} />
+                </Box>
+              </Box>
+            ))}
+          </Panel>
+          <Panel className="pm-overview-panel--activity" title={t('projectManagement.workbench.overview.activity')}>
+            {activities.data?.data.items.length ? activities.data.data.items.map((activity) => (
+              <Box className="pm-overview-activity-row" key={activity.id}>
+                <span className="pm-overview-dot" style={{ background: 'var(--app-accent)', marginTop: 6 }} />
+                <Typography className="pm-overview-activity-row__summary" component="span">
+                  {activity.summaryText ? format(activity.summaryText.key, activity.summaryText.arguments) : activity.summary ?? activity.activityType}
+                </Typography>
+                <Typography className="pm-overview-activity-row__time" component="span">{dateTime(activity.createdTime)}</Typography>
+              </Box>
+            )) : <Typography className="pm-overview-empty" component="p">{t('projectManagement.workbench.overview.noActivity')}</Typography>}
+          </Panel>
+          <Panel className="pm-overview-panel--distribution" title={t('projectManagement.workbench.overview.distribution')}>
+            {item.requirementTypeDistribution?.map((entry) => (
+              <Box className="pm-overview-list-row" key={entry.key}>
+                <Typography component="span" variant="body2">{entry.key}</Typography>
+                <Typography color="text.secondary" component="span" variant="body2">{entry.count} · {entry.percent}%</Typography>
+              </Box>
+            ))}
+          </Panel>
+        </Box>
+      </Box>
+    </ProjectWorkbenchFrame>
+  );
 }
 
-function MetricCard({ color, label, value }: { color: string; label: string; value: number }) { return <Box sx={{ p: 1.75, border: '1px solid #edf0f4', borderRadius: 2, bgcolor: '#fff' }}><Box sx={{ width: 26, height: 26, borderRadius: 1.5, bgcolor: color, mb: 1 }} /><Typography color="text.secondary" variant="caption">{label}</Typography><Typography fontWeight={750} sx={{ mt: 0.2, fontSize: 24 }}>{value}</Typography></Box>; }
-function Panel({ children, sx, title }: { children: ReactNode; sx: object; title: string }) { return <Box sx={{ ...sx, minHeight: 190, p: 2, border: '1px solid #edf0f4', borderRadius: 2, bgcolor: '#fff' }}><Typography fontWeight={700} sx={{ mb: 1.5 }} variant="subtitle2">{title}</Typography>{children}</Box>; }
+function MetricCard({ label, tone, value }: { label: string; tone: keyof typeof metricTones; value: number }) {
+  return (
+    <Box className="pm-metric-card">
+      <Box className="pm-metric-card__icon" sx={{ bgcolor: metricTones[tone] }} />
+      <Typography className="pm-metric-card__label" component="span">{label}</Typography>
+      <Typography className="pm-metric-card__value" component="span">{value}</Typography>
+    </Box>
+  );
+}
+
+function Panel({ children, className, title }: { children: ReactNode; className?: string; title: string }) {
+  return (
+    <Box className={`pm-overview-panel ${className ?? ''}`.trim()}>
+      <Typography className="pm-overview-panel__title" component="h2">{title}</Typography>
+      {children}
+    </Box>
+  );
+}
 
 function isRequestCancelled(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;

@@ -10,11 +10,13 @@ const toneColors = {
 } as const;
 
 export function ProjectManagementProgressBar({
+  compact = false,
   dueDate,
   progressPercent,
   showLabel = true,
   status,
 }: {
+  compact?: boolean;
   dueDate?: string;
   progressPercent: number;
   showLabel?: boolean;
@@ -25,11 +27,11 @@ export function ProjectManagementProgressBar({
   const color = toneColors[progressBarTone(value, overdue)];
 
   return (
-    <Box className="pm-task-progress" sx={{ display: 'grid', gridTemplateColumns: showLabel ? 'minmax(48px, 1fr) auto' : '1fr', alignItems: 'center', gap: 0.75, minWidth: 72 }}>
-      <Box sx={{ height: 6, borderRadius: 99, bgcolor: '#e2e8f0', overflow: 'hidden' }}>
+    <Box className="pm-task-progress" sx={{ display: 'grid', gridTemplateColumns: showLabel ? 'minmax(48px, 1fr) auto' : '1fr', alignItems: 'center', gap: compact ? 0.5 : 0.75, minWidth: compact ? 0 : 72 }}>
+      <Box sx={{ height: compact ? 4 : 6, borderRadius: 99, bgcolor: 'var(--app-gray-200)', overflow: 'hidden' }}>
         <Box sx={{ width: `${value}%`, height: '100%', bgcolor: color, borderRadius: 99, transition: 'width .2s ease' }} />
       </Box>
-      {showLabel ? <Typography color="text.secondary" sx={{ fontVariantNumeric: 'tabular-nums', minWidth: 28 }} variant="caption">{Math.round(value)}%</Typography> : null}
+      {showLabel ? <Typography color="text.secondary" sx={{ fontSize: compact ? 'var(--app-text-3xs)' : undefined, fontVariantNumeric: 'tabular-nums', minWidth: compact ? 24 : 28 }} variant="caption">{Math.round(value)}%</Typography> : null}
     </Box>
   );
 }

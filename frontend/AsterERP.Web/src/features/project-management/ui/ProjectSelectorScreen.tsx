@@ -13,6 +13,8 @@ import { projectManagementEnumLabel, useProjectManagementI18n } from '../project
 import { toProjectManagementPlatformRoute } from '../state/projectManagementPlatformRoutes';
 import { useProjectManagementWorkspaceScope } from '../state/projectManagementWorkspaceScope';
 
+import './projectWorkbench.css';
+
 const newProject: ProjectManagementProjectUpsertRequest = { projectCode: '', projectName: '', status: 'Planning', priority: 'Medium' };
 
 export function ProjectSelectorScreen() {
@@ -50,27 +52,18 @@ export function ProjectSelectorScreen() {
   };
 
   return (
-    <Box sx={{ display: 'flex', flex: '1 1 auto', minHeight: 0, p: { xs: 2, md: 3 }, bgcolor: '#f7f8fb' }}>
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, flex: '1 1 auto', minWidth: 0, maxWidth: 1440, mx: 'auto' }}>
-        <Box
-          sx={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 1.5,
-            rowGap: 1,
-          }}
-        >
-          <Box sx={{ minWidth: 0, flex: '1 1 240px' }}>
-            <Typography component="h1" fontWeight={750} sx={{ lineHeight: 1.3 }} variant="h5">
+    <Box className="pm-workbench-page">
+      <Box className="pm-workbench-page__inner">
+        <Box className="pm-workbench-page__header">
+          <Box className="pm-workbench-page__intro">
+            <Typography className="pm-workbench-page__title" component="h1">
               {t('projectManagement.workbench.selector.title')}
             </Typography>
-            <Typography color="text.secondary" sx={{ mt: 0.5, maxWidth: 520 }} variant="body2">
+            <Typography className="pm-workbench-page__description" component="p">
               {t('projectManagement.workbench.selector.description')}
             </Typography>
           </Box>
-          <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>
+          <Box className="pm-workbench-page__actions">
             <button
               aria-busy={refreshing}
               aria-label={t('projectManagement.workbench.selector.refresh')}
@@ -102,19 +95,8 @@ export function ProjectSelectorScreen() {
           />
         </Box>
 
-        <Box sx={{ overflow: 'hidden', bgcolor: '#fff', border: '1px solid #e7eaf0', borderRadius: 2 }}>
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: 'minmax(260px, 2fr) repeat(4, minmax(100px, 1fr))',
-              gap: 2,
-              px: 2.25,
-              py: 1.25,
-              bgcolor: '#fbfcfe',
-              color: 'text.secondary',
-              fontSize: 12,
-            }}
-          >
+        <Box className="pm-workbench-page__panel">
+          <Box className="pm-workbench-page__panel-head">
             <span>{t('projectManagement.workbench.selector.name')}</span>
             <span>{t('projectManagement.workbench.selector.health')}</span>
             <span>{t('projectManagement.workbench.selector.owner')}</span>

@@ -37,6 +37,7 @@ export const projectManagementWorkItemsMessagesZhCN = {
   'projectManagement.workItems.loadFailed': '任务列表加载失败',
   'projectManagement.workItems.retry': '重试',
   'projectManagement.workItems.empty': '暂无任务',
+  'projectManagement.workItems.boardEmpty': '拖拽任务到此',
   'projectManagement.workItems.column.code': '编号',
   'projectManagement.workItems.column.title': '标题',
   'projectManagement.workItems.column.status': '状态',

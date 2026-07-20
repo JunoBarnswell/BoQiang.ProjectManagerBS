@@ -15,14 +15,14 @@ export function ProjectWorkbenchFrame({ children, active }: { children: ReactNod
   const requirementsPath = toProjectManagementPlatformRoute(`projects/${encodeURIComponent(projectId)}/requirements`);
 
   return (
-    <Box sx={{ display: 'flex', flex: '1 1 auto', minHeight: 0, width: '100%', bgcolor: '#f7f8fb' }}>
-      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, width: 48, py: 1.5, bgcolor: '#fff', borderRight: '1px solid #e7eaf0' }}>
+    <Box className="pm-workbench" sx={{ display: 'flex', flex: '1 1 auto', minHeight: 0, width: '100%', bgcolor: 'var(--app-bg-subtle)' }}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, width: 48, py: 1.5, bgcolor: 'var(--app-white)', borderRight: '1px solid var(--app-border-subtle)' }}>
         <TooltipButton label={t('projectManagement.workbench.back')} onClick={() => navigate(toProjectManagementPlatformRoute())}><PmIcon name="briefcase" /></TooltipButton>
         <TooltipButton active={active === 'overview'} label={t('projectManagement.workbench.overview')} onClick={() => navigate(overviewPath)}><PmIcon name="layers" /></TooltipButton>
         <TooltipButton active={active === 'requirements'} label={t('projectManagement.workbench.requirementsNav')} onClick={() => navigate(requirementsPath)}><PmIcon name="folder" /></TooltipButton>
       </Box>
-      <Box sx={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto', minWidth: 0, minHeight: 0, bgcolor: '#fff' }}>
-        <Box component="nav" sx={{ display: 'flex', alignItems: 'center', gap: 2.5, minHeight: 44, px: 3, borderBottom: '1px solid #e7eaf0' }}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto', minWidth: 0, minHeight: 0, bgcolor: 'var(--app-white)' }}>
+        <Box component="nav" sx={{ display: 'flex', alignItems: 'center', gap: 2.5, minHeight: 44, px: 3, borderBottom: '1px solid var(--app-border-subtle)' }}>
           <button className={active === 'overview' ? 'pm-project-tab is-active' : 'pm-project-tab'} onClick={() => navigate(overviewPath)} type="button">{t('projectManagement.workbench.overview')}</button>
           <button className={active === 'requirements' ? 'pm-project-tab is-active' : 'pm-project-tab'} onClick={() => navigate(requirementsPath)} type="button">{t('projectManagement.workbench.requirementsNav')}</button>
         </Box>
@@ -47,21 +47,10 @@ export function ProjectScreenHeader({
 }) {
   const { format, t } = useProjectManagementI18n();
   return (
-    <Box
-      sx={{
-        display: 'flex',
-        flexWrap: 'wrap',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: 1.5,
-        px: 3,
-        py: 2,
-        borderBottom: '1px solid #eef0f4',
-      }}
-    >
-      <Box sx={{ minWidth: 0, flex: '1 1 220px' }}>
-        <Typography color="text.secondary" variant="caption">{format('projectManagement.workbench.breadcrumb', { code })}</Typography>
-        <Typography fontWeight={700} noWrap sx={{ mt: 0.25, lineHeight: 1.35 }} variant="h6">{name}</Typography>
+    <Box className="pm-workbench-header">
+      <Box className="pm-workbench-header__meta">
+        <Typography className="pm-workbench-header__breadcrumb" variant="caption">{format('projectManagement.workbench.breadcrumb', { code })}</Typography>
+        <Typography className="pm-workbench-header__title" noWrap variant="h6">{name}</Typography>
       </Box>
       <Box className="pm-header-actions" sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, ml: 'auto', flexShrink: 0 }}>
         {onRefresh ? (

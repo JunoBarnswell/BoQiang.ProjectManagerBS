@@ -1,4 +1,4 @@
-﻿import { Box, Chip, Stack, Typography } from '@mui/material';
+﻿import { Box, Stack, Typography } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useState, type DragEvent } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -309,7 +309,7 @@ export function ProjectRequirementsScreen() {
             ))}
           </Box>
         ) : null}
-        <Box className="pm-requirements-content" sx={{ display: 'flex', flex: 1, minHeight: 0, p: { xs: 1, md: 2 } }}>
+        <Box className="pm-requirements-content">
           {query.isError && !rows.length ? (
             <Stack alignItems="center" justifyContent="center" spacing={1} sx={{ flex: 1 }}>
               <Typography color="error">{t('projectManagement.workItems.loadFailed')}</Typography>
@@ -489,52 +489,59 @@ function RequirementBoard({
   }));
   return (
     <Box className="pm-requirement-board">
-      {columns.map((column) => (
-        <Stack
-          className={overStatus === column.status ? 'pm-board-column is-over' : 'pm-board-column'}
-          key={column.status}
-          onDragOver={(event: DragEvent<HTMLElement>) => {
-            event.preventDefault();
-            setOverStatus(column.status);
-          }}
-          onDrop={(event: DragEvent<HTMLElement>) => {
-            event.preventDefault();
-            if (dragged && dragged.status !== column.status && canTransitionProjectManagementTaskStatus(dragged.status, column.status)) {
-              onMove(dragged, column.status);
-            }
-            setDragged(undefined);
-            setOverStatus(undefined);
-          }}
-        >
-          <Stack direction="row" justifyContent="space-between">
-            <Typography fontWeight={700}>{column.label}</Typography>
-            <Typography color="text.secondary">{rows.filter((row) => row.status === column.status).length}</Typography>
-          </Stack>
-          {rows.filter((row) => row.status === column.status).map((task) => (
-            <Box
-              className="pm-requirement-card"
-              draggable
-              key={task.id}
-              onDoubleClick={() => onEdit(task.id)}
-              onDragStart={(event: DragEvent<HTMLElement>) => {
-                setDragged(task);
-                event.dataTransfer.effectAllowed = 'move';
-              }}
-            >
-              <Typography color="text.secondary" variant="caption">{task.taskCode}</Typography>
-              <Typography fontWeight={650} variant="body2">{task.title}</Typography>
-              <ProjectManagementProgressBar dueDate={task.dueDate} progressPercent={task.progressPercent} status={task.status} />
-              <Stack direction="row" justifyContent="space-between">
-                <Chip label={projectManagementEnumLabel(t, 'priority', task.priority)} size="small" />
-                <Typography color="text.secondary" variant="caption">{task.assigneeDisplayName ?? t('projectManagement.workItems.unassigned')}</Typography>
-              </Stack>
-              <Typography color="text.secondary" variant="caption">
-                {format('projectManagement.workItems.children', { completed: task.completedChildCount ?? 0, total: task.childCount ?? 0, points: task.storyPoints ?? '—' })}
-              </Typography>
+      {columns.map((column) => {
+        const columnTasks = rows.filter((row) => row.status === column.status);
+        return (
+          <Box
+            className={overStatus === column.status ? 'pm-board-column is-over' : 'pm-board-column'}
+            key={column.status}
+            onDragLeave={() => setOverStatus(undefined)}
+            onDragOver={(event: DragEvent<HTMLElement>) => {
+              event.preventDefault();
+              setOverStatus(column.status);
+            }}
+            onDrop={(event: DragEvent<HTMLElement>) => {
+              event.preventDefault();
+              if (dragged && dragged.status !== column.status && canTransitionProjectManagementTaskStatus(dragged.status, column.status)) {
+                onMove(dragged, column.status);
+              }
+              setDragged(undefined);
+              setOverStatus(undefined);
+            }}
+          >
+            <header className="pm-board-column__header">
+              <Box className="pm-board-column__title-row">
+                <span className="pm-board-column-tone" data-status={column.status} />
+                <Typography className="pm-board-column__title">{column.label}</Typography>
+              </Box>
+              <span className="pm-board-column__count">{columnTasks.length}</span>
+            </header>
+            <Box className="pm-board-column__body">
+              {columnTasks.map((task) => (
+                <RequirementTaskCard
+                  compact
+                  draggable
+                  format={format}
+                  key={task.id}
+                  onDoubleClick={() => onEdit(task.id)}
+                  onDragEnd={() => setDragged(undefined)}
+                  onDragStart={(event: DragEvent<HTMLElement>) => {
+                    setDragged(task);
+                    event.dataTransfer.effectAllowed = 'move';
+                    event.currentTarget.classList.add('is-dragging');
+                  }}
+                  showStatusSelect={false}
+                  t={t}
+                  task={task}
+                />
+              ))}
+              {columnTasks.length === 0 ? (
+                <Box className="pm-board-column__empty">{t('projectManagement.workItems.boardEmpty')}</Box>
+              ) : null}
             </Box>
-          ))}
-        </Stack>
-      ))}
+          </Box>
+        );
+      })}
     </Box>
   );
 }
@@ -552,35 +559,101 @@ function RequirementCardGrid({
   rows: ProjectManagementTaskListItem[];
   t: (key: string) => string;
 }) {
-  if (!rows.length) return <Typography color="text.secondary" sx={{ p: 3 }}>{t('projectManagement.workItems.empty')}</Typography>;
+  if (!rows.length) {
+    return <Box className="pm-requirement-empty">{t('projectManagement.workItems.empty')}</Box>;
+  }
   return (
     <Box className="pm-requirement-card-grid">
       {rows.map((task) => (
-        <Box className="pm-requirement-card" key={task.id} onDoubleClick={() => onEdit(task.id)}>
-          <Typography color="text.secondary" variant="caption">{task.taskCode}</Typography>
-          <button className="pm-table-title" onClick={() => onEdit(task.id)} type="button" style={{ fontWeight: 650, marginBottom: 8 }}>{task.title}</button>
-          <ProjectManagementProgressBar dueDate={task.dueDate} progressPercent={task.progressPercent} status={task.status} />
-          <Stack direction="row" justifyContent="space-between" sx={{ mt: 1 }}>
-            <select
-              className="pm-status-select"
-              onChange={(event) => {
-                if (event.target.value !== task.status) onStatusChange(task, event.target.value);
-              }}
-              value={task.status}
-            >
-              {getAllowedProjectManagementTaskStatuses(task.status).map((option) => (
-                <option key={option} value={option}>{projectManagementEnumLabel(t, 'status', option)}</option>
-              ))}
-            </select>
-            <Chip label={projectManagementEnumLabel(t, 'priority', task.priority)} size="small" />
-          </Stack>
-          <Typography color="text.secondary" sx={{ mt: 1 }} variant="caption">
-            {task.assigneeDisplayName ?? t('projectManagement.workItems.unassigned')} · {format('projectManagement.workItems.children', { completed: task.completedChildCount ?? 0, total: task.childCount ?? 0, points: task.storyPoints ?? '—' })}
-          </Typography>
-        </Box>
+        <RequirementTaskCard
+          format={format}
+          key={task.id}
+          onDoubleClick={() => onEdit(task.id)}
+          onStatusChange={onStatusChange}
+          showStatusSelect
+          t={t}
+          task={task}
+        />
       ))}
     </Box>
   );
+}
+
+function RequirementTaskCard({
+  compact = false,
+  draggable = false,
+  format,
+  onDoubleClick,
+  onDragEnd,
+  onDragStart,
+  onStatusChange,
+  showStatusSelect = false,
+  t,
+  task,
+}: {
+  compact?: boolean;
+  draggable?: boolean;
+  format: (key: string, values?: Record<string, string | number>) => string;
+  onDoubleClick?: () => void;
+  onDragEnd?: (event: DragEvent<HTMLElement>) => void;
+  onDragStart?: (event: DragEvent<HTMLElement>) => void;
+  onStatusChange?: (task: ProjectManagementTaskListItem, status: string) => void;
+  showStatusSelect?: boolean;
+  t: (key: string) => string;
+  task: ProjectManagementTaskListItem;
+}) {
+  return (
+    <Box
+      className="pm-requirement-card"
+      data-status={task.status}
+      draggable={draggable}
+      onDoubleClick={onDoubleClick}
+      onDragEnd={(event) => {
+        event.currentTarget.classList.remove('is-dragging');
+        onDragEnd?.(event);
+      }}
+      onDragStart={onDragStart}
+    >
+      <Typography className="pm-requirement-card__code" component="div" variant="caption">{task.taskCode}</Typography>
+      <Typography className="pm-requirement-card__title" component="div" variant="body2">{task.title}</Typography>
+      <ProjectManagementProgressBar compact={compact} dueDate={task.dueDate} progressPercent={task.progressPercent} status={task.status} />
+      <Box className="pm-requirement-card__footer">
+        {showStatusSelect && onStatusChange ? (
+          <select
+            aria-label={t('projectManagement.workItems.column.status')}
+            className="pm-status-select"
+            onChange={(event) => {
+              if (event.target.value !== task.status) onStatusChange(task, event.target.value);
+            }}
+            onClick={(event) => event.stopPropagation()}
+            value={task.status}
+          >
+            {getAllowedProjectManagementTaskStatuses(task.status).map((option) => (
+              <option key={option} value={option}>{projectManagementEnumLabel(t, 'status', option)}</option>
+            ))}
+          </select>
+        ) : (
+          <span className={priorityBadgeClass(task.priority)}>{projectManagementEnumLabel(t, 'priority', task.priority)}</span>
+        )}
+        <Typography className="pm-requirement-card__assignee" component="span" variant="caption">
+          {task.assigneeDisplayName ?? t('projectManagement.workItems.unassigned')}
+        </Typography>
+      </Box>
+      {!compact ? (
+        <Typography className="pm-requirement-card__meta" component="div" variant="caption">
+          {format('projectManagement.workItems.children', { completed: task.completedChildCount ?? 0, total: task.childCount ?? 0, points: task.storyPoints ?? '—' })}
+        </Typography>
+      ) : null}
+    </Box>
+  );
+}
+
+function priorityBadgeClass(priority: string): string {
+  const normalized = priority.toLowerCase();
+  if (normalized === 'urgent') return 'pm-priority-badge pm-priority-badge--urgent';
+  if (normalized === 'high') return 'pm-priority-badge pm-priority-badge--high';
+  if (normalized === 'low') return 'pm-priority-badge pm-priority-badge--low';
+  return 'pm-priority-badge pm-priority-badge--medium';
 }
 
 function filterCollapsedRows(rows: ProjectManagementTaskListItem[], collapsed: Set<string>): ProjectManagementTaskListItem[] {
