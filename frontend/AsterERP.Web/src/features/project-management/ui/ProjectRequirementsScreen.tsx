@@ -19,6 +19,7 @@ import { DataTable } from '../../../shared/table/DataTable';
 import { PmIcon } from '../../../ui/project-management';
 import { ProjectManagementTaskCalendar } from '../calendar/ProjectManagementTaskCalendar';
 import { ProjectManagementProgressBar } from '../components/ProjectManagementProgressBar';
+import { ProjectManagementScheduleTimelineBar } from '../components/ProjectManagementScheduleTimelineBar';
 import { ProjectManagementCountdown } from '../components/ProjectManagementCountdown';
 import { updateGanttSchedule } from '../gantt/ganttSchedule.api';
 import { ProjectManagementGanttView } from '../gantt/ProjectManagementGanttView';
@@ -403,13 +404,13 @@ function RequirementTable({
   return (
     <DataTable<ProjectManagementTaskListItem>
       className="pm-requirement-table"
-      columnSettingsKey="project-management-requirements"
+      columnSettingsKey="project-management-requirements-v2"
       columns={[
         { key: 'code', title: t('projectManagement.workItems.column.code'), width: '120px', render: (row) => row.taskCode },
         {
           key: 'title',
           title: t('projectManagement.workItems.column.title'),
-          width: '320px',
+          width: '80px',
           render: (row) => (
             <Stack alignItems="center" direction="row" spacing={0.5} sx={{ pl: tree ? row.depth * 1.6 : 0 }}>
               <button
@@ -423,6 +424,15 @@ function RequirementTable({
               </button>
               <button className="pm-table-title" onClick={() => onEdit(row.id)} type="button">{row.title}</button>
             </Stack>
+          ),
+        },
+        {
+          key: 'schedule',
+          title: t('projectManagement.workItems.column.schedule'),
+          width: '176px',
+          cellClassName: 'pm-schedule-cell',
+          render: (row) => (
+            <ProjectManagementScheduleTimelineBar dueDate={row.dueDate} layout="stack" startDate={row.startDate} status={row.status} />
           ),
         },
         {
@@ -453,9 +463,6 @@ function RequirementTable({
         },
         { key: 'assignee', title: t('projectManagement.workItems.column.assignee'), width: '120px', render: (row) => row.assigneeDisplayName ?? '—' },
         { key: 'priority', title: t('projectManagement.workItems.column.priority'), width: '90px', render: (row) => projectManagementEnumLabel(t, 'priority', row.priority) },
-        { key: 'parent', title: t('projectManagement.workItems.column.parent'), width: '130px', render: (row) => row.parentTaskId ?? '—' },
-        { key: 'type', title: t('projectManagement.workItems.column.type'), width: '120px', render: (row) => row.requirementType ?? '—' },
-        { key: 'points', title: t('projectManagement.workItems.column.points'), width: '90px', render: (row) => row.storyPoints ?? '—' },
       ]}
       emptyText={t('projectManagement.workItems.empty')}
       fitScreen

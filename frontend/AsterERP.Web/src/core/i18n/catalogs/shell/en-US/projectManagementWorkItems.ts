@@ -2,7 +2,7 @@ import type { projectManagementWorkItemsMessagesZhCN } from '../zh-CN/projectMan
 
 export const projectManagementWorkItemsMessagesEnUS = {
   'projectManagement.workItems.view.tree': 'Tree', 'projectManagement.workItems.view.flat': 'List', 'projectManagement.workItems.view.card': 'Cards', 'projectManagement.workItems.view.board': 'Board', 'projectManagement.workItems.view.gantt': 'Gantt', 'projectManagement.workItems.view.calendar': 'Calendar',
-  'projectManagement.workItems.refresh': 'Refresh', 'projectManagement.workItems.column.progress': 'Progress', 'projectManagement.workItems.notifications': 'Notifications',
+  'projectManagement.workItems.refresh': 'Refresh', 'projectManagement.workItems.column.progress': 'Completion', 'projectManagement.workItems.column.schedule': 'Timeline', 'projectManagement.workItems.notifications': 'Notifications',
   'projectManagement.enum.status.Backlog': 'Backlog',
   'projectManagement.workItems.segment.all': 'All tasks', 'projectManagement.workItems.segment.mine': 'My tasks', 'projectManagement.workItems.segment.inProgress': 'In progress', 'projectManagement.workItems.segment.todo': 'Pending', 'projectManagement.workItems.segment.done': 'Completed', 'projectManagement.workItems.segment.closed': 'Closed',
   'projectManagement.workItems.searchAria': 'Search tasks', 'projectManagement.workItems.searchPlaceholder': 'Search by code or title', 'projectManagement.workItems.filter': 'Filter', 'projectManagement.workItems.view': 'Views', 'projectManagement.workItems.type': 'Task type', 'projectManagement.workItems.risk': 'Risk', 'projectManagement.workItems.all': 'All',

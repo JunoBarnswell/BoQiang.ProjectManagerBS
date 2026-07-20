@@ -625,6 +625,30 @@
   min-width: 24px !important;
 }
 
+.pm-requirement-table .pm-schedule-timeline,
+.pm-requirement-table .pm-task-progress {
+  min-width: 0;
+}
+
+.pm-requirement-table .pm-schedule-timeline.is-stack {
+  width: 100%;
+}
+
+.pm-requirement-table .data-table__td.pm-schedule-cell,
+.pm-requirement-table .data-table__th.pm-schedule-cell {
+  white-space: normal;
+}
+
+.pm-requirement-table .pm-schedule-timeline > div:first-of-type,
+.pm-requirement-table .pm-task-progress > div:first-of-type {
+  height: 6px;
+}
+
+.pm-requirement-table .pm-schedule-timeline .MuiTypography-caption,
+.pm-requirement-table .pm-task-progress .MuiTypography-caption {
+  font-size: var(--app-text-3xs) !important;
+}
+
 /* ── Task cards ── */
 .pm-requirement-card-grid {
   display: grid;
