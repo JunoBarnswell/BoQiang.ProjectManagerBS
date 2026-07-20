@@ -5,6 +5,7 @@ namespace AsterERP.Api.Application.ProjectManagement;
 public enum ProjectManagementFileWritePurpose
 {
     TaskAttachment,
+    TaskDraftAttachment,
     SyncImport
 }
 

@@ -29,14 +29,14 @@ import {
   uploadProjectManagementTaskAttachment,
   uploadProjectManagementTaskDraftAttachment,
 } from '../../../api/project-management/projectManagement.api';
-import type { ProjectManagementMemberCandidate, ProjectManagementTaskAttachment, ProjectManagementTaskUpsertRequest } from '../../../api/project-management/projectManagement.types';
+import type { ProjectManagementMemberCandidate, ProjectManagementTaskAttachment, ProjectManagementTaskComment, ProjectManagementTaskUpsertRequest } from '../../../api/project-management/projectManagement.types';
 import { usePermission } from '../../../core/auth/usePermission';
 import { isHttpError } from '../../../core/http/httpError';
 import { useConfirm } from '../../../shared/feedback/useConfirm';
 import { useMessage } from '../../../shared/feedback/useMessage';
 import { FilePreviewDialog } from '../../../shared/file-preview/FilePreviewDialog';
 import { ResponsiveModal } from '../../../shared/responsive/ResponsiveModal';
-import { ProjectManagementMarkdownEditor } from '../collaboration/ProjectManagementMarkdownEditor';
+import { ProjectManagementMarkdownEditor, ProjectManagementMarkdownContent } from '../collaboration/ProjectManagementMarkdownEditor';
 import { ProjectManagementProgressBar } from '../components/ProjectManagementProgressBar';
 import { ProjectManagementCountdown } from '../components/ProjectManagementCountdown';
 import { projectManagementEnumLabel, useProjectManagementI18n } from '../projectManagementI18n';
@@ -90,6 +90,7 @@ export function ProjectWorkItemEditor({
   const [baseline, setBaseline] = useState(JSON.stringify(blank));
   const [draftId, setDraftId] = useState<string>();
   const [comment, setComment] = useState('');
+  const [commentContentJson, setCommentContentJson] = useState<string>();
   const [commentMentionIds, setCommentMentionIds] = useState<string[]>([]);
   const [commentFile, setCommentFile] = useState<File>();
   const [continueCreating, setContinueCreating] = useState(false);
@@ -166,7 +167,9 @@ export function ProjectWorkItemEditor({
       return uploadProjectManagementTaskDraftAttachment(draft.data.id, file);
     },
     onSuccess: () => { void attachments.refetch(); message.success(t('projectManagement.editor.uploaded')); },
-    onError: () => message.error(t('projectManagement.editor.uploadFailed')),
+    onError: (error) => message.error(error instanceof Error
+      ? error.message
+      : t(taskId ? 'projectManagement.editor.uploadFailed' : 'projectManagement.editor.draftUploadFailed')),
   });
 
   const removeAttachment = useMutation({
@@ -180,8 +183,8 @@ export function ProjectWorkItemEditor({
       const attachment = commentFile ? await uploadProjectManagementTaskAttachment(taskId!, commentFile) : undefined;
       return createProjectManagementTaskComment(taskId!, { markdown: comment, mentionUserIds: commentMentionIds, attachmentId: attachment?.data.id });
     },
-    onSuccess: () => { setComment(''); setCommentMentionIds([]); setCommentFile(undefined); void comments.refetch(); void attachments.refetch(); message.success(t('projectManagement.editor.commentPublished')); },
-    onError: () => message.error(t('projectManagement.editor.uploadFailed')),
+    onSuccess: () => { setComment(''); setCommentContentJson(undefined); setCommentMentionIds([]); setCommentFile(undefined); void comments.refetch(); void attachments.refetch(); message.success(t('projectManagement.editor.commentPublished')); },
+    onError: (error) => message.error(error instanceof Error ? error.message : t('projectManagement.editor.commentPublishFailed')),
   });
 
   const follow = useMutation({
@@ -303,10 +306,12 @@ export function ProjectWorkItemEditor({
             canManageAttachment={canManageAttachment}
             comments={comments.data?.data.items ?? []}
             comment={comment}
+            commentContentJson={commentContentJson}
             commentFile={commentFile}
             filter={collaborationFilter}
             isPublishing={addComment.isPending}
             onCommentChange={setComment}
+            onCommentContentJsonChange={setCommentContentJson}
             onCommentFileChange={setCommentFile}
             onCommentMentionsChange={setCommentMentionIds}
             onDeleteAttachment={(item) => removeAttachment.mutate(item)}
@@ -386,12 +391,14 @@ function CollaborationPanel({
   canManageAttachment,
   comments,
   comment,
+  commentContentJson,
   commentFile,
   dateTime,
   filter,
   isPublishing,
   mentionCandidates,
   onCommentChange,
+  onCommentContentJsonChange,
   onCommentFileChange,
   onCommentMentionsChange,
   onDeleteAttachment,
@@ -405,14 +412,16 @@ function CollaborationPanel({
   activities: Array<{ id: string; activityType: string; createdTime: string; summary?: string }>;
   attachments: ProjectManagementTaskAttachment[];
   canManageAttachment: boolean;
-  comments: Array<{ attachment?: ProjectManagementTaskAttachment; authorDisplayName?: string; authorUserId: string; createdTime: string; id: string; markdown: string }>;
+  comments: ProjectManagementTaskComment[];
   comment: string;
+  commentContentJson?: string;
   commentFile?: File;
   dateTime: (value?: string | Date | null) => string;
   filter: CollaborationFilter;
   isPublishing: boolean;
   mentionCandidates: ProjectManagementMemberCandidate[];
   onCommentChange: (value: string) => void;
+  onCommentContentJsonChange: (value: string) => void;
   onCommentFileChange: (file?: File) => void;
   onCommentMentionsChange: (value: string[]) => void;
   onDeleteAttachment: (item: { id: string; versionNo: number }) => void;
@@ -434,7 +443,7 @@ function CollaborationPanel({
       </Stack>
       {(filter === 'all' || filter === 'comments') ? comments.map((item) => <Box className="pm-comment" key={item.id}>
         <Typography color="text.secondary" variant="caption">{item.authorDisplayName ?? item.authorUserId} · {dateTime(item.createdTime)}</Typography>
-        <Typography variant="body2">{item.markdown}</Typography>
+        <ProjectManagementMarkdownContent className="pm-comment__body" mentions={item.mentions} value={item.markdown} />
         {item.attachment ? <AttachmentCard attachment={item.attachment} canDelete={false} onDownload={onDownload} onPreview={onPreview} t={t} /> : null}
       </Box>) : null}
       {(filter === 'all' || filter === 'attachments') ? <Stack spacing={0.75}>
@@ -446,9 +455,9 @@ function CollaborationPanel({
       </Stack> : null}
       {(filter === 'all' || filter === 'activity') ? activities.map((item) => <Box className="pm-overview-activity-row" key={item.id}><span className="pm-overview-dot" /><Typography className="pm-overview-activity-row__summary" component="span" variant="body2">{item.summary ?? item.activityType}</Typography><Typography className="pm-overview-activity-row__time" component="span" variant="caption">{dateTime(item.createdTime)}</Typography></Box>) : null}
       <Stack className="pm-comment-composer" spacing={0.75}>
-        <ProjectManagementMarkdownEditor ariaLabel={t('projectManagement.editor.commentAria')} mentionCandidates={mentionCandidates} onChange={onCommentChange} onMentionUserIdsChange={onCommentMentionsChange} placeholder={t('projectManagement.editor.commentPlaceholder')} rows={3} value={comment} />
+        <ProjectManagementMarkdownEditor ariaLabel={t('projectManagement.editor.commentAria')} contentJson={commentContentJson} mentionCandidates={mentionCandidates} onChange={onCommentChange} onContentJsonChange={onCommentContentJsonChange} onMentionUserIdsChange={onCommentMentionsChange} placeholder={t('projectManagement.editor.commentPlaceholder')} rows={3} value={comment} />
         <Stack alignItems="center" direction="row" justifyContent="space-between">
-          <label className="pm-workbench-command">{commentFile?.name ?? t('projectManagement.editor.attachFile')}<input hidden onChange={(event) => { onCommentFileChange(event.target.files?.[0]); event.currentTarget.value = ''; }} type="file" /></label>
+          {canManageAttachment ? <label className="pm-workbench-command">{commentFile?.name ?? t('projectManagement.editor.attachFile')}<input hidden onChange={(event) => { onCommentFileChange(event.target.files?.[0]); event.currentTarget.value = ''; }} type="file" /></label> : <span />}
           <button className="pm-primary-button" disabled={!comment.trim() || isPublishing} onClick={onPublish} type="button">{t('projectManagement.editor.publishComment')}</button>
         </Stack>
       </Stack>

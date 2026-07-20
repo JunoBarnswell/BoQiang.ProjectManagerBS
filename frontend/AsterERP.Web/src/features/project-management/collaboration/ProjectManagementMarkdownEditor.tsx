@@ -179,12 +179,14 @@ export function ProjectManagementMarkdownEditor({ ariaLabel, contentJson, mentio
 
   useEffect(() => {
     if (!editor) return;
-    const current = htmlToMarkdown(editor.getHTML());
     const desiredJson = parseEditorJson(contentJson);
     const currentJson = JSON.stringify(editor.getJSON());
     if (desiredJson && currentJson !== JSON.stringify(desiredJson)) {
       editor.commands.setContent(desiredJson, { emitUpdate: false });
-    } else if (normalizeProjectManagementMarkdown(current) !== normalizeProjectManagementMarkdown(value)) {
+      return;
+    }
+    const current = htmlToMarkdown(editor.getHTML());
+    if (normalizeProjectManagementMarkdown(current) !== normalizeProjectManagementMarkdown(value)) {
       editor.commands.setContent(markdownToHtml(value), { emitUpdate: false });
     }
   }, [contentJson, editor, value]);
@@ -235,6 +237,10 @@ function htmlToMarkdown(value: string): string {
   const render = (node: Node): string => {
     if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? '';
     if (!(node instanceof HTMLElement)) return Array.from(node.childNodes).map(render).join('');
+    if (node.dataset.type === 'project-mention') {
+      const label = node.dataset.label ?? (node.textContent ?? '').replace(/^@/, '');
+      return `@${label}`;
+    }
     const content = Array.from(node.childNodes).map(render).join('');
     switch (node.tagName.toLowerCase()) {
       case 'strong': case 'b': return `**${content}**`;

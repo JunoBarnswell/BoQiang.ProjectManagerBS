@@ -54,7 +54,10 @@ public sealed class ProjectManagementTaskDraftService(IWorkspaceDatabaseAccessor
     {
         var draft = await GetDraftAsync(id, cancellationToken);
         if (file is null || file.Length <= 0 || file.Length > 100 * 1024 * 1024) throw new ValidationException("附件大小必须在 1 字节到 100 MB 之间");
-        var stored = await fileStore.StoreAsync(file, new ProjectManagementFileUploadContext(ProjectManagementFileWritePurpose.TaskAttachment), cancellationToken);
+        var stored = await fileStore.StoreAsync(
+            file,
+            new ProjectManagementFileUploadContext(ProjectManagementFileWritePurpose.TaskDraftAttachment, draft.Id),
+            cancellationToken);
         var entity = new ProjectManagementTaskDraftAttachmentEntity { TenantId = Tenant(), AppCode = App(), ProjectId = draft.ProjectId, DraftId = draft.Id, FileId = stored.Id, FileName = stored.FileName, ContentType = file.ContentType ?? "application/octet-stream", FileSize = stored.Size, UploadedByUserId = User(), CreatedBy = User(), CreatedTime = DateTime.UtcNow };
         try { await databaseAccessor.GetCurrentDb().Insertable(entity).ExecuteCommandAsync(cancellationToken); } catch { await fileStore.DeleteAsync(stored.Id, CancellationToken.None); throw; }
         return new(entity.Id, entity.DraftId, entity.FileName, entity.ContentType, entity.FileSize, entity.VersionNo, entity.CreatedTime);

@@ -111,7 +111,6 @@ public sealed class ProjectManagementTaskCommentService(
     public async Task<ProjectManagementTaskCommentResponse> CreateAsync(string taskId, ProjectManagementTaskCommentUpsertRequest request, CancellationToken cancellationToken = default)
     {
         var task = await GetTaskAsync(taskId, cancellationToken);
-        await EnsureCommentsMutableAsync(task, cancellationToken);
         await Policy(task.ProjectId, task.AssigneeUserId).EnsureCanManageTaskAsync(task.ProjectId, task.AssigneeUserId, cancellationToken);
         var markdown = NormalizeMarkdown(request.Markdown);
         await EnsureParentAsync(task, request.ParentCommentId, cancellationToken);
@@ -148,7 +147,6 @@ public sealed class ProjectManagementTaskCommentService(
     public async Task<ProjectManagementTaskCommentResponse> UpdateAsync(string taskId, string id, ProjectManagementTaskCommentUpsertRequest request, CancellationToken cancellationToken = default)
     {
         var task = await GetTaskAsync(taskId, cancellationToken);
-        await EnsureCommentsMutableAsync(task, cancellationToken);
         var db = databaseAccessor.GetCurrentDb();
         var entity = (await db.Queryable<ProjectManagementTaskCommentEntity>().Where(item => item.Id == id && item.TenantId == Tenant() && item.AppCode == App() && item.TaskId == task.Id && !item.IsDeleted).Take(1).ToListAsync(cancellationToken)).FirstOrDefault()
             ?? throw new NotFoundException("任务评论不存在", ErrorCodes.PlatformResourceNotFound);
@@ -184,7 +182,6 @@ public sealed class ProjectManagementTaskCommentService(
     public async Task DeleteAsync(string taskId, string id, long versionNo, CancellationToken cancellationToken = default)
     {
         var task = await GetTaskAsync(taskId, cancellationToken);
-        await EnsureCommentsMutableAsync(task, cancellationToken);
         var db = databaseAccessor.GetCurrentDb();
         var entity = (await db.Queryable<ProjectManagementTaskCommentEntity>().Where(item => item.Id == id && item.TenantId == Tenant() && item.AppCode == App() && item.TaskId == task.Id && !item.IsDeleted).Take(1).ToListAsync(cancellationToken)).FirstOrDefault()
             ?? throw new NotFoundException("任务评论不存在", ErrorCodes.PlatformResourceNotFound);
@@ -210,17 +207,6 @@ public sealed class ProjectManagementTaskCommentService(
         RequireTenant(); RequireApp();
         return (await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskEntity>().Where(item => item.Id == taskId && item.TenantId == Tenant() && item.AppCode == App() && !item.IsDeleted).Take(1).ToListAsync(cancellationToken)).FirstOrDefault()
             ?? throw new NotFoundException("任务不存在", ErrorCodes.PlatformResourceNotFound);
-    }
-
-    private async Task EnsureCommentsMutableAsync(ProjectManagementTaskEntity task, CancellationToken cancellationToken)
-    {
-        var projectStatus = (await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementProjectEntity>()
-            .Where(item => item.Id == task.ProjectId && !item.IsDeleted)
-            .Select(item => item.Status)
-            .Take(1)
-            .ToListAsync(cancellationToken)).FirstOrDefault();
-        if (string.Equals(projectStatus, ProjectManagementDomainRules.ProjectArchived, StringComparison.OrdinalIgnoreCase))
-            throw new ValidationException("已归档项目的任务评论不可新增、编辑或删除", ErrorCodes.PermissionDenied);
     }
 
     private async Task EnsureCanManageCommentAsync(ProjectManagementTaskEntity task, ProjectManagementTaskCommentEntity comment, CancellationToken cancellationToken)

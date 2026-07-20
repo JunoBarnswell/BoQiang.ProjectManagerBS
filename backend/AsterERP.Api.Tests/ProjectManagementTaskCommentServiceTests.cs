@@ -166,7 +166,7 @@ public sealed class ProjectManagementTaskCommentServiceTests
     }
 
     [Fact]
-    public async Task Archived_project_rejects_comment_mutations_but_keeps_existing_history()
+    public async Task Archived_project_allows_comment_mutations()
     {
         using var db = new SqlSugarClient(new ConnectionConfig { ConnectionString = $"Data Source=file:project-management-comment-archive-{Guid.NewGuid():N};Mode=Memory;Cache=Shared", DbType = DbType.Sqlite, IsAutoCloseConnection = false });
         await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
@@ -174,7 +174,10 @@ public sealed class ProjectManagementTaskCommentServiceTests
         await db.Insertable(new ProjectManagementTaskEntity { Id = "task-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", TaskCode = "T-1", Title = "Task", CreatedBy = "operator", CreatedTime = DateTime.UtcNow }).ExecuteCommandAsync();
 
         var service = new ProjectManagementTaskCommentService(new TestWorkspaceDatabaseAccessor(db), CreateUser());
-        await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() => service.CreateAsync("task-a", new ProjectManagementTaskCommentUpsertRequest("blocked")));
+        var created = await service.CreateAsync("task-a", new ProjectManagementTaskCommentUpsertRequest("archived project comment"));
+        var updated = await service.UpdateAsync("task-a", created.Id, new ProjectManagementTaskCommentUpsertRequest("archived project comment updated", VersionNo: created.VersionNo));
+        await service.DeleteAsync("task-a", updated.Id, updated.VersionNo);
+
         Assert.Empty(await service.QueryAsync("task-a"));
     }
 

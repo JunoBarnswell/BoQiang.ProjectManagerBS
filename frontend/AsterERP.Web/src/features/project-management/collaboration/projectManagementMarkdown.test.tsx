@@ -36,4 +36,9 @@ describe('project management markdown security policy', () => {
     expect(html).toContain('<strong>safe</strong>');
     expect(html).not.toMatch(/script|onload|javascript:|svg|<img/i);
   });
+
+  it('highlights saved comment mentions with the same token styling', () => {
+    const html = renderProjectManagementMarkdown('hello @System Admin', [{ userId: 'user-a', displayName: 'System Admin' }]);
+    expect(html).toContain('<span class="pm-mention-token" data-type="project-mention">@System Admin</span>');
+  });
 });

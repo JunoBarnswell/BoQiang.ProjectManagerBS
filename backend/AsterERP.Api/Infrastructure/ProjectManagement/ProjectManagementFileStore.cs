@@ -21,8 +21,10 @@ public sealed class ProjectManagementFileStore(IFileAppService fileAppService) :
     private static string ToRemark(ProjectManagementFileUploadContext context) => context.Purpose switch
     {
         ProjectManagementFileWritePurpose.TaskAttachment when !string.IsNullOrWhiteSpace(context.TaskId) => $"ProjectManagement task:{context.TaskId}",
+        ProjectManagementFileWritePurpose.TaskDraftAttachment when !string.IsNullOrWhiteSpace(context.TaskId) => $"ProjectManagement task-draft:{context.TaskId}",
         ProjectManagementFileWritePurpose.SyncImport => "ProjectManagement sync import",
         ProjectManagementFileWritePurpose.TaskAttachment => throw new ArgumentException("任务附件必须提供任务标识", nameof(context)),
+        ProjectManagementFileWritePurpose.TaskDraftAttachment => throw new ArgumentException("任务草稿附件必须提供草稿标识", nameof(context)),
         _ => throw new ArgumentOutOfRangeException(nameof(context))
     };
 }

@@ -1290,6 +1290,20 @@
   background: var(--pm-surface);
 }
 
+.pm-comment__body {
+  color: var(--pm-text);
+  font-size: var(--app-text-sm);
+  line-height: 1.55;
+  word-break: break-word;
+}
+
+.pm-comment__body .pm-mention-token {
+  border-radius: 4px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  padding: 1px 3px;
+}
+
 .pm-collaboration {
   display: grid;
   gap: 10px;

@@ -1,6 +1,8 @@
 import DOMPurify from 'dompurify';
 import { useMemo } from 'react';
 
+import type { ProjectManagementTaskCommentMention } from '../../../api/project-management/projectManagement.types';
+
 const safeMarkdownUrlPattern = /^(?:https?:|mailto:)/i;
 const markdownLinkPattern = /(!?)\[([^\]\r\n]{0,500})\]\(((?:[^()\r\n]|\([^()\r\n]*\))*)\)/g;
 
@@ -30,7 +32,7 @@ export function sanitizeProjectManagementPaste(plainText: string, htmlText = '')
   return normalizeProjectManagementMarkdown(text);
 }
 
-export function renderProjectManagementMarkdown(value: string): string {
+export function renderProjectManagementMarkdown(value: string, mentions: ProjectManagementTaskCommentMention[] = []): string {
   const markdown = normalizeProjectManagementMarkdown(value);
   if (!markdown) return '';
 
@@ -91,14 +93,28 @@ export function renderProjectManagementMarkdown(value: string): string {
     blocks.push(`<p>${renderInline(paragraph.join('\n'))}</p>`);
   }
 
-  return DOMPurify.sanitize(blocks.join(''), {
-    ALLOW_DATA_ATTR: false,
-    ALLOWED_ATTR: ['href', 'rel', 'target'],
-    ALLOWED_TAGS: ['a', 'blockquote', 'br', 'code', 'em', 'h1', 'h2', 'h3', 'li', 'ol', 'p', 'pre', 'strong', 'ul'],
+  return sanitizeProjectManagementMarkdownHtml(applyMentionHighlights(blocks.join(''), mentions));
+}
+
+export function sanitizeProjectManagementMarkdownHtml(value: string): string {
+  return DOMPurify.sanitize(value, {
+    ALLOW_DATA_ATTR: true,
+    ALLOWED_ATTR: ['class', 'data-type', 'href', 'rel', 'target'],
+    ALLOWED_TAGS: ['a', 'blockquote', 'br', 'code', 'em', 'h1', 'h2', 'h3', 'li', 'ol', 'p', 'pre', 'span', 'strong', 'ul'],
     ALLOWED_URI_REGEXP: safeMarkdownUrlPattern,
     FORBID_ATTR: ['style', 'srcdoc'],
     FORBID_TAGS: ['form', 'iframe', 'img', 'object', 'script', 'style', 'svg', 'template']
   });
+}
+
+function applyMentionHighlights(html: string, mentions: ProjectManagementTaskCommentMention[]): string {
+  if (!mentions.length) return html;
+  return mentions.reduce((result, mention) => {
+    const label = mention.displayName.trim();
+    if (!label) return result;
+    const token = `<span class="pm-mention-token" data-type="project-mention">@${escapeHtml(label)}</span>`;
+    return result.replace(new RegExp(`@${escapeRegExp(label)}(?![\\w-])`, 'g'), token);
+  }, html);
 }
 
 export function isSafeMarkdownUrl(value: string): boolean {
@@ -145,7 +161,19 @@ function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character] ?? character);
 }
 
-export function ProjectManagementMarkdownContent({ className, value }: { className?: string; value: string }) {
-  const html = useMemo(() => renderProjectManagementMarkdown(value), [value]);
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+export function ProjectManagementMarkdownContent({
+  className,
+  mentions = [],
+  value,
+}: {
+  className?: string;
+  mentions?: ProjectManagementTaskCommentMention[];
+  value: string;
+}) {
+  const html = useMemo(() => renderProjectManagementMarkdown(value, mentions), [mentions, value]);
   return <div className={className} dangerouslySetInnerHTML={{ __html: html }} />;
 }
