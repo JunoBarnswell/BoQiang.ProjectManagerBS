@@ -5,8 +5,11 @@ import type { ReactNode } from 'react';
 const NavRoot = styled(Box)(({ theme }) => ({
   width: 248,
   flex: '0 0 248px',
+  alignSelf: 'stretch',
   display: 'flex',
   flexDirection: 'column',
+  minHeight: 0,
+  height: '100%',
   padding: theme.spacing(2, 1.25, 1),
   borderRight: `1px solid ${theme.palette.divider}`,
   backgroundColor: theme.palette.background.paper,

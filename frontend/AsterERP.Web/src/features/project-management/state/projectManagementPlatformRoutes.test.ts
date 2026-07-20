@@ -12,10 +12,10 @@ describe('projectManagementPlatformRoutes', () => {
     expect(toProjectManagementPlatformRoute('/projects/project-a/overview')).toBe('/platform/project-management/projects/project-a/overview');
   });
 
-  it('normalizes legacy PM targets while retaining non-PM targets', () => {
+  it('moves internal task search results into the canonical requirement editor route', () => {
     expect(normalizeProjectManagementTargetRoute('/projects/project-a/tasks?taskId=task-a'))
-      .toBe('/platform/project-management/projects/project-a/tasks?taskId=task-a');
-    expect(normalizeProjectManagementTargetRoute('/project-search')).toBe('/platform/project-management/project-search');
+      .toBe('/platform/project-management/projects/project-a/requirements?view=tree&taskId=task-a');
+    expect(normalizeProjectManagementTargetRoute('/project-search')).toBe('/project-search');
     expect(normalizeProjectManagementTargetRoute('/im/messages')).toBe('/im/messages');
   });
 });

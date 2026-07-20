@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { TaskScheduleRow } from '../task-workspace/taskScheduleProjectionModel';
+import type { TaskScheduleRow } from '../state/projectManagementScheduleModel';
 
 import {
   buildProjectManagementCalendarSegments,

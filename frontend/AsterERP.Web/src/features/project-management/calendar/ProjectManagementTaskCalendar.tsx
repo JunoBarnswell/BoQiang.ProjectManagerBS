@@ -3,7 +3,7 @@ import { useMemo, useState, type DragEvent } from 'react';
 import type { ProjectManagementMilestone, ProjectManagementTaskDependency, ProjectManagementTaskListItem } from '../../../api/project-management/projectManagement.types';
 import { usePermission } from '../../../core/auth/usePermission';
 import { PermissionButton } from '../../../shared/auth/PermissionButton';
-import { buildTaskScheduleRows, validateScheduleMove, type TaskScheduleRow } from '../task-workspace/taskScheduleProjectionModel';
+import { buildTaskScheduleRows, validateScheduleMove, type TaskScheduleRow } from '../state/projectManagementScheduleModel';
 
 import {
   addProjectManagementCalendarDays,

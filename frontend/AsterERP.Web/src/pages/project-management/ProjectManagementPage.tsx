@@ -1,5 +1,5 @@
-import { ProjectHomeShell } from '../../features/project-management/home/ProjectHomeShell';
+import { ProjectSelectorScreen } from '../../features/project-management/ui/ProjectSelectorScreen';
 
 export function ProjectManagementPage() {
-  return <ProjectHomeShell />;
+  return <ProjectSelectorScreen />;
 }

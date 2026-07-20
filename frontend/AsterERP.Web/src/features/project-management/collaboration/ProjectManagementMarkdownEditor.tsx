@@ -144,7 +144,7 @@ function createProjectMentionSuggestion(candidatesRef: { current: ProjectManagem
   });
 }
 
-export function ProjectManagementMarkdownEditor({ ariaLabel, contentJson, mentionCandidates = [], onChange, onContentJsonChange, onMentionUserIdsChange, placeholder, rows = 5, value }: ProjectManagementMarkdownEditorProps) {
+export function ProjectManagementMarkdownEditor({ ariaLabel, contentJson, mentionCandidates = [], onChange, onContentJsonChange, onMentionUserIdsChange, placeholder, value }: ProjectManagementMarkdownEditorProps) {
   const candidatesRef = useRef(mentionCandidates);
   const onChangeRef = useRef(onChange);
   const onContentJsonChangeRef = useRef(onContentJsonChange);
@@ -164,7 +164,7 @@ export function ProjectManagementMarkdownEditor({ ariaLabel, contentJson, mentio
     immediatelyRender: false,
     extensions,
     content: parseEditorJson(contentJson) ?? markdownToHtml(value),
-    editorProps: { attributes: { 'aria-label': ariaLabel, class: 'min-h-24 w-full resize-y p-3 outline-none text-sm' } },
+    editorProps: { attributes: { 'aria-label': ariaLabel, class: 'pm-tiptap-content' } },
     onUpdate: ({ editor: current }) => {
       onChangeRef.current(htmlToMarkdown(current.getHTML()));
       onContentJsonChangeRef.current?.(JSON.stringify(current.getJSON()));
@@ -185,8 +185,8 @@ export function ProjectManagementMarkdownEditor({ ariaLabel, contentJson, mentio
   }, [contentJson, editor, value]);
 
   if (!editor) return <div aria-label={ariaLabel} className="min-h-24 rounded border border-gray-200 p-3 text-sm text-gray-500">正在加载编辑器…</div>;
-  return <div className="rounded border border-gray-200">
-    <div className="flex flex-wrap items-center gap-1 border-b border-gray-100 p-1 text-xs">
+  return <div className="pm-rich-editor rounded border border-gray-200">
+    <div aria-label="富文本工具栏" className="pm-rich-editor-toolbar">
       <button type="button" aria-label="段落" onClick={() => editor.chain().focus().setParagraph().run()}>段落</button>
       <button type="button" aria-label="标题" onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}>标题</button>
       <button type="button" aria-label="加粗" onClick={() => editor.chain().focus().toggleBold().run()}>粗体</button>
@@ -200,7 +200,7 @@ export function ProjectManagementMarkdownEditor({ ariaLabel, contentJson, mentio
       <button type="button" aria-label="撤销" onClick={() => editor.chain().focus().undo().run()}>撤销</button>
       <button type="button" aria-label="重做" onClick={() => editor.chain().focus().redo().run()}>重做</button>
     </div>
-    <EditorContent editor={editor} className={rows > 8 ? 'min-h-48' : rows > 5 ? 'min-h-36' : 'min-h-24'} />
+    <EditorContent editor={editor} className="pm-rich-editor-content" />
   </div>;
 }
 

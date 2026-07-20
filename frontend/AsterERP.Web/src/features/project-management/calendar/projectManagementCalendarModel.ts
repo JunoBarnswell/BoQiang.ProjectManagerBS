@@ -1,4 +1,4 @@
-import type { TaskScheduleRow } from '../task-workspace/taskScheduleProjectionModel';
+import type { TaskScheduleRow } from '../state/projectManagementScheduleModel';
 
 export type ProjectManagementCalendarMode = 'month' | 'week';
 

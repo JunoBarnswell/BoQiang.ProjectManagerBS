@@ -399,6 +399,9 @@ export interface ProjectManagementOverviewPerson {
   completedTaskCount: number;
   overdueTaskCount: number;
   displayName?: string;
+  estimatedMinutes?: number;
+  capacityMinutes?: number;
+  workloadPercent?: number;
 }
 
 export interface ProjectManagementOverviewDistribution {
@@ -434,6 +437,9 @@ export interface ProjectManagementOverviewItem {
   health?: string;
   workItemTypeDistribution?: ProjectManagementOverviewDistribution[];
   statusDistribution?: ProjectManagementOverviewDistribution[];
+  pendingTaskCount?: number;
+  storyPointsTotal?: number;
+  requirementTypeDistribution?: ProjectManagementOverviewDistribution[];
 }
 
 export type ProjectManagementMyWorkCategory = 'all' | 'assigned' | 'participating' | 'created' | 'mentioned' | 'today' | 'upcoming' | 'overdue' | 'blocked';

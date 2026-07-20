@@ -68,18 +68,27 @@ public sealed class ProjectManagementOverviewService(
                 var openCount = leaves.Count(task => !ProjectManagementTaskProgressCalculator.IsCompleted(task));
                 var dueSoonCount = leaves.Count(task => task.DueDate.HasValue && task.DueDate.Value >= now && task.DueDate.Value <= now.AddDays(7) && !ProjectManagementTaskProgressCalculator.IsCompleted(task));
                 var wipExceededBy = project.WipLimit.HasValue ? Math.Max(0, inProgressCount - project.WipLimit.Value) : 0;
+                var memberCapacities = members.Where(member => member.ProjectId == project.Id).ToDictionary(member => member.UserId, member => Math.Max(1, member.SuggestedCapacityMinutes), StringComparer.Ordinal);
                 var people = leaves.Where(task => !string.IsNullOrWhiteSpace(task.AssigneeUserId)).GroupBy(task => task.AssigneeUserId!, StringComparer.Ordinal)
-                    .Select(group => new ProjectManagementOverviewPersonSummary(group.Key, group.Count(), group.Count(ProjectManagementTaskProgressCalculator.IsCompleted), group.Count(task => overdueIds.Contains(task.Id)), displays.User(group.Key)))
+                    .Select(group =>
+                    {
+                        var estimatedMinutes = group.Where(task => !ProjectManagementTaskProgressCalculator.IsCompleted(task)).Sum(task => task.EstimateMinutes ?? 0);
+                        var capacityMinutes = memberCapacities.GetValueOrDefault(group.Key, 2400);
+                        return new ProjectManagementOverviewPersonSummary(group.Key, group.Count(), group.Count(ProjectManagementTaskProgressCalculator.IsCompleted), group.Count(task => overdueIds.Contains(task.Id)), displays.User(group.Key), estimatedMinutes, capacityMinutes, Math.Round(Math.Min(100m, estimatedMinutes * 100m / Math.Max(1, capacityMinutes)), 1));
+                    })
                     .OrderByDescending(item => item.TaskCount).Take(10).ToList();
                 var workItemTypeDistribution = CreateDistribution(leaves.Select(task => string.IsNullOrWhiteSpace(task.WorkItemType) ? "Task" : task.WorkItemType));
                 var statusDistribution = CreateDistribution(leaves.Select(task => task.Status));
+                var requirementTypeDistribution = CreateDistribution(leaves.Select(task => string.IsNullOrWhiteSpace(task.RequirementType) ? "未分类" : task.RequirementType));
+                var pendingCount = leaves.Count(task => task.Status == ProjectManagementDomainRules.TaskTodo);
+                var storyPointsTotal = leaves.Sum(task => task.StoryPoints ?? 0);
                 return new ProjectManagementOverviewItem(
                     new ProjectManagementProjectResponse(project.Id, project.TenantId, project.AppCode, project.ProjectCode, project.ProjectName, project.Description, project.Status, project.Priority, project.OwnerUserId, project.StartDate, project.DueDate, project.CompletedAt, project.WipLimit, project.ProgressPercent, project.VersionNo, project.CreatedTime, project.UpdatedTime, displays.User(project.OwnerUserId)),
                     leaves.Count, leaves.Count(ProjectManagementTaskProgressCalculator.IsCompleted), inProgressCount, overdue.Count, blockedCount, snapshot.ProjectProgressPercent,
                     milestones.Count(item => item.ProjectId == project.Id), members.Count(item => item.ProjectId == project.Id),
                     milestones.Where(item => item.ProjectId == project.Id).Take(10).Select(item => new ProjectManagementOverviewMilestoneSummary(item.Id, item.MilestoneName, item.Status, item.HealthStatus, item.ProgressPercent, item.DueDate)).ToList(), people,
                     new ProjectManagementProjectRiskSummary(overdue.Count, blockedCount, dueSoonCount, inProgressCount, project.WipLimit, wipExceededBy > 0, wipExceededBy, overdue.Count > 0 || blockedCount > 0 || dueSoonCount > 0),
-                    projector.Project(project, openCount, blockedCount, now), workItemTypeDistribution, statusDistribution);
+                    projector.Project(project, openCount, blockedCount, now), workItemTypeDistribution, statusDistribution, pendingCount, storyPointsTotal, requirementTypeDistribution);
             }).ToList()
         };
     }

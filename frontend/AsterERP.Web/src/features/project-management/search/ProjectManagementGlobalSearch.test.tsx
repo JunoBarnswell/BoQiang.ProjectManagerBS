@@ -82,7 +82,7 @@ describe('ProjectManagementGlobalSearch', () => {
 
     fireEvent.keyDown(input, { key: 'ArrowDown' });
     fireEvent.keyDown(input, { key: 'Enter' });
-    expect(navigate).toHaveBeenCalledWith('/platform/project-management/projects/project-1/tasks?taskId=task-1');
+    expect(navigate).toHaveBeenCalledWith('/platform/project-management/projects/project-1/requirements?view=tree&taskId=task-1');
     expect(screen.queryByRole('dialog')).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: '打开全局搜索' }));

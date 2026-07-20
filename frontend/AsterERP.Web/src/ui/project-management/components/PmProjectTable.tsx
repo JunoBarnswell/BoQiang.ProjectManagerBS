@@ -57,7 +57,11 @@ const HeaderButton = styled(ButtonBase)(({ theme }) => ({
 }));
 
 const TableViewport = styled(Box)({
+  display: 'block',
+  flex: '1 1 auto',
+  width: '100%',
   minWidth: 0,
+  minHeight: 0,
   overflow: 'auto',
   maxHeight: '100%',
 });

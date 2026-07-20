@@ -67,6 +67,7 @@ CREATE TABLE IF NOT EXISTS pm_project_members (
     UserId TEXT NOT NULL,
     EmploymentId TEXT NULL,
     RoleCode TEXT NOT NULL DEFAULT 'Member',
+    SuggestedCapacityMinutes INTEGER NOT NULL DEFAULT 2400,
     IsActive INTEGER NOT NULL DEFAULT 1,
     JoinedAt TEXT NOT NULL,
     LeftAt TEXT NULL,
@@ -186,6 +187,7 @@ CREATE TABLE IF NOT EXISTS pm_task_participants (
 );
 """);
         schema.EnsureColumn("pm_project_members", "ScopeRootTaskId", "TEXT NULL");
+        schema.EnsureColumn("pm_project_members", "SuggestedCapacityMinutes", "INTEGER NOT NULL DEFAULT 2400");
         schema.EnsureColumn("pm_milestones", "OwnerUserId", "TEXT NULL");
         schema.EnsureColumn("pm_milestones", "HealthStatus", "TEXT NOT NULL DEFAULT 'OnTrack'");
         schema.EnsureColumn("pm_tasks", "BlockedReason", "TEXT NULL");

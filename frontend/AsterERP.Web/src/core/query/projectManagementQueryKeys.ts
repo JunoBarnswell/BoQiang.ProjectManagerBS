@@ -171,6 +171,13 @@ export const projectManagementQueryKeys = {
     query.dueFrom ?? '',
     query.dueTo ?? '',
     query.includeCompleted ?? true,
+    query.workItemType ?? '',
+    query.riskLevel ?? '',
+    query.requirementType ?? '',
+    query.requirementSource ?? '',
+    query.mentionedUserId ?? '',
+    query.hasAttachment ?? '',
+    query.hasChildren ?? '',
   ] as const,
   tasksProject: (scope: ProjectManagementWorkspaceScope, projectId: string) => [...root(scope), 'tasks', projectId] as const,
   task: (scope: ProjectManagementWorkspaceScope, projectId: string, taskId: string) => [

@@ -19,7 +19,10 @@ public sealed record ProjectManagementOverviewPersonSummary(
     int TaskCount,
     int CompletedTaskCount,
     int OverdueTaskCount,
-    string? DisplayName = null);
+    string? DisplayName = null,
+    int EstimatedMinutes = 0,
+    int CapacityMinutes = 2400,
+    decimal WorkloadPercent = 0);
 
 /// <summary>
 /// 项目列表与详情共用的轻量风险摘要；仅基于有效叶子任务计算，避免父子任务重复计数。
@@ -54,4 +57,7 @@ public sealed record ProjectManagementOverviewItem(
     ProjectManagementProjectRiskSummary RiskSummary,
     string Health = "Unknown",
     IReadOnlyList<ProjectManagementOverviewDistribution>? WorkItemTypeDistribution = null,
-    IReadOnlyList<ProjectManagementOverviewDistribution>? StatusDistribution = null);
+    IReadOnlyList<ProjectManagementOverviewDistribution>? StatusDistribution = null,
+    int PendingTaskCount = 0,
+    int StoryPointsTotal = 0,
+    IReadOnlyList<ProjectManagementOverviewDistribution>? RequirementTypeDistribution = null);

@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 import { findRouteMeta } from '@/app/navigation/routes';
@@ -14,8 +14,7 @@ import { ImUnreadEntry } from '../../features/im/components/ImUnreadEntry';
 import { ProjectManagementWorkbenchLayout } from '../../features/project-management/components/ProjectManagementWorkbenchLayout';
 import { ProjectManagementImConversationTargetLink } from '../../features/project-management/im/ProjectManagementImConversationTargetLink';
 import { ProjectManagementNotificationEntry } from '../../features/project-management/notifications/ProjectManagementNotificationEntry';
-import { projectManagementPlatformRoutePrefix } from '../../features/project-management/state/projectManagementPlatformRoutes';
-import { isProjectManagementWorkbenchPath } from '../../features/project-management/state/projectManagementWorkbenchNavigation';
+import { isProjectManagementWorkbenchPath, projectManagementPlatformRoutePrefix } from '../../features/project-management/state/projectManagementPlatformRoutes';
 import { useConfirm } from '../../shared/feedback/useConfirm';
 import { resolveMenuLabel } from '../navigation/menuLabels';
 
@@ -41,6 +40,7 @@ export function AppLayout() {
   const clearWorkspace = useWorkspaceStore((state) => state.clearWorkspace);
   const menus = useMenuStore((state) => state.menus);
   const user = useAuthStore((state) => state.user);
+  const refreshSession = useAuthStore((state) => state.refreshSession);
   const branding = useWorkspaceStore((state) => state.branding);
   const currentWorkspace = useWorkspaceStore((state) => state.currentWorkspace);
   const locationKey = `${location.pathname}${location.search}`;
@@ -60,6 +60,14 @@ export function AppLayout() {
     [currentWorkspace?.appCode, currentWorkspace?.tenantId, currentWorkspace?.workspaceLevel]
   );
   const canReturnPlatform = currentWorkspace?.workspaceLevel === 'application' && getActiveTokenSlot() === 'platform' && hasPlatformAccessToken();
+  const menuRefreshKey = `${currentWorkspace?.tenantId ?? ''}:${currentWorkspace?.appCode ?? ''}:${currentWorkspace?.workspaceLevel ?? ''}`;
+  const menuRefreshAttempt = useRef('');
+
+  useEffect(() => {
+    if (!isAuthenticated || !isProjectManagementWorkbenchPath(location.pathname) || menus.length > 0 || menuRefreshAttempt.current === menuRefreshKey) return;
+    menuRefreshAttempt.current = menuRefreshKey;
+    void refreshSession({ preserveTabs: true });
+  }, [isAuthenticated, location.pathname, menuRefreshKey, menus.length, refreshSession]);
 
   useEffect(() => {
     if (!isAuthenticated) {

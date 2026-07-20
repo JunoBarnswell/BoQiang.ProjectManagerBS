@@ -3,7 +3,9 @@ import { useEffect, useState } from 'react';
 
 import { projectManagementQueryKeys } from '../../../core/query/projectManagementQueryKeys';
 import { acquireProjectManagementHubConnection, type ProjectManagementHubConnectionState } from '../hooks/projectManagementHubConnection';
+import { applyProjectManagementTaskPatch } from '../hooks/useProjectManagementViewSync';
 import type { ProjectManagementWorkspaceScope } from '../state/projectManagementWorkspaceScope';
+import type { ProjectManagementViewSyncInvalidation } from '../view-sync/projectManagementViewSyncModel';
 
 interface ProjectInvalidationEvent {
   eventId?: string;
@@ -17,6 +19,7 @@ interface ProjectInvalidationEvent {
   workspaceSequence?: number;
   projectSequence?: number;
   changedFields?: string[];
+  patch?: Record<string, unknown>;
   traceId?: string;
 }
 
@@ -39,6 +42,7 @@ export function useProjectManagementProjectRealtime({ signalRUrl, scope, project
       void queryClient.invalidateQueries({ queryKey: projectManagementQueryKeys.milestones(scope, projectId) });
       void queryClient.invalidateQueries({ queryKey: projectManagementQueryKeys.activities(scope, projectId, { pageIndex: 1, pageSize: 20 }) });
       void queryClient.invalidateQueries({ queryKey: projectManagementQueryKeys.resources(scope, projectId) });
+      void queryClient.invalidateQueries({ queryKey: projectManagementQueryKeys.tasksProject(scope, projectId) });
     };
     const flush = () => {
       timer = undefined;
@@ -47,6 +51,7 @@ export function useProjectManagementProjectRealtime({ signalRUrl, scope, project
       void queryClient.invalidateQueries({ queryKey: projectManagementQueryKeys.milestones(scope, projectId) });
       void queryClient.invalidateQueries({ queryKey: projectManagementQueryKeys.activities(scope, projectId, { pageIndex: 1, pageSize: 20 }) });
       void queryClient.invalidateQueries({ queryKey: projectManagementQueryKeys.resources(scope, projectId) });
+      void queryClient.invalidateQueries({ queryKey: projectManagementQueryKeys.tasksProject(scope, projectId) });
     };
     const queueFlush = () => { if (!timer) timer = setTimeout(flush, 120); };
     const unsubscribeInvalidation = connection.subscribe('ProjectManagementInvalidated', (payload: unknown) => {
@@ -59,7 +64,16 @@ export function useProjectManagementProjectRealtime({ signalRUrl, scope, project
       const aggregateVersion = event.aggregateVersion ?? 0;
       if (aggregateVersion > 0 && (aggregateVersions.get(key) ?? 0) >= aggregateVersion) return;
       if (aggregateVersion > 0) aggregateVersions.set(key, aggregateVersion);
-      queueFlush();
+      const patchApplied = applyProjectManagementTaskPatch(queryClient, { projectId, scope }, {
+        aggregateId: event.aggregateId ?? '',
+        aggregateType: event.aggregateType === 'Task' ? 'Task' : event.aggregateType === 'TaskAttachment' ? 'TaskAttachment' : event.aggregateType === 'TaskComment' ? 'TaskComment' : event.aggregateType === 'TaskReminder' ? 'TaskReminder' : event.aggregateType === 'ProjectMember' ? 'ProjectMember' : 'Project',
+        changedFields: event.changedFields,
+        eventType: event.eventType ?? 'updated',
+        patch: event.patch,
+        projectId,
+        version: event.aggregateVersion ?? 0,
+      } satisfies ProjectManagementViewSyncInvalidation);
+      if (!patchApplied) queueFlush();
     });
     const unsubscribeRevocation = connection.subscribe('ProjectManagementAccessRevoked', (payload: unknown) => {
       const event = readEvent(payload);
