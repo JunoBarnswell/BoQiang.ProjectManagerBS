@@ -90,6 +90,7 @@ import type {
   ProjectManagementActivity,
   ProjectManagementActivityQuery,
   ProjectManagementReportQuery,
+  ProjectManagementProjectMarkdownOptions,
   ProjectManagementReportSnapshotRequest,
   ProjectManagementReportSnapshotStartResponse,
   ProjectManagementExcelImportPreview,
@@ -913,6 +914,16 @@ export function exportProjectManagementTasksCsv(
 ): Promise<{ blob: Blob; fileName: string }> {
   return httpClient.downloadBlob(
     `/project-management/reports/tasks.csv${buildProjectManagementLabelFilterQuery(query)}`,
+    { timeoutMs: 120_000 },
+  );
+}
+
+export function exportProjectManagementProjectMarkdown(
+  projectId: string,
+  options: ProjectManagementProjectMarkdownOptions = {},
+): Promise<{ blob: Blob; fileName: string }> {
+  return httpClient.downloadBlob(
+    `/project-management/reports/projects/${encodeURIComponent(projectId)}/summary.md${buildQueryString(options)}`,
     { timeoutMs: 120_000 },
   );
 }

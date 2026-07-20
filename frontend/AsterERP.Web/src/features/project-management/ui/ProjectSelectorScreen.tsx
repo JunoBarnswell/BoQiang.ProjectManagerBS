@@ -9,6 +9,8 @@ import { projectManagementQueryKeys } from '../../../core/query/projectManagemen
 import { useMessage } from '../../../shared/feedback/useMessage';
 import { PmIcon } from '../../../ui/project-management';
 import { ProjectCreateDialog } from '../project-create/ProjectCreateDialog';
+import { ProjectManagementCountdown } from '../components/ProjectManagementCountdown';
+import { ProjectManagementProgressBar } from '../components/ProjectManagementProgressBar';
 import { projectManagementEnumLabel, useProjectManagementI18n } from '../projectManagementI18n';
 import { toProjectManagementPlatformRoute } from '../state/projectManagementPlatformRoutes';
 import { useProjectManagementWorkspaceScope } from '../state/projectManagementWorkspaceScope';
@@ -18,7 +20,7 @@ import './projectWorkbench.css';
 const newProject: ProjectManagementProjectUpsertRequest = { projectCode: '', projectName: '', status: 'Planning', priority: 'Medium' };
 
 export function ProjectSelectorScreen() {
-  const { date, t } = useProjectManagementI18n();
+  const { t } = useProjectManagementI18n();
   const scope = useProjectManagementWorkspaceScope();
   const navigate = useNavigate();
   const message = useMessage();
@@ -95,37 +97,40 @@ export function ProjectSelectorScreen() {
           />
         </Box>
 
-        <Box className="pm-workbench-page__panel">
-          <Box className="pm-workbench-page__panel-head">
-            <span>{t('projectManagement.workbench.selector.name')}</span>
-            <span>{t('projectManagement.workbench.selector.health')}</span>
-            <span>{t('projectManagement.workbench.selector.owner')}</span>
-            <span>{t('projectManagement.workbench.selector.dueDate')}</span>
-            <span>{t('projectManagement.workbench.selector.status')}</span>
-          </Box>
+        <Box className="pm-project-selector-grid">
           {query.isLoading ? <Typography sx={{ p: 4, textAlign: 'center' }}>{t('projectManagement.workbench.selector.loading')}</Typography> : null}
           {query.isError && !projects.length ? <Typography color="error" sx={{ p: 4, textAlign: 'center' }}>{t('projectManagement.workbench.selector.loadFailed')}</Typography> : null}
           {!query.isLoading && !query.isError && projects.length === 0 ? (
-            <Typography color="text.secondary" sx={{ p: 6, textAlign: 'center' }}>{t('projectManagement.workbench.selector.empty')}</Typography>
+            <Box className="pm-project-selector-empty">
+              <Typography component="p" fontWeight={700}>{t('projectManagement.workbench.selector.empty')}</Typography>
+              <Typography color="text.secondary" component="p" variant="body2">{t('projectManagement.workbench.selector.emptyHint')}</Typography>
+              <button className="pm-primary-button" onClick={() => setCreateOpen(true)} type="button"><PmIcon name="plus" size={16} /> {t('projectManagement.workbench.selector.create')}</button>
+            </Box>
           ) : null}
           {projects.map((item) => (
             <button
-              className="pm-project-selector-row"
+              className="pm-project-selector-card"
               key={item.project.id}
               onClick={() => navigate(toProjectManagementPlatformRoute(`projects/${encodeURIComponent(item.project.id)}/overview`))}
               type="button"
             >
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
-                <PmIcon name="folder" />
-                <Box sx={{ minWidth: 0 }}>
-                  <Typography fontWeight={650} noWrap>{item.project.projectName}</Typography>
-                  <Typography color="text.secondary" variant="caption">{item.project.projectCode}</Typography>
+              <Box className="pm-project-selector-card__heading">
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+                  <PmIcon name="folder" />
+                  <Box sx={{ minWidth: 0 }}>
+                    <Typography fontWeight={650} noWrap>{item.project.projectName}</Typography>
+                    <Typography color="text.secondary" variant="caption">{item.project.projectCode}</Typography>
+                  </Box>
                 </Box>
+                <ProjectManagementCountdown dueDate={item.project.dueDate} status={item.project.status} />
               </Box>
-              <span>{item.health}</span>
-              <span>{item.project.ownerDisplayName ?? item.project.ownerUserId}</span>
-              <span>{item.project.dueDate ? date(item.project.dueDate) : '—'}</span>
-              <span>{projectManagementEnumLabel(t, 'status', item.project.status)}</span>
+              <Box className="pm-project-selector-card__progress">
+                <ProjectManagementProgressBar dueDate={item.project.dueDate} progressPercent={item.taskProgressPercent} status={item.project.status} />
+              </Box>
+              <Box className="pm-project-selector-card__footer">
+                <span>{t('projectManagement.workbench.selector.owner')} · {item.project.ownerDisplayName ?? item.project.ownerUserId}</span>
+                <span>{projectManagementEnumLabel(t, 'status', item.project.status)} · {item.health}</span>
+              </Box>
             </button>
           ))}
         </Box>

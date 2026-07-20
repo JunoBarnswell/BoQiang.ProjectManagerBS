@@ -22,6 +22,7 @@
     "test": "vitest",
     "typecheck": "tsc --noEmit",
     "i18n:audit": "node scripts/check-i18n-coverage.mjs",
+    "i18n:audit:project-workbench": "node scripts/check-i18n-coverage.mjs --project-management-workbench",
     "publish:reachability": "node scripts/frontend-reachability.mjs"
   },
   "dependencies": {

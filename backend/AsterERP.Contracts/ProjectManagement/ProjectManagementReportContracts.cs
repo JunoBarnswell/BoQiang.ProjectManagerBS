@@ -27,6 +27,18 @@ public sealed record ProjectManagementReportFile(
     byte[] Content,
     int RowCount);
 
+/// <summary>
+/// 单项目 Markdown 汇报导出选项。该格式面向人工阅读和交给 AI 进行总结，
+/// 不包含附件二进制内容或审计敏感字段。
+/// </summary>
+public sealed record ProjectManagementProjectMarkdownOptions(
+    bool IncludeCompleted = true,
+    bool IncludeComments = true,
+    bool IncludeActivities = true,
+    int MaxTaskRows = 500,
+    int MaxCommentRows = 1000,
+    int MaxActivityRows = 1000);
+
 public sealed record ProjectManagementReportSnapshotOptions(
     bool IncludeCompleted = false,
     bool IncludeDeleted = false,

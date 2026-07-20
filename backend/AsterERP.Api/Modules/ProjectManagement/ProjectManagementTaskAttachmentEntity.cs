@@ -10,6 +10,7 @@ public sealed class ProjectManagementTaskAttachmentEntity : EntityBase
     public string AppCode { get; set; } = string.Empty;
     public string ProjectId { get; set; } = string.Empty;
     public string TaskId { get; set; } = string.Empty;
+    [SugarColumn(IsNullable = true)] public string? CommentId { get; set; }
     public string FileId { get; set; } = string.Empty;
     public string FileName { get; set; } = string.Empty;
     public string ContentType { get; set; } = "application/octet-stream";

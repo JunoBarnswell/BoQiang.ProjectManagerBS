@@ -795,6 +795,7 @@ export interface ProjectManagementTaskComment {
   createdTime: string;
   editedTime?: string;
   authorDisplayName?: string;
+  attachment?: ProjectManagementTaskAttachment;
 }
 
 export interface ProjectManagementTaskCommentMention {
@@ -818,6 +819,7 @@ export interface ProjectManagementTaskCommentUpsertRequest {
   parentCommentId?: string;
   mentionUserIds?: string[];
   versionNo?: number;
+  attachmentId?: string;
 }
 
 export interface ProjectManagementTaskReminder {
@@ -992,6 +994,7 @@ export interface ProjectManagementTaskAttachment {
   previewSupported: boolean;
   previewType?: string;
   previewPipeline?: string;
+  commentId?: string;
 }
 
 export type ProjectManagementSearchScope = 'all' | 'projects' | 'tasks' | 'milestones' | 'labels' | 'members' | 'comments';
@@ -1070,6 +1073,15 @@ export interface ProjectManagementReportSnapshotStartResponse {
   operationId: string;
   traceId: string;
   expiresAt: string;
+}
+
+export interface ProjectManagementProjectMarkdownOptions {
+  includeCompleted?: boolean;
+  includeComments?: boolean;
+  includeActivities?: boolean;
+  maxTaskRows?: number;
+  maxCommentRows?: number;
+  maxActivityRows?: number;
 }
 
 export type ProjectManagementExcelImportPreviewStatus = 'Completed' | 'CompletedWithErrors';

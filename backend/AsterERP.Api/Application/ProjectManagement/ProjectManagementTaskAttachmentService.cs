@@ -187,7 +187,8 @@ public sealed class ProjectManagementTaskAttachmentService(
             item.VersionNo,
             format is not null,
             format?.ViewerType,
-            format?.PreviewPipeline);
+            format?.PreviewPipeline,
+            item.CommentId);
     }
     private string Tenant() => currentUser.GetAsterErpTenantId()?.Trim() ?? throw new ValidationException("当前会话缺少租户", ErrorCodes.PermissionDenied);
     private string App() => currentUser.GetAsterErpAppCode()?.Trim().ToUpperInvariant() ?? throw new ValidationException("当前会话缺少应用", ErrorCodes.PermissionDenied);

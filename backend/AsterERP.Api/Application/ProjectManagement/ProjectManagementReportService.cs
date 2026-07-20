@@ -21,7 +21,8 @@ public sealed class ProjectManagementReportService(
     IProjectManagementOperationWriter? operationWriter = null,
     IBackgroundJobManager? backgroundJobManager = null,
     IHostEnvironment? environment = null,
-    IProjectManagementTaskService? taskService = null) : IProjectManagementReportService, ITransientDependency
+    IProjectManagementTaskService? taskService = null,
+    IProjectManagementDisplayProjectionService? displayProjectionService = null) : IProjectManagementReportService, ITransientDependency
 {
     private const int MaxPageSize = 500;
     private const int MaxExportRows = 5000;
@@ -307,6 +308,178 @@ public sealed class ProjectManagementReportService(
             "text/csv; charset=utf-8",
             Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(builder.ToString())).ToArray(),
             totalWritten);
+    }
+
+    public async Task<ProjectManagementReportFile> ExportProjectMarkdownAsync(
+        string projectId,
+        ProjectManagementProjectMarkdownOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        RequireTenantId();
+        RequireAppCode();
+        projectId = NormalizeOptional(projectId) ?? throw new ValidationException("项目标识不能为空");
+        options = NormalizeMarkdownOptions(options);
+        var db = databaseAccessor.GetCurrentDb();
+        var project = (await db.Queryable<ProjectManagementProjectEntity>()
+                .Where(item => item.Id == projectId && !item.IsDeleted)
+                .Take(1)
+                .ToListAsync(cancellationToken))
+            .FirstOrDefault()
+            ?? throw new NotFoundException("项目不存在或无权访问", ErrorCodes.PlatformResourceNotFound);
+
+        var taskQuery = db.Queryable<ProjectManagementTaskEntity>()
+            .Where(item => item.ProjectId == projectId && !item.IsDeleted);
+        if (!options.IncludeCompleted)
+            taskQuery = taskQuery.Where(item => item.Status != ProjectManagementDomainRules.TaskDone && item.Status != ProjectManagementDomainRules.TaskCancelled);
+        var tasks = await taskQuery
+            .OrderBy(item => item.Depth)
+            .OrderBy(item => item.SortOrder)
+            .OrderBy(item => item.CreatedTime)
+            .Take(options.MaxTaskRows + 1)
+            .ToListAsync(cancellationToken);
+        if (tasks.Count > options.MaxTaskRows)
+            throw new ValidationException($"项目任务数超过导出上限 {options.MaxTaskRows} 条，请缩小范围后重试");
+
+        var milestones = await db.Queryable<ProjectManagementMilestoneEntity>()
+            .Where(item => item.ProjectId == projectId && !item.IsDeleted)
+            .OrderBy(item => item.SortOrder)
+            .OrderBy(item => item.CreatedTime)
+            .ToListAsync(cancellationToken);
+        var taskIds = tasks.Select(item => item.Id).ToArray();
+        var comments = !options.IncludeComments || taskIds.Length == 0
+            ? []
+            : await db.Queryable<ProjectManagementTaskCommentEntity>()
+                .Where(item => taskIds.Contains(item.TaskId) && !item.IsDeleted)
+                .OrderBy(item => item.CreatedTime)
+                .Take(options.MaxCommentRows + 1)
+                .ToListAsync(cancellationToken);
+        if (comments.Count > options.MaxCommentRows)
+            throw new ValidationException($"项目进展评论超过导出上限 {options.MaxCommentRows} 条，请缩小范围后重试");
+
+        var activities = !options.IncludeActivities
+            ? []
+            : await db.Queryable<ProjectManagementActivityEntity>()
+                .Where(item => item.ProjectId == projectId && !item.IsDeleted)
+                .OrderBy(item => item.CreatedTime, OrderByType.Desc)
+                .Take(options.MaxActivityRows + 1)
+                .ToListAsync(cancellationToken);
+        if (activities.Count > options.MaxActivityRows)
+            throw new ValidationException($"项目动态超过导出上限 {options.MaxActivityRows} 条，请缩小范围后重试");
+
+        var userIds = new[] { project.OwnerUserId }
+            .Concat(tasks.Select(item => item.AssigneeUserId))
+            .Concat(comments.Select(item => item.AuthorUserId))
+            .Concat(activities.Select(item => item.ActorUserId));
+        var projection = displayProjectionService is null
+            ? null
+            : await displayProjectionService.ResolveAsync(
+                [projectId],
+                activities.Select(item => new ProjectManagementDisplayReference(item.AggregateType, item.AggregateId)),
+                userIds,
+                cancellationToken);
+        var taskById = tasks.ToDictionary(item => item.Id, StringComparer.Ordinal);
+        var commentsByTask = comments.GroupBy(item => item.TaskId, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.ToList(), StringComparer.Ordinal);
+        var now = DateTime.UtcNow;
+        var builder = new StringBuilder();
+        builder.Append("# ").AppendLine(MarkdownLine(project.ProjectName));
+        builder.AppendLine();
+        builder.AppendLine($"- 项目编号：{MarkdownLine(project.ProjectCode)}");
+        builder.AppendLine($"- 负责人：{MarkdownLine(UserName(projection, project.OwnerUserId))}");
+        builder.AppendLine($"- 状态：{MarkdownLine(project.Status)}");
+        builder.AppendLine($"- 优先级：{MarkdownLine(project.Priority)}");
+        builder.AppendLine($"- 开始时间：{MarkdownDate(project.StartDate)}");
+        builder.AppendLine($"- 预期完成时间：{MarkdownDate(project.DueDate)}");
+        builder.AppendLine($"- 倒计时：{CountdownText(project.DueDate, project.Status, now)}");
+        builder.AppendLine($"- 当前进度：{project.ProgressPercent:0.#}%");
+        builder.AppendLine($"- 导出时间：{MarkdownDate(now)}");
+        if (!string.IsNullOrWhiteSpace(project.Description))
+        {
+            builder.AppendLine();
+            builder.AppendLine("## 项目说明");
+            builder.AppendLine();
+            builder.AppendLine(project.Description.Trim());
+        }
+
+        var completedCount = tasks.Count(item => item.Status == ProjectManagementDomainRules.TaskDone || item.Status == ProjectManagementDomainRules.TaskCancelled);
+        var inProgressCount = tasks.Count(item => item.Status == "InProgress");
+        var overdueCount = tasks.Count(item => item.DueDate.HasValue && item.DueDate.Value < now && item.Status != ProjectManagementDomainRules.TaskDone && item.Status != ProjectManagementDomainRules.TaskCancelled);
+        builder.AppendLine();
+        builder.AppendLine("## 概览");
+        builder.AppendLine();
+        builder.AppendLine($"- 任务总数：{tasks.Count}");
+        builder.AppendLine($"- 已完成：{completedCount}");
+        builder.AppendLine($"- 进行中：{inProgressCount}");
+        builder.AppendLine($"- 已逾期：{overdueCount}");
+
+        if (milestones.Count > 0)
+        {
+            builder.AppendLine();
+            builder.AppendLine("## 里程碑");
+            builder.AppendLine();
+            foreach (var milestone in milestones)
+            {
+                builder.AppendLine($"- {MarkdownLine(milestone.MilestoneName)}：{milestone.ProgressPercent:0.#}% · {MarkdownLine(milestone.Status)} · 截止 {MarkdownDate(milestone.DueDate)}");
+            }
+        }
+
+        builder.AppendLine();
+        builder.AppendLine("## 任务进展");
+        builder.AppendLine();
+        if (tasks.Count == 0)
+        {
+            builder.AppendLine("暂无任务。");
+        }
+        else
+        {
+            foreach (var task in tasks)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                builder.Append("### ").Append(' ', Math.Max(0, task.Depth)).AppendLine(MarkdownLine($"[{task.Status}] {task.Title}"));
+                builder.AppendLine();
+                builder.AppendLine($"- 编号：{MarkdownLine(task.TaskCode)}");
+                builder.AppendLine($"- 负责人：{MarkdownLine(UserName(projection, task.AssigneeUserId))}");
+                builder.AppendLine($"- 截止时间：{MarkdownDate(task.DueDate)}（{CountdownText(task.DueDate, task.Status, now)}）");
+                builder.AppendLine($"- 完成比例：{task.ProgressPercent:0.#}%");
+                if (!string.IsNullOrWhiteSpace(task.Description))
+                {
+                    builder.AppendLine("- 任务说明：");
+                    builder.AppendLine();
+                    builder.AppendLine(task.Description.Trim());
+                }
+
+                if (commentsByTask.TryGetValue(task.Id, out var taskComments))
+                {
+                    builder.AppendLine();
+                    builder.AppendLine("#### 进展记录");
+                    builder.AppendLine();
+                    foreach (var comment in taskComments)
+                    {
+                        builder.AppendLine($"- {MarkdownDate(comment.CreatedTime)} · {MarkdownLine(UserName(projection, comment.AuthorUserId))}：{MarkdownLine(comment.Markdown)}");
+                    }
+                }
+                builder.AppendLine();
+            }
+        }
+
+        if (activities.Count > 0)
+        {
+            builder.AppendLine("## 动态时间线");
+            builder.AppendLine();
+            foreach (var activity in activities)
+            {
+                var aggregate = activity.AggregateType.Equals("Project", StringComparison.OrdinalIgnoreCase)
+                    ? project.ProjectName
+                    : projection?.Aggregate(activity.AggregateType, activity.AggregateId) ?? activity.AggregateType;
+                builder.AppendLine($"- {MarkdownDate(activity.CreatedTime)} · {MarkdownLine(UserName(projection, activity.ActorUserId))} · {MarkdownLine(aggregate)}：{MarkdownLine(activity.Summary ?? activity.ActivityType)}");
+            }
+        }
+
+        return new ProjectManagementReportFile(
+            $"project-{SafeFileName(project.ProjectCode)}-{DateTime.UtcNow:yyyyMMddHHmmss}.md",
+            "text/markdown; charset=utf-8",
+            Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(builder.ToString())).ToArray(),
+            tasks.Count);
     }
 
     public async Task<ProjectManagementReportSnapshotStartResponse> StartSnapshotAsync(
@@ -697,6 +870,17 @@ public sealed class ProjectManagementReportService(
         };
     }
 
+    private static ProjectManagementProjectMarkdownOptions NormalizeMarkdownOptions(ProjectManagementProjectMarkdownOptions? options)
+    {
+        options ??= new ProjectManagementProjectMarkdownOptions();
+        return options with
+        {
+            MaxTaskRows = Math.Clamp(options.MaxTaskRows, 1, 2000),
+            MaxCommentRows = Math.Clamp(options.MaxCommentRows, 1, 5000),
+            MaxActivityRows = Math.Clamp(options.MaxActivityRows, 1, 5000)
+        };
+    }
+
     private static void TryDelete(string path)
     {
         try { if (File.Exists(path)) File.Delete(path); }
@@ -704,6 +888,36 @@ public sealed class ProjectManagementReportService(
     }
 
     private static string? NormalizeOptional(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static string MarkdownLine(string? value) =>
+        string.IsNullOrWhiteSpace(value)
+            ? "—"
+            : value.Trim().Replace("\r\n", " ", StringComparison.Ordinal).Replace('\r', ' ').Replace('\n', ' ');
+
+    private static string MarkdownDate(DateTime? value) =>
+        value?.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) ?? "未设置";
+
+    private static string UserName(ProjectManagementDisplayProjection? projection, string? userId) =>
+        projection?.User(userId) ?? (string.IsNullOrWhiteSpace(userId) ? "未指派" : userId);
+
+    private static string CountdownText(DateTime? dueDate, string status, DateTime now)
+    {
+        if (!dueDate.HasValue) return "未设置";
+        if (status == ProjectManagementDomainRules.TaskDone || status == ProjectManagementDomainRules.TaskCancelled || status is "Completed" or "Archived")
+            return "已结束";
+        var remaining = dueDate.Value.ToUniversalTime() - now;
+        if (remaining.TotalMinutes < 0) return $"已逾期 {Math.Ceiling(-remaining.TotalDays):0} 天";
+        if (remaining.TotalHours < 1) return "不足 1 小时";
+        if (remaining.TotalDays < 1) return $"还剩 {Math.Ceiling(remaining.TotalHours):0} 小时";
+        return $"还剩 {Math.Ceiling(remaining.TotalDays):0} 天";
+    }
+
+    private static string SafeFileName(string value)
+    {
+        var invalid = Path.GetInvalidFileNameChars().ToHashSet();
+        var safe = new string(value.Where(character => !invalid.Contains(character) && char.IsLetterOrDigit(character) || character is '-' or '_').Take(48).ToArray());
+        return string.IsNullOrWhiteSpace(safe) ? "project" : safe;
+    }
 
     private static string SafeReportText(string? value, int maxLength)
     {

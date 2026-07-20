@@ -1,11 +1,13 @@
-import { Box, Typography } from '@mui/material';
+import { Box, Stack, Typography } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
-import { getProjectManagementActivities, getProjectManagementOverview } from '../../../api/project-management/projectManagement.api';
+import { exportProjectManagementProjectMarkdown, getProjectManagementActivities, getProjectManagementOverview } from '../../../api/project-management/projectManagement.api';
 import { projectManagementQueryKeys } from '../../../core/query/projectManagementQueryKeys';
 import { useMessage } from '../../../shared/feedback/useMessage';
+import { ProjectManagementCountdown } from '../components/ProjectManagementCountdown';
+import { ProjectManagementProgressBar } from '../components/ProjectManagementProgressBar';
 import { useProjectManagementI18n } from '../projectManagementI18n';
 import { useProjectManagementProjectRealtime } from '../realtime/useProjectManagementProjectRealtime';
 import { toProjectManagementPlatformRoute } from '../state/projectManagementPlatformRoutes';
@@ -28,8 +30,10 @@ export function ProjectOverviewScreen() {
   const message = useMessage();
   const { projectId = '' } = useParams<{ projectId: string }>();
   const [refreshing, setRefreshing] = useState(false);
+  const [activityLimit, setActivityLimit] = useState(8);
+  const [exportingMarkdown, setExportingMarkdown] = useState(false);
   const overview = useQuery({ enabled: scope.isAvailable && Boolean(projectId), queryKey: projectManagementQueryKeys.overview(scope, { projectId, pageIndex: 1, pageSize: 1 }), queryFn: ({ signal }) => getProjectManagementOverview({ projectId, pageIndex: 1, pageSize: 1 }, signal) });
-  const activities = useQuery({ enabled: scope.isAvailable && Boolean(projectId), queryKey: projectManagementQueryKeys.activities(scope, projectId, { pageIndex: 1, pageSize: 4 }), queryFn: ({ signal }) => getProjectManagementActivities(projectId, { pageIndex: 1, pageSize: 4 }, signal) });
+  const activities = useQuery({ enabled: scope.isAvailable && Boolean(projectId), queryKey: projectManagementQueryKeys.activities(scope, projectId, { pageIndex: 1, pageSize: activityLimit }), queryFn: ({ signal }) => getProjectManagementActivities(projectId, { pageIndex: 1, pageSize: activityLimit }, signal) });
   const handleAccessRevoked = useCallback(() => {
     navigate(toProjectManagementPlatformRoute());
   }, [navigate]);
@@ -51,6 +55,24 @@ export function ProjectOverviewScreen() {
       if (!isRequestCancelled(error)) message.error(t('projectManagement.workbench.overview.notFound'));
     } finally {
       setRefreshing(false);
+    }
+  };
+  const exportMarkdown = async () => {
+    if (exportingMarkdown) return;
+    setExportingMarkdown(true);
+    try {
+      const { blob, fileName } = await exportProjectManagementProjectMarkdown(projectId);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = fileName;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      message.success(t('projectManagement.workbench.overview.exportSuccess'));
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : t('projectManagement.workbench.overview.exportFailed'));
+    } finally {
+      setExportingMarkdown(false);
     }
   };
 
@@ -85,6 +107,26 @@ export function ProjectOverviewScreen() {
           refreshing={refreshing}
         />
         <Box className="pm-overview-grid">
+          <Box className="pm-overview-hero">
+            <Box className="pm-overview-hero__main">
+              <Typography className="pm-overview-hero__eyebrow" component="span">{t('projectManagement.workbench.overview.progress')}</Typography>
+              <Typography className="pm-overview-hero__name" component="h1">{item.project.projectName}</Typography>
+              <Stack className="pm-overview-hero__meta" direction="row">
+                <span>{t('projectManagement.workbench.overview.owner')} · {item.project.ownerDisplayName ?? item.project.ownerUserId}</span>
+                <span>{t('projectManagement.workbench.overview.schedule')} · {item.project.startDate ? dateTime(item.project.startDate) : '—'} → {item.project.dueDate ? dateTime(item.project.dueDate) : '—'}</span>
+              </Stack>
+              <Box className="pm-overview-hero__progress">
+                <ProjectManagementProgressBar dueDate={item.project.dueDate} progressPercent={item.project.progressPercent} status={item.project.status} />
+              </Box>
+            </Box>
+            <Box className="pm-overview-hero__deadline">
+              <ProjectManagementCountdown dueDate={item.project.dueDate} status={item.project.status} variant="hero" />
+              <Stack direction="row" spacing={1}>
+                <button className="pm-workbench-command" disabled={exportingMarkdown} onClick={() => void exportMarkdown()} type="button">{t('projectManagement.workbench.overview.exportMarkdown')}</button>
+                <button className="pm-primary-button" onClick={() => navigate(toProjectManagementPlatformRoute(`projects/${encodeURIComponent(projectId)}/requirements?create=1`))} type="button">{t('projectManagement.workbench.createRequirement')}</button>
+              </Stack>
+            </Box>
+          </Box>
           <Box className="pm-overview-metrics">
             {metricMeta.map(([label, key, tone]) => (
               <MetricCard key={key} label={label} tone={tone} value={values[key]} />
@@ -129,7 +171,7 @@ export function ProjectOverviewScreen() {
               </Box>
             ))}
           </Panel>
-          <Panel className="pm-overview-panel--activity" title={t('projectManagement.workbench.overview.activity')}>
+          <Panel className="pm-overview-panel--activity" title={t('projectManagement.workbench.overview.timeline')}>
             {activities.data?.data.items.length ? activities.data.data.items.map((activity) => (
               <Box className="pm-overview-activity-row" key={activity.id}>
                 <span className="pm-overview-dot" style={{ background: 'var(--app-accent)', marginTop: 6 }} />
@@ -138,7 +180,8 @@ export function ProjectOverviewScreen() {
                 </Typography>
                 <Typography className="pm-overview-activity-row__time" component="span">{dateTime(activity.createdTime)}</Typography>
               </Box>
-            )) : <Typography className="pm-overview-empty" component="p">{t('projectManagement.workbench.overview.noActivity')}</Typography>}
+            )) : <Typography className="pm-overview-empty" component="p">{t('projectManagement.workbench.overview.timelineEmpty')}</Typography>}
+            {(activities.data?.data.total ?? 0) > activityLimit ? <button className="pm-workbench-command pm-overview-timeline-more" onClick={() => setActivityLimit((value) => value + 8)} type="button">{t('projectManagement.workbench.overview.loadMore')}</button> : null}
           </Panel>
           <Panel className="pm-overview-panel--distribution" title={t('projectManagement.workbench.overview.distribution')}>
             {item.requirementTypeDistribution?.map((entry) => (

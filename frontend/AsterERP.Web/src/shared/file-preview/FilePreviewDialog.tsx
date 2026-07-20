@@ -1,6 +1,5 @@
 import { lazy, Suspense } from 'react';
 
-import type { SystemFileRecordDto } from '../../api/system/files.types';
 import { formatMessage } from '../../core/i18n/formatMessage';
 import { useI18n } from '../../core/i18n/I18nProvider';
 import { ResponsiveModal } from '../responsive/ResponsiveModal';
@@ -12,7 +11,7 @@ const PptxPreviewSurface = lazy(() => import('./PptxPreviewSurface').then((modul
 interface FilePreviewDialogProps {
   error?: string | null;
   closeOnEscape?: boolean;
-  file?: SystemFileRecordDto | null;
+  file?: { extension?: string; fileName: string } | null;
   loading?: boolean;
   open: boolean;
   previewFile?: File | null;

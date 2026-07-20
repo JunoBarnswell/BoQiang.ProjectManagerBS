@@ -19,6 +19,7 @@ import { DataTable } from '../../../shared/table/DataTable';
 import { PmIcon } from '../../../ui/project-management';
 import { ProjectManagementTaskCalendar } from '../calendar/ProjectManagementTaskCalendar';
 import { ProjectManagementProgressBar } from '../components/ProjectManagementProgressBar';
+import { ProjectManagementCountdown } from '../components/ProjectManagementCountdown';
 import { updateGanttSchedule } from '../gantt/ganttSchedule.api';
 import { ProjectManagementGanttView } from '../gantt/ProjectManagementGanttView';
 import { useProjectManagementGlobalShortcuts } from '../interactions/useProjectManagementGlobalShortcuts';
@@ -617,6 +618,7 @@ function RequirementTaskCard({
       <Typography className="pm-requirement-card__code" component="div" variant="caption">{task.taskCode}</Typography>
       <Typography className="pm-requirement-card__title" component="div" variant="body2">{task.title}</Typography>
       <ProjectManagementProgressBar compact={compact} dueDate={task.dueDate} progressPercent={task.progressPercent} status={task.status} />
+      <ProjectManagementCountdown dueDate={task.dueDate} status={task.status} />
       <Box className="pm-requirement-card__footer">
         {showStatusSelect && onStatusChange ? (
           <select

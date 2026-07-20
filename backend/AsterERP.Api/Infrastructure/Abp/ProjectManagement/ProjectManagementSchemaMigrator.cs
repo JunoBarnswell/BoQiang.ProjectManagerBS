@@ -483,6 +483,7 @@ CREATE TABLE IF NOT EXISTS pm_reversible_commands (
         schema.EnsureColumn("pm_notifications", "MessageKey", "TEXT NULL");
         schema.EnsureColumn("pm_notifications", "MessageArgumentsJson", "TEXT NULL");
         schema.EnsureColumn("pm_task_comments", "MentionUserIdsJson", "TEXT NULL");
+        schema.EnsureColumn("pm_task_attachments", "CommentId", "TEXT NULL");
         schema.Execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_pm_task_followers_user ON pm_task_followers(TenantId, AppCode, TaskId, UserId) WHERE IsDeleted = 0;");
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_task_drafts_owner ON pm_task_drafts(TenantId, AppCode, ProjectId, OwnerUserId, IsDeleted);");
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_task_draft_attachments_draft ON pm_task_draft_attachments(TenantId, AppCode, DraftId, IsDeleted);");
@@ -546,6 +547,7 @@ CREATE TABLE IF NOT EXISTS pm_reversible_commands (
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_saved_views_project ON pm_saved_views(TenantId, AppCode, ProjectId, IsShared, IsDefault, IsDeleted);");
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_saved_views_scope ON pm_saved_views(TenantId, AppCode, ProjectId, OwnerUserId, IsShared, IsDeleted);");
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_task_attachments_task ON pm_task_attachments(TenantId, AppCode, ProjectId, TaskId, CreatedTime, IsDeleted);");
+        schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_task_attachments_comment ON pm_task_attachments(TenantId, AppCode, CommentId, IsDeleted);");
         schema.Execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_pm_external_api_requests_idempotency ON pm_external_api_requests(TenantId, AppCode, CallerUserId, Operation, IdempotencyKey) WHERE IsDeleted = 0;");
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_external_api_requests_audit ON pm_external_api_requests(TenantId, AppCode, ProjectId, CreatedTime, IsDeleted);");
         schema.Execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_pm_im_conversation_link_scope ON pm_im_conversation_links(TenantId, AppCode, ProjectId, COALESCE(TaskId, '')) WHERE IsDeleted = 0;");

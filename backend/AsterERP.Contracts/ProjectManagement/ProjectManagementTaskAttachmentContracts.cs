@@ -15,4 +15,5 @@ public sealed record ProjectManagementTaskAttachmentResponse(
     long VersionNo,
     bool PreviewSupported = false,
     string? PreviewType = null,
-    string? PreviewPipeline = null);
+    string? PreviewPipeline = null,
+    string? CommentId = null);

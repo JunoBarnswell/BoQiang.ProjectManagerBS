@@ -4,7 +4,8 @@ public sealed record ProjectManagementTaskCommentUpsertRequest(
     string Markdown,
     string? ParentCommentId = null,
     IReadOnlyList<string>? MentionUserIds = null,
-    long VersionNo = 0);
+    long VersionNo = 0,
+    string? AttachmentId = null);
 
 public sealed record ProjectManagementTaskCommentQuery(
     int PageIndex = 1,
@@ -22,7 +23,8 @@ public sealed record ProjectManagementTaskCommentResponse(
     long VersionNo,
     DateTime CreatedTime,
     DateTime? EditedTime,
-    string? AuthorDisplayName = null);
+    string? AuthorDisplayName = null,
+    ProjectManagementTaskAttachmentResponse? Attachment = null);
 
 public sealed record ProjectManagementTaskCommentMentionResponse(
     string UserId,

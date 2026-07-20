@@ -1,6 +1,6 @@
 import { Box, Stack, Typography } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import {
   addProjectManagementTaskFollower,
@@ -24,23 +24,26 @@ import {
   getProjectManagementTaskReminders,
   getProjectManagementTasks,
   getProjectManagementTaskTimeLogs,
+  previewProjectManagementTaskAttachment,
   updateProjectManagementTask,
   uploadProjectManagementTaskAttachment,
   uploadProjectManagementTaskDraftAttachment,
 } from '../../../api/project-management/projectManagement.api';
-import type { ProjectManagementTaskUpsertRequest } from '../../../api/project-management/projectManagement.types';
+import type { ProjectManagementMemberCandidate, ProjectManagementTaskAttachment, ProjectManagementTaskUpsertRequest } from '../../../api/project-management/projectManagement.types';
 import { usePermission } from '../../../core/auth/usePermission';
 import { isHttpError } from '../../../core/http/httpError';
 import { useConfirm } from '../../../shared/feedback/useConfirm';
 import { useMessage } from '../../../shared/feedback/useMessage';
+import { FilePreviewDialog } from '../../../shared/file-preview/FilePreviewDialog';
 import { ResponsiveModal } from '../../../shared/responsive/ResponsiveModal';
 import { ProjectManagementMarkdownEditor } from '../collaboration/ProjectManagementMarkdownEditor';
 import { ProjectManagementProgressBar } from '../components/ProjectManagementProgressBar';
+import { ProjectManagementCountdown } from '../components/ProjectManagementCountdown';
 import { projectManagementEnumLabel, useProjectManagementI18n } from '../projectManagementI18n';
 import { getAllowedProjectManagementTaskStatuses } from '../state/projectManagementStatusTransitions';
 import { readProjectManagementTaskConflict, taskDetailToForm } from '../state/projectManagementTaskDetailModel';
 
-type EditorTab = 'details' | 'comments' | 'attachments' | 'reminders' | 'timeLogs' | 'activity';
+type CollaborationFilter = 'all' | 'comments' | 'attachments' | 'activity';
 
 const blank: ProjectManagementTaskUpsertRequest = {
   taskCode: '',
@@ -80,12 +83,15 @@ export function ProjectWorkItemEditor({
   const { hasPermission: canManageAttachment } = usePermission('project-management:attachment:manage');
   const { hasPermission: canManageReminder } = usePermission('project-management:reminder:manage');
   const { hasPermission: canViewReminder } = usePermission('project-management:reminder:view');
-  const [tab, setTab] = useState<EditorTab>('details');
+  const [collaborationFilter, setCollaborationFilter] = useState<CollaborationFilter>('all');
+  const [remindersOpen, setRemindersOpen] = useState(false);
+  const [timeLogsOpen, setTimeLogsOpen] = useState(false);
   const [form, setForm] = useState(blank);
   const [baseline, setBaseline] = useState(JSON.stringify(blank));
   const [draftId, setDraftId] = useState<string>();
   const [comment, setComment] = useState('');
   const [commentMentionIds, setCommentMentionIds] = useState<string[]>([]);
+  const [commentFile, setCommentFile] = useState<File>();
   const [continueCreating, setContinueCreating] = useState(false);
   const [conflict, setConflict] = useState<ReturnType<typeof readProjectManagementTaskConflict>>();
   const [reminderAt, setReminderAt] = useState('');
@@ -94,6 +100,7 @@ export function ProjectWorkItemEditor({
   const [timeStartedAt, setTimeStartedAt] = useState('');
   const [timeEndedAt, setTimeEndedAt] = useState('');
   const [timeNote, setTimeNote] = useState('');
+  const [preview, setPreview] = useState<{ error?: string; file?: { fileName: string; extension: string }; loading: boolean; open: boolean; previewFile?: File }>({ loading: false, open: false });
 
   const task = useQuery({ enabled: open && Boolean(taskId), queryKey: ['pm', 'editor', projectId, taskId], queryFn: ({ signal }) => getProjectManagementTask(taskId!, signal) });
   const members = useQuery({ enabled: open, queryKey: ['pm', 'editor-members', projectId], queryFn: ({ signal }) => getProjectManagementMemberCandidates({ projectId, pageIndex: 1, pageSize: 100 }, signal) });
@@ -102,9 +109,9 @@ export function ProjectWorkItemEditor({
   const attachments = useQuery({ enabled: open && Boolean(taskId), queryKey: ['pm', 'editor-attachments', taskId], queryFn: ({ signal }) => getProjectManagementTaskAttachments(taskId!, signal) });
   const comments = useQuery({ enabled: open && Boolean(taskId), queryKey: ['pm', 'editor-comments', taskId], queryFn: ({ signal }) => getProjectManagementTaskComments(taskId!, { pageIndex: 1, pageSize: 20 }, signal) });
   const followers = useQuery({ enabled: open && Boolean(taskId), queryKey: ['pm', 'editor-followers', taskId], queryFn: ({ signal }) => getProjectManagementTaskFollowers(taskId!, signal) });
-  const reminders = useQuery({ enabled: open && Boolean(taskId) && canViewReminder && tab === 'reminders', queryKey: ['pm', 'editor-reminders', taskId], queryFn: ({ signal }) => getProjectManagementTaskReminders(taskId!, signal) });
-  const timeLogs = useQuery({ enabled: open && Boolean(taskId) && tab === 'timeLogs', queryKey: ['pm', 'editor-time-logs', taskId], queryFn: ({ signal }) => getProjectManagementTaskTimeLogs(taskId!, signal) });
-  const activities = useQuery({ enabled: open && Boolean(taskId) && tab === 'activity', queryKey: ['pm', 'editor-activities', taskId], queryFn: ({ signal }) => getProjectManagementTaskActivities(taskId!, { pageIndex: 1, pageSize: 30 }, signal) });
+  const reminders = useQuery({ enabled: open && Boolean(taskId) && canViewReminder && remindersOpen, queryKey: ['pm', 'editor-reminders', taskId], queryFn: ({ signal }) => getProjectManagementTaskReminders(taskId!, signal) });
+  const timeLogs = useQuery({ enabled: open && Boolean(taskId) && timeLogsOpen, queryKey: ['pm', 'editor-time-logs', taskId], queryFn: ({ signal }) => getProjectManagementTaskTimeLogs(taskId!, signal) });
+  const activities = useQuery({ enabled: open && Boolean(taskId) && (collaborationFilter === 'all' || collaborationFilter === 'activity'), queryKey: ['pm', 'editor-activities', taskId], queryFn: ({ signal }) => getProjectManagementTaskActivities(taskId!, { pageIndex: 1, pageSize: 30 }, signal) });
 
   useEffect(() => {
     if (!open) return;
@@ -115,7 +122,8 @@ export function ProjectWorkItemEditor({
     setBaseline(JSON.stringify(next));
     setDraftId(undefined);
     setConflict(undefined);
-    setTab('details');
+    setCollaborationFilter('all');
+    setCommentFile(undefined);
   }, [initialStartDate, open, task.data]);
 
   const save = useMutation({
@@ -168,8 +176,12 @@ export function ProjectWorkItemEditor({
   });
 
   const addComment = useMutation({
-    mutationFn: () => createProjectManagementTaskComment(taskId!, { markdown: comment, mentionUserIds: commentMentionIds }),
-    onSuccess: () => { setComment(''); setCommentMentionIds([]); void comments.refetch(); message.success(t('projectManagement.editor.commentPublished')); },
+    mutationFn: async () => {
+      const attachment = commentFile ? await uploadProjectManagementTaskAttachment(taskId!, commentFile) : undefined;
+      return createProjectManagementTaskComment(taskId!, { markdown: comment, mentionUserIds: commentMentionIds, attachmentId: attachment?.data.id });
+    },
+    onSuccess: () => { setComment(''); setCommentMentionIds([]); setCommentFile(undefined); void comments.refetch(); void attachments.refetch(); message.success(t('projectManagement.editor.commentPublished')); },
+    onError: () => message.error(t('projectManagement.editor.uploadFailed')),
   });
 
   const follow = useMutation({
@@ -245,14 +257,28 @@ export function ProjectWorkItemEditor({
   const enumLabels = (group: 'priority' | 'status' | 'workItemType' | 'risk' | 'requirementType' | 'requirementSource', values: string[]) =>
     Object.fromEntries(values.map((value) => [value, projectManagementEnumLabel(t, group, value)]));
   const statusOptions = getAllowedProjectManagementTaskStatuses(form.status ?? 'Todo');
-  const tabs: Array<[EditorTab, string]> = [
-    ['details', t('projectManagement.editor.tab.details')],
-    ['comments', t('projectManagement.editor.tab.comments')],
-    ['attachments', t('projectManagement.editor.tab.attachments')],
-    ['reminders', t('projectManagement.editor.tab.reminders')],
-    ['timeLogs', t('projectManagement.editor.tab.timeLogs')],
-    ['activity', t('projectManagement.editor.tab.activity')],
-  ];
+  const downloadAttachment = async (item: ProjectManagementTaskAttachment) => {
+    const { blob, fileName } = await downloadProjectManagementTaskAttachment(item);
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = fileName;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+  const previewAttachment = async (item: ProjectManagementTaskAttachment) => {
+    if (!item.previewSupported) {
+      message.warning(t('projectManagement.editor.previewUnsupported'));
+      return;
+    }
+    setPreview({ file: { fileName: item.fileName, extension: item.fileName.split('.').pop() ?? '' }, loading: true, open: true });
+    try {
+      const { blob, fileName } = await previewProjectManagementTaskAttachment(item);
+      setPreview({ file: { fileName, extension: fileName.split('.').pop() ?? '' }, loading: false, open: true, previewFile: new File([blob], fileName, { type: blob.type || item.contentType }) });
+    } catch (error) {
+      setPreview({ error: error instanceof Error ? error.message : t('projectManagement.editor.previewFailed'), file: { fileName: item.fileName, extension: item.fileName.split('.').pop() ?? '' }, loading: false, open: true });
+    }
+  };
   const footer = (
     <Stack alignItems="center" direction="row" justifyContent="space-between">
       <label className="pm-editor-checkbox"><input checked={continueCreating} onChange={(event) => setContinueCreating(event.target.checked)} type="checkbox" /> {t('projectManagement.editor.continueCreating')}</label>
@@ -266,131 +292,33 @@ export function ProjectWorkItemEditor({
   return (
     <ResponsiveModal bodyClassName="pm-work-item-editor-body" className="pm-work-item-editor" footer={footer} maxWidth="96vw" mode="modal" onClose={requestClose} open={open} title={taskId ? t('projectManagement.editor.edit') : t('projectManagement.editor.create')}>
       {conflict ? <ConflictPanel conflict={conflict} onKeepLocal={() => setConflict(undefined)} onOverwrite={() => save.mutate({ overwriteVersionNo: conflict.serverValues.versionNo })} onReload={() => { const next = taskDetailToForm(conflict.serverValues); setForm(next); setBaseline(JSON.stringify(next)); setConflict(undefined); }} t={t} /> : null}
-      <Box className="pm-editor-tabs">
-        {tabs.map(([key, label]) => (
-          <button className={tab === key ? 'pm-editor-tab is-active' : 'pm-editor-tab'} key={key} onClick={() => setTab(key)} type="button">{label}</button>
-        ))}
-      </Box>
       <Box className="pm-editor-grid">
         <Stack className="pm-editor-main" spacing={1.25}>
-          {tab === 'details' ? (
-            <>
-              <input aria-label={t('projectManagement.editor.titleAria')} className="pm-editor-title" maxLength={256} onChange={(event) => update({ title: event.target.value })} placeholder={t('projectManagement.editor.titlePlaceholder')} value={form.title} />
-              <Typography color="text.secondary" variant="caption">{form.title.length}/256</Typography>
-              <ProjectManagementMarkdownEditor ariaLabel={t('projectManagement.editor.descriptionAria')} contentJson={form.contentJson} mentionCandidates={candidateItems} onChange={(value) => update({ description: value, markdown: value })} onContentJsonChange={(value) => update({ contentJson: value })} onMentionUserIdsChange={(value) => update({ mentionUserIds: value })} placeholder={t('projectManagement.editor.descriptionPlaceholder')} rows={14} value={form.description ?? ''} />
-            </>
-          ) : null}
-          {tab === 'comments' ? (
-            taskId ? (
-              <Stack className="pm-editor-tab-panel" spacing={1}>
-                {comments.data?.data.items.map((item) => (
-                  <Box className="pm-comment" key={item.id}>
-                    <Typography color="text.secondary" variant="caption">{item.authorDisplayName ?? item.authorUserId} · {dateTime(item.createdTime)}</Typography>
-                    <Typography variant="body2">{item.markdown}</Typography>
-                  </Box>
-                ))}
-                <ProjectManagementMarkdownEditor ariaLabel={t('projectManagement.editor.commentAria')} mentionCandidates={candidateItems} onChange={setComment} onMentionUserIdsChange={setCommentMentionIds} placeholder={t('projectManagement.editor.commentPlaceholder')} rows={4} value={comment} />
-                <button className="pm-workbench-command" disabled={!comment.trim() || addComment.isPending} onClick={() => addComment.mutate()} type="button">{t('projectManagement.editor.publishComment')}</button>
-              </Stack>
-            ) : <Typography color="text.secondary" variant="caption">{t('projectManagement.editor.saveFirst')}</Typography>
-          ) : null}
-          {tab === 'attachments' ? (
-            <Stack className="pm-editor-tab-panel" spacing={1}>
-              <Stack alignItems="center" direction="row" justifyContent="space-between">
-                <Typography fontWeight={700}>{t('projectManagement.editor.attachment')}</Typography>
-                {canManageAttachment ? (
-                  <label className="pm-workbench-command">{t('projectManagement.editor.upload')}<input hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) upload.mutate(file); event.currentTarget.value = ''; }} type="file" /></label>
-                ) : null}
-              </Stack>
-              {attachments.data?.data.map((item) => (
-                <Stack alignItems="center" className="pm-editor-list-item" direction="row" justifyContent="space-between" key={item.id}>
-                  <Typography variant="body2">{item.fileName} · {Math.ceil(item.fileSize / 1024)} KB</Typography>
-                  <Stack direction="row" spacing={1}>
-                    <button className="pm-workbench-command" onClick={() => void downloadProjectManagementTaskAttachment(item).then(({ blob, fileName }) => {
-                      const url = URL.createObjectURL(blob);
-                      const anchor = document.createElement('a');
-                      anchor.href = url;
-                      anchor.download = fileName;
-                      anchor.click();
-                      URL.revokeObjectURL(url);
-                    })} type="button">{t('projectManagement.editor.download')}</button>
-                    {canManageAttachment && taskId ? (
-                      <button className="pm-workbench-command" onClick={() => removeAttachment.mutate(item)} type="button">{t('projectManagement.editor.deleteAttachment')}</button>
-                    ) : null}
-                  </Stack>
-                </Stack>
-              ))}
-              {!taskId ? <Typography color="text.secondary" variant="caption">{t('projectManagement.editor.afterSaveHint')}</Typography> : null}
-            </Stack>
-          ) : null}
-          {tab === 'reminders' ? (
-            taskId && canViewReminder ? (
-              <Stack className="pm-editor-tab-panel" spacing={1}>
-                {canManageReminder ? (
-                  <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>
-                    <input className="pm-editor-select" onChange={(event) => setReminderAt(event.target.value)} type="datetime-local" value={reminderAt} />
-                    <select className="pm-editor-select" onChange={(event) => setReminderScope(event.target.value as typeof reminderScope)} value={reminderScope}>
-                      {(['Self', 'Assignee', 'Participants', 'Members'] as const).map((scope) => <option key={scope} value={scope}>{t(`projectManagement.editor.reminder.scope.${scope}`)}</option>)}
-                    </select>
-                    <input className="pm-editor-select" onChange={(event) => setReminderNote(event.target.value)} placeholder={t('projectManagement.editor.reminder.note')} value={reminderNote} />
-                    <button className="pm-primary-button" disabled={!reminderAt || addReminder.isPending} onClick={() => addReminder.mutate()} type="button">{t('projectManagement.editor.reminder.add')}</button>
-                  </Stack>
-                ) : null}
-                {reminders.data?.data.length ? reminders.data.data.map((item) => (
-                  <Stack alignItems="center" className="pm-editor-list-item" direction="row" justifyContent="space-between" key={item.id}>
-                    <Stack spacing={0.25}>
-                      <Typography variant="body2">{dateTime(item.reminderAtUtc)} · {item.status}</Typography>
-                      <Typography color="text.secondary" variant="caption">{item.note || '—'}</Typography>
-                    </Stack>
-                    {canManageReminder ? (
-                      <Stack direction="row" spacing={1}>
-                        {item.status === 'Pending' ? <button className="pm-workbench-command" onClick={() => cancelReminder.mutate(item)} type="button">{t('projectManagement.editor.reminder.cancel')}</button> : null}
-                        <button className="pm-workbench-command" onClick={() => removeReminder.mutate(item)} type="button">{t('projectManagement.editor.reminder.delete')}</button>
-                      </Stack>
-                    ) : null}
-                  </Stack>
-                )) : <Typography color="text.secondary" variant="body2">{t('projectManagement.editor.reminder.empty')}</Typography>}
-              </Stack>
-            ) : <Typography color="text.secondary" variant="caption">{t('projectManagement.editor.saveFirst')}</Typography>
-          ) : null}
-          {tab === 'timeLogs' ? (
-            taskId ? (
-              <Stack className="pm-editor-tab-panel" spacing={1}>
-                <Typography fontWeight={700}>{format('projectManagement.editor.timeLog.summary', { estimate: form.estimateMinutes ?? 0, actual: task.data?.data.actualMinutes ?? 0 })}</Typography>
-                {canEditTask ? (
-                  <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>
-                    <input className="pm-editor-select" onChange={(event) => setTimeStartedAt(event.target.value)} type="datetime-local" value={timeStartedAt} />
-                    <input className="pm-editor-select" onChange={(event) => setTimeEndedAt(event.target.value)} type="datetime-local" value={timeEndedAt} />
-                    <input className="pm-editor-select" onChange={(event) => setTimeNote(event.target.value)} placeholder={t('projectManagement.editor.timeLog.note')} value={timeNote} />
-                    <button className="pm-primary-button" disabled={!timeStartedAt || !timeEndedAt || addTimeLog.isPending} onClick={() => addTimeLog.mutate()} type="button">{t('projectManagement.editor.timeLog.add')}</button>
-                  </Stack>
-                ) : null}
-                {timeLogs.data?.data.length ? timeLogs.data.data.map((item) => (
-                  <Stack alignItems="center" className="pm-editor-list-item" direction="row" justifyContent="space-between" key={item.id}>
-                    <Stack spacing={0.25}>
-                      <Typography variant="body2">{item.minutes} {t('projectManagement.editor.timeLog.minutes')} · {dateTime(item.startedAt)} — {dateTime(item.endedAt)}</Typography>
-                      <Typography color="text.secondary" variant="caption">{item.note || '—'}</Typography>
-                    </Stack>
-                    {canEditTask ? <button className="pm-workbench-command" onClick={() => removeTimeLog.mutate(item)} type="button">{t('projectManagement.editor.timeLog.delete')}</button> : null}
-                  </Stack>
-                )) : <Typography color="text.secondary" variant="body2">{t('projectManagement.editor.timeLog.empty')}</Typography>}
-              </Stack>
-            ) : <Typography color="text.secondary" variant="caption">{t('projectManagement.editor.saveFirst')}</Typography>
-          ) : null}
-          {tab === 'activity' ? (
-            taskId ? (
-              <Stack className="pm-editor-tab-panel" spacing={1}>
-                <ProjectManagementProgressBar dueDate={form.dueDate} progressPercent={form.progressPercent ?? 0} status={form.status} />
-                {activities.data?.data.items.length ? activities.data.data.items.map((item) => (
-                  <Box className="pm-overview-activity-row" key={item.id}>
-                    <span className="pm-overview-dot" style={{ background: 'var(--app-accent)', marginTop: 6 }} />
-                    <Typography className="pm-overview-activity-row__summary" component="span" variant="body2">{item.summaryText ? format(item.summaryText.key, item.summaryText.arguments) : item.summary ?? item.activityType}</Typography>
-                    <Typography className="pm-overview-activity-row__time" component="span" variant="caption">{dateTime(item.createdTime)}</Typography>
-                  </Box>
-                )) : <Typography color="text.secondary" variant="body2">{t('projectManagement.editor.activity.empty')}</Typography>}
-              </Stack>
-            ) : <Typography color="text.secondary" variant="caption">{t('projectManagement.editor.saveFirst')}</Typography>
-          ) : null}
+          <input aria-label={t('projectManagement.editor.titleAria')} className="pm-editor-title" maxLength={256} onChange={(event) => update({ title: event.target.value })} placeholder={t('projectManagement.editor.titlePlaceholder')} value={form.title} />
+          <Typography color="text.secondary" variant="caption">{form.title.length}/256</Typography>
+          <ProjectManagementMarkdownEditor ariaLabel={t('projectManagement.editor.descriptionAria')} contentJson={form.contentJson} mentionCandidates={candidateItems} onChange={(value) => update({ description: value, markdown: value })} onContentJsonChange={(value) => update({ contentJson: value })} onMentionUserIdsChange={(value) => update({ mentionUserIds: value })} placeholder={t('projectManagement.editor.descriptionPlaceholder')} rows={10} value={form.description ?? ''} />
+          {taskId ? <CollaborationPanel
+            activities={activities.data?.data.items ?? []}
+            attachments={attachments.data?.data ?? []}
+            canManageAttachment={canManageAttachment}
+            comments={comments.data?.data.items ?? []}
+            comment={comment}
+            commentFile={commentFile}
+            filter={collaborationFilter}
+            isPublishing={addComment.isPending}
+            onCommentChange={setComment}
+            onCommentFileChange={setCommentFile}
+            onCommentMentionsChange={setCommentMentionIds}
+            onDeleteAttachment={(item) => removeAttachment.mutate(item)}
+            onDownload={(item) => void downloadAttachment(item)}
+            onFilterChange={setCollaborationFilter}
+            onPreview={(item) => void previewAttachment(item)}
+            onPublish={() => addComment.mutate()}
+            onUpload={(file) => upload.mutate(file)}
+            mentionCandidates={candidateItems}
+            t={t}
+            dateTime={dateTime}
+          /> : <Typography color="text.secondary" variant="caption">{t('projectManagement.editor.saveFirst')}</Typography>}
         </Stack>
         <Stack className="pm-editor-properties" spacing={0}>
           <Box className="pm-editor-property-group">
@@ -415,6 +343,7 @@ export function ProjectWorkItemEditor({
             {taskId ? <Field label={t('projectManagement.editor.field.actualMinutes')} value={String(task.data?.data.actualMinutes ?? 0)} /> : null}
             <DateField label={t('projectManagement.editor.field.startDate')} onChange={(value) => update({ startDate: value || undefined })} value={form.startDate} />
             <DateField label={t('projectManagement.editor.field.dueDate')} onChange={(value) => update({ dueDate: value || undefined })} value={form.dueDate} />
+            <ProjectManagementCountdown dueDate={form.dueDate} status={form.status} />
             <SelectField label={t('projectManagement.editor.field.parent')} labels={Object.fromEntries(parentItems.map((item) => [item.id, `${item.taskCode} · ${item.title}`]))} onChange={(value) => update({ parentTaskId: value || undefined })} options={['', ...parentItems.map((item) => item.id)]} value={form.parentTaskId ?? ''} t={t} />
             <SelectField label={t('projectManagement.editor.field.milestone')} labels={Object.fromEntries(milestoneItems.map((item) => [item.id, item.milestoneName]))} onChange={(value) => update({ milestoneId: value || undefined })} options={['', ...milestoneItems.map((item) => item.id)]} value={form.milestoneId ?? ''} t={t} />
           </Box>
@@ -425,10 +354,114 @@ export function ProjectWorkItemEditor({
             <SelectField label={t('projectManagement.editor.field.requirementType')} labels={enumLabels('requirementType', ['Feature', 'NonFunctional', 'Other'])} onChange={(value) => update({ requirementType: value || undefined })} options={['', 'Feature', 'NonFunctional', 'Other']} value={form.requirementType ?? ''} t={t} />
             <SelectField label={t('projectManagement.editor.field.requirementSource')} labels={enumLabels('requirementSource', ['ProductPlan', 'Customer', 'Internal', 'BugConversion', 'Other'])} onChange={(value) => update({ requirementSource: value || undefined })} options={['', 'ProductPlan', 'Customer', 'Internal', 'BugConversion', 'Other']} value={form.requirementSource ?? ''} t={t} />
           </Box>
+          {taskId ? <CollapsibleEditorGroup open={timeLogsOpen} onToggle={() => setTimeLogsOpen((value) => !value)} title={t('projectManagement.editor.timeLog.title')}>
+            <Typography fontWeight={700} variant="body2">{format('projectManagement.editor.timeLog.summary', { estimate: form.estimateMinutes ?? 0, actual: task.data?.data.actualMinutes ?? 0 })}</Typography>
+            {canEditTask ? <Stack spacing={0.75}>
+              <input className="pm-editor-select" onChange={(event) => setTimeStartedAt(event.target.value)} type="datetime-local" value={timeStartedAt} />
+              <input className="pm-editor-select" onChange={(event) => setTimeEndedAt(event.target.value)} type="datetime-local" value={timeEndedAt} />
+              <input className="pm-editor-select" onChange={(event) => setTimeNote(event.target.value)} placeholder={t('projectManagement.editor.timeLog.note')} value={timeNote} />
+              <button className="pm-primary-button" disabled={!timeStartedAt || !timeEndedAt || addTimeLog.isPending} onClick={() => addTimeLog.mutate()} type="button">{t('projectManagement.editor.timeLog.add')}</button>
+            </Stack> : null}
+            {timeLogs.data?.data.map((item) => <Stack alignItems="center" className="pm-editor-list-item" direction="row" justifyContent="space-between" key={item.id}><Typography variant="caption">{item.minutes} {t('projectManagement.editor.timeLog.minutes')} · {dateTime(item.startedAt)}</Typography>{canEditTask ? <button className="pm-workbench-command" onClick={() => removeTimeLog.mutate(item)} type="button">{t('projectManagement.editor.timeLog.delete')}</button> : null}</Stack>)}
+          </CollapsibleEditorGroup> : null}
+          {taskId && canViewReminder ? <CollapsibleEditorGroup open={remindersOpen} onToggle={() => setRemindersOpen((value) => !value)} title={t('projectManagement.editor.reminder.title')}>
+            {canManageReminder ? <Stack spacing={0.75}>
+              <input className="pm-editor-select" onChange={(event) => setReminderAt(event.target.value)} type="datetime-local" value={reminderAt} />
+              <select className="pm-editor-select" onChange={(event) => setReminderScope(event.target.value as typeof reminderScope)} value={reminderScope}>{(['Self', 'Assignee', 'Participants', 'Members'] as const).map((scope) => <option key={scope} value={scope}>{t(`projectManagement.editor.reminder.scope.${scope}`)}</option>)}</select>
+              <input className="pm-editor-select" onChange={(event) => setReminderNote(event.target.value)} placeholder={t('projectManagement.editor.reminder.note')} value={reminderNote} />
+              <button className="pm-primary-button" disabled={!reminderAt || addReminder.isPending} onClick={() => addReminder.mutate()} type="button">{t('projectManagement.editor.reminder.add')}</button>
+            </Stack> : null}
+            {reminders.data?.data.map((item) => <Stack alignItems="center" className="pm-editor-list-item" direction="row" justifyContent="space-between" key={item.id}><Typography variant="caption">{dateTime(item.reminderAtUtc)} · {item.status}</Typography>{canManageReminder ? <button className="pm-workbench-command" onClick={() => removeReminder.mutate(item)} type="button">{t('projectManagement.editor.reminder.delete')}</button> : null}</Stack>)}
+          </CollapsibleEditorGroup> : null}
         </Stack>
       </Box>
+      <FilePreviewDialog error={preview.error} file={preview.file} loading={preview.loading} onClose={() => setPreview({ loading: false, open: false })} open={preview.open} previewFile={preview.previewFile} />
     </ResponsiveModal>
   );
+}
+
+function CollaborationPanel({
+  activities,
+  attachments,
+  canManageAttachment,
+  comments,
+  comment,
+  commentFile,
+  dateTime,
+  filter,
+  isPublishing,
+  mentionCandidates,
+  onCommentChange,
+  onCommentFileChange,
+  onCommentMentionsChange,
+  onDeleteAttachment,
+  onDownload,
+  onFilterChange,
+  onPreview,
+  onPublish,
+  onUpload,
+  t,
+}: {
+  activities: Array<{ id: string; activityType: string; createdTime: string; summary?: string }>;
+  attachments: ProjectManagementTaskAttachment[];
+  canManageAttachment: boolean;
+  comments: Array<{ attachment?: ProjectManagementTaskAttachment; authorDisplayName?: string; authorUserId: string; createdTime: string; id: string; markdown: string }>;
+  comment: string;
+  commentFile?: File;
+  dateTime: (value?: string | Date | null) => string;
+  filter: CollaborationFilter;
+  isPublishing: boolean;
+  mentionCandidates: ProjectManagementMemberCandidate[];
+  onCommentChange: (value: string) => void;
+  onCommentFileChange: (file?: File) => void;
+  onCommentMentionsChange: (value: string[]) => void;
+  onDeleteAttachment: (item: { id: string; versionNo: number }) => void;
+  onDownload: (item: ProjectManagementTaskAttachment) => void;
+  onFilterChange: (filter: CollaborationFilter) => void;
+  onPreview: (item: ProjectManagementTaskAttachment) => void;
+  onPublish: () => void;
+  onUpload: (file: File) => void;
+  t: (key: string) => string;
+}) {
+  const taskAttachments = attachments.filter((item) => !item.commentId);
+  return (
+    <Box className="pm-collaboration">
+      <Stack alignItems="center" className="pm-collaboration__header" direction="row" justifyContent="space-between">
+        <Typography component="h3" fontWeight={700}>{t('projectManagement.editor.collaboration')}</Typography>
+        <div className="pm-collaboration__filters">
+          {(['all', 'comments', 'attachments', 'activity'] as const).map((value) => <button className={filter === value ? 'is-active' : ''} key={value} onClick={() => onFilterChange(value)} type="button">{t(`projectManagement.editor.feed.${value}`)}</button>)}
+        </div>
+      </Stack>
+      {(filter === 'all' || filter === 'comments') ? comments.map((item) => <Box className="pm-comment" key={item.id}>
+        <Typography color="text.secondary" variant="caption">{item.authorDisplayName ?? item.authorUserId} · {dateTime(item.createdTime)}</Typography>
+        <Typography variant="body2">{item.markdown}</Typography>
+        {item.attachment ? <AttachmentCard attachment={item.attachment} canDelete={false} onDownload={onDownload} onPreview={onPreview} t={t} /> : null}
+      </Box>) : null}
+      {(filter === 'all' || filter === 'attachments') ? <Stack spacing={0.75}>
+        <Stack alignItems="center" direction="row" justifyContent="space-between">
+          <Typography fontWeight={700} variant="body2">{t('projectManagement.editor.attachment')}</Typography>
+          {canManageAttachment ? <label className="pm-workbench-command">{t('projectManagement.editor.upload')}<input hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) onUpload(file); event.currentTarget.value = ''; }} type="file" /></label> : null}
+        </Stack>
+        {taskAttachments.map((item) => <AttachmentCard attachment={item} canDelete={canManageAttachment} key={item.id} onDelete={onDeleteAttachment} onDownload={onDownload} onPreview={onPreview} t={t} />)}
+      </Stack> : null}
+      {(filter === 'all' || filter === 'activity') ? activities.map((item) => <Box className="pm-overview-activity-row" key={item.id}><span className="pm-overview-dot" /><Typography className="pm-overview-activity-row__summary" component="span" variant="body2">{item.summary ?? item.activityType}</Typography><Typography className="pm-overview-activity-row__time" component="span" variant="caption">{dateTime(item.createdTime)}</Typography></Box>) : null}
+      <Stack className="pm-comment-composer" spacing={0.75}>
+        <ProjectManagementMarkdownEditor ariaLabel={t('projectManagement.editor.commentAria')} mentionCandidates={mentionCandidates} onChange={onCommentChange} onMentionUserIdsChange={onCommentMentionsChange} placeholder={t('projectManagement.editor.commentPlaceholder')} rows={3} value={comment} />
+        <Stack alignItems="center" direction="row" justifyContent="space-between">
+          <label className="pm-workbench-command">{commentFile?.name ?? t('projectManagement.editor.attachFile')}<input hidden onChange={(event) => { onCommentFileChange(event.target.files?.[0]); event.currentTarget.value = ''; }} type="file" /></label>
+          <button className="pm-primary-button" disabled={!comment.trim() || isPublishing} onClick={onPublish} type="button">{t('projectManagement.editor.publishComment')}</button>
+        </Stack>
+      </Stack>
+    </Box>
+  );
+}
+
+function AttachmentCard({ attachment, canDelete, onDelete, onDownload, onPreview, t }: { attachment: ProjectManagementTaskAttachment; canDelete: boolean; onDelete?: (item: { id: string; versionNo: number }) => void; onDownload: (item: ProjectManagementTaskAttachment) => void; onPreview: (item: ProjectManagementTaskAttachment) => void; t: (key: string) => string }) {
+  return <Stack alignItems="center" className="pm-attachment-card" direction="row" justifyContent="space-between"><Typography variant="body2">{attachment.fileName} · {Math.ceil(attachment.fileSize / 1024)} KB</Typography><Stack direction="row" spacing={0.5}>{attachment.previewSupported ? <button className="pm-workbench-command" onClick={() => onPreview(attachment)} type="button">{t('projectManagement.editor.preview')}</button> : null}<button className="pm-workbench-command" onClick={() => onDownload(attachment)} type="button">{t('projectManagement.editor.download')}</button>{canDelete && onDelete ? <button className="pm-workbench-command" onClick={() => onDelete(attachment)} type="button">{t('projectManagement.editor.deleteAttachment')}</button> : null}</Stack></Stack>;
+}
+
+function CollapsibleEditorGroup({ children, onToggle, open, title }: { children: ReactNode; onToggle: () => void; open: boolean; title: string }) {
+  return <Box className="pm-editor-property-group pm-editor-property-group--collapsible"><button className="pm-editor-property-group__toggle" onClick={onToggle} type="button"><span>{title}</span><span>{open ? '−' : '+'}</span></button>{open ? <Stack spacing={0.75}>{children}</Stack> : null}</Box>;
 }
 
 function ConflictPanel({ conflict, onKeepLocal, onOverwrite, onReload, t }: { conflict: NonNullable<ReturnType<typeof readProjectManagementTaskConflict>>; onKeepLocal: () => void; onOverwrite: () => void; onReload: () => void; t: (key: string) => string }) {

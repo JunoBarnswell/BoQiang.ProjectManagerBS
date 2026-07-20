@@ -31,6 +31,16 @@ public sealed class ProjectManagementReportsController(IProjectManagementReportS
         return File(file.Content, file.ContentType, file.FileName);
     }
 
+    [HttpGet("projects/{projectId}/summary.md")]
+    public async Task<IActionResult> ExportProjectMarkdownAsync(
+        string projectId,
+        [FromQuery] ProjectManagementProjectMarkdownOptions? options,
+        CancellationToken cancellationToken)
+    {
+        var file = await service.ExportProjectMarkdownAsync(projectId, options, cancellationToken);
+        return File(file.Content, file.ContentType, file.FileName);
+    }
+
     [HttpPost("snapshots")]
     public async Task<IActionResult> StartSnapshotAsync([FromBody] ProjectManagementReportSnapshotRequest request, CancellationToken cancellationToken) =>
         ApiOk(await service.StartSnapshotAsync(request, cancellationToken));

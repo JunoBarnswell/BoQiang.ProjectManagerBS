@@ -16,6 +16,11 @@ public interface IProjectManagementReportService
         ProjectManagementTaskQuery query,
         CancellationToken cancellationToken = default);
 
+    Task<ProjectManagementReportFile> ExportProjectMarkdownAsync(
+        string projectId,
+        ProjectManagementProjectMarkdownOptions? options = null,
+        CancellationToken cancellationToken = default);
+
     Task<ProjectManagementReportSnapshotStartResponse> StartSnapshotAsync(
         ProjectManagementReportSnapshotRequest request,
         CancellationToken cancellationToken = default);
