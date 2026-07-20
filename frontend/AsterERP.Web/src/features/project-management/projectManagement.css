@@ -717,29 +717,8 @@
   display: grid;
   align-content: start;
   gap: 8px;
-  min-height: 170px;
+  min-height: 0;
   padding: 11px;
-}
-
-.pm-calendar {
-  display: grid;
-  gap: 10px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.pm-calendar > .pm-prototype-note {
-  grid-column: 1 / -1;
-}
-
-.pm-calendar-day > h3 {
-  margin: 0;
-  color: var(--pm-text);
-  font-size: var(--app-text-sm);
-}
-
-.pm-calendar-day > div {
-  display: grid;
-  gap: 8px;
 }
 
 .pm-task-tree-title {
@@ -782,8 +761,7 @@
   }
 
   .pm-task-grid,
-  .pm-calendar-grid,
-  .pm-calendar {
+  .pm-calendar-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -809,8 +787,7 @@
 @media (max-width: 767px) {
   .pm-metric-grid,
   .pm-task-grid,
-  .pm-calendar-grid,
-  .pm-calendar {
+  .pm-calendar-grid {
     grid-template-columns: 1fr;
   }
 

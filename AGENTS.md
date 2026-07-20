@@ -114,8 +114,8 @@ Before shipping, confirm:
 
 ## Git Push Credentials
 
-- Code push for this repository must use the SSH credential `id_ed25519_git`.
-- Ensure the key is loaded in the local SSH agent before pushing (for example `ssh-add`).
+- GitHub remote `origin` uses HTTPS. All GitHub fetch, ls-remote, and push commands must force HTTP/1.1: `git -c http.version=HTTP/1.1 <git-command>`; for example, `git -c http.version=HTTP/1.1 push origin main`.
+- CodeUp remote `aliyun` uses the SSH credential `id_ed25519_git`. Ensure the key is loaded in the local SSH agent before pushing (for example `ssh-add`).
 - Do not place private key material in repository files.
 
 ## Git Maintenance And Disk Cleanup

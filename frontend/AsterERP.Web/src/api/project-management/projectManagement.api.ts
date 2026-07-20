@@ -59,6 +59,11 @@ import type {
   ProjectManagementNotificationPage,
   ProjectManagementNotificationOpenResult,
   ProjectManagementTaskAttachment,
+  ProjectManagementTaskTimeLog,
+  ProjectManagementTaskTimeLogUpsertRequest,
+  ProjectManagementTaskTimeLogUpdateRequest,
+  ProjectManagementTaskWorkload,
+  ProjectManagementTaskWorkloadQuery,
   ProjectManagementTaskFollower,
   ProjectManagementTaskFollowerUpsertRequest,
   ProjectManagementTaskDraft,
@@ -463,6 +468,18 @@ export function getProjectManagementActivities(
   );
 }
 
+export function getProjectManagementTaskActivities(
+  taskId: string,
+  query: ProjectManagementActivityQuery = {},
+  signal?: AbortSignal,
+): Promise<ApiEnvelope<ProjectManagementActivityPage>> {
+  return httpClient.get<ProjectManagementActivityPage>(
+    `/project-management/tasks/${taskId}/activities${buildQueryString(query)}`,
+    undefined,
+    signal,
+  );
+}
+
 export function getProjectManagementProjectUpdates(
   projectId: string,
   query: ProjectManagementActivityQuery,
@@ -787,6 +804,69 @@ export function previewProjectManagementTaskAttachment(
   if (!attachment.previewSupported) return Promise.reject(new Error('当前文件格式不支持在线预览，请下载后查看'));
   if (!attachment.previewUrl) return Promise.reject(new Error('附件预览链接已失效'));
   return httpClient.downloadBlob(normalizeProjectManagementAttachmentPath(attachment.previewUrl), { signal, timeoutMs: 120_000 });
+}
+
+export function deleteProjectManagementTaskAttachment(
+  taskId: string,
+  id: string,
+  versionNo: number,
+): Promise<ApiEnvelope<{ id: string }>> {
+  return httpClient.delete<{ id: string }>(
+    `/project-management/tasks/${taskId}/attachments/${id}${buildQueryString({ versionNo })}`,
+  );
+}
+
+export function getProjectManagementTaskTimeLogs(
+  taskId: string,
+  signal?: AbortSignal,
+): Promise<ApiEnvelope<ProjectManagementTaskTimeLog[]>> {
+  return httpClient.get<ProjectManagementTaskTimeLog[]>(
+    `/project-management/tasks/${taskId}/time-logs`,
+    undefined,
+    signal,
+  );
+}
+
+export function createProjectManagementTaskTimeLog(
+  taskId: string,
+  request: ProjectManagementTaskTimeLogUpsertRequest,
+): Promise<ApiEnvelope<ProjectManagementTaskTimeLog>> {
+  return httpClient.post<ProjectManagementTaskTimeLog, ProjectManagementTaskTimeLogUpsertRequest>(
+    `/project-management/tasks/${taskId}/time-logs`,
+    request,
+  );
+}
+
+export function updateProjectManagementTaskTimeLog(
+  taskId: string,
+  id: string,
+  request: ProjectManagementTaskTimeLogUpdateRequest,
+): Promise<ApiEnvelope<ProjectManagementTaskTimeLog>> {
+  return httpClient.put<ProjectManagementTaskTimeLog, ProjectManagementTaskTimeLogUpdateRequest>(
+    `/project-management/tasks/${taskId}/time-logs/${id}`,
+    request,
+  );
+}
+
+export function deleteProjectManagementTaskTimeLog(
+  taskId: string,
+  id: string,
+  versionNo: number,
+): Promise<ApiEnvelope<{ id: string }>> {
+  return httpClient.delete<{ id: string }>(
+    `/project-management/tasks/${taskId}/time-logs/${id}${buildQueryString({ versionNo })}`,
+  );
+}
+
+export function getProjectManagementWorkloads(
+  query: ProjectManagementTaskWorkloadQuery,
+  signal?: AbortSignal,
+): Promise<ApiEnvelope<ProjectManagementTaskWorkload[]>> {
+  return httpClient.get<ProjectManagementTaskWorkload[]>(
+    `/project-management/workloads${buildQueryString(query)}`,
+    undefined,
+    signal,
+  );
 }
 
 export function searchProjectManagement(

@@ -46,4 +46,8 @@ export const projectManagementWorkbenchMessagesZhCN = {
   ,'projectManagement.workbench.reports': '报表'
   ,'projectManagement.workbench.settings': '设置'
   ,'projectManagement.workbench.breadcrumb': '项目 / {code}'
+  ,'projectManagement.workbench.refresh': '刷新'
+  ,'projectManagement.workbench.refreshSuccess': '已刷新'
+  ,'projectManagement.workbench.selector.refresh': '刷新项目列表'
+  ,'projectManagement.workbench.selector.refreshSuccess': '项目列表已刷新'
 } as const;

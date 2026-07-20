@@ -96,7 +96,7 @@ function ProjectManagementNotificationEntryContent() {
   const unread = page?.unreadCount ?? 0;
   return (
     <div className="relative hidden sm:block">
-      <button aria-expanded={open} className="relative cursor-pointer transition-colors hover:text-white" onClick={() => setOpen((value) => !value)} title={t('projectManagement.notification.title')} type="button">
+      <button aria-expanded={open} className="relative cursor-pointer transition-colors hover:text-white" data-pm-notification-entry onClick={() => setOpen((value) => !value)} title={t('projectManagement.notification.title')} type="button">
         <AppIcon className="text-lg" name="bell" />
         {unread > 0 ? <span className="absolute -right-2 -top-2 min-w-4 rounded-full bg-red-500 px-1 text-[10px] font-semibold leading-4 text-white">{unread > 99 ? t('projectManagement.notification.countOverflow') : unread}</span> : null}
       </button>

@@ -847,6 +847,49 @@ export interface ProjectManagementTaskReminderCreateRequest {
   clientRequestId: string;
 }
 
+export interface ProjectManagementTaskTimeLog {
+  id: string;
+  taskId: string;
+  userId: string;
+  startedAt: string;
+  endedAt: string;
+  minutes: number;
+  note?: string;
+  versionNo: number;
+}
+
+export interface ProjectManagementTaskTimeLogUpsertRequest {
+  startedAt: string;
+  endedAt: string;
+  note?: string;
+  versionNo?: number;
+}
+
+export interface ProjectManagementTaskTimeLogUpdateRequest {
+  startedAt: string;
+  endedAt: string;
+  note?: string;
+  versionNo: number;
+  taskVersionNo: number;
+}
+
+export interface ProjectManagementTaskWorkloadQuery {
+  projectId: string;
+  timeLogStartedFrom?: string;
+  timeLogStartedTo?: string;
+}
+
+export interface ProjectManagementTaskWorkload {
+  userId: string;
+  todoTaskCount: number;
+  inProgressTaskCount: number;
+  completedTaskCount: number;
+  overdueTaskCount: number;
+  estimatedMinutes: number;
+  loggedMinutes: number;
+  displayName?: string;
+}
+
 export interface ProjectManagementTaskReminderUpdateRequest {
   reminderAt: string;
   timeZoneId: string;

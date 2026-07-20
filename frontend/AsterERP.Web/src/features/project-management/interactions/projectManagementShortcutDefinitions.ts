@@ -31,7 +31,7 @@ export const projectManagementShortcutHelpItems: readonly ProjectManagementShort
   { id: 'search', keys: 'Ctrl+F', label: '打开全局搜索' },
   { id: 'undo', keys: 'Ctrl+Z', label: '撤销' },
   { id: 'redo', keys: 'Ctrl+Y', label: '重做' },
-  { id: 'switchView', keys: 'Ctrl+1…5', label: '切换树形、列表、卡片、看板、甘特视图' },
+  { id: 'switchView', keys: 'Ctrl+1…6', label: '切换树形、列表、卡片、看板、甘特、日历视图' },
   { id: 'switchView', keys: 'Esc', label: '仅关闭最上层弹层' },
 ];
 
@@ -44,7 +44,7 @@ export function resolveProjectManagementShortcut(event: Pick<KeyboardEvent, 'ctr
   if (key === 'z' && !event.shiftKey) return { id: 'undo' };
   if (key === 'y' && !event.shiftKey) return { id: 'redo' };
 
-  const view = ({ 1: 'tree', 2: 'list', 3: 'card', 4: 'board', 5: 'gantt' } as const)[Number(key) as 1 | 2 | 3 | 4 | 5];
+  const view = ({ 1: 'tree', 2: 'list', 3: 'card', 4: 'board', 5: 'gantt', 6: 'calendar' } as const)[Number(key) as 1 | 2 | 3 | 4 | 5 | 6];
   return view && !event.shiftKey ? { id: 'switchView', view } : undefined;
 }
 

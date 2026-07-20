@@ -48,4 +48,8 @@ export const projectManagementWorkbenchMessagesEnUS = {
   ,'projectManagement.workbench.reports': 'Reports'
   ,'projectManagement.workbench.settings': 'Settings'
   ,'projectManagement.workbench.breadcrumb': 'Project / {code}'
+  ,'projectManagement.workbench.refresh': 'Refresh'
+  ,'projectManagement.workbench.refreshSuccess': 'Refreshed'
+  ,'projectManagement.workbench.selector.refresh': 'Refresh project list'
+  ,'projectManagement.workbench.selector.refreshSuccess': 'Project list refreshed'
 } satisfies Record<keyof typeof projectManagementWorkbenchMessagesZhCN, string>;
