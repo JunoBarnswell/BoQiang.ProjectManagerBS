@@ -46,7 +46,9 @@ export function ProjectWorkItemEditor({ onClose, onSaved, open, projectId, taskI
   const save = useMutation({
     mutationFn: ({ overwriteVersionNo }: { overwriteVersionNo?: number } = {}) => {
       const request = overwriteVersionNo === undefined ? form : { ...form, versionNo: overwriteVersionNo };
-      return taskId ? updateProjectManagementTask(taskId, request) : createProjectManagementTask(projectId, { ...request, draftId });
+      return taskId
+        ? updateProjectManagementTask(taskId, request)
+        : createProjectManagementTask(projectId, { ...request, workItemType: 'Requirement', draftId });
     },
     onSuccess: (result) => {
       const next = taskDetailToForm(result.data);

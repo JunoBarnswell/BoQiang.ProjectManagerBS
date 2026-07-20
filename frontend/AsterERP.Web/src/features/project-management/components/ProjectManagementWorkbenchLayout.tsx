@@ -2,6 +2,7 @@ import { useEffect, type ReactNode } from 'react';
 import { useI18n } from '../../../core/i18n/I18nProvider';
 import { PmContent, PmPage, PmWorkbenchBody, ProjectManagementThemeProvider } from '../../../ui/project-management';
 import { ProjectManagementWorkbenchProvider, useProjectManagementWorkbenchContext } from '../state/ProjectManagementWorkbenchContext';
+import '../ui/projectWorkbench.css';
 
 export function ProjectManagementWorkbenchLayout({ children }: { children: ReactNode }) {
   return <ProjectManagementThemeProvider><ProjectManagementWorkbenchProvider><ProjectManagementWorkbenchLayoutContent>{children}</ProjectManagementWorkbenchLayoutContent></ProjectManagementWorkbenchProvider></ProjectManagementThemeProvider>;

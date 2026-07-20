@@ -26,8 +26,12 @@ public sealed class ProjectManagementTaskServiceTests
         }).ExecuteCommandAsync();
         var service = new ProjectManagementTaskService(new TestWorkspaceDatabaseAccessor(db), CreateUser());
 
-        var created = await service.CreateAsync("project-a", new ProjectManagementTaskUpsertRequest(string.Empty, "自动编码需求"));
+        var created = await service.CreateAsync("project-a", new ProjectManagementTaskUpsertRequest(string.Empty, "自动编码需求", WorkItemType: "Requirement"));
         Assert.StartsWith("REQ-", created.TaskCode, StringComparison.Ordinal);
+        Assert.Equal("Requirement", created.WorkItemType);
+
+        var visible = await service.QueryAsync(new ProjectManagementTaskQuery("project-a", WorkItemType: "Requirement"));
+        Assert.Equal(1, visible.Total);
 
         var updated = await service.UpdateAsync(created.Id, new ProjectManagementTaskUpsertRequest(string.Empty, "更新后的需求", VersionNo: created.VersionNo));
         Assert.Equal(created.TaskCode, updated.TaskCode);
