@@ -62,7 +62,7 @@ export function TaskDetailDrawer({
   if (!open) return null;
 
   return <div className="pm-task-drawer__backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-    <aside aria-label={creating ? '新建任务' : `任务详情 ${selectedTask?.taskCode ?? ''}`} aria-modal="true" className="pm-task-drawer" role="dialog">
+    <aside aria-label={creating ? '新建需求' : `编辑需求 ${selectedTask?.taskCode ?? ''}`} aria-modal="true" className="pm-task-drawer pm-work-item-editor" role="dialog">
       <header className="pm-task-drawer__header">
         <div>
           <h2>{creating ? '新建任务' : selectedTask ? `${selectedTask.taskCode} · ${selectedTask.title}` : '任务详情'}</h2>

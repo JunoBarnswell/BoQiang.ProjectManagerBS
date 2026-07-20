@@ -191,6 +191,14 @@ CREATE TABLE IF NOT EXISTS pm_task_participants (
         schema.EnsureColumn("pm_tasks", "BlockedReason", "TEXT NULL");
         schema.EnsureColumn("pm_tasks", "OccurrenceKey", "TEXT NULL");
         schema.EnsureColumn("pm_tasks", "Summary", "TEXT NULL");
+        schema.EnsureColumn("pm_tasks", "WorkItemType", "TEXT NOT NULL DEFAULT 'Task'");
+        schema.EnsureColumn("pm_tasks", "ContentJson", "TEXT NULL");
+        schema.EnsureColumn("pm_tasks", "ContentText", "TEXT NULL");
+        schema.EnsureColumn("pm_tasks", "MentionUserIdsJson", "TEXT NULL");
+        schema.EnsureColumn("pm_tasks", "RiskLevel", "TEXT NOT NULL DEFAULT 'None'");
+        schema.EnsureColumn("pm_tasks", "RequirementType", "TEXT NULL");
+        schema.EnsureColumn("pm_tasks", "RequirementSource", "TEXT NULL");
+        schema.EnsureColumn("pm_tasks", "StoryPoints", "INTEGER NULL");
         schema.Execute("""
 CREATE TABLE IF NOT EXISTS pm_labels (
     Id TEXT NOT NULL PRIMARY KEY,
@@ -275,6 +283,22 @@ CREATE TABLE IF NOT EXISTS pm_task_comments (
     VersionNo INTEGER NOT NULL DEFAULT 1, EditedTime TEXT NULL, CreatedBy TEXT NULL, CreatedTime TEXT NOT NULL,
     UpdatedBy TEXT NULL, UpdatedTime TEXT NULL, DeletedBy TEXT NULL, DeletedTime TEXT NULL,
     IsDeleted INTEGER NOT NULL DEFAULT 0, Remark TEXT NULL
+);
+CREATE TABLE IF NOT EXISTS pm_task_followers (
+    Id TEXT NOT NULL PRIMARY KEY, TenantId TEXT NOT NULL, AppCode TEXT NOT NULL, ProjectId TEXT NOT NULL, TaskId TEXT NOT NULL,
+    UserId TEXT NOT NULL, VersionNo INTEGER NOT NULL DEFAULT 1, CreatedBy TEXT NULL, CreatedTime TEXT NOT NULL,
+    UpdatedBy TEXT NULL, UpdatedTime TEXT NULL, DeletedBy TEXT NULL, DeletedTime TEXT NULL, IsDeleted INTEGER NOT NULL DEFAULT 0, Remark TEXT NULL
+);
+CREATE TABLE IF NOT EXISTS pm_task_drafts (
+    Id TEXT NOT NULL PRIMARY KEY, TenantId TEXT NOT NULL, AppCode TEXT NOT NULL, ProjectId TEXT NOT NULL, OwnerUserId TEXT NOT NULL,
+    PayloadJson TEXT NOT NULL, ExpiresAt TEXT NOT NULL, VersionNo INTEGER NOT NULL DEFAULT 1, CreatedBy TEXT NULL, CreatedTime TEXT NOT NULL,
+    UpdatedBy TEXT NULL, UpdatedTime TEXT NULL, DeletedBy TEXT NULL, DeletedTime TEXT NULL, IsDeleted INTEGER NOT NULL DEFAULT 0, Remark TEXT NULL
+);
+CREATE TABLE IF NOT EXISTS pm_task_draft_attachments (
+    Id TEXT NOT NULL PRIMARY KEY, TenantId TEXT NOT NULL, AppCode TEXT NOT NULL, ProjectId TEXT NOT NULL, DraftId TEXT NOT NULL,
+    FileId TEXT NOT NULL, FileName TEXT NOT NULL, ContentType TEXT NOT NULL, FileSize INTEGER NOT NULL, UploadedByUserId TEXT NOT NULL,
+    VersionNo INTEGER NOT NULL DEFAULT 1, CreatedBy TEXT NULL, CreatedTime TEXT NOT NULL, UpdatedBy TEXT NULL, UpdatedTime TEXT NULL,
+    DeletedBy TEXT NULL, DeletedTime TEXT NULL, IsDeleted INTEGER NOT NULL DEFAULT 0, Remark TEXT NULL
 );
 
 CREATE TABLE IF NOT EXISTS pm_project_resources (
@@ -453,6 +477,9 @@ CREATE TABLE IF NOT EXISTS pm_reversible_commands (
         schema.EnsureColumn("pm_notifications", "ProjectId", "TEXT NULL");
         schema.EnsureColumn("pm_notifications", "TaskId", "TEXT NULL");
         schema.EnsureColumn("pm_task_comments", "MentionUserIdsJson", "TEXT NULL");
+        schema.Execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_pm_task_followers_user ON pm_task_followers(TenantId, AppCode, TaskId, UserId) WHERE IsDeleted = 0;");
+        schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_task_drafts_owner ON pm_task_drafts(TenantId, AppCode, ProjectId, OwnerUserId, IsDeleted);");
+        schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_task_draft_attachments_draft ON pm_task_draft_attachments(TenantId, AppCode, DraftId, IsDeleted);");
         schema.EnsureColumn("pm_sync_history", "Deleted", "INTEGER NOT NULL DEFAULT 0");
         schema.EnsureColumn("pm_sync_history", "Failed", "INTEGER NOT NULL DEFAULT 0");
         schema.EnsureColumn("pm_data_space_exports", "StoragePath", "TEXT NOT NULL DEFAULT ''");

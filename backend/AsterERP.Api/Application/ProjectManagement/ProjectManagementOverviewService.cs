@@ -71,18 +71,30 @@ public sealed class ProjectManagementOverviewService(
                 var people = leaves.Where(task => !string.IsNullOrWhiteSpace(task.AssigneeUserId)).GroupBy(task => task.AssigneeUserId!, StringComparer.Ordinal)
                     .Select(group => new ProjectManagementOverviewPersonSummary(group.Key, group.Count(), group.Count(ProjectManagementTaskProgressCalculator.IsCompleted), group.Count(task => overdueIds.Contains(task.Id)), displays.User(group.Key)))
                     .OrderByDescending(item => item.TaskCount).Take(10).ToList();
+                var workItemTypeDistribution = CreateDistribution(leaves.Select(task => string.IsNullOrWhiteSpace(task.WorkItemType) ? "Task" : task.WorkItemType));
+                var statusDistribution = CreateDistribution(leaves.Select(task => task.Status));
                 return new ProjectManagementOverviewItem(
                     new ProjectManagementProjectResponse(project.Id, project.TenantId, project.AppCode, project.ProjectCode, project.ProjectName, project.Description, project.Status, project.Priority, project.OwnerUserId, project.StartDate, project.DueDate, project.CompletedAt, project.WipLimit, project.ProgressPercent, project.VersionNo, project.CreatedTime, project.UpdatedTime, displays.User(project.OwnerUserId)),
                     leaves.Count, leaves.Count(ProjectManagementTaskProgressCalculator.IsCompleted), inProgressCount, overdue.Count, blockedCount, snapshot.ProjectProgressPercent,
                     milestones.Count(item => item.ProjectId == project.Id), members.Count(item => item.ProjectId == project.Id),
                     milestones.Where(item => item.ProjectId == project.Id).Take(10).Select(item => new ProjectManagementOverviewMilestoneSummary(item.Id, item.MilestoneName, item.Status, item.HealthStatus, item.ProgressPercent, item.DueDate)).ToList(), people,
                     new ProjectManagementProjectRiskSummary(overdue.Count, blockedCount, dueSoonCount, inProgressCount, project.WipLimit, wipExceededBy > 0, wipExceededBy, overdue.Count > 0 || blockedCount > 0 || dueSoonCount > 0),
-                    projector.Project(project, openCount, blockedCount, now));
+                    projector.Project(project, openCount, blockedCount, now), workItemTypeDistribution, statusDistribution);
             }).ToList()
         };
     }
 
     private IProjectManagementDisplayProjectionService DisplayProjection => displayProjection ?? new ProjectManagementDisplayProjectionService(databaseAccessor);
+
+    private static IReadOnlyList<ProjectManagementOverviewDistribution> CreateDistribution(IEnumerable<string> values)
+    {
+        var materialized = values.ToList();
+        if (materialized.Count == 0) return [];
+        return materialized.GroupBy(value => value, StringComparer.OrdinalIgnoreCase)
+            .Select(group => new ProjectManagementOverviewDistribution(group.Key, group.Count(), Math.Round(group.Count() * 100m / materialized.Count, 1)))
+            .OrderByDescending(item => item.Count)
+            .ToList();
+    }
 
     private string RequireTenantId() => currentUser.GetAsterErpTenantId()?.Trim() ?? throw new ValidationException("当前会话缺少租户", ErrorCodes.PermissionDenied);
     private string RequireAppCode() => currentUser.GetAsterErpAppCode()?.Trim().ToUpperInvariant() ?? throw new ValidationException("当前会话缺少应用", ErrorCodes.PermissionDenied);

@@ -34,6 +34,11 @@ public sealed record ProjectManagementProjectRiskSummary(
     int WipExceededBy,
     bool HasScheduleRisk);
 
+public sealed record ProjectManagementOverviewDistribution(
+    string Key,
+    int Count,
+    decimal Percent);
+
 public sealed record ProjectManagementOverviewItem(
     ProjectManagementProjectResponse Project,
     int TaskCount,
@@ -47,4 +52,6 @@ public sealed record ProjectManagementOverviewItem(
     IReadOnlyList<ProjectManagementOverviewMilestoneSummary> Milestones,
     IReadOnlyList<ProjectManagementOverviewPersonSummary> People,
     ProjectManagementProjectRiskSummary RiskSummary,
-    string Health = "Unknown");
+    string Health = "Unknown",
+    IReadOnlyList<ProjectManagementOverviewDistribution>? WorkItemTypeDistribution = null,
+    IReadOnlyList<ProjectManagementOverviewDistribution>? StatusDistribution = null);

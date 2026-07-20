@@ -29,7 +29,8 @@ public sealed class ProjectManagementTaskService(
     IProjectManagementReversibleCommandWriter? reversibleCommandWriter = null,
     ProjectManagementWipCoordinator? wipCoordinator = null,
     IProjectManagementNotificationPublisher? notificationPublisher = null,
-    IProjectManagementDisplayProjectionService? displayProjection = null) : IProjectManagementTaskService, IProjectManagementTaskOccurrenceCommandService, IProjectManagementTaskTemplateCommandService
+    IProjectManagementDisplayProjectionService? displayProjection = null,
+    IProjectManagementTaskDraftService? draftService = null) : IProjectManagementTaskService, IProjectManagementTaskOccurrenceCommandService, IProjectManagementTaskTemplateCommandService
 {
     private static readonly string[] Priorities = ["Low", "Medium", "High", "Urgent"];
 
@@ -41,6 +42,11 @@ public sealed class ProjectManagementTaskService(
         var keyword = NormalizeOptional(query.Keyword);
         var status = NormalizeOptional(query.Status);
         var assignee = NormalizeOptional(query.AssigneeUserId);
+        var workItemType = NormalizeOptional(query.WorkItemType);
+        var riskLevel = NormalizeOptional(query.RiskLevel);
+        var requirementType = NormalizeOptional(query.RequirementType);
+        var requirementSource = NormalizeOptional(query.RequirementSource);
+        var mentionedUserId = NormalizeOptional(query.MentionedUserId);
         var labelFilter = ProjectManagementTaskLabelFilterQuery.Normalize(query.LabelFilter);
         var tenantId = RequireTenantId();
         var appCode = RequireAppCode();
@@ -53,6 +59,24 @@ public sealed class ProjectManagementTaskService(
             taskQuery = taskQuery.Where(item => item.Status == status);
         if (!string.IsNullOrWhiteSpace(assignee))
             taskQuery = taskQuery.Where(item => item.AssigneeUserId == assignee);
+        if (!string.IsNullOrWhiteSpace(workItemType))
+            taskQuery = taskQuery.Where(item => item.WorkItemType == workItemType);
+        if (!string.IsNullOrWhiteSpace(riskLevel))
+            taskQuery = taskQuery.Where(item => item.RiskLevel == riskLevel);
+        if (!string.IsNullOrWhiteSpace(requirementType))
+            taskQuery = taskQuery.Where(item => item.RequirementType == requirementType);
+        if (!string.IsNullOrWhiteSpace(requirementSource))
+            taskQuery = taskQuery.Where(item => item.RequirementSource == requirementSource);
+        if (!string.IsNullOrWhiteSpace(mentionedUserId))
+            taskQuery = taskQuery.Where(item => item.MentionUserIdsJson != null && item.MentionUserIdsJson.Contains($"\"{mentionedUserId}\""));
+        if (query.HasChildren is true)
+            taskQuery = taskQuery.Where(item => databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskEntity>().Any(child => child.ParentTaskId == item.Id && !child.IsDeleted));
+        if (query.HasChildren is false)
+            taskQuery = taskQuery.Where(item => !databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskEntity>().Any(child => child.ParentTaskId == item.Id && !child.IsDeleted));
+        if (query.HasAttachment is true)
+            taskQuery = taskQuery.Where(item => databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskAttachmentEntity>().Any(attachment => attachment.TaskId == item.Id && !attachment.IsDeleted));
+        if (query.HasAttachment is false)
+            taskQuery = taskQuery.Where(item => !databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskAttachmentEntity>().Any(attachment => attachment.TaskId == item.Id && !attachment.IsDeleted));
         if (!string.IsNullOrWhiteSpace(query.MilestoneId))
             taskQuery = taskQuery.Where(item => item.MilestoneId == query.MilestoneId);
         if (!string.IsNullOrWhiteSpace(query.ParentTaskId))
@@ -95,6 +119,15 @@ public sealed class ProjectManagementTaskService(
                 .Where(item => !string.IsNullOrWhiteSpace(item))
                 .Select(item => item!)
                 .ToHashSet(StringComparer.Ordinal);
+        var childRows = ids.Count == 0 ? [] : await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskEntity>()
+            .Where(item => item.ProjectId == query.ProjectId && item.ParentTaskId != null && ids.Contains(item.ParentTaskId) && !item.IsDeleted)
+            .ToListAsync(cancellationToken);
+        var childCounts = childRows.GroupBy(item => item.ParentTaskId!, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.ToList(), StringComparer.Ordinal);
+        var attachmentTaskIds = ids.Count == 0 ? new HashSet<string>(StringComparer.Ordinal) : (await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskAttachmentEntity>()
+            .Where(item => item.ProjectId == query.ProjectId && ids.Contains(item.TaskId) && !item.IsDeleted)
+            .Select(item => item.TaskId)
+            .ToListAsync(cancellationToken)).ToHashSet(StringComparer.Ordinal);
         var taskLabelLinks = ids.Count == 0
             ? []
             : await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskLabelEntity>()
@@ -158,7 +191,10 @@ public sealed class ProjectManagementTaskService(
                     labelsByTask.GetValueOrDefault(item.Id),
                     participantUserIdsByTask.GetValueOrDefault(item.Id),
                     displays?.User(item.AssigneeUserId),
-                    participantUserIdsByTask.GetValueOrDefault(item.Id)?.Select(userId => displays?.User(userId) ?? "用户别名暂不可用").ToList());
+                    participantUserIdsByTask.GetValueOrDefault(item.Id)?.Select(userId => displays?.User(userId) ?? "用户别名暂不可用").ToList(),
+                    childCounts.GetValueOrDefault(item.Id)?.Count ?? 0,
+                    childCounts.GetValueOrDefault(item.Id)?.Count(child => child.Status == ProjectManagementDomainRules.TaskDone) ?? 0,
+                    attachmentTaskIds.Contains(item.Id));
             }).ToList()
         };
     }
@@ -202,7 +238,9 @@ public sealed class ProjectManagementTaskService(
             TenantId = RequireTenantId(), AppCode = RequireAppCode(), ProjectId = projectId,
             MilestoneId = NormalizeOptional(request.MilestoneId), ParentTaskId = parent?.Id,
             TaskCode = taskCode, Title = NormalizeRequired(request.Title, "任务标题不能为空"), Summary = NormalizeOptional(request.Summary), Description = ResolveMarkdown(request),
+            WorkItemType = NormalizeWorkItemType(request.WorkItemType), ContentJson = NormalizeOptional(request.ContentJson), ContentText = NormalizeOptional(request.ContentText), MentionUserIdsJson = SerializeIds(request.MentionUserIds),
             Status = state.Status, BlockedReason = state.Status == ProjectManagementDomainRules.TaskBlocked ? "手工阻塞" : null, Priority = NormalizePriority(request.Priority), AssigneeUserId = NormalizeOptional(request.AssigneeUserId),
+            RiskLevel = NormalizeRiskLevel(request.RiskLevel), RequirementType = NormalizeOptional(request.RequirementType), RequirementSource = NormalizeOptional(request.RequirementSource), StoryPoints = request.StoryPoints,
             AssigneeEmploymentId = NormalizeOptional(request.AssigneeEmploymentId), StartDate = request.StartDate, DueDate = request.DueDate,
             ActualStartAt = state.ActualStartAt, ActualEndAt = state.ActualEndAt, ProgressPercent = state.ProgressPercent, Weight = weight, EstimateMinutes = request.EstimateMinutes,
             SortOrder = await GetNextSiblingSortOrderAsync(projectId, parent?.Id, cancellationToken), Depth = depth, VersionNo = 1, CreatedBy = RequireUserId(), CreatedTime = now
@@ -216,6 +254,8 @@ public sealed class ProjectManagementTaskService(
                 await db.Insertable(recurrenceOccurrence).ExecuteCommandAsync(cancellationToken);
             }
             await db.Insertable(entity).ExecuteCommandAsync(cancellationToken);
+            await SyncFollowersAsync(db, entity, request.FollowerUserIds, cancellationToken);
+            if (!string.IsNullOrWhiteSpace(request.DraftId) && draftService is not null) await draftService.BindAsync(request.DraftId, entity.Id, projectId, cancellationToken);
             if (recurrenceOccurrence is not null)
             {
                 recurrenceOccurrence.TaskId = entity.Id;
@@ -378,9 +418,17 @@ public sealed class ProjectManagementTaskService(
         entity.Title = NormalizeRequired(request.Title, "任务标题不能为空");
         entity.Summary = NormalizeOptional(request.Summary);
         entity.Description = ResolveMarkdown(request);
+        entity.WorkItemType = NormalizeWorkItemType(request.WorkItemType);
+        entity.ContentJson = NormalizeOptional(request.ContentJson);
+        entity.ContentText = NormalizeOptional(request.ContentText);
+        entity.MentionUserIdsJson = SerializeIds(request.MentionUserIds);
         entity.Status = state.Status;
         entity.BlockedReason = state.Status == ProjectManagementDomainRules.TaskBlocked ? entity.BlockedReason ?? "手工阻塞" : null;
         entity.Priority = NormalizePriority(request.Priority);
+        entity.RiskLevel = NormalizeRiskLevel(request.RiskLevel);
+        entity.RequirementType = NormalizeOptional(request.RequirementType);
+        entity.RequirementSource = NormalizeOptional(request.RequirementSource);
+        entity.StoryPoints = request.StoryPoints;
         entity.AssigneeUserId = NormalizeOptional(request.AssigneeUserId);
         entity.AssigneeEmploymentId = NormalizeOptional(request.AssigneeEmploymentId);
         entity.StartDate = request.StartDate;
@@ -400,6 +448,8 @@ public sealed class ProjectManagementTaskService(
             await TaskHierarchy.UpdateDescendantDepthsAsync(
                 db, placement, entity.UpdatedTime ?? DateTime.UtcNow, entity.UpdatedBy ?? RequireUserId(), cancellationToken);
             await UpdateTaskWithExpectedVersionAsync(db, entity, expectedVersion, cancellationToken, localValues);
+            await SyncFollowersAsync(db, entity, request.FollowerUserIds, cancellationToken);
+            if (!string.IsNullOrWhiteSpace(request.DraftId) && draftService is not null) await draftService.BindAsync(request.DraftId, entity.Id, entity.ProjectId, cancellationToken);
             if (dependencyService is not null) await dependencyService.RefreshBlockedStatesAsync(entity.ProjectId, cancellationToken);
             await RefreshProgressProjectionsAsync(entity.ProjectId, cancellationToken);
             await WriteActivityAsync(entity, "updated", $"更新任务 {entity.Title}", cancellationToken);
@@ -411,7 +461,7 @@ public sealed class ProjectManagementTaskService(
             await imConversationService.SynchronizeTaskLinksAsync(entity.Id, cancellationToken);
         }
         await PublishTaskChangeNotificationsAsync(entity, before, cancellationToken);
-        await PublishInvalidationAsync(entity, "task.updated", cancellationToken);
+        await PublishInvalidationAsync(entity, "task.updated", cancellationToken, before);
         var result = await MapDetailAsync(entity, cancellationToken);
         var commandType = request.AssigneeUserId != before.AssigneeUserId
             ? ProjectManagementReversibleCommandTypes.TaskAssigneeChanged
@@ -614,10 +664,64 @@ public sealed class ProjectManagementTaskService(
         return result;
     }
 
-    private async Task PublishInvalidationAsync(ProjectManagementTaskEntity entity, string eventType, CancellationToken cancellationToken)
+    private async Task PublishInvalidationAsync(ProjectManagementTaskEntity entity, string eventType, CancellationToken cancellationToken, ProjectManagementTaskUpsertRequest? before = null)
     {
         if (realtimePublisher is null) return;
-        await realtimePublisher.PublishInvalidationAsync(new ProjectManagementDataInvalidationEvent(RequireTenantId(), RequireAppCode(), "Task", entity.Id, eventType, entity.VersionNo, Activity.Current?.Id ?? Guid.NewGuid().ToString("N"), entity.ProjectId), cancellationToken);
+        var traceId = Activity.Current?.Id ?? Guid.NewGuid().ToString("N");
+        var patch = BuildRealtimeTaskPatch(entity, before, out var changedFields);
+        await realtimePublisher.PublishInvalidationAsync(new ProjectManagementDataInvalidationEvent(
+            RequireTenantId(), RequireAppCode(), "Task", entity.Id, eventType, entity.VersionNo, traceId, entity.ProjectId,
+            ChangedFields: changedFields, Patch: patch), cancellationToken);
+    }
+
+    private static IReadOnlyDictionary<string, object?> BuildRealtimeTaskPatch(ProjectManagementTaskEntity entity, ProjectManagementTaskUpsertRequest? before, out IReadOnlyList<string> changedFields)
+    {
+        var values = new Dictionary<string, object?>(StringComparer.Ordinal);
+        var changed = new List<string>();
+        void Add(string field, object? current, object? previous)
+        {
+            if (before is null || !Equals(current, previous))
+            {
+                changed.Add(field);
+                values[field] = current;
+            }
+        }
+
+        Add("id", entity.Id, before is null ? null : entity.Id);
+        Add("projectId", entity.ProjectId, before is null ? null : entity.ProjectId);
+        Add("taskCode", entity.TaskCode, before?.TaskCode);
+        Add("title", entity.Title, before?.Title);
+        Add("summary", entity.Summary, before?.Summary);
+        Add("status", entity.Status, before?.Status);
+        Add("priority", entity.Priority, before?.Priority);
+        Add("milestoneId", entity.MilestoneId, before?.MilestoneId);
+        Add("parentTaskId", entity.ParentTaskId, before?.ParentTaskId);
+        Add("assigneeUserId", entity.AssigneeUserId, before?.AssigneeUserId);
+        Add("startDate", entity.StartDate?.ToString("yyyy-MM-dd"), before?.StartDate?.ToString("yyyy-MM-dd"));
+        Add("dueDate", entity.DueDate?.ToString("yyyy-MM-dd"), before?.DueDate?.ToString("yyyy-MM-dd"));
+        Add("progressPercent", entity.ProgressPercent, before?.ProgressPercent);
+        Add("workItemType", entity.WorkItemType, before?.WorkItemType);
+        Add("contentJson", entity.ContentJson, before?.ContentJson);
+        Add("contentText", entity.ContentText, before?.ContentText);
+        Add("riskLevel", entity.RiskLevel, before?.RiskLevel);
+        Add("requirementType", entity.RequirementType, before?.RequirementType);
+        Add("requirementSource", entity.RequirementSource, before?.RequirementSource);
+        Add("storyPoints", entity.StoryPoints, before?.StoryPoints);
+        var mentionUserIds = DeserializeIds(entity.MentionUserIdsJson);
+        if (before is null || !mentionUserIds.SequenceEqual(before.MentionUserIds ?? [], StringComparer.OrdinalIgnoreCase))
+        {
+            changed.Add("mentionUserIds");
+            values["mentionUserIds"] = mentionUserIds;
+        }
+        Add("versionNo", entity.VersionNo, before?.VersionNo);
+        Add("updatedTime", entity.UpdatedTime, null);
+        if (before is null || entity.IsDeleted)
+        {
+            values["isDeleted"] = entity.IsDeleted;
+            changed.Add("isDeleted");
+        }
+        changedFields = changed;
+        return values;
     }
 
     private async Task WriteActivityAsync(ProjectManagementTaskEntity entity, string activityType, string summary, CancellationToken cancellationToken)
@@ -980,8 +1084,12 @@ public sealed class ProjectManagementTaskService(
     {
         ProjectManagementDomainRules.ValidateDates(request.StartDate, request.DueDate, "任务");
         ProjectManagementDomainRules.RequireProgress(request.ProgressPercent, "任务");
+        if (string.IsNullOrWhiteSpace(request.Title) || request.Title.Trim().Length > 256) throw new ValidationException("任务标题不能为空且不能超过 256 个字符");
         if (request.Weight is <= 0) throw new ValidationException("任务权重必须大于 0");
         if (request.EstimateMinutes is < 0) throw new ValidationException("预估工时不能为负数");
+        if (request.StoryPoints is < 0) throw new ValidationException("故事点不能为负数");
+        _ = NormalizeWorkItemType(request.WorkItemType);
+        _ = NormalizeRiskLevel(request.RiskLevel);
         _ = ResolveMarkdown(request);
     }
 
@@ -989,6 +1097,18 @@ public sealed class ProjectManagementTaskService(
         explicitWeight ?? (estimateMinutes is > 0 ? estimateMinutes.Value : 1m);
 
     private static string NormalizePriority(string value) => Priorities.Contains(value.Trim(), StringComparer.Ordinal) ? value.Trim() : throw new ValidationException("任务优先级不受支持");
+    private static string NormalizeWorkItemType(string? value) => value?.Trim() switch
+    {
+        "Epic" or "Story" or "Requirement" or "Task" or "Bug" => value.Trim(),
+        null or "" => "Task",
+        _ => throw new ValidationException("工作项类型不受支持")
+    };
+    private static string NormalizeRiskLevel(string? value) => value?.Trim() switch
+    {
+        "None" or "Low" or "Medium" or "High" or "Closed" => value.Trim(),
+        null or "" => "None",
+        _ => throw new ValidationException("风险等级不受支持")
+    };
     private static bool IsForceStarted(string? blockedReason) => blockedReason?.StartsWith("已强制开始：", StringComparison.Ordinal) == true;
     private string RequireTenantId() => currentUser.GetAsterErpTenantId()?.Trim() ?? throw new ValidationException("当前会话缺少租户");
     private string RequireAppCode() => currentUser.GetAsterErpAppCode()?.Trim().ToUpperInvariant() ?? throw new ValidationException("当前会话缺少应用");
@@ -1023,13 +1143,74 @@ public sealed class ProjectManagementTaskService(
         var predecessorStatus = predecessors.ToDictionary(item => item.Id, item => item.Status, StringComparer.Ordinal);
         var blockedByCount = dependencyRows.Count(dependency => !predecessorStatus.TryGetValue(dependency.PredecessorTaskId, out var status) || status != ProjectManagementDomainRules.TaskDone);
         var forceStarted = IsForceStarted(entity.BlockedReason);
-        return MapDetail(entity, blockedByCount, blockedByCount == 0 || forceStarted, blockedByCount == 0 || forceStarted ? entity.BlockedReason : $"存在 {blockedByCount} 个未完成前置任务");
+        var children = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskEntity>()
+            .Where(item => item.ParentTaskId == entity.Id && !item.IsDeleted).ToListAsync(cancellationToken);
+        var hasAttachments = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskAttachmentEntity>()
+            .Where(item => item.TaskId == entity.Id && !item.IsDeleted).AnyAsync(cancellationToken);
+        var followerIds = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskFollowerEntity>()
+            .Where(item => item.TaskId == entity.Id && !item.IsDeleted).Select(item => item.UserId).ToListAsync(cancellationToken);
+        return MapDetail(entity, blockedByCount, blockedByCount == 0 || forceStarted, blockedByCount == 0 || forceStarted ? entity.BlockedReason : $"存在 {blockedByCount} 个未完成前置任务", children.Count, children.Count(item => item.Status == ProjectManagementDomainRules.TaskDone), hasAttachments, DeserializeIds(entity.MentionUserIdsJson), followerIds);
     }
 
-    private static ProjectManagementTaskListItemResponse MapList(ProjectManagementTaskEntity entity, int blockedByCount, bool canStart, string? blockedReason, bool hasChildren, IReadOnlyList<ProjectManagementTaskLabelResponse>? labels, IReadOnlyList<string>? participantUserIds, string? assigneeDisplayName, IReadOnlyList<string>? participantDisplayNames) => new(entity.Id, entity.ProjectId, entity.MilestoneId, entity.ParentTaskId, entity.TaskCode, entity.Title, entity.Status, entity.Priority, entity.AssigneeUserId, entity.StartDate, entity.DueDate, entity.ProgressPercent, entity.SortOrder, entity.Depth, entity.VersionNo, blockedByCount, canStart, blockedReason, ProjectManagementDomainRules.IsTaskOverdue(entity.Status, entity.DueDate, DateTime.UtcNow), entity.ActualStartAt, entity.ActualEndAt, entity.Summary, hasChildren, labels, participantUserIds, assigneeDisplayName, participantDisplayNames);
+    private static ProjectManagementTaskListItemResponse MapList(ProjectManagementTaskEntity entity, int blockedByCount, bool canStart, string? blockedReason, bool hasChildren, IReadOnlyList<ProjectManagementTaskLabelResponse>? labels, IReadOnlyList<string>? participantUserIds, string? assigneeDisplayName, IReadOnlyList<string>? participantDisplayNames, int childCount = 0, int completedChildCount = 0, bool hasAttachments = false) => new(entity.Id, entity.ProjectId, entity.MilestoneId, entity.ParentTaskId, entity.TaskCode, entity.Title, entity.Status, entity.Priority, entity.AssigneeUserId, entity.StartDate, entity.DueDate, entity.ProgressPercent, entity.SortOrder, entity.Depth, entity.VersionNo, blockedByCount, canStart, blockedReason, ProjectManagementDomainRules.IsTaskOverdue(entity.Status, entity.DueDate, DateTime.UtcNow), entity.ActualStartAt, entity.ActualEndAt, entity.Summary, hasChildren, labels, participantUserIds, assigneeDisplayName, participantDisplayNames, entity.WorkItemType, entity.RiskLevel, entity.RequirementType, entity.RequirementSource, entity.StoryPoints, childCount, completedChildCount, hasAttachments);
 
-    private static ProjectManagementTaskDetailResponse MapDetail(ProjectManagementTaskEntity entity, int blockedByCount, bool canStart, string? blockedReason) => new(entity.Id, entity.ProjectId, entity.MilestoneId, entity.ParentTaskId, entity.TaskCode, entity.Title, entity.Description, entity.Status, entity.Priority, entity.AssigneeUserId, entity.AssigneeEmploymentId, entity.StartDate, entity.DueDate, entity.ProgressPercent, entity.Weight, entity.EstimateMinutes, entity.ActualMinutes, entity.SortOrder, entity.Depth, entity.VersionNo, entity.CreatedTime, entity.UpdatedTime, blockedByCount, canStart, blockedReason, ProjectManagementDomainRules.IsTaskOverdue(entity.Status, entity.DueDate, DateTime.UtcNow), entity.ActualStartAt, entity.ActualEndAt, Summary: entity.Summary, Markdown: entity.Description);
+    private static ProjectManagementTaskDetailResponse MapDetail(ProjectManagementTaskEntity entity, int blockedByCount, bool canStart, string? blockedReason, int childCount = 0, int completedChildCount = 0, bool hasAttachments = false, IReadOnlyList<string>? mentionUserIds = null, IReadOnlyList<string>? followerUserIds = null) => new(entity.Id, entity.ProjectId, entity.MilestoneId, entity.ParentTaskId, entity.TaskCode, entity.Title, entity.Description, entity.Status, entity.Priority, entity.AssigneeUserId, entity.AssigneeEmploymentId, entity.StartDate, entity.DueDate, entity.ProgressPercent, entity.Weight, entity.EstimateMinutes, entity.ActualMinutes, entity.SortOrder, entity.Depth, entity.VersionNo, entity.CreatedTime, entity.UpdatedTime, blockedByCount, canStart, blockedReason, ProjectManagementDomainRules.IsTaskOverdue(entity.Status, entity.DueDate, DateTime.UtcNow), entity.ActualStartAt, entity.ActualEndAt, Summary: entity.Summary, Markdown: entity.Description, WorkItemType: entity.WorkItemType, ContentJson: entity.ContentJson, ContentText: entity.ContentText, RiskLevel: entity.RiskLevel, RequirementType: entity.RequirementType, RequirementSource: entity.RequirementSource, StoryPoints: entity.StoryPoints, MentionUserIds: mentionUserIds, FollowerUserIds: followerUserIds, ChildCount: childCount, CompletedChildCount: completedChildCount, HasAttachments: hasAttachments);
     private static ProjectManagementTaskResponse ToTemplateResponse(ProjectManagementTaskEntity entity) => new(entity.Id, entity.ProjectId, entity.MilestoneId, entity.ParentTaskId, entity.TaskCode, entity.Title, entity.Description, entity.Status, entity.Priority, entity.AssigneeUserId, entity.AssigneeEmploymentId, entity.StartDate, entity.DueDate, entity.ProgressPercent, entity.Weight, entity.EstimateMinutes, entity.ActualMinutes, entity.SortOrder, entity.Depth, entity.VersionNo, entity.CreatedTime, entity.UpdatedTime, IsOverdue: ProjectManagementDomainRules.IsTaskOverdue(entity.Status, entity.DueDate, DateTime.UtcNow), Summary: entity.Summary, Markdown: entity.Description);
+
+    private static IReadOnlyList<string> DeserializeIds(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return [];
+        try { return JsonSerializer.Deserialize<string[]>(json) ?? []; }
+        catch (JsonException) { return []; }
+    }
+
+    private static string? SerializeIds(IReadOnlyList<string>? values)
+    {
+        if (values is null) return null;
+        var normalized = values.Where(value => !string.IsNullOrWhiteSpace(value)).Select(value => value.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).Take(50).ToList();
+        return normalized.Count == 0 ? null : JsonSerializer.Serialize(normalized);
+    }
+
+    private async Task SyncFollowersAsync(ISqlSugarClient db, ProjectManagementTaskEntity task, IReadOnlyList<string>? requestedUserIds, CancellationToken cancellationToken)
+    {
+        if (requestedUserIds is null) return;
+        var desired = requestedUserIds.Where(value => !string.IsNullOrWhiteSpace(value)).Select(value => value.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).Take(50).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (desired.Count > 0)
+        {
+            var validMemberIds = (await db.Queryable<ProjectManagementProjectMemberEntity>()
+                .Where(member => member.ProjectId == task.ProjectId && member.TenantId == task.TenantId && member.AppCode == task.AppCode && member.IsActive && !member.IsDeleted)
+                .Select(member => member.UserId).ToListAsync(cancellationToken)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            if (desired.Any(userId => !validMemberIds.Contains(userId)) && !currentUser.IsAsterErpPlatformAdmin() && !currentUser.HasAsterErpPermission("*"))
+                throw new ValidationException("关注人必须是项目成员", ErrorCodes.PermissionDenied);
+        }
+        var existing = await db.Queryable<ProjectManagementTaskFollowerEntity>()
+            .Where(item => item.TaskId == task.Id && item.TenantId == task.TenantId && item.AppCode == task.AppCode).ToListAsync(cancellationToken);
+        foreach (var item in existing)
+        {
+            var shouldBeActive = desired.Contains(item.UserId);
+            if (item.IsDeleted == !shouldBeActive)
+            {
+                if (shouldBeActive) desired.Remove(item.UserId);
+                continue;
+            }
+            item.IsDeleted = !shouldBeActive;
+            item.DeletedBy = shouldBeActive ? null : RequireUserId();
+            item.DeletedTime = shouldBeActive ? null : DateTime.UtcNow;
+            item.UpdatedBy = RequireUserId();
+            item.UpdatedTime = DateTime.UtcNow;
+            item.VersionNo++;
+            await db.Updateable(item).ExecuteCommandAsync(cancellationToken);
+            desired.Remove(item.UserId);
+        }
+        foreach (var userId in desired)
+        {
+            await db.Insertable(new ProjectManagementTaskFollowerEntity
+            {
+                TenantId = task.TenantId, AppCode = task.AppCode, ProjectId = task.ProjectId, TaskId = task.Id, UserId = userId,
+                VersionNo = 1, CreatedBy = RequireUserId(), CreatedTime = DateTime.UtcNow,
+            }).ExecuteCommandAsync(cancellationToken);
+        }
+    }
 
     private async Task PublishTaskChangeNotificationsAsync(ProjectManagementTaskEntity task, ProjectManagementTaskUpsertRequest? before, CancellationToken cancellationToken)
     {

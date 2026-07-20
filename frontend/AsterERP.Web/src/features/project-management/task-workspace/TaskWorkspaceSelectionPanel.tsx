@@ -6,7 +6,10 @@ import type {
   ProjectManagementTaskReminder,
   ProjectManagementTaskReminderCreateRequest,
   ProjectManagementMember,
+  ProjectManagementMemberCandidate,
+  ProjectManagementMilestone,
   ProjectManagementTaskUpsertRequest,
+  ProjectManagementTaskDraftAttachment,
 } from '../../../api/project-management/projectManagement.types';
 import { PermissionButton } from '../../../shared/auth/PermissionButton';
 import { PermissionGuard } from '../../../shared/auth/PermissionGuard';
@@ -70,6 +73,12 @@ interface TaskWorkspaceSelectionPanelProps {
   onDeleteReminder: (reminder: ProjectManagementTaskReminder) => void;
   saving: boolean;
   selectedTask?: ProjectManagementTaskDetail;
+  projectId?: string;
+  memberCandidates?: ProjectManagementMemberCandidate[];
+  milestones?: ProjectManagementMilestone[];
+  draftAttachments?: ProjectManagementTaskDraftAttachment[];
+  draftUploading?: boolean;
+  onDraftUpload?: (file: File) => void;
 }
 
 export function TaskWorkspaceSelectionPanel({
@@ -126,6 +135,12 @@ export function TaskWorkspaceSelectionPanel({
   onDeleteReminder,
   saving,
   selectedTask,
+  projectId,
+  memberCandidates = [],
+  milestones = [],
+  draftAttachments = [],
+  draftUploading = false,
+  onDraftUpload,
 }: TaskWorkspaceSelectionPanelProps) {
   if (!creating && !selectedTask) return null;
   if (!creating && selectedTask && !['basic', 'comments', 'attachments', 'reminders'].includes(activeSection)) return null;
@@ -133,32 +148,42 @@ export function TaskWorkspaceSelectionPanel({
 
   return (
     <aside className="mb-4 space-y-4 rounded-lg border border-gray-200 p-4">
-      {(creating || activeSection === 'basic') ? <section>
-        <div className="mb-3 text-sm font-semibold">{creating ? '新建任务' : `编辑任务 · ${selectedTask?.taskCode}`}</div>
-        <div className="grid gap-2 md:grid-cols-5">
-          <input aria-label="任务编码" onChange={(event) => onFormChange({ ...form, taskCode: event.target.value })} placeholder="任务编码" value={form.taskCode} />
-          <input aria-label="任务标题" onChange={(event) => onFormChange({ ...form, title: event.target.value })} placeholder="任务标题" value={form.title} />
-          <select aria-label="任务状态" onChange={(event) => onFormChange({ ...form, status: event.target.value })} value={form.status}>
-            {['Todo', 'InProgress', 'Blocked', 'Done', 'Cancelled'].map((status) => <option key={status}>{status}</option>)}
-          </select>
-          <select aria-label="任务优先级" onChange={(event) => onFormChange({ ...form, priority: event.target.value })} value={form.priority}>
-            {['Low', 'Medium', 'High', 'Urgent'].map((priority) => <option key={priority}>{priority}</option>)}
-          </select>
-          <input aria-label="任务进度" max={100} min={0} onChange={(event) => onFormChange({ ...form, progressPercent: Number(event.target.value) })} type="number" value={form.progressPercent ?? 0} />
-          <input aria-label="开始日期" onChange={(event) => onFormChange({ ...form, startDate: event.target.value || undefined })} type="date" value={toDateInputValue(form.startDate)} />
-          <input aria-label="截止日期" onChange={(event) => onFormChange({ ...form, dueDate: event.target.value || undefined })} type="date" value={toDateInputValue(form.dueDate)} />
+      {(creating || activeSection === 'basic') ? <section className="pm-editor-form">
+        <div className="pm-editor-form__main">
+          <div className="mb-3 text-sm font-semibold">{creating ? '新建/编辑需求' : `编辑需求 · ${selectedTask?.taskCode}`}</div>
+          <label className="grid gap-1 text-sm"><span>标题 <em className="text-red-600">*</em><small className="float-right text-gray-500">{form.title.length}/256</small></span><input autoFocus aria-label="需求标题" maxLength={256} onChange={(event) => onFormChange({ ...form, title: event.target.value })} placeholder="输入需求标题" value={form.title} /></label>
+          <label className="mt-3 grid gap-1 text-sm"><span>描述</span><ProjectManagementMarkdownEditor
+            ariaLabel="需求富文本描述"
+            onChange={(markdown) => onFormChange({ ...form, description: undefined, markdown: markdown || undefined })}
+            onContentJsonChange={(contentJson) => onFormChange({ ...form, contentJson })}
+            onMentionUserIdsChange={(mentionUserIds) => onFormChange({ ...form, mentionUserIds })}
+            contentJson={form.contentJson}
+            mentionCandidates={memberCandidates}
+            placeholder="支持标题、粗体、斜体、列表、链接和 @成员"
+            rows={10}
+            value={form.markdown ?? form.description ?? ''}
+          /></label>
+          <div className="mt-4 rounded border border-gray-200 p-3"><div className="mb-2 text-sm font-semibold">协作</div><div className="text-xs text-gray-500">在描述中输入 @ 后选择成员，Mention 会以结构化节点保存；附件、评论和关注人会在保存后绑定。</div>{form.mentionUserIds?.length ? <div className="mt-2 flex flex-wrap gap-1">{form.mentionUserIds.map(userId => <span className="rounded bg-blue-50 px-2 py-1 text-xs text-blue-700" key={userId}>已提及成员 · {memberCandidates.find(item => item.userId === userId)?.displayName ?? userId}</span>)}</div> : null}</div>
         </div>
-        <div className="mt-2"><ProjectManagementMarkdownEditor
-          ariaLabel="任务 Markdown 描述"
-          onChange={(markdown) => onFormChange({ ...form, description: undefined, markdown: markdown || undefined })}
-          placeholder="任务描述，支持安全 Markdown"
-          rows={5}
-          value={form.markdown ?? form.description ?? ''}
-        /></div>
-        <div className="mt-3 flex gap-2">
-          <PermissionButton code={actionPermission} disabled={!form.taskCode.trim() || !form.title.trim() || saving} onClick={onSubmit}>{saving ? '保存中…' : creating ? '创建任务' : '保存修改'}</PermissionButton>
-          <button type="button" onClick={onCancel}>取消</button>
+        <div className="pm-editor-form__properties">
+          <label>项目<input aria-label="项目" disabled value={projectId ?? selectedTask?.projectId ?? ''} /></label>
+          <label>工作项类型<select aria-label="工作项类型" onChange={(event) => onFormChange({ ...form, workItemType: event.target.value })} value={form.workItemType ?? 'Task'}>{[['Epic', '史诗'], ['Story', '用户故事'], ['Requirement', '功能需求'], ['Task', '任务'], ['Bug', '缺陷']].map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+          <label>状态<select aria-label="需求状态" onChange={(event) => onFormChange({ ...form, status: event.target.value })} value={form.status}>{[['Todo', '未开始'], ['InProgress', '进行中'], ['Blocked', '已阻塞'], ['Done', '已完成'], ['Cancelled', '已关闭']].map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+          <label>负责人<select aria-label="需求负责人" onChange={(event) => onFormChange({ ...form, assigneeUserId: event.target.value || undefined })} value={form.assigneeUserId ?? ''}><option value="">未分配</option>{memberCandidates.filter(item => item.isSelectable).map(item => <option key={item.userId} value={item.userId}>{item.displayName || item.userName}</option>)}</select></label>
+          <label>父工作项<input aria-label="父工作项" placeholder="输入父工作项编号" value={form.parentTaskId ?? ''} onChange={(event) => onFormChange({ ...form, parentTaskId: event.target.value || undefined })} /></label>
+          <label>里程碑<select aria-label="里程碑" onChange={(event) => onFormChange({ ...form, milestoneId: event.target.value || undefined })} value={form.milestoneId ?? ''}><option value="">未设置</option>{milestones.map(item => <option key={item.id} value={item.id}>{item.milestoneName}</option>)}</select></label>
+          <label>开始时间<input aria-label="开始时间" onChange={(event) => onFormChange({ ...form, startDate: event.target.value || undefined })} type="date" value={toDateInputValue(form.startDate)} /></label>
+          <label>结束时间<input aria-label="结束时间" onChange={(event) => onFormChange({ ...form, dueDate: event.target.value || undefined })} type="date" value={toDateInputValue(form.dueDate)} /></label>
+          <label>优先级<select aria-label="优先级" onChange={(event) => onFormChange({ ...form, priority: event.target.value })} value={form.priority}>{[['Low', '低'], ['Medium', '中'], ['High', '高'], ['Urgent', '紧急']].map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+          <label>风险<select aria-label="风险等级" onChange={(event) => onFormChange({ ...form, riskLevel: event.target.value })} value={form.riskLevel ?? 'None'}>{[['None', '无'], ['Low', '低'], ['Medium', '中'], ['High', '高'], ['Closed', '已关闭']].map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+          <label>需求类型<input aria-label="需求类型" value={form.requirementType ?? ''} onChange={(event) => onFormChange({ ...form, requirementType: event.target.value || undefined })} placeholder="用户故事/功能需求" /></label>
+          <label>需求来源<input aria-label="需求来源" value={form.requirementSource ?? ''} onChange={(event) => onFormChange({ ...form, requirementSource: event.target.value || undefined })} placeholder="产品计划/客户反馈" /></label>
+          <label>故事点<input aria-label="故事点" min={0} type="number" value={form.storyPoints ?? ''} onChange={(event) => onFormChange({ ...form, storyPoints: event.target.value ? Number(event.target.value) : undefined })} /></label>
+          <fieldset className="pm-editor-form__followers"><legend>关注人</legend><div>{memberCandidates.filter(item => item.isSelectable).slice(0, 20).map(item => <label className="flex items-center gap-1 text-xs" key={`follower-${item.userId}`}><input checked={Boolean(form.followerUserIds?.includes(item.userId))} onChange={(event) => onFormChange({ ...form, followerUserIds: event.target.checked ? [...new Set([...(form.followerUserIds ?? []), item.userId])] : (form.followerUserIds ?? []).filter(id => id !== item.userId) })} type="checkbox" />{item.displayName || item.userName}</label>)}</div></fieldset>
+          <label>任务编码<input aria-label="需求编号" onChange={(event) => onFormChange({ ...form, taskCode: event.target.value })} placeholder="例如 DEMO-1" value={form.taskCode} /></label>
         </div>
+        <div className="pm-editor-form__footer"><label className="text-sm"><input type="checkbox" /> 继续创建下一个</label><div className="flex gap-2"><button type="button" onClick={onCancel}>取消</button><PermissionButton code={actionPermission} disabled={!form.taskCode.trim() || !form.title.trim() || saving} onClick={onSubmit}>{saving ? '保存中…' : creating ? '创建' : '保存'}</PermissionButton></div></div>
+        {creating && onDraftUpload ? <div className="mt-3 rounded border border-dashed border-gray-300 p-3 text-sm"><div className="font-medium">草稿附件</div><div className="mt-1 text-xs text-gray-500">需求提交前附件保存在 Draft Session，创建成功后事务性绑定。</div>{draftAttachments.map(item => <div className="mt-1 text-xs text-gray-600" key={item.id}>{item.fileName} · {Math.ceil(item.fileSize / 1024)} KB</div>)}<input className="mt-2" disabled={draftUploading} onChange={(event) => { const file = event.target.files?.[0]; if (file) onDraftUpload(file); event.currentTarget.value = ''; }} type="file" /></div> : null}
       </section> : null}
       {!creating && selectedTask ? <TaskCollaborationPanel
         activeSection={activeSection}
@@ -207,6 +232,7 @@ export function TaskWorkspaceSelectionPanel({
         onRetryDownloadAttachment={onRetryDownloadAttachment}
         onPreviewAttachment={onPreviewAttachment}
         onRetryPreviewAttachment={onRetryPreviewAttachment}
+        memberCandidates={memberCandidates}
       /> : null}
     </aside>
   );
@@ -263,6 +289,7 @@ function TaskCollaborationPanel({
   onRetryDownloadAttachment,
   onPreviewAttachment,
   onRetryPreviewAttachment,
+  memberCandidates,
 }: Omit<TaskWorkspaceSelectionPanelProps, 'creating' | 'form' | 'onCancel' | 'onFormChange' | 'onSubmit' | 'saving' | 'selectedTask'>) {
   return <div className="grid gap-4 lg:grid-cols-2">
     {activeSection === 'comments' ? <section>
@@ -270,7 +297,7 @@ function TaskCollaborationPanel({
       {commentsError ? <div className="rounded bg-amber-50 p-2 text-sm text-amber-800">评论加载失败，请重新选择任务重试。</div> : <div className="mb-3 space-y-2">
         {comments.length === 0 ? <div className="text-sm text-gray-500">暂无评论</div> : comments.map((comment) => <article className="rounded border border-gray-100 p-2" key={comment.id}>
           {commentEditing?.id === comment.id ? <>
-            <ProjectManagementMarkdownEditor ariaLabel={`编辑评论 ${comment.id}`} onChange={(markdown) => onCommentEditChange({ ...commentEditForm, markdown })} placeholder="支持安全 Markdown" rows={4} value={commentEditForm.markdown} />
+            <ProjectManagementMarkdownEditor ariaLabel={`编辑评论 ${comment.id}`} onChange={(markdown) => onCommentEditChange({ ...commentEditForm, markdown })} onMentionUserIdsChange={(mentionUserIds) => onCommentEditChange({ ...commentEditForm, mentionUserIds })} mentionCandidates={memberCandidates} placeholder="支持安全 Markdown" rows={4} value={commentEditForm.markdown} />
             <div className="mt-2 flex gap-2"><PermissionButton code="project-management:comment:add" disabled={!commentEditForm.markdown.trim() || commentEditSubmitting} onClick={onCommentEditSubmit}>{commentEditSubmitting ? '保存中…' : '保存修改'}</PermissionButton><button type="button" onClick={onCommentEditCancel}>取消</button></div>
           </> : <>
             <ProjectManagementMarkdownContent className="text-sm" value={comment.markdown} />
@@ -279,7 +306,7 @@ function TaskCollaborationPanel({
         </article>)}
       </div>}
       {commentsTotal > commentPageSize ? <div className="mb-3 flex items-center justify-between text-xs"><button disabled={commentPageIndex <= 1} type="button" onClick={() => onCommentPageChange(commentPageIndex - 1)}>上一页</button><span>第 {commentPageIndex} 页</span><button disabled={commentPageIndex * commentPageSize >= commentsTotal} type="button" onClick={() => onCommentPageChange(commentPageIndex + 1)}>下一页</button></div> : null}
-      <ProjectManagementMarkdownEditor ariaLabel="评论内容" onChange={(markdown) => onCommentChange({ markdown })} placeholder="支持安全 Markdown 评论" rows={4} value={commentForm.markdown} />
+      <ProjectManagementMarkdownEditor ariaLabel="评论内容" onChange={(markdown) => onCommentChange({ ...commentForm, markdown })} onMentionUserIdsChange={(mentionUserIds) => onCommentChange({ ...commentForm, mentionUserIds })} mentionCandidates={memberCandidates} placeholder="支持安全 Markdown 评论" rows={4} value={commentForm.markdown} />
       <div className="mt-2"><PermissionButton code="project-management:comment:add" disabled={!commentForm.markdown.trim() || commentSubmitting} onClick={onCommentSubmit}>{commentSubmitting ? '发布中…' : '发布评论'}</PermissionButton></div>
     </section> : null}
     {activeSection === 'attachments' ? <section>

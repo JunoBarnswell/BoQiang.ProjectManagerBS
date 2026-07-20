@@ -211,6 +211,24 @@ public static class ProjectManagementDataPermissionFilterRegistrar
             return true;
         }
 
+        if (entityType == typeof(ProjectManagementTaskFollowerEntity))
+        {
+            db.QueryFilter.AddTableFilter<ProjectManagementTaskFollowerEntity>(follower => follower.TenantId == tenantId && follower.AppCode == appCode && (!restrictToMembership || SqlFunc.Subqueryable<ProjectManagementTaskEntity>().Where(taskScopePredicate).Where(task => task.Id == follower.TaskId).Any()));
+            return true;
+        }
+
+        if (entityType == typeof(ProjectManagementTaskDraftEntity))
+        {
+            db.QueryFilter.AddTableFilter<ProjectManagementTaskDraftEntity>(draft => draft.TenantId == tenantId && draft.AppCode == appCode && draft.OwnerUserId == userId);
+            return true;
+        }
+
+        if (entityType == typeof(ProjectManagementTaskDraftAttachmentEntity))
+        {
+            db.QueryFilter.AddTableFilter<ProjectManagementTaskDraftAttachmentEntity>(attachment => attachment.TenantId == tenantId && attachment.AppCode == appCode && SqlFunc.Subqueryable<ProjectManagementTaskDraftEntity>().Where(draft => draft.Id == attachment.DraftId && draft.OwnerUserId == userId).Any());
+            return true;
+        }
+
         if (entityType == typeof(ProjectManagementExternalApiRequestEntity))
         {
             db.QueryFilter.AddTableFilter<ProjectManagementExternalApiRequestEntity>(request =>

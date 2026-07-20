@@ -59,6 +59,10 @@ import type {
   ProjectManagementNotificationPage,
   ProjectManagementNotificationOpenResult,
   ProjectManagementTaskAttachment,
+  ProjectManagementTaskFollower,
+  ProjectManagementTaskFollowerUpsertRequest,
+  ProjectManagementTaskDraft,
+  ProjectManagementTaskDraftAttachment,
   ProjectManagementSavedView,
   ProjectManagementSavedViewUpsertRequest,
   ProjectManagementWorkspaceOverview,
@@ -502,7 +506,7 @@ export function getProjectManagementTasks(
   signal?: AbortSignal,
 ): Promise<ApiEnvelope<{ total: number; items: ProjectManagementTaskListItem[] }>> {
   return httpClient.get<{ total: number; items: ProjectManagementTaskListItem[] }>(
-    `/project-management/tasks${buildProjectManagementLabelFilterQuery(query)}`,
+    `/project-management/projects/${encodeURIComponent(query.projectId)}/work-items${buildProjectManagementLabelFilterQuery(query)}`,
     undefined,
     signal,
   );
@@ -512,7 +516,7 @@ export function getProjectManagementTask(
   id: string,
   signal?: AbortSignal,
 ): Promise<ApiEnvelope<ProjectManagementTaskDetail>> {
-  return httpClient.get<ProjectManagementTaskDetail>(`/project-management/tasks/${id}`, undefined, signal);
+  return httpClient.get<ProjectManagementTaskDetail>(`/project-management/work-items/${id}`, undefined, signal);
 }
 
 export function getProjectManagementTaskDependencies(
@@ -531,7 +535,7 @@ export function createProjectManagementTask(
   request: ProjectManagementTaskUpsertRequest,
 ): Promise<ApiEnvelope<ProjectManagementTaskDetail>> {
   return httpClient.post<ProjectManagementTaskDetail, ProjectManagementTaskUpsertRequest>(
-    `/project-management/tasks/${projectId}`,
+    `/project-management/projects/${encodeURIComponent(projectId)}/work-items`,
     request,
   );
 }
@@ -541,7 +545,7 @@ export function updateProjectManagementTask(
   request: ProjectManagementTaskUpsertRequest,
 ): Promise<ApiEnvelope<ProjectManagementTaskDetail>> {
   return httpClient.put<ProjectManagementTaskDetail, ProjectManagementTaskUpsertRequest>(
-    `/project-management/tasks/${id}`,
+    `/project-management/work-items/${id}`,
     request,
   );
 }
@@ -551,7 +555,7 @@ export function changeProjectManagementTaskStatus(
   request: { status: string; versionNo: number },
 ): Promise<ApiEnvelope<ProjectManagementTaskDetail>> {
   return httpClient.post<ProjectManagementTaskDetail, typeof request>(
-    `/project-management/tasks/${id}/status`,
+    `/project-management/work-items/${id}/status`,
     request,
   );
 }
@@ -567,7 +571,7 @@ export function moveProjectManagementTask(
     updateMilestone?: boolean;
   },
 ): Promise<ApiEnvelope<ProjectManagementTaskDetail>> {
-  return httpClient.post<ProjectManagementTaskDetail, typeof request>(`/project-management/tasks/${id}/move`, request);
+  return httpClient.post<ProjectManagementTaskDetail, typeof request>(`/project-management/work-items/${id}/move`, request);
 }
 
 export function updateProjectManagementTasksBatch(
@@ -590,6 +594,28 @@ export function executeProjectManagementTasksBatch(
 
 export function deleteProjectManagementTask(id: string, versionNo: number): Promise<ApiEnvelope<{ id: string }>> {
   return httpClient.delete<{ id: string }>(`/project-management/tasks/${id}${buildQueryString({ versionNo })}`);
+}
+
+export function getProjectManagementTaskFollowers(taskId: string, signal?: AbortSignal): Promise<ApiEnvelope<ProjectManagementTaskFollower[]>> {
+  return httpClient.get<ProjectManagementTaskFollower[]>(`/project-management/work-items/${taskId}/followers`, undefined, signal);
+}
+
+export function addProjectManagementTaskFollower(taskId: string, request: ProjectManagementTaskFollowerUpsertRequest): Promise<ApiEnvelope<ProjectManagementTaskFollower>> {
+  return httpClient.post<ProjectManagementTaskFollower, ProjectManagementTaskFollowerUpsertRequest>(`/project-management/work-items/${taskId}/followers`, request);
+}
+
+export function removeProjectManagementTaskFollower(taskId: string, userId: string, versionNo: number): Promise<ApiEnvelope<{ userId: string }>> {
+  return httpClient.delete<{ userId: string }>(`/project-management/work-items/${taskId}/followers/${encodeURIComponent(userId)}${buildQueryString({ versionNo })}`);
+}
+
+export function createProjectManagementTaskDraft(projectId: string, payloadJson = '{}'): Promise<ApiEnvelope<ProjectManagementTaskDraft>> {
+  return httpClient.post<ProjectManagementTaskDraft, { projectId: string; payloadJson: string }>('/project-management/drafts', { projectId, payloadJson });
+}
+
+export function uploadProjectManagementTaskDraftAttachment(draftId: string, file: File): Promise<ApiEnvelope<ProjectManagementTaskDraftAttachment>> {
+  const formData = new FormData();
+  formData.append('file', file);
+  return httpClient.postForm<ProjectManagementTaskDraftAttachment>(`/project-management/drafts/${draftId}/attachments`, formData, { timeoutMs: 120_000 });
 }
 
 export function getProjectManagementTaskComments(

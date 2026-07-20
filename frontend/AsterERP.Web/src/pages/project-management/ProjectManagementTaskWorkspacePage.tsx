@@ -7,6 +7,7 @@ import {
   deleteProjectManagementSavedView,
   ensureProjectManagementImConversation,
   createProjectManagementTask,
+  createProjectManagementTaskDraft,
   changeProjectManagementTaskStatus,
   createProjectManagementTaskComment,
   downloadProjectManagementTaskAttachment,
@@ -25,6 +26,7 @@ import {
   getProjectManagementTaskAttachments,
   getProjectManagementTaskComments,
   getProjectManagementTask,
+  uploadProjectManagementTaskDraftAttachment,
   getProjectManagementTaskLabels,
   getProjectManagementTaskDependencies,
   getProjectManagementTaskReminders,
@@ -41,6 +43,7 @@ import {
 } from '../../api/project-management/projectManagement.api';
 import type {
   ProjectManagementTaskAttachment,
+  ProjectManagementTaskDraftAttachment,
   ProjectManagementTaskComment,
   ProjectManagementTaskCommentUpsertRequest,
   ProjectManagementActivityQuery,
@@ -109,6 +112,8 @@ const emptyForm: ProjectManagementTaskUpsertRequest = {
   taskCode: '',
   title: '',
   weight: 1,
+  workItemType: 'Task',
+  riskLevel: 'None',
 };
 
 type QuickTaskAction = 'complete' | 'delete';
@@ -128,6 +133,16 @@ function toTaskUpsertRequest(task: ProjectManagementTaskDetail, status = task.st
     status,
     taskCode: task.taskCode,
     title: task.title,
+    workItemType: task.workItemType,
+    contentJson: task.contentJson,
+    contentText: task.contentText,
+    riskLevel: task.riskLevel,
+    requirementType: task.requirementType,
+    requirementSource: task.requirementSource,
+    storyPoints: task.storyPoints,
+    mentionUserIds: task.mentionUserIds,
+    followerUserIds: task.followerUserIds,
+    draftId: task.draftId,
     versionNo: task.versionNo,
     weight: task.weight,
   };
@@ -190,6 +205,7 @@ export function ProjectManagementTaskWorkspacePage() {
   const [editingComment, setEditingComment] = useState<ProjectManagementTaskComment | null>(null);
   const [commentEditForm, setCommentEditForm] = useState<ProjectManagementTaskCommentUpsertRequest>({ markdown: '' });
   const [attachmentUploadFile, setAttachmentUploadFile] = useState<File | null>(null);
+  const [draftAttachments, setDraftAttachments] = useState<ProjectManagementTaskDraftAttachment[]>([]);
   const [attachmentUploadProgress, setAttachmentUploadProgress] = useState(0);
   const [attachmentUploadError, setAttachmentUploadError] = useState<string | undefined>();
   const attachmentAbortController = useRef<AbortController | null>(null);
@@ -287,6 +303,7 @@ export function ProjectManagementTaskWorkspacePage() {
     setAttachmentDownloadError(undefined);
     setAttachmentDownloadErrorId(undefined);
     setAttachmentPreviewState({ attachment: null, loading: false, previewFile: null });
+    setDraftAttachments([]);
     setCommentPageIndex(1);
     setTaskActivityQuery({ pageIndex: 1, pageSize: 20 });
     setEditingComment(null);
@@ -558,6 +575,19 @@ export function ProjectManagementTaskWorkspacePage() {
       await attachmentsQuery.refetch();
     },
     onSettled: () => { attachmentAbortController.current = null; },
+  });
+  const draftAttachmentMutation = useApiMutation({
+    mutationFn: async (file: File) => {
+      let draftId = form.draftId;
+      if (!draftId) {
+        const draft = await createProjectManagementTaskDraft(projectId, JSON.stringify(form));
+        draftId = draft.data.id;
+        setForm(current => ({ ...current, draftId }));
+      }
+      return uploadProjectManagementTaskDraftAttachment(draftId, file);
+    },
+    onError: (error) => message.error(getErrorMessage(error, '草稿附件上传失败')),
+    onSuccess: (result) => { setDraftAttachments(current => [...current, result.data]); message.success('草稿附件已保存，创建需求后自动绑定'); },
   });
   const downloadAttachment = async (attachment: ProjectManagementTaskAttachment) => {
     setAttachmentDownloadingId(attachment.id);
@@ -920,6 +950,8 @@ export function ProjectManagementTaskWorkspacePage() {
           selectedCount={selectedTasks.length}
           state={state}
           total={tasksQuery.data?.data?.total ?? 0}
+          memberCandidates={memberCandidatesQuery.data?.data?.items ?? []}
+          milestones={milestones}
         />
       }
     >
@@ -1007,6 +1039,12 @@ export function ProjectManagementTaskWorkspacePage() {
           reminders={remindersQuery.data?.data ?? []}
           remindersError={remindersQuery.isError}
           remindersLoading={remindersQuery.isLoading}
+          projectId={projectId}
+          memberCandidates={memberCandidatesQuery.data?.data?.items ?? []}
+          milestones={milestones}
+          draftAttachments={draftAttachments}
+          draftUploading={draftAttachmentMutation.isPending}
+          onDraftUpload={(file) => draftAttachmentMutation.mutate(file)}
           saving={saveMutation.isPending}
           selectedTask={selectedTask}
         />

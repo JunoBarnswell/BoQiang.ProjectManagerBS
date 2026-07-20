@@ -27,6 +27,10 @@ export function useTaskWorkspaceUrlState(viewKey: ProjectManagementTaskView) {
       sortBy: searchParams.get('sortBy') as TaskWorkspaceState['sortBy'],
       sortDirection: searchParams.get('sortDirection') as TaskWorkspaceState['sortDirection'],
       status: searchParams.get('status') ?? undefined,
+      workItemType: searchParams.get('workItemType') ?? undefined,
+      riskLevel: searchParams.get('riskLevel') ?? undefined,
+      requirementType: searchParams.get('requirementType') ?? undefined,
+      requirementSource: searchParams.get('requirementSource') ?? undefined,
       visibleColumns: parseCsv(searchParams.get('columns')),
     }),
     [searchParams, viewKey],
@@ -49,6 +53,10 @@ export function createTaskWorkspaceSearchParams(viewKey: ProjectManagementTaskVi
   if (viewKey !== 'tree') params.set('view', viewKey);
   setOptional(params, 'q', normalized.keyword);
   setOptional(params, 'status', normalized.status);
+  setOptional(params, 'workItemType', normalized.workItemType);
+  setOptional(params, 'riskLevel', normalized.riskLevel);
+  setOptional(params, 'requirementType', normalized.requirementType);
+  setOptional(params, 'requirementSource', normalized.requirementSource);
   setOptional(params, 'assignee', normalized.assigneeUserId);
   setOptional(params, 'milestoneId', normalized.milestoneId);
   setOptional(params, 'groupBy', normalized.groupBy);
@@ -69,7 +77,7 @@ export function createTaskWorkspaceSearchParams(viewKey: ProjectManagementTaskVi
 
 export function hasTaskWorkspaceUrlOverrides(search: string): boolean {
   const params = new URLSearchParams(search);
-  return ['q', 'status', 'assignee', 'milestoneId', 'groupBy', 'dueFrom', 'dueTo', 'completed', 'sortBy', 'sortDirection', 'labelIds', 'labelMatchMode', 'columns', 'ganttZoom'].some((key) => params.has(key));
+  return ['q', 'status', 'workItemType', 'riskLevel', 'requirementType', 'requirementSource', 'assignee', 'milestoneId', 'groupBy', 'dueFrom', 'dueTo', 'completed', 'sortBy', 'sortDirection', 'labelIds', 'labelMatchMode', 'columns', 'ganttZoom'].some((key) => params.has(key));
 }
 
 function parseInteger(value: string | null): number | undefined {

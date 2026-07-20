@@ -11,7 +11,7 @@ import {
 } from '../view-sync/projectManagementViewSyncModel';
 
 import { acquireProjectManagementHubConnection } from './projectManagementHubConnection';
-import { invalidateProjectManagementViewSyncTargets } from './useProjectManagementViewSync';
+import { applyProjectManagementTaskPatch, invalidateProjectManagementViewSyncTargets } from './useProjectManagementViewSync';
 
 interface ProjectManagementViewSyncRealtimeOptions {
   enabled: boolean;
@@ -46,8 +46,8 @@ export function useProjectManagementViewSyncRealtime({ enabled, onReconciled, on
       pendingTargets.clear();
       if (targets.size > 0) void invalidateProjectManagementViewSyncTargets(queryClient, { projectId, scope }, targets);
     };
-    const queueInvalidation = (event: ProjectManagementViewSyncInvalidation, immediate = false) => {
-      for (const target of getProjectManagementViewSyncInvalidationTargets(event)) pendingTargets.add(target);
+    const queueInvalidation = (event: ProjectManagementViewSyncInvalidation, immediate = false, skipTargets?: ReadonlySet<ProjectManagementViewSyncInvalidationTarget>) => {
+      for (const target of getProjectManagementViewSyncInvalidationTargets(event)) if (!skipTargets?.has(target)) pendingTargets.add(target);
       if (immediate) {
         if (flushTimer) clearTimeout(flushTimer);
         flushInvalidations();
@@ -70,7 +70,8 @@ export function useProjectManagementViewSyncRealtime({ enabled, onReconciled, on
       if ((versions.get(versionKey) ?? 0) >= payload.version) return;
       versions.set(versionKey, payload.version);
       if (shouldClearProjectManagementViewSyncSelection(payload, selectedTaskIdRef.current)) onSelectedTaskDeleted?.(payload.aggregateId);
-      queueInvalidation(payload);
+      const patchApplied = applyProjectManagementTaskPatch(queryClient, { projectId, scope }, payload);
+      queueInvalidation(payload, false, patchApplied ? new Set<ProjectManagementViewSyncInvalidationTarget>(['tasks']) : undefined);
     });
     const unsubscribeRevocation = connection.subscribe('ProjectManagementAccessRevoked', (payload: unknown) => {
       const event = readProjectAccessRevocation(payload);

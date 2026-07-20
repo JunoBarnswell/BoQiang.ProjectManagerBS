@@ -260,11 +260,16 @@ function TaskTableProjection({ childStateByParent, expandedTaskIds, onLoadMoreCh
         );
       }
     },
+    { key: 'workItemType', title: '类型', width: '104px', render: (row) => workItemTypeLabel(row.workItemType) },
     { key: 'status', title: '状态', width: '110px', render: (row) => <StatusBadge status={row.status} /> },
     { key: 'priority', title: '优先级', width: '96px', render: (row) => <PriorityBadge priority={row.priority} /> },
+    { key: 'riskLevel', title: '风险', width: '86px', render: (row) => <RiskBadge level={row.riskLevel} /> },
+    { key: 'storyPoints', title: '点数', width: '70px', render: (row) => row.storyPoints ?? '—' },
     { key: 'progressPercent', title: '进度', width: '138px', render: (row) => <Progress value={row.progressPercent} /> },
     { key: 'dueDate', title: '截止日期', width: '120px', render: (row) => formatDate(row.dueDate) },
+    { key: 'childCount', title: '子项', width: '70px', render: (row) => row.childCount ? `${row.completedChildCount ?? 0}/${row.childCount}` : '—' },
     { key: 'blockedByCount', title: '阻塞', width: '96px', render: (row) => row.blockedByCount ? <StatusBadge status="Blocked" label={`${row.blockedByCount} 项`} /> : '—' },
+    { key: 'hasAttachments', title: '附件', width: '70px', render: (row) => row.hasAttachments ? '有' : '—' },
   ], [childStateByParent, drag, expandedTaskIds, onLoadMoreChildren, onToggleTaskExpansion, onToggleTaskSelection, rows, selectedTaskIds, state.viewKey]);
 
   const visibleColumns = new Set(state.visibleColumns);
@@ -305,6 +310,14 @@ function StatusBadge({ label, status }: { label?: string; status: string }) {
 
 function PriorityBadge({ priority }: { priority: string }) {
   return <span className={`pm-priority-badge pm-priority-badge--${priority.toLowerCase()}`}>{priorityLabel(priority)}</span>;
+}
+
+function RiskBadge({ level }: { level?: string }) {
+  return <span className={`pm-priority-badge pm-priority-badge--${(level ?? 'None').toLowerCase()}`}>{({ None: '无', Low: '低', Medium: '中', High: '高', Closed: '关闭' } as Record<string, string>)[level ?? 'None'] ?? level ?? '无'}</span>;
+}
+
+function workItemTypeLabel(type?: string): string {
+  return ({ Epic: '史诗', Story: '用户故事', Requirement: '需求', Task: '任务', Bug: '缺陷' } as Record<string, string>)[type ?? 'Task'] ?? type ?? '任务';
 }
 
 function Progress({ value }: { value: number }) {

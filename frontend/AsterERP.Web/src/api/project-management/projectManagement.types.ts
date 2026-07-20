@@ -401,6 +401,23 @@ export interface ProjectManagementOverviewPerson {
   displayName?: string;
 }
 
+export interface ProjectManagementOverviewDistribution {
+  key: string;
+  count: number;
+  percent: number;
+}
+
+export interface ProjectManagementOverviewRiskSummary {
+  overdueTaskCount: number;
+  blockedTaskCount: number;
+  dueSoonIncompleteTaskCount: number;
+  inProgressTaskCount: number;
+  wipLimit?: number;
+  isWipExceeded: boolean;
+  wipExceededBy: number;
+  hasScheduleRisk: boolean;
+}
+
 export interface ProjectManagementOverviewItem {
   project: ProjectManagementProject;
   taskCount: number;
@@ -413,7 +430,10 @@ export interface ProjectManagementOverviewItem {
   memberCount: number;
   milestones: ProjectManagementOverviewMilestone[];
   people: ProjectManagementOverviewPerson[];
+  riskSummary?: ProjectManagementOverviewRiskSummary;
   health?: string;
+  workItemTypeDistribution?: ProjectManagementOverviewDistribution[];
+  statusDistribution?: ProjectManagementOverviewDistribution[];
 }
 
 export type ProjectManagementMyWorkCategory = 'all' | 'assigned' | 'participating' | 'created' | 'mentioned' | 'today' | 'upcoming' | 'overdue' | 'blocked';
@@ -527,6 +547,13 @@ export interface ProjectManagementTaskQuery {
   dueTo?: string;
   includeCompleted?: boolean;
   labelFilter?: ProjectManagementTaskLabelFilter;
+  workItemType?: string;
+  riskLevel?: string;
+  requirementType?: string;
+  requirementSource?: string;
+  mentionedUserId?: string;
+  hasAttachment?: boolean;
+  hasChildren?: boolean;
 }
 
 export interface ProjectManagementTaskListItem {
@@ -554,6 +581,14 @@ export interface ProjectManagementTaskListItem {
   participantUserIds?: string[];
   assigneeDisplayName?: string;
   participantDisplayNames?: string[];
+  workItemType?: string;
+  riskLevel?: string;
+  requirementType?: string;
+  requirementSource?: string;
+  storyPoints?: number;
+  childCount?: number;
+  completedChildCount?: number;
+  hasAttachments?: boolean;
 }
 
 export interface ProjectManagementTaskDetail extends ProjectManagementTaskListItem {
@@ -565,6 +600,42 @@ export interface ProjectManagementTaskDetail extends ProjectManagementTaskListIt
   actualMinutes: number;
   createdTime: string;
   updatedTime?: string;
+  contentJson?: string;
+  contentText?: string;
+  mentionUserIds?: string[];
+  followerUserIds?: string[];
+  draftId?: string;
+}
+
+export interface ProjectManagementTaskFollower {
+  id: string;
+  taskId: string;
+  userId: string;
+  versionNo: number;
+  createdTime: string;
+}
+
+export interface ProjectManagementTaskFollowerUpsertRequest {
+  userId: string;
+  versionNo?: number;
+}
+
+export interface ProjectManagementTaskDraft {
+  id: string;
+  projectId: string;
+  payloadJson: string;
+  expiresAt: string;
+  versionNo: number;
+}
+
+export interface ProjectManagementTaskDraftAttachment {
+  id: string;
+  draftId: string;
+  fileName: string;
+  contentType: string;
+  fileSize: number;
+  versionNo: number;
+  createdTime: string;
 }
 
 export interface ProjectManagementTaskConflictLocalValues extends ProjectManagementTaskUpsertRequest {
@@ -619,6 +690,16 @@ export interface ProjectManagementTaskUpsertRequest {
   overrideWip?: boolean;
   overrideWipReason?: string;
   summary?: string;
+  workItemType?: string;
+  contentJson?: string;
+  contentText?: string;
+  riskLevel?: string;
+  requirementType?: string;
+  requirementSource?: string;
+  storyPoints?: number;
+  mentionUserIds?: string[];
+  followerUserIds?: string[];
+  draftId?: string;
 }
 
 export interface ProjectManagementTaskBatchUpdateRequest {

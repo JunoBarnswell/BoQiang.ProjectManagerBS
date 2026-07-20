@@ -21,6 +21,10 @@ export interface TaskWorkspaceState {
   sortBy: TaskWorkspaceSortBy;
   sortDirection: TaskWorkspaceSortDirection;
   status?: string;
+  workItemType?: string;
+  riskLevel?: string;
+  requirementType?: string;
+  requirementSource?: string;
   visibleColumns: string[];
   viewKey: ProjectManagementTaskView;
 }
@@ -28,7 +32,7 @@ export interface TaskWorkspaceState {
 const views: readonly ProjectManagementTaskView[] = ['tree', 'list', 'card', 'board', 'gantt', 'calendar'];
 const groupByValues: readonly TaskWorkspaceGroupBy[] = ['status', 'priority', 'assignee', 'milestone', 'parent', 'label'];
 const sortByValues: readonly TaskWorkspaceSortBy[] = ['tree', 'dueDate', 'priority', 'status', 'updated'];
-export const taskWorkspaceVisibleColumns = ['taskCode', 'title', 'status', 'priority', 'progressPercent', 'dueDate', 'blockedByCount'] as const;
+export const taskWorkspaceVisibleColumns = ['taskCode', 'title', 'workItemType', 'status', 'priority', 'riskLevel', 'storyPoints', 'progressPercent', 'dueDate', 'childCount', 'blockedByCount', 'hasAttachments'] as const;
 const visibleColumnValues = new Set<string>(taskWorkspaceVisibleColumns);
 
 export function createTaskWorkspaceState(viewKey: ProjectManagementTaskView): TaskWorkspaceState {
@@ -70,6 +74,10 @@ export function normalizeTaskWorkspaceState(
     sortBy,
     sortDirection,
     status: normalizeText(input.status),
+    workItemType: normalizeText(input.workItemType),
+    riskLevel: normalizeText(input.riskLevel),
+    requirementType: normalizeText(input.requirementType),
+    requirementSource: normalizeText(input.requirementSource),
     ganttZoom: input.ganttZoom === 28 || input.ganttZoom === 84 ? input.ganttZoom : 56,
     labelIds: normalizeStringArray(input.labelIds, 50, 64),
     labelMatchMode: input.labelMatchMode === 'All' ? 'All' : 'Any',
@@ -93,6 +101,10 @@ export function taskWorkspaceStateToQuery(projectId: string, state: TaskWorkspac
     sortBy: state.sortBy,
     sortDirection: state.sortDirection,
     status: state.status,
+    workItemType: state.workItemType,
+    riskLevel: state.riskLevel,
+    requirementType: state.requirementType,
+    requirementSource: state.requirementSource,
     viewKey: state.viewKey,
   };
 }
@@ -111,6 +123,10 @@ export function taskWorkspaceStateToSavedView(state: TaskWorkspaceState) {
     sortBy: state.sortBy,
     sortDirection: state.sortDirection,
     status: state.status,
+    workItemType: state.workItemType,
+    riskLevel: state.riskLevel,
+    requirementType: state.requirementType,
+    requirementSource: state.requirementSource,
     version: 2,
     visibleColumns: state.visibleColumns,
     viewKey: state.viewKey,

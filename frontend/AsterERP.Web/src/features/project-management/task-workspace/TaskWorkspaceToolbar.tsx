@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-import type { ProjectManagementSavedView, ProjectManagementTaskView } from '../../../api/project-management/projectManagement.types';
+import type { ProjectManagementMemberCandidate, ProjectManagementMilestone, ProjectManagementSavedView, ProjectManagementTaskView } from '../../../api/project-management/projectManagement.types';
 import { PermissionButton } from '../../../shared/auth/PermissionButton';
 import { ProjectManagementReversibleCommandControls } from '../components/ProjectManagementReversibleCommandControls';
 import { taskWorkspaceVisibleColumns, type TaskWorkspaceState } from '../state/taskWorkspaceState';
@@ -19,6 +19,8 @@ interface TaskWorkspaceToolbarProps {
   selectedCount: number;
   state: TaskWorkspaceState;
   total: number;
+  memberCandidates?: ProjectManagementMemberCandidate[];
+  milestones?: ProjectManagementMilestone[];
 }
 
 const viewRoutes: Array<{ key: ProjectManagementTaskView; label: string }> = [
@@ -44,6 +46,8 @@ export function TaskWorkspaceToolbar({
   selectedCount,
   state,
   total,
+  memberCandidates = [],
+  milestones = [],
 }: TaskWorkspaceToolbarProps) {
   const [keywordDraft, setKeywordDraft] = useState(state.keyword);
   const [viewName, setViewName] = useState('');
@@ -94,6 +98,24 @@ export function TaskWorkspaceToolbar({
         >
           <option value="">全部状态</option>
           {['Todo', 'InProgress', 'Blocked', 'Done', 'Cancelled'].map((status) => <option key={status} value={status}>{status}</option>)}
+        </select>
+        <select aria-label="工作项类型筛选" onChange={(event) => onStateChange({ pageIndex: 1, workItemType: event.target.value || undefined })} value={state.workItemType ?? ''}>
+          <option value="">全部类型</option>
+          <option value="Epic">史诗</option><option value="Story">用户故事</option><option value="Requirement">需求</option><option value="Task">任务</option><option value="Bug">缺陷</option>
+        </select>
+        <select aria-label="风险等级筛选" onChange={(event) => onStateChange({ pageIndex: 1, riskLevel: event.target.value || undefined })} value={state.riskLevel ?? ''}>
+          <option value="">全部风险</option><option value="None">无风险</option><option value="Low">低</option><option value="Medium">中</option><option value="High">高</option><option value="Closed">已关闭</option>
+        </select>
+        <select aria-label="需求类型筛选" onChange={(event) => onStateChange({ pageIndex: 1, requirementType: event.target.value || undefined })} value={state.requirementType ?? ''}>
+          <option value="">全部需求类型</option><option value="Functional">功能</option><option value="NonFunctional">非功能</option><option value="Technical">技术</option><option value="Business">业务</option>
+        </select>
+        <select aria-label="负责人筛选" onChange={(event) => onStateChange({ pageIndex: 1, assigneeUserId: event.target.value || undefined })} value={state.assigneeUserId ?? ''}>
+          <option value="">全部负责人</option>
+          {memberCandidates.filter(item => item.isSelectable).map(item => <option key={item.userId} value={item.userId}>{item.displayName || item.userName}</option>)}
+        </select>
+        <select aria-label="里程碑筛选" onChange={(event) => onStateChange({ pageIndex: 1, milestoneId: event.target.value || undefined })} value={state.milestoneId ?? ''}>
+          <option value="">全部里程碑</option>
+          {milestones.map(item => <option key={item.id} value={item.id}>{item.milestoneName}</option>)}
         </select>
         <select
           aria-label="任务分组"
@@ -155,7 +177,11 @@ export function TaskWorkspaceToolbar({
           {savingView ? '保存中…' : '保存视图'}
         </PermissionButton>
       </div>
-      {(state.viewKey === 'tree' || state.viewKey === 'list') ? <fieldset className="flex flex-wrap items-center gap-2 text-sm"><legend className="px-1">保存列显示</legend>{taskWorkspaceVisibleColumns.map((column) => <label className="flex items-center gap-1" key={column}><input checked={state.visibleColumns.includes(column)} onChange={(event) => onStateChange({ visibleColumns: event.target.checked ? [...state.visibleColumns, column] : state.visibleColumns.filter((item) => item !== column) })} type="checkbox" />{column}</label>)}</fieldset> : null}
+      {(state.viewKey === 'tree' || state.viewKey === 'list') ? <fieldset className="flex flex-wrap items-center gap-2 text-sm"><legend className="px-1">保存列显示</legend>{taskWorkspaceVisibleColumns.map((column) => <label className="flex items-center gap-1" key={column}><input checked={state.visibleColumns.includes(column)} onChange={(event) => onStateChange({ visibleColumns: event.target.checked ? [...state.visibleColumns, column] : state.visibleColumns.filter((item) => item !== column) })} type="checkbox" />{columnLabel(column)}</label>)}</fieldset> : null}
     </div>
   );
+}
+
+function columnLabel(column: string): string {
+  return ({ taskCode: '编码', title: '标题', workItemType: '类型', status: '状态', priority: '优先级', riskLevel: '风险', storyPoints: '点数', progressPercent: '进度', dueDate: '截止日期', childCount: '子项', blockedByCount: '阻塞', hasAttachments: '附件' } as Record<string, string>)[column] ?? column;
 }

@@ -7,24 +7,24 @@ using Microsoft.AspNetCore.Mvc;
 namespace AsterERP.Api.Controllers;
 
 [ApiController]
-[Route("api/project-management/tasks")]
+[Route("api/project-management")]
 [Permission(PermissionCodes.ProjectManagementTaskView)]
 public sealed class ProjectManagementTasksController(IProjectManagementTaskService service) : BaseApiController
 {
-    [HttpGet]
-    public async Task<IActionResult> QueryAsync([FromQuery] ProjectManagementTaskQuery query, CancellationToken cancellationToken)
-        => ApiOk(await service.QueryAsync(query, cancellationToken));
+    [HttpGet("projects/{projectId}/work-items")]
+    public async Task<IActionResult> QueryAsync(string projectId, [FromQuery] ProjectManagementTaskQuery query, CancellationToken cancellationToken)
+        => ApiOk(await service.QueryAsync(query with { ProjectId = projectId }, cancellationToken));
 
-    [HttpGet("{id}")]
+    [HttpGet("work-items/{id}")]
     public async Task<IActionResult> GetAsync(string id, CancellationToken cancellationToken)
         => ApiOk(await service.GetAsync(id, cancellationToken));
 
-    [HttpPost("{projectId}")]
+    [HttpPost("projects/{projectId}/work-items")]
     [Permission(PermissionCodes.ProjectManagementTaskAdd)]
     public async Task<IActionResult> CreateAsync(string projectId, [FromBody] ProjectManagementTaskUpsertRequest request, CancellationToken cancellationToken)
         => ApiOk(await service.CreateAsync(projectId, request, cancellationToken));
 
-    [HttpPut("{id}")]
+    [HttpPut("work-items/{id}")]
     [Permission(PermissionCodes.ProjectManagementTaskEdit)]
     public async Task<IActionResult> UpdateAsync(string id, [FromBody] ProjectManagementTaskUpsertRequest request, CancellationToken cancellationToken)
     {
@@ -38,7 +38,7 @@ public sealed class ProjectManagementTasksController(IProjectManagementTaskServi
         }
     }
 
-    [HttpPost("{id}/status")]
+    [HttpPost("work-items/{id}/status")]
     [Permission(PermissionCodes.ProjectManagementTaskEdit)]
     public async Task<IActionResult> ChangeStatusAsync(string id, [FromBody] ProjectManagementTaskStatusChangeRequest request, CancellationToken cancellationToken)
     {
@@ -52,17 +52,17 @@ public sealed class ProjectManagementTasksController(IProjectManagementTaskServi
         }
     }
 
-    [HttpPost("{id}/force-start")]
+    [HttpPost("work-items/{id}/force-start")]
     [Permission(PermissionCodes.ProjectManagementTaskManageDependency)]
     public async Task<IActionResult> ForceStartAsync(string id, [FromBody] ProjectManagementTaskDependencyForceStartRequest request, CancellationToken cancellationToken)
         => ApiOk(await service.ForceStartAsync(id, request, cancellationToken));
 
-    [HttpPost("{id}/move")]
+    [HttpPost("work-items/{id}/move")]
     [Permission(PermissionCodes.ProjectManagementTaskMove)]
     public async Task<IActionResult> MoveAsync(string id, [FromBody] ProjectManagementTaskMoveRequest request, CancellationToken cancellationToken)
         => ApiOk(await service.MoveAsync(id, request, cancellationToken));
 
-    [HttpDelete("{id}")]
+    [HttpDelete("work-items/{id}")]
     [Permission(PermissionCodes.ProjectManagementTaskDelete)]
     public async Task<IActionResult> DeleteAsync(string id, [FromQuery] long versionNo, CancellationToken cancellationToken)
     {
@@ -70,7 +70,7 @@ public sealed class ProjectManagementTasksController(IProjectManagementTaskServi
         return ApiOk(new { id });
     }
 
-    [HttpPost("{id}/delete")]
+    [HttpPost("work-items/{id}/delete")]
     [Permission(PermissionCodes.ProjectManagementTaskDelete)]
     public async Task<IActionResult> DeleteWithPolicyAsync(string id, [FromBody] ProjectManagementTaskDeleteRequest request, CancellationToken cancellationToken)
     {
@@ -78,7 +78,7 @@ public sealed class ProjectManagementTasksController(IProjectManagementTaskServi
         return ApiOk(new { id, request.Mode });
     }
 
-    [HttpPost("{id}/restore")]
+    [HttpPost("work-items/{id}/restore")]
     [Permission(PermissionCodes.ProjectManagementTaskRestore)]
     public async Task<IActionResult> RestoreAsync(string id, [FromQuery] long versionNo, CancellationToken cancellationToken)
         => ApiOk(await service.RestoreAsync(id, versionNo, cancellationToken));

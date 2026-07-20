@@ -97,6 +97,8 @@ public sealed class AsterErpProjectManagementModule : AbpModule
         context.Services.AddScoped<IProjectManagementTaskTemplateDependencyCommandService>(provider => (ProjectManagementTaskDependencyService)provider.GetRequiredService<IProjectManagementTaskDependencyService>());
         context.Services.AddScoped<IProjectManagementLabelService, ProjectManagementLabelService>();
         context.Services.AddScoped<IProjectManagementTaskParticipantService, ProjectManagementTaskParticipantService>();
+        context.Services.AddScoped<IProjectManagementTaskFollowerService, ProjectManagementTaskFollowerService>();
+        context.Services.AddScoped<IProjectManagementTaskDraftService, ProjectManagementTaskDraftService>();
         context.Services.AddScoped<IProjectManagementTaskTimeLogService, ProjectManagementTaskTimeLogService>();
         context.Services.AddScoped<IProjectManagementTaskTemplateService, ProjectManagementTaskTemplateService>();
         context.Services.AddScoped<IProjectManagementTaskTemplateInstantiationService, ProjectManagementTaskTemplateInstantiationService>();
@@ -118,6 +120,9 @@ public sealed class AsterErpProjectManagementModule : AbpModule
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementTaskEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementTaskDependencyEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementTaskParticipantEntity));
+        registry.RegisterProjectManagementFilter(typeof(ProjectManagementTaskFollowerEntity));
+        registry.RegisterProjectManagementFilter(typeof(ProjectManagementTaskDraftEntity));
+        registry.RegisterProjectManagementFilter(typeof(ProjectManagementTaskDraftAttachmentEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementLabelEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementTaskLabelEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementTaskTimeLogEntity));

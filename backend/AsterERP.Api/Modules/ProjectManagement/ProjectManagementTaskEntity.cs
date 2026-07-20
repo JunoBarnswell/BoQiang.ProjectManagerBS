@@ -16,9 +16,17 @@ public sealed class ProjectManagementTaskEntity : EntityBase
     public string Title { get; set; } = string.Empty;
     [SugarColumn(IsNullable = true)] public string? Summary { get; set; }
     [SugarColumn(IsNullable = true)] public string? Description { get; set; }
+    public string WorkItemType { get; set; } = "Task";
+    [SugarColumn(IsNullable = true)] public string? ContentJson { get; set; }
+    [SugarColumn(IsNullable = true)] public string? ContentText { get; set; }
+    [SugarColumn(IsNullable = true)] public string? MentionUserIdsJson { get; set; }
     public string Status { get; set; } = "Todo";
     [SugarColumn(IsNullable = true)] public string? BlockedReason { get; set; }
     public string Priority { get; set; } = "Medium";
+    public string RiskLevel { get; set; } = "None";
+    [SugarColumn(IsNullable = true)] public string? RequirementType { get; set; }
+    [SugarColumn(IsNullable = true)] public string? RequirementSource { get; set; }
+    [SugarColumn(IsNullable = true)] public int? StoryPoints { get; set; }
     [SugarColumn(IsNullable = true)] public string? AssigneeUserId { get; set; }
     [SugarColumn(IsNullable = true)] public string? AssigneeEmploymentId { get; set; }
     [SugarColumn(IsNullable = true)] public DateTime? StartDate { get; set; }

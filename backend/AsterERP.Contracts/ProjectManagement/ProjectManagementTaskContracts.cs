@@ -16,7 +16,14 @@ public sealed record ProjectManagementTaskQuery(
     DateTime? DueFrom = null,
     DateTime? DueTo = null,
     bool IncludeCompleted = true,
-    ProjectManagementTaskLabelFilter? LabelFilter = null);
+    ProjectManagementTaskLabelFilter? LabelFilter = null,
+    string? WorkItemType = null,
+    string? RiskLevel = null,
+    string? RequirementType = null,
+    string? RequirementSource = null,
+    string? MentionedUserId = null,
+    bool? HasAttachment = null,
+    bool? HasChildren = null);
 
 public sealed record ProjectManagementTaskUpsertRequest(
     string TaskCode,
@@ -42,7 +49,17 @@ public sealed record ProjectManagementTaskUpsertRequest(
     bool ForceComplete = false,
     string? ForceCompleteReason = null,
     string? Markdown = null,
-    string? Summary = null);
+    string? Summary = null,
+    string WorkItemType = "Task",
+    string? ContentJson = null,
+    string? ContentText = null,
+    string RiskLevel = "None",
+    string? RequirementType = null,
+    string? RequirementSource = null,
+    int? StoryPoints = null,
+    IReadOnlyList<string>? MentionUserIds = null,
+    IReadOnlyList<string>? FollowerUserIds = null,
+    string? DraftId = null);
 
 /// <summary>
 /// 移动任务树。<paramref name="BeforeTaskId"/> 是稳定排序的首选定位方式；
@@ -99,7 +116,15 @@ public sealed record ProjectManagementTaskListItemResponse(
     IReadOnlyList<ProjectManagementTaskLabelResponse>? Labels = null,
     IReadOnlyList<string>? ParticipantUserIds = null,
     string? AssigneeDisplayName = null,
-    IReadOnlyList<string>? ParticipantDisplayNames = null);
+    IReadOnlyList<string>? ParticipantDisplayNames = null,
+    string WorkItemType = "Task",
+    string RiskLevel = "None",
+    string? RequirementType = null,
+    string? RequirementSource = null,
+    int? StoryPoints = null,
+    int ChildCount = 0,
+    int CompletedChildCount = 0,
+    bool HasAttachments = false);
 
 /// <summary>
 /// 单任务详情，用于编辑和任务侧栏；列表加载不返回这些扩展字段。
@@ -134,7 +159,19 @@ public sealed record ProjectManagementTaskDetailResponse(
     DateTime? ActualStartAt = null,
     DateTime? ActualEndAt = null,
     string? Summary = null,
-    string? Markdown = null);
+    string? Markdown = null,
+    string WorkItemType = "Task",
+    string? ContentJson = null,
+    string? ContentText = null,
+    string RiskLevel = "None",
+    string? RequirementType = null,
+    string? RequirementSource = null,
+    int? StoryPoints = null,
+    IReadOnlyList<string>? MentionUserIds = null,
+    IReadOnlyList<string>? FollowerUserIds = null,
+    int ChildCount = 0,
+    int CompletedChildCount = 0,
+    bool HasAttachments = false);
 
 /// <summary>
 /// 任务编辑发生乐观并发冲突时，保留客户端提交的字段，供详情抽屉逐字段比较。

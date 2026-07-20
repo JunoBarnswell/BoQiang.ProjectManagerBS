@@ -20,7 +20,10 @@ export interface ProjectManagementViewSyncState {
 export interface ProjectManagementViewSyncInvalidation {
   aggregateId: string;
   aggregateType: 'Project' | 'ProjectMember' | 'Task' | 'TaskAttachment' | 'TaskComment' | 'TaskReminder';
+  changedFields?: string[];
   eventType: string;
+  eventId?: string;
+  patch?: Record<string, unknown>;
   projectId: string;
   version: number;
 }
@@ -106,6 +109,8 @@ export function isProjectManagementViewSyncInvalidation(value: unknown): value i
     && typeof event.projectId === 'string'
     && typeof event.version === 'number'
     && Number.isFinite(event.version)
+    && (event.changedFields === undefined || (Array.isArray(event.changedFields) && event.changedFields.every(item => typeof item === 'string')))
+    && (event.patch === undefined || (typeof event.patch === 'object' && event.patch !== null && !Array.isArray(event.patch)))
     && ['Project', 'ProjectMember', 'Task', 'TaskAttachment', 'TaskComment', 'TaskReminder'].includes(event.aggregateType);
 }
 
