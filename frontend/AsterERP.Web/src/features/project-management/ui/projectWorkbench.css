@@ -1283,11 +1283,41 @@
 
 .pm-comment {
   display: grid;
-  gap: 5px;
-  padding: 10px 12px;
+  gap: 8px;
+  padding: 12px 14px;
   border: 1px solid var(--pm-border-subtle);
   border-radius: var(--app-radius-md);
   background: var(--pm-surface);
+}
+
+.pm-comment__header {
+  min-width: 0;
+}
+
+.pm-comment__meta {
+  min-width: 0;
+}
+
+.pm-comment__avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  color: #fff;
+  font-size: var(--app-text-xs);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.pm-comment__author {
+  line-height: 1.3;
+}
+
+.pm-comment__time {
+  line-height: 1.3;
 }
 
 .pm-comment__body {
@@ -1304,6 +1334,16 @@
   padding: 1px 3px;
 }
 
+.pm-comment__attachments {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: 8px;
+}
+
+.pm-comment-empty {
+  padding: 8px 2px 2px;
+}
+
 .pm-collaboration {
   display: grid;
   gap: 10px;
@@ -1312,34 +1352,8 @@
   border-top: 1px solid var(--pm-border-subtle);
 }
 
-.pm-collaboration__header {
-  gap: 12px;
-}
-
-.pm-collaboration__filters {
-  display: inline-flex;
-  gap: 2px;
-  padding: 3px;
-  border: 1px solid var(--pm-border-subtle);
-  border-radius: var(--app-radius-md);
-  background: var(--pm-surface-subtle);
-}
-
-.pm-collaboration__filters button,
-.pm-editor-property-group__toggle {
-  border: 0;
-  border-radius: var(--app-radius-sm);
-  padding: 5px 8px;
-  background: transparent;
-  color: var(--pm-muted);
-  font-size: var(--app-text-xs);
-  cursor: pointer;
-}
-
-.pm-collaboration__filters button.is-active {
-  background: var(--pm-surface);
-  color: var(--pm-accent);
-  box-shadow: var(--app-shadow-xs);
+.pm-collaboration__title {
+  margin: 0;
 }
 
 .pm-comment-composer {
@@ -1350,12 +1364,90 @@
   background: var(--pm-surface-subtle);
 }
 
-.pm-attachment-card {
+.pm-comment-composer__pending-files {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
   gap: 8px;
-  padding: 8px 10px;
+}
+
+.pm-attachment-chip {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  gap: 0 10px;
+  align-items: center;
+  min-width: 0;
+  padding: 10px 12px;
   border: 1px solid var(--pm-border-subtle);
-  border-radius: var(--app-radius-sm);
+  border-radius: var(--app-radius-md);
   background: var(--pm-surface);
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.pm-attachment-chip:hover {
+  border-color: color-mix(in srgb, var(--pm-accent) 35%, var(--pm-border-subtle));
+  box-shadow: var(--app-shadow-xs);
+  transform: translateY(-1px);
+}
+
+.pm-attachment-chip--pending {
+  background: color-mix(in srgb, var(--pm-surface-subtle) 70%, var(--pm-surface));
+}
+
+.pm-attachment-chip__icon {
+  grid-row: 1 / span 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.pm-attachment-chip__icon--image { background: linear-gradient(135deg, #6366f1, #8b5cf6); }
+.pm-attachment-chip__icon--pdf { background: linear-gradient(135deg, #ef4444, #f97316); }
+.pm-attachment-chip__icon--doc { background: linear-gradient(135deg, #2563eb, #0ea5e9); }
+.pm-attachment-chip__icon--sheet { background: linear-gradient(135deg, #059669, #10b981); }
+.pm-attachment-chip__icon--archive { background: linear-gradient(135deg, #64748b, #475569); }
+.pm-attachment-chip__icon--other { background: linear-gradient(135deg, #6b7280, #374151); }
+
+.pm-attachment-chip__meta {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pm-attachment-chip__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--pm-text);
+  font-size: var(--app-text-sm);
+  font-weight: 600;
+}
+
+.pm-attachment-chip__size {
+  color: var(--pm-muted);
+  font-size: var(--app-text-xs);
+}
+
+.pm-attachment-chip__actions {
+  grid-column: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+
+.pm-attachment-chip:hover .pm-attachment-chip__actions,
+.pm-attachment-chip--pending .pm-attachment-chip__actions {
+  opacity: 1;
 }
 
 .pm-editor-property-group--collapsible {
@@ -1367,9 +1459,14 @@
   align-items: center;
   justify-content: space-between;
   width: 100%;
+  border: 0;
+  border-radius: var(--app-radius-sm);
   padding: 0;
+  background: transparent;
   color: var(--pm-text);
+  font-size: var(--app-text-xs);
   font-weight: 650;
+  cursor: pointer;
 }
 
 .pm-task-conflict {

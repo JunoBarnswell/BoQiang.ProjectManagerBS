@@ -795,7 +795,7 @@ export interface ProjectManagementTaskComment {
   createdTime: string;
   editedTime?: string;
   authorDisplayName?: string;
-  attachment?: ProjectManagementTaskAttachment;
+  attachments?: ProjectManagementTaskAttachment[];
 }
 
 export interface ProjectManagementTaskCommentMention {
@@ -819,7 +819,7 @@ export interface ProjectManagementTaskCommentUpsertRequest {
   parentCommentId?: string;
   mentionUserIds?: string[];
   versionNo?: number;
-  attachmentId?: string;
+  attachmentIds?: string[];
 }
 
 export interface ProjectManagementTaskReminder {

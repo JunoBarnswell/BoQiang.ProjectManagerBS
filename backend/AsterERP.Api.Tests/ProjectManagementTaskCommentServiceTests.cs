@@ -42,20 +42,22 @@ public sealed class ProjectManagementTaskCommentServiceTests
     }
 
     [Fact]
-    public async Task Comment_can_link_one_existing_task_attachment()
+    public async Task Comment_can_link_existing_task_attachments()
     {
         using var db = new SqlSugarClient(new ConnectionConfig { ConnectionString = $"Data Source=file:project-management-comment-attachment-{Guid.NewGuid():N};Mode=Memory;Cache=Shared", DbType = DbType.Sqlite, IsAutoCloseConnection = false });
         await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
         await db.Insertable(new ProjectManagementProjectEntity { Id = "project-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "A", ProjectName = "A", OwnerUserId = "operator" }).ExecuteCommandAsync();
         await db.Insertable(new ProjectManagementTaskEntity { Id = "task-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", TaskCode = "T-1", Title = "Task", CreatedBy = "operator", CreatedTime = DateTime.UtcNow }).ExecuteCommandAsync();
         await db.Insertable(new ProjectManagementTaskAttachmentEntity { Id = "attachment-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", TaskId = "task-a", FileId = "file-a", FileName = "note.pdf", FileSize = 10, UploadedByUserId = "operator", CreatedBy = "operator", CreatedTime = DateTime.UtcNow }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementTaskAttachmentEntity { Id = "attachment-b", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", TaskId = "task-a", FileId = "file-b", FileName = "sheet.xlsx", FileSize = 20, UploadedByUserId = "operator", CreatedBy = "operator", CreatedTime = DateTime.UtcNow }).ExecuteCommandAsync();
 
         var service = new ProjectManagementTaskCommentService(new TestWorkspaceDatabaseAccessor(db), CreateUser());
-        var comment = await service.CreateAsync("task-a", new ProjectManagementTaskCommentUpsertRequest("with attachment", AttachmentId: "attachment-a"));
+        var comment = await service.CreateAsync("task-a", new ProjectManagementTaskCommentUpsertRequest("with attachments", AttachmentIds: ["attachment-a", "attachment-b"]));
 
-        Assert.NotNull(comment.Attachment);
-        Assert.Equal("attachment-a", comment.Attachment!.Id);
+        Assert.Equal(2, comment.Attachments!.Count);
+        Assert.Equal(["attachment-a", "attachment-b"], comment.Attachments.Select(item => item.Id));
         Assert.Equal(comment.Id, (await db.Queryable<ProjectManagementTaskAttachmentEntity>().Where(item => item.Id == "attachment-a").SingleAsync()).CommentId);
+        Assert.Equal(comment.Id, (await db.Queryable<ProjectManagementTaskAttachmentEntity>().Where(item => item.Id == "attachment-b").SingleAsync()).CommentId);
     }
 
     [Fact]

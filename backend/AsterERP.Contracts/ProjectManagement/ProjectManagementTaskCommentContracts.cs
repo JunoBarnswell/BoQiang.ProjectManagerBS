@@ -5,7 +5,7 @@ public sealed record ProjectManagementTaskCommentUpsertRequest(
     string? ParentCommentId = null,
     IReadOnlyList<string>? MentionUserIds = null,
     long VersionNo = 0,
-    string? AttachmentId = null);
+    IReadOnlyList<string>? AttachmentIds = null);
 
 public sealed record ProjectManagementTaskCommentQuery(
     int PageIndex = 1,
@@ -24,7 +24,7 @@ public sealed record ProjectManagementTaskCommentResponse(
     DateTime CreatedTime,
     DateTime? EditedTime,
     string? AuthorDisplayName = null,
-    ProjectManagementTaskAttachmentResponse? Attachment = null);
+    IReadOnlyList<ProjectManagementTaskAttachmentResponse>? Attachments = null);
 
 public sealed record ProjectManagementTaskCommentMentionResponse(
     string UserId,

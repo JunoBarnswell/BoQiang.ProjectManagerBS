@@ -116,7 +116,7 @@ public sealed class ProjectManagementTaskCommentService(
         await EnsureParentAsync(task, request.ParentCommentId, cancellationToken);
         var mentions = NormalizeMentions(request.MentionUserIds);
         var mentionSnapshots = await ResolveMentionSnapshotsAsync(task.ProjectId, mentions, cancellationToken);
-        var attachment = await FindAttachableAttachmentAsync(task, request.AttachmentId, cancellationToken);
+        var attachments = await FindAttachableAttachmentsAsync(task, request.AttachmentIds, cancellationToken);
         var now = DateTime.UtcNow;
         var entity = new ProjectManagementTaskCommentEntity
         {
@@ -129,7 +129,7 @@ public sealed class ProjectManagementTaskCommentService(
         await ProjectManagementMutationTransaction.RunAsync(databaseAccessor.GetCurrentDb(), async () =>
         {
             await databaseAccessor.GetCurrentDb().Insertable(entity).ExecuteCommandAsync(cancellationToken);
-            if (attachment is not null)
+            foreach (var attachment in attachments)
             {
                 attachment.CommentId = entity.Id;
                 attachment.UpdatedBy = User();
@@ -223,19 +223,21 @@ public sealed class ProjectManagementTaskCommentService(
             throw new ValidationException("父评论不存在或不属于当前任务");
     }
 
-    private async Task<ProjectManagementTaskAttachmentEntity?> FindAttachableAttachmentAsync(
+    private async Task<IReadOnlyList<ProjectManagementTaskAttachmentEntity>> FindAttachableAttachmentsAsync(
         ProjectManagementTaskEntity task,
-        string? attachmentId,
+        IReadOnlyList<string>? attachmentIds,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(attachmentId)) return null;
-        var attachment = (await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskAttachmentEntity>()
-            .Where(item => item.Id == attachmentId.Trim() && item.TenantId == Tenant() && item.AppCode == App() && item.TaskId == task.Id && !item.IsDeleted)
-            .Take(1)
-            .ToListAsync(cancellationToken))
-            .FirstOrDefault() ?? throw new ValidationException("评论附件不存在或不属于当前任务");
-        if (!string.IsNullOrWhiteSpace(attachment.CommentId)) throw new ValidationException("该附件已关联其他评论");
-        return attachment;
+        var normalizedIds = NormalizeAttachmentIds(attachmentIds);
+        if (normalizedIds.Count == 0) return [];
+        var attachments = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskAttachmentEntity>()
+            .Where(item => normalizedIds.Contains(item.Id) && item.TenantId == Tenant() && item.AppCode == App() && item.TaskId == task.Id && !item.IsDeleted)
+            .ToListAsync(cancellationToken);
+        if (attachments.Count != normalizedIds.Count)
+            throw new ValidationException("评论附件不存在或不属于当前任务");
+        if (attachments.Any(item => !string.IsNullOrWhiteSpace(item.CommentId)))
+            throw new ValidationException("该附件已关联其他评论");
+        return attachments.OrderBy(item => normalizedIds.IndexOf(item.Id)).ToList();
     }
 
     private async Task<IReadOnlyList<MentionSnapshot>> ResolveMentionSnapshotsAsync(string projectId, IReadOnlyList<string> mentions, CancellationToken cancellationToken)
@@ -309,6 +311,7 @@ public sealed class ProjectManagementTaskCommentService(
         _ => throw new ValidationException("评论排序只支持 timeline 或 desc")
     };
     private static IReadOnlyList<string> NormalizeMentions(IReadOnlyList<string>? values) => (values ?? []).Where(value => !string.IsNullOrWhiteSpace(value)).Select(value => value.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).Take(50).ToList();
+    private static IReadOnlyList<string> NormalizeAttachmentIds(IReadOnlyList<string>? values) => (values ?? []).Where(value => !string.IsNullOrWhiteSpace(value)).Select(value => value.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).Take(10).ToList();
     private static string? Optional(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     private static void EnsureVersion(long current, long requested) { if (requested <= 0 || current != requested) throw new ValidationException("评论已被其他用户修改，请刷新后重试", ErrorCodes.ApplicationDevelopmentPageRevisionConflict); }
     private static IReadOnlyList<ProjectManagementActivityFieldChange> CreateChanges(CommentActivitySnapshot? before, ProjectManagementTaskCommentEntity after) =>
@@ -339,7 +342,7 @@ public sealed class ProjectManagementTaskCommentService(
             .ToList();
         var attachmentsByCommentId = await LoadAttachmentsByCommentIdAsync(comments, cancellationToken);
         if (mentionedUserIds.Count == 0)
-            return comments.Select(comment => Map(comment, [], displays, attachmentsByCommentId.GetValueOrDefault(comment.Id))).ToList();
+            return comments.Select(comment => Map(comment, [], displays, attachmentsByCommentId.GetValueOrDefault(comment.Id, []))).ToList();
 
         var snapshots = comments
             .SelectMany(comment => DeserializeMentionSnapshots(comment.Remark))
@@ -355,10 +358,10 @@ public sealed class ProjectManagementTaskCommentService(
             DeserializeMentionUserIds(comment.MentionUserIdsJson)
                 .Where(userId => snapshots.ContainsKey(userId))
                 .Select(userId => new ProjectManagementTaskCommentMentionResponse(userId, snapshots[userId]))
-                .ToList(), displays, attachmentsByCommentId.GetValueOrDefault(comment.Id))).ToList();
+                .ToList(), displays, attachmentsByCommentId.GetValueOrDefault(comment.Id, []))).ToList();
     }
 
-    private async Task<Dictionary<string, ProjectManagementTaskAttachmentResponse>> LoadAttachmentsByCommentIdAsync(
+    private async Task<Dictionary<string, IReadOnlyList<ProjectManagementTaskAttachmentResponse>>> LoadAttachmentsByCommentIdAsync(
         IReadOnlyList<ProjectManagementTaskCommentEntity> comments,
         CancellationToken cancellationToken)
     {
@@ -366,10 +369,13 @@ public sealed class ProjectManagementTaskCommentService(
         if (commentIds.Count == 0) return [];
         var attachments = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskAttachmentEntity>()
             .Where(item => item.TenantId == Tenant() && item.AppCode == App() && commentIds.Contains(item.CommentId!) && !item.IsDeleted)
+            .OrderBy(item => item.CreatedTime, OrderByType.Asc)
+            .OrderBy(item => item.Id, OrderByType.Asc)
             .ToListAsync(cancellationToken);
         return attachments
             .Where(item => !string.IsNullOrWhiteSpace(item.CommentId))
-            .ToDictionary(item => item.CommentId!, MapAttachment, StringComparer.Ordinal);
+            .GroupBy(item => item.CommentId!, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Select(MapAttachment).ToList(), StringComparer.Ordinal);
     }
 
     private static ProjectManagementTaskAttachmentResponse MapAttachment(ProjectManagementTaskAttachmentEntity item)
@@ -386,8 +392,8 @@ public sealed class ProjectManagementTaskCommentService(
         ProjectManagementTaskCommentEntity entity,
         IReadOnlyList<ProjectManagementTaskCommentMentionResponse> mentions,
         ProjectManagementDisplayProjection? displays = null,
-        ProjectManagementTaskAttachmentResponse? attachment = null)
-        => new(entity.Id, entity.ProjectId, entity.TaskId, entity.ParentCommentId, entity.Markdown, mentions, entity.AuthorUserId, entity.VersionNo, entity.CreatedTime, entity.EditedTime, displays?.User(entity.AuthorUserId), attachment);
+        IReadOnlyList<ProjectManagementTaskAttachmentResponse>? attachments = null)
+        => new(entity.Id, entity.ProjectId, entity.TaskId, entity.ParentCommentId, entity.Markdown, mentions, entity.AuthorUserId, entity.VersionNo, entity.CreatedTime, entity.EditedTime, displays?.User(entity.AuthorUserId), attachments ?? []);
 
     private static IReadOnlyList<string> DeserializeMentionUserIds(string? json)
     {
