@@ -100,6 +100,8 @@ export const sharedUiMessagesZhCN: MessageBag = {
   'filePreview.pptx.loading': '正在解析 PPTX...',
   'filePreview.pptx.previewFailed': 'PPTX 预览失败',
   'filePreview.pptx.parseFailed': 'PPTX 解析失败',
+  'filePreview.enterFullscreen': '全屏阅读',
+  'filePreview.exitFullscreen': '退出全屏',
   'ai.markdown.copyCode': '复制代码',
   'ai.markdown.language.text': '文本',
   'forms.permissionTree.empty': '暂无权限树数据',

@@ -267,9 +267,9 @@ export function ProjectWorkItemEditor({
     }
   };
   const footer = (
-    <Stack alignItems="center" direction="row" justifyContent="space-between">
+    <Stack alignItems="center" className="pm-editor-footer" direction="row" justifyContent="space-between" width="100%">
       <label className="pm-editor-checkbox"><input checked={continueCreating} onChange={(event) => setContinueCreating(event.target.checked)} type="checkbox" /> {t('projectManagement.editor.continueCreating')}</label>
-      <Stack direction="row" spacing={1}>
+      <Stack className="pm-editor-footer-actions" direction="row" spacing={2}>
         <button className="pm-workbench-command" onClick={requestClose} type="button">{t('projectManagement.editor.cancel')}</button>
         <button className="pm-primary-button" disabled={!form.title.trim() || save.isPending || !canEditTask} onClick={() => save.mutate({})} type="button">{t('projectManagement.editor.save')}</button>
       </Stack>
@@ -277,12 +277,14 @@ export function ProjectWorkItemEditor({
   );
 
   return (
-    <ResponsiveModal bodyClassName="pm-work-item-editor-body" className="pm-work-item-editor" footer={footer} maxWidth="96vw" mode="modal" onClose={requestClose} open={open} title={taskId ? t('projectManagement.editor.edit') : t('projectManagement.editor.create')}>
+    <ResponsiveModal bodyClassName="pm-work-item-editor-body" className="pm-work-item-editor" closeOnEscape={!preview.open} footer={footer} maxWidth="96vw" mode="modal" onClose={requestClose} open={open} title={taskId ? t('projectManagement.editor.edit') : t('projectManagement.editor.create')}>
       {conflict ? <ConflictPanel conflict={conflict} onKeepLocal={() => setConflict(undefined)} onOverwrite={() => save.mutate({ overwriteVersionNo: conflict.serverValues.versionNo })} onReload={() => { const next = taskDetailToForm(conflict.serverValues); setForm(next); setBaseline(JSON.stringify(next)); setConflict(undefined); }} t={t} /> : null}
       <Box className="pm-editor-grid">
         <Stack className="pm-editor-main" spacing={1.25}>
-          <input aria-label={t('projectManagement.editor.titleAria')} className="pm-editor-title" maxLength={256} onChange={(event) => update({ title: event.target.value })} placeholder={t('projectManagement.editor.titlePlaceholder')} value={form.title} />
-          <Typography color="text.secondary" variant="caption">{form.title.length}/256</Typography>
+          <div className="pm-editor-title-field">
+            <input aria-label={t('projectManagement.editor.titleAria')} className="pm-editor-title" maxLength={256} onChange={(event) => update({ title: event.target.value })} placeholder={t('projectManagement.editor.titlePlaceholder')} value={form.title} />
+            <span aria-live="polite" className={`pm-editor-counter${form.title.length >= 256 ? ' is-at-limit' : form.title.length >= 230 ? ' is-near-limit' : ''}`}>{form.title.length}/256</span>
+          </div>
           <ProjectManagementMarkdownEditor ariaLabel={t('projectManagement.editor.descriptionAria')} contentJson={form.contentJson} mentionCandidates={candidateItems} onChange={(value) => update({ description: value, markdown: value })} onContentJsonChange={(value) => update({ contentJson: value })} onMentionUserIdsChange={(value) => update({ mentionUserIds: value })} placeholder={t('projectManagement.editor.descriptionPlaceholder')} rows={10} value={form.description ?? ''} />
           {taskId ? <CollaborationPanel
             canManageAttachment={canManageAttachment}
@@ -410,36 +412,6 @@ function CollaborationPanel({
   return (
     <Box className="pm-collaboration">
       <Typography className="pm-collaboration__title" component="h3" fontWeight={700}>{t('projectManagement.editor.comment')}</Typography>
-      {comments.length === 0 ? <Typography className="pm-comment-empty" color="text.secondary" variant="body2">{t('projectManagement.editor.comment.empty')}</Typography> : null}
-      {comments.map((item) => {
-        const authorName = item.authorDisplayName ?? item.authorUserId;
-        const attachments = item.attachments ?? [];
-        return (
-          <Box className="pm-comment" key={item.id}>
-            <Stack alignItems="flex-start" className="pm-comment__header" direction="row" spacing={1}>
-              <CommentAvatar name={authorName} />
-              <Stack className="pm-comment__meta" spacing={0.25}>
-                <Typography className="pm-comment__author" fontWeight={650} variant="body2">{authorName}</Typography>
-                <Typography className="pm-comment__time" color="text.secondary" variant="caption">{dateTime(item.createdTime)}</Typography>
-              </Stack>
-            </Stack>
-            <ProjectManagementMarkdownContent className="pm-comment__body" mentions={item.mentions} value={item.markdown} />
-            {attachments.length > 0 ? (
-              <div className="pm-comment__attachments">
-                {attachments.map((attachment) => (
-                  <AttachmentChip
-                    attachment={attachment}
-                    key={attachment.id}
-                    onDownload={onDownload}
-                    onPreview={onPreview}
-                    t={t}
-                  />
-                ))}
-              </div>
-            ) : null}
-          </Box>
-        );
-      })}
       <Stack className="pm-comment-composer" spacing={0.75}>
         <ProjectManagementMarkdownEditor ariaLabel={t('projectManagement.editor.commentAria')} contentJson={commentContentJson} mentionCandidates={mentionCandidates} onChange={onCommentChange} onContentJsonChange={onCommentContentJsonChange} onMentionUserIdsChange={onCommentMentionsChange} placeholder={t('projectManagement.editor.commentPlaceholder')} rows={3} value={comment} />
         {commentFiles.length > 0 ? (
@@ -455,7 +427,7 @@ function CollaborationPanel({
             ))}
           </div>
         ) : null}
-        <Stack alignItems="center" direction="row" justifyContent="space-between">
+        <Stack alignItems="center" className="pm-comment-composer__actions" direction="row" justifyContent="space-between" width="100%">
           {canManageAttachment ? (
             <label className="pm-workbench-command">
               {commentFiles.length > 0 ? t('projectManagement.editor.attachFile') : t('projectManagement.editor.attachFile')}
@@ -465,6 +437,38 @@ function CollaborationPanel({
           <button className="pm-primary-button" disabled={!comment.trim() || isPublishing} onClick={onPublish} type="button">{t('projectManagement.editor.publishComment')}</button>
         </Stack>
       </Stack>
+      <Box className="pm-comment-feed">
+        {comments.length === 0 ? <Typography className="pm-comment-empty" color="text.secondary" variant="body2">{t('projectManagement.editor.comment.empty')}</Typography> : null}
+        {comments.map((item) => {
+          const authorName = item.authorDisplayName ?? item.authorUserId;
+          const attachments = item.attachments ?? [];
+          return (
+            <Box className="pm-comment" key={item.id}>
+              <Stack alignItems="flex-start" className="pm-comment__header" direction="row" spacing={1}>
+                <CommentAvatar name={authorName} />
+                <Stack className="pm-comment__meta" spacing={0.25}>
+                  <Typography className="pm-comment__author" fontWeight={650} variant="body2">{authorName}</Typography>
+                  <Typography className="pm-comment__time" color="text.secondary" variant="caption">{dateTime(item.createdTime)}</Typography>
+                </Stack>
+              </Stack>
+              <ProjectManagementMarkdownContent className="pm-comment__body" mentions={item.mentions} value={item.markdown} />
+              {attachments.length > 0 ? (
+                <div className="pm-comment__attachments">
+                  {attachments.map((attachment) => (
+                    <AttachmentChip
+                      attachment={attachment}
+                      key={attachment.id}
+                      onDownload={onDownload}
+                      onPreview={onPreview}
+                      t={t}
+                    />
+                  ))}
+                </div>
+              ) : null}
+            </Box>
+          );
+        })}
+      </Box>
     </Box>
   );
 }

@@ -100,6 +100,8 @@ export const sharedUiMessagesEnUS: MessageBag = {
   'filePreview.pptx.loading': 'Parsing PPTX...',
   'filePreview.pptx.previewFailed': 'PPTX preview failed',
   'filePreview.pptx.parseFailed': 'Failed to parse PPTX',
+  'filePreview.enterFullscreen': 'Enter fullscreen',
+  'filePreview.exitFullscreen': 'Exit fullscreen',
   'ai.markdown.copyCode': 'Copy code',
   'ai.markdown.language.text': 'Text',
   'forms.permissionTree.empty': 'No permission tree data',

@@ -1,10 +1,13 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import { formatMessage } from '../../core/i18n/formatMessage';
 import { useI18n } from '../../core/i18n/I18nProvider';
 import { ResponsiveModal } from '../responsive/ResponsiveModal';
 
 import { getFileExtension } from './filePreviewUtils';
+import './filePreview.css';
+
 const GenericFilePreviewSurface = lazy(() => import('./GenericFilePreviewSurface').then((module) => ({ default: module.GenericFilePreviewSurface })));
 const PptxPreviewSurface = lazy(() => import('./PptxPreviewSurface').then((module) => ({ default: module.PptxPreviewSurface })));
 
@@ -28,44 +31,73 @@ export function FilePreviewDialog({
   onClose
 }: FilePreviewDialogProps) {
   const { translate } = useI18n();
+  const [fullscreen, setFullscreen] = useState(false);
   const viewerType = previewFile ? getFileExtension(previewFile.name) || file?.extension || previewFile.type : undefined;
   const usePptxPreviewSurface = viewerType === 'pptx';
+  const title = file?.fileName
+    ? formatMessage(translate('filePreview.titleWithName'), { name: file.fileName })
+    : translate('filePreview.title');
 
-  return (
+  useEffect(() => {
+    if (!open) {
+      setFullscreen(false);
+    }
+  }, [open]);
+
+  const dialog = (
     <ResponsiveModal
+      bodyClassName="file-preview-modal__body"
+      className="file-preview-modal"
       closeOnEscape={closeOnEscape}
-      mode="modal"
+      maxWidth={fullscreen ? undefined : 1200}
+      mode={fullscreen ? 'fullscreen' : 'modal'}
       open={open}
-      title={file?.fileName ? formatMessage(translate('filePreview.titleWithName'), { name: file.fileName }) : translate('filePreview.title')}
+      title={title}
       onClose={onClose}
     >
-      <div className="flex min-h-[60vh] min-h-0 flex-col">
+      <div className="file-preview-modal__toolbar">
+        <button
+          className="pm-workbench-command"
+          type="button"
+          onClick={() => setFullscreen((value) => !value)}
+        >
+          {fullscreen ? translate('filePreview.exitFullscreen') : translate('filePreview.enterFullscreen')}
+        </button>
+      </div>
+      <div className="file-preview-modal__content">
         {loading ? (
-          <div className="flex min-h-[360px] items-center justify-center text-sm text-gray-500">{translate('filePreview.loading')}</div>
+          <PreviewState label={translate('filePreview.loading')} />
         ) : error ? (
-          <div className="flex min-h-[360px] items-center justify-center rounded border border-rose-200 bg-rose-50 px-6 text-sm text-rose-700">
-            {error}
-          </div>
+          <PreviewState className="file-preview-modal__state--error" label={error} />
         ) : previewFile ? (
-          <div className="min-h-[360px] max-h-[min(72vh,760px)] flex-1 overflow-auto rounded border border-gray-200 bg-white">
-            {usePptxPreviewSurface ? (
-              <Suspense fallback={<PreviewLoading label={translate('filePreview.loading')} />}>
-                <PptxPreviewSurface file={previewFile} />
-              </Suspense>
-            ) : (
-              <Suspense fallback={<PreviewLoading label={translate('filePreview.loading')} />}>
-                <GenericFilePreviewSurface className="min-h-[360px] w-full" file={previewFile} loadingLabel={translate('filePreview.loading')} type={viewerType} />
-              </Suspense>
-            )}
-          </div>
+          usePptxPreviewSurface ? (
+            <Suspense fallback={<PreviewState label={translate('filePreview.loading')} />}>
+              <PptxPreviewSurface file={previewFile} />
+            </Suspense>
+          ) : (
+            <Suspense fallback={<PreviewState label={translate('filePreview.loading')} />}>
+              <GenericFilePreviewSurface
+                className="file-preview-modal__viewer"
+                file={previewFile}
+                loadingLabel={translate('filePreview.loading')}
+                type={viewerType}
+              />
+            </Suspense>
+          )
         ) : (
-          <div className="flex min-h-[360px] items-center justify-center text-sm text-gray-500">{translate('filePreview.empty')}</div>
+          <PreviewState className="file-preview-modal__state--muted" label={translate('filePreview.empty')} />
         )}
       </div>
     </ResponsiveModal>
   );
+
+  if (!open || typeof document === 'undefined') {
+    return null;
+  }
+
+  return createPortal(dialog, document.body);
 }
 
-function PreviewLoading({ label }: { label: string }) {
-  return <div className="flex min-h-[360px] items-center justify-center text-sm text-gray-500">{label}</div>;
+function PreviewState({ className, label }: { className?: string; label: string }) {
+  return <div className={`file-preview-modal__state${className ? ` ${className}` : ''}`}>{label}</div>;
 }

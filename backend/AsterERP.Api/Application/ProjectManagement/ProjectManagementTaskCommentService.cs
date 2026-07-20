@@ -237,7 +237,10 @@ public sealed class ProjectManagementTaskCommentService(
             throw new ValidationException("评论附件不存在或不属于当前任务");
         if (attachments.Any(item => !string.IsNullOrWhiteSpace(item.CommentId)))
             throw new ValidationException("该附件已关联其他评论");
-        return attachments.OrderBy(item => normalizedIds.IndexOf(item.Id)).ToList();
+        var order = normalizedIds
+            .Select((id, index) => (id, index))
+            .ToDictionary(item => item.id, item => item.index, StringComparer.Ordinal);
+        return attachments.OrderBy(item => order.GetValueOrDefault(item.Id, int.MaxValue)).ToList();
     }
 
     private async Task<IReadOnlyList<MentionSnapshot>> ResolveMentionSnapshotsAsync(string projectId, IReadOnlyList<string> mentions, CancellationToken cancellationToken)
@@ -375,7 +378,10 @@ public sealed class ProjectManagementTaskCommentService(
         return attachments
             .Where(item => !string.IsNullOrWhiteSpace(item.CommentId))
             .GroupBy(item => item.CommentId!, StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => group.Select(MapAttachment).ToList(), StringComparer.Ordinal);
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<ProjectManagementTaskAttachmentResponse>)group.Select(MapAttachment).ToList(),
+                StringComparer.Ordinal);
     }
 
     private static ProjectManagementTaskAttachmentResponse MapAttachment(ProjectManagementTaskAttachmentEntity item)
