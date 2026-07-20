@@ -39,13 +39,16 @@ const iconAliases: Record<string, string> = {
   Factory: 'factory',
   FileClock: 'file-clock',
   FilePenLine: 'file-text',
+  FileSearch: 'file-search',
   FolderTree: 'tree-structure',
   FormInput: 'textbox',
   GitBranch: 'git-branch',
+  KanbanSquare: 'list',
   LayoutDashboard: 'house',
   ListTree: 'book-bookmark',
   Megaphone: 'megaphone',
   PanelsTopLeft: 'squares-four',
+  Printer: 'print',
   Radar: 'radar',
   ScrollText: 'scroll',
   Send: 'paper-plane-tilt',
@@ -53,6 +56,7 @@ const iconAliases: Record<string, string> = {
   Settings2: 'sliders-horizontal',
   ShieldCheck: 'shield-check',
   SlidersHorizontal: 'sliders-horizontal',
+  Cable: 'cable',
   Timer: 'timer',
   UserCog: 'user-gear',
   UserCheck: 'user-check',
@@ -86,9 +90,25 @@ const iconAliases: Record<string, string> = {
   'ph ph-users-three': 'users'
 };
 
-function getIconClass(icon?: string | null) {
-  if (!icon) return 'folder';
-  return iconAliases[icon] ?? icon;
+const menuCodeIconAliases: Record<string, string> = {
+  'project-management': 'list',
+  'system:abp-setting': 'cable',
+  'system:file': 'file-search',
+  'system:print': 'print',
+};
+
+function getIconClass(icon?: string | null, menuCode?: string | null) {
+  if (icon && iconAliases[icon]) {
+    return iconAliases[icon];
+  }
+
+  const code = menuCode?.trim();
+  if (code && menuCodeIconAliases[code]) {
+    return menuCodeIconAliases[code];
+  }
+
+  if (icon) return icon;
+  return 'folder';
 }
 
 function resolveMenuTargetPath(
@@ -187,7 +207,7 @@ function renderMenuItems(
   return nodes.map((node) => {
     const targetPath = resolveMenuTargetPath(node, workspaceAppCode, workspaceLevel, workspaceTenantId);
     const isActive = targetPath ? activePath === targetPath : false;
-    const iconClass = getIconClass(node.icon);
+    const iconClass = getIconClass(node.icon, node.menuCode);
     const rawLabel = resolveMenuLabel(node, translate);
     const label = targetPath?.startsWith('/flowise/')
       ? formatWorkflowMenuTitle(targetPath, rawLabel)

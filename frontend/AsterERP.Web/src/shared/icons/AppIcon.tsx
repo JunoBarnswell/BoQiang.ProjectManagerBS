@@ -12,6 +12,7 @@ import {
   Braces,
   BriefcaseBusiness,
   Building2,
+  Cable,
   CalendarDays,
   Check,
   CheckCircle2,
@@ -57,6 +58,7 @@ import {
   Pencil,
   PlayCircle,
   Plus,
+  Printer,
   RefreshCw,
   Rocket,
   Bot,
@@ -96,6 +98,7 @@ export type AppIconName =
   | 'braces'
   | 'briefcase'
   | 'building'
+  | 'cable'
   | 'calendar'
   | 'check'
   | 'checkCircle'
@@ -168,6 +171,7 @@ export type AppIconName =
   | 'gear'
   | 'list'
   | 'plus'
+  | 'print'
   | 'search'
   | 'trash'
   | 'refresh';
@@ -186,6 +190,7 @@ const iconRegistry: Record<AppIconName, LucideIcon> = {
   braces: Braces,
   briefcase: BriefcaseBusiness,
   building: Building2,
+  cable: Cable,
   calendar: CalendarDays,
   check: Check,
   checkCircle: CheckCircle2,
@@ -258,6 +263,7 @@ const iconRegistry: Record<AppIconName, LucideIcon> = {
   gear: Cog,
   list: SquareKanban,
   plus: Plus,
+  print: Printer,
   refresh: RefreshCw,
   search: Search,
   trash: Trash2
@@ -296,6 +302,7 @@ const aliasMap: AppIconAliasMap = {
   'clipboard-text': 'clipboard',
   code: 'code',
   copy: 'copy',
+  cable: 'cable',
   'clock-countdown': 'clock',
   'clock-counter-clockwise': 'clock',
   cube: 'cube',
@@ -320,6 +327,7 @@ const aliasMap: AppIconAliasMap = {
   'hard-drives': 'hardDrive',
   'identification-card': 'user',
   info: 'default',
+  'kanban-square': 'list',
   key: 'key',
   lightning: 'activity',
   megaphone: 'megaphone',
@@ -340,6 +348,7 @@ const aliasMap: AppIconAliasMap = {
   'pencil-simple': 'edit',
   play: 'play',
   'play-circle': 'play',
+  printer: 'print',
   'plugs-connected': 'wrench',
   'push-pin': 'flag',
   'push-pin-slash': 'flag',
