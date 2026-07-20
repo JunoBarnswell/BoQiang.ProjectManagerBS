@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useCallback, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
-import { exportProjectManagementProjectMarkdown, getProjectManagementActivities, getProjectManagementOverview } from '../../../api/project-management/projectManagement.api';
+import { getProjectManagementActivities, getProjectManagementOverview } from '../../../api/project-management/projectManagement.api';
 import { projectManagementQueryKeys } from '../../../core/query/projectManagementQueryKeys';
 import { useMessage } from '../../../shared/feedback/useMessage';
 import { ProjectManagementCountdown } from '../components/ProjectManagementCountdown';
@@ -13,6 +13,7 @@ import { useProjectManagementProjectRealtime } from '../realtime/useProjectManag
 import { toProjectManagementPlatformRoute } from '../state/projectManagementPlatformRoutes';
 import { useProjectManagementWorkspaceScope } from '../state/projectManagementWorkspaceScope';
 
+import { ProjectMarkdownExportDialog } from './ProjectMarkdownExportDialog';
 import { ProjectScreenHeader, ProjectWorkbenchFrame } from './ProjectWorkbenchFrame';
 
 const metricTones = {
@@ -31,7 +32,7 @@ export function ProjectOverviewScreen() {
   const { projectId = '' } = useParams<{ projectId: string }>();
   const [refreshing, setRefreshing] = useState(false);
   const [activityLimit, setActivityLimit] = useState(8);
-  const [exportingMarkdown, setExportingMarkdown] = useState(false);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const overview = useQuery({ enabled: scope.isAvailable && Boolean(projectId), queryKey: projectManagementQueryKeys.overview(scope, { projectId, pageIndex: 1, pageSize: 1 }), queryFn: ({ signal }) => getProjectManagementOverview({ projectId, pageIndex: 1, pageSize: 1 }, signal) });
   const activities = useQuery({ enabled: scope.isAvailable && Boolean(projectId), queryKey: projectManagementQueryKeys.activities(scope, projectId, { pageIndex: 1, pageSize: activityLimit }), queryFn: ({ signal }) => getProjectManagementActivities(projectId, { pageIndex: 1, pageSize: activityLimit }, signal) });
   const handleAccessRevoked = useCallback(() => {
@@ -57,25 +58,6 @@ export function ProjectOverviewScreen() {
       setRefreshing(false);
     }
   };
-  const exportMarkdown = async () => {
-    if (exportingMarkdown) return;
-    setExportingMarkdown(true);
-    try {
-      const { blob, fileName } = await exportProjectManagementProjectMarkdown(projectId);
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement('a');
-      anchor.href = url;
-      anchor.download = fileName;
-      anchor.click();
-      URL.revokeObjectURL(url);
-      message.success(t('projectManagement.workbench.overview.exportSuccess'));
-    } catch (error) {
-      message.error(error instanceof Error ? error.message : t('projectManagement.workbench.overview.exportFailed'));
-    } finally {
-      setExportingMarkdown(false);
-    }
-  };
-
   if (overview.isLoading) return <Box className="pm-overview-page" sx={{ p: 4 }}>{t('projectManagement.workbench.overview.loading')}</Box>;
   if (!item) return <Box className="pm-overview-page" sx={{ p: 4 }}>{t('projectManagement.workbench.overview.notFound')}</Box>;
   const taskCount = item.taskCount;
@@ -122,7 +104,7 @@ export function ProjectOverviewScreen() {
             <Box className="pm-overview-hero__deadline">
               <ProjectManagementCountdown dueDate={item.project.dueDate} status={item.project.status} variant="hero" />
               <Stack direction="row" spacing={1}>
-                <button className="pm-workbench-command" disabled={exportingMarkdown} onClick={() => void exportMarkdown()} type="button">{t('projectManagement.workbench.overview.exportMarkdown')}</button>
+                <button className="pm-workbench-command" onClick={() => setExportDialogOpen(true)} type="button">{t('projectManagement.workbench.overview.exportMarkdown')}</button>
                 <button className="pm-primary-button" onClick={() => navigate(toProjectManagementPlatformRoute(`projects/${encodeURIComponent(projectId)}/requirements?create=1`))} type="button">{t('projectManagement.workbench.createRequirement')}</button>
               </Stack>
             </Box>
@@ -193,6 +175,7 @@ export function ProjectOverviewScreen() {
           </Panel>
         </Box>
       </Box>
+      <ProjectMarkdownExportDialog onClose={() => setExportDialogOpen(false)} open={exportDialogOpen} projectId={projectId} />
     </ProjectWorkbenchFrame>
   );
 }

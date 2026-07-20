@@ -319,6 +319,10 @@ public sealed class ProjectManagementReportService(
         RequireAppCode();
         projectId = NormalizeOptional(projectId) ?? throw new ValidationException("项目标识不能为空");
         options = NormalizeMarkdownOptions(options);
+        var selectedTaskIds = ParseMarkdownTaskIds(options.TaskIds);
+        if (selectedTaskIds.Count > options.MaxTaskRows)
+            throw new ValidationException($"所选任务数超过导出上限 {options.MaxTaskRows} 条，请缩小范围后重试");
+
         var db = databaseAccessor.GetCurrentDb();
         var project = (await db.Queryable<ProjectManagementProjectEntity>()
                 .Where(item => item.Id == projectId && !item.IsDeleted)
@@ -331,6 +335,8 @@ public sealed class ProjectManagementReportService(
             .Where(item => item.ProjectId == projectId && !item.IsDeleted);
         if (!options.IncludeCompleted)
             taskQuery = taskQuery.Where(item => item.Status != ProjectManagementDomainRules.TaskDone && item.Status != ProjectManagementDomainRules.TaskCancelled);
+        if (selectedTaskIds.Count > 0)
+            taskQuery = taskQuery.Where(item => selectedTaskIds.Contains(item.Id));
         var tasks = await taskQuery
             .OrderBy(item => item.Depth)
             .OrderBy(item => item.SortOrder)
@@ -339,6 +345,8 @@ public sealed class ProjectManagementReportService(
             .ToListAsync(cancellationToken);
         if (tasks.Count > options.MaxTaskRows)
             throw new ValidationException($"项目任务数超过导出上限 {options.MaxTaskRows} 条，请缩小范围后重试");
+        if (selectedTaskIds.Count > 0 && tasks.Count != selectedTaskIds.Count)
+            throw new ValidationException("存在无效或不属于当前项目的任务标识，请刷新后重试");
 
         var milestones = await db.Queryable<ProjectManagementMilestoneEntity>()
             .Where(item => item.ProjectId == projectId && !item.IsDeleted)
@@ -382,44 +390,47 @@ public sealed class ProjectManagementReportService(
             .ToDictionary(group => group.Key, group => group.ToList(), StringComparer.Ordinal);
         var now = DateTime.UtcNow;
         var builder = new StringBuilder();
-        builder.Append("# ").AppendLine(MarkdownLine(project.ProjectName));
-        builder.AppendLine();
-        builder.AppendLine($"- 项目编号：{MarkdownLine(project.ProjectCode)}");
-        builder.AppendLine($"- 负责人：{MarkdownLine(UserName(projection, project.OwnerUserId))}");
-        builder.AppendLine($"- 状态：{MarkdownLine(project.Status)}");
-        builder.AppendLine($"- 优先级：{MarkdownLine(project.Priority)}");
-        builder.AppendLine($"- 开始时间：{MarkdownDate(project.StartDate)}");
-        builder.AppendLine($"- 预期完成时间：{MarkdownDate(project.DueDate)}");
-        builder.AppendLine($"- 倒计时：{CountdownText(project.DueDate, project.Status, now)}");
-        builder.AppendLine($"- 当前进度：{project.ProgressPercent:0.#}%");
-        builder.AppendLine($"- 导出时间：{MarkdownDate(now)}");
-        if (!string.IsNullOrWhiteSpace(project.Description))
+        if (options.IncludeProjectInfo)
         {
+            builder.Append("# ").AppendLine(MarkdownLine(project.ProjectName));
             builder.AppendLine();
-            builder.AppendLine("## 项目说明");
-            builder.AppendLine();
-            builder.AppendLine(project.Description.Trim());
-        }
-
-        var completedCount = tasks.Count(item => item.Status == ProjectManagementDomainRules.TaskDone || item.Status == ProjectManagementDomainRules.TaskCancelled);
-        var inProgressCount = tasks.Count(item => item.Status == "InProgress");
-        var overdueCount = tasks.Count(item => item.DueDate.HasValue && item.DueDate.Value < now && item.Status != ProjectManagementDomainRules.TaskDone && item.Status != ProjectManagementDomainRules.TaskCancelled);
-        builder.AppendLine();
-        builder.AppendLine("## 概览");
-        builder.AppendLine();
-        builder.AppendLine($"- 任务总数：{tasks.Count}");
-        builder.AppendLine($"- 已完成：{completedCount}");
-        builder.AppendLine($"- 进行中：{inProgressCount}");
-        builder.AppendLine($"- 已逾期：{overdueCount}");
-
-        if (milestones.Count > 0)
-        {
-            builder.AppendLine();
-            builder.AppendLine("## 里程碑");
-            builder.AppendLine();
-            foreach (var milestone in milestones)
+            builder.AppendLine($"- 项目编号：{MarkdownLine(project.ProjectCode)}");
+            builder.AppendLine($"- 负责人：{MarkdownLine(UserName(projection, project.OwnerUserId))}");
+            builder.AppendLine($"- 状态：{MarkdownLine(project.Status)}");
+            builder.AppendLine($"- 优先级：{MarkdownLine(project.Priority)}");
+            builder.AppendLine($"- 开始时间：{MarkdownDate(project.StartDate)}");
+            builder.AppendLine($"- 预期完成时间：{MarkdownDate(project.DueDate)}");
+            builder.AppendLine($"- 倒计时：{CountdownText(project.DueDate, project.Status, now)}");
+            builder.AppendLine($"- 当前进度：{project.ProgressPercent:0.#}%");
+            builder.AppendLine($"- 导出时间：{MarkdownDate(now)}");
+            if (!string.IsNullOrWhiteSpace(project.Description))
             {
-                builder.AppendLine($"- {MarkdownLine(milestone.MilestoneName)}：{milestone.ProgressPercent:0.#}% · {MarkdownLine(milestone.Status)} · 截止 {MarkdownDate(milestone.DueDate)}");
+                builder.AppendLine();
+                builder.AppendLine("## 项目说明");
+                builder.AppendLine();
+                builder.AppendLine(project.Description.Trim());
+            }
+
+            var completedCount = tasks.Count(item => item.Status == ProjectManagementDomainRules.TaskDone || item.Status == ProjectManagementDomainRules.TaskCancelled);
+            var inProgressCount = tasks.Count(item => item.Status == "InProgress");
+            var overdueCount = tasks.Count(item => item.DueDate.HasValue && item.DueDate.Value < now && item.Status != ProjectManagementDomainRules.TaskDone && item.Status != ProjectManagementDomainRules.TaskCancelled);
+            builder.AppendLine();
+            builder.AppendLine("## 概览");
+            builder.AppendLine();
+            builder.AppendLine($"- 任务总数：{tasks.Count}");
+            builder.AppendLine($"- 已完成：{completedCount}");
+            builder.AppendLine($"- 进行中：{inProgressCount}");
+            builder.AppendLine($"- 已逾期：{overdueCount}");
+
+            if (milestones.Count > 0)
+            {
+                builder.AppendLine();
+                builder.AppendLine("## 里程碑");
+                builder.AppendLine();
+                foreach (var milestone in milestones)
+                {
+                    builder.AppendLine($"- {MarkdownLine(milestone.MilestoneName)}：{milestone.ProgressPercent:0.#}% · {MarkdownLine(milestone.Status)} · 截止 {MarkdownDate(milestone.DueDate)}");
+                }
             }
         }
 
@@ -877,9 +888,23 @@ public sealed class ProjectManagementReportService(
         {
             MaxTaskRows = Math.Clamp(options.MaxTaskRows, 1, 2000),
             MaxCommentRows = Math.Clamp(options.MaxCommentRows, 1, 5000),
-            MaxActivityRows = Math.Clamp(options.MaxActivityRows, 1, 5000)
+            MaxActivityRows = Math.Clamp(options.MaxActivityRows, 1, 5000),
+            TaskIds = NormalizeMarkdownTaskIds(options.TaskIds)
         };
     }
+
+    private static string? NormalizeMarkdownTaskIds(string? taskIds)
+    {
+        var parsed = ParseMarkdownTaskIds(taskIds);
+        return parsed.Count == 0 ? null : string.Join(',', parsed);
+    }
+
+    private static List<string> ParseMarkdownTaskIds(string? taskIds) =>
+        string.IsNullOrWhiteSpace(taskIds)
+            ? []
+            : taskIds.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
 
     private static void TryDelete(string path)
     {

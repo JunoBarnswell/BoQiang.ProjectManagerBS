@@ -32,12 +32,14 @@ public sealed record ProjectManagementReportFile(
 /// 不包含附件二进制内容或审计敏感字段。
 /// </summary>
 public sealed record ProjectManagementProjectMarkdownOptions(
+    bool IncludeProjectInfo = true,
     bool IncludeCompleted = true,
     bool IncludeComments = true,
     bool IncludeActivities = true,
     int MaxTaskRows = 500,
     int MaxCommentRows = 1000,
-    int MaxActivityRows = 1000);
+    int MaxActivityRows = 1000,
+    string? TaskIds = null);
 
 public sealed record ProjectManagementReportSnapshotOptions(
     bool IncludeCompleted = false,

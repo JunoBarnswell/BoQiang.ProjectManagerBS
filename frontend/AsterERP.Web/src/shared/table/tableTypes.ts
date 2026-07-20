@@ -180,4 +180,5 @@ export interface DataTableProps<TItem> {
   style?: CSSProperties;
   tableQuery?: DataTableQueryState;
   toolbar?: ReactNode;
+  columnFilterFixed?: boolean;
 }

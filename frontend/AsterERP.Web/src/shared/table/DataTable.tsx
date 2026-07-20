@@ -98,7 +98,8 @@ export function DataTable<TItem>({
   sorts,
   style,
   tableQuery,
-  toolbar
+  toolbar,
+  columnFilterFixed = false
 }: DataTableProps<TItem>) {
   const { translate } = useI18n();
   const displayStorageKey = safeDisplayStorageKey(columnSettingsKey);
@@ -703,6 +704,7 @@ export function DataTable<TItem>({
                   column={column}
                   draft={headerFilterDraft}
                   fieldTypeMap={queryFieldTypeMap}
+                  fixedPlacement={columnFilterFixed}
                   onApply={applyHeaderFilter}
                   onClear={clearHeaderFilter}
                   onClose={closeHeaderFilter}

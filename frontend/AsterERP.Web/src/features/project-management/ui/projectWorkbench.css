@@ -845,6 +845,124 @@
   cursor: pointer;
 }
 
+/* ── Markdown export dialog ── */
+.pm-markdown-export-dialog__option,
+.pm-markdown-export-dialog__select-all {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.pm-markdown-export-dialog__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pm-markdown-export-dialog__table {
+  --pm-export-table-body-rows: 10;
+  --pm-export-table-pagination-height: 38px;
+  display: flex;
+  flex-direction: column;
+  min-height: calc(
+    var(--erp-table-row-height) * (var(--pm-export-table-body-rows) + 1) + var(--pm-export-table-pagination-height)
+  );
+  overflow: hidden;
+  border: 1px solid var(--pm-control-border);
+  border-radius: var(--app-radius-md);
+  background: var(--pm-surface);
+}
+
+.pm-markdown-export-dialog__table .data-table-shell {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+}
+
+.pm-markdown-export-dialog__table .data-table-wrapper {
+  flex: 1;
+  min-height: calc(var(--erp-table-row-height) * (var(--pm-export-table-body-rows) + 1));
+  max-height: calc(var(--erp-table-row-height) * (var(--pm-export-table-body-rows) + 1));
+  overflow: auto;
+}
+
+.pm-markdown-export-dialog__table .data-table-wrapper > .overflow-auto {
+  min-height: 100%;
+  overflow: auto;
+}
+
+.pm-markdown-export-dialog__table .data-table__th,
+.pm-markdown-export-dialog__table .data-table-header-cell {
+  overflow: visible;
+}
+
+.pm-markdown-export-dialog__table .data-table-column-filter {
+  z-index: 30;
+  min-width: 248px;
+  padding: 12px;
+  gap: 10px;
+  border: 1px solid #93c5fd;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow:
+    0 18px 40px rgba(15, 23, 42, 0.16),
+    0 0 0 1px rgba(37, 99, 235, 0.08);
+}
+
+.pm-markdown-export-dialog__table .data-table-column-filter__header span {
+  font-size: var(--app-text-sm);
+}
+
+.pm-markdown-export-dialog__table .data-table-column-filter .data-table-field {
+  font-size: var(--app-text-xs);
+}
+
+.pm-markdown-export-dialog__table .data-table-column-filter .data-table-field select,
+.pm-markdown-export-dialog__table .data-table-column-filter .data-table-field input {
+  min-height: 34px;
+  font-size: var(--app-text-sm);
+  background: #f8fafc;
+}
+
+.pm-markdown-export-dialog__table .data-table-header-cell__filter {
+  width: 24px;
+  height: 24px;
+}
+
+.pm-markdown-export-dialog__table .data-table-header-cell__filter--active {
+  background: var(--app-primary-100);
+  border-color: var(--app-primary-400);
+  color: var(--app-primary-700);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
+}
+
+.pm-markdown-export-dialog__table .data-table-column-filter__actions button {
+  min-height: 32px;
+  padding: 0 12px;
+}
+
+.pm-markdown-export-dialog__table .data-table-column-filter__actions button:last-child {
+  font-weight: 600;
+}
+
+.pm-markdown-export-dialog__table .data-table-pagination {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  background: var(--pm-surface);
+  border-top: 1px solid var(--pm-control-border);
+}
+
+.pm-markdown-export-dialog__footer {
+  width: 100%;
+}
+
 /* ── Overview ── */
 .pm-overview-page {
   flex: 1 1 auto;

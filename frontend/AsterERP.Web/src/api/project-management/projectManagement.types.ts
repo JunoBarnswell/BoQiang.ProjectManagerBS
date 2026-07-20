@@ -1109,12 +1109,14 @@ export interface ProjectManagementReportSnapshotStartResponse {
 }
 
 export interface ProjectManagementProjectMarkdownOptions {
+  includeProjectInfo?: boolean;
   includeCompleted?: boolean;
   includeComments?: boolean;
   includeActivities?: boolean;
   maxTaskRows?: number;
   maxCommentRows?: number;
   maxActivityRows?: number;
+  taskIds?: string[];
 }
 
 export type ProjectManagementExcelImportPreviewStatus = 'Completed' | 'CompletedWithErrors';

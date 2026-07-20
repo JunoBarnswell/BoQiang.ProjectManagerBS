@@ -956,8 +956,14 @@ export function exportProjectManagementProjectMarkdown(
   projectId: string,
   options: ProjectManagementProjectMarkdownOptions = {},
 ): Promise<{ blob: Blob; fileName: string }> {
+  const { taskIds, ...baseOptions } = options;
+  const searchParams = new URLSearchParams(buildQueryString(baseOptions).replace(/^\?/, ''));
+  if (taskIds && taskIds.length > 0) {
+    searchParams.set('taskIds', taskIds.join(','));
+  }
+  const query = searchParams.size ? `?${searchParams.toString()}` : '';
   return httpClient.downloadBlob(
-    `/project-management/reports/projects/${encodeURIComponent(projectId)}/summary.md${buildQueryString(options)}`,
+    `/project-management/reports/projects/${encodeURIComponent(projectId)}/summary.md${query}`,
     { timeoutMs: 120_000 },
   );
 }

@@ -90,6 +90,105 @@ public sealed class ProjectManagementReportTests
         await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() => service.ExportCsvAsync(new ProjectManagementReportQuery()));
     }
 
+    [Fact]
+    public async Task Markdown_export_filters_tasks_by_task_ids()
+    {
+        using var db = CreateDatabase("report-markdown-filter");
+        await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
+        await db.Insertable(new ProjectManagementProjectEntity
+        {
+            Id = "project-a",
+            TenantId = "tenant-a",
+            AppCode = "SYSTEM",
+            ProjectCode = "PRJ-001",
+            ProjectName = "Demo Project",
+            OwnerUserId = "operator",
+            Status = "Active",
+            Priority = "Medium",
+        }).ExecuteCommandAsync();
+        await db.Insertable(new[]
+        {
+            new ProjectManagementTaskEntity { Id = "task-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", TaskCode = "T-001", Title = "Alpha Task", Status = "Todo" },
+            new ProjectManagementTaskEntity { Id = "task-b", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", TaskCode = "T-002", Title = "Beta Task", Status = "InProgress" },
+        }).ExecuteCommandAsync();
+
+        var user = CreateUser("operator", "tenant-a", "SYSTEM");
+        Assert.True(ProjectManagementDataPermissionFilterRegistrar.TryRegister(db, typeof(ProjectManagementProjectEntity), user, "tenant-a", "SYSTEM"));
+        Assert.True(ProjectManagementDataPermissionFilterRegistrar.TryRegister(db, typeof(ProjectManagementTaskEntity), user, "tenant-a", "SYSTEM"));
+        var service = new ProjectManagementReportService(new TestWorkspaceDatabaseAccessor(db), user);
+
+        var markdown = DecodeMarkdown(await service.ExportProjectMarkdownAsync("project-a", new ProjectManagementProjectMarkdownOptions(TaskIds: "task-a")));
+
+        Assert.Contains("Alpha Task", markdown);
+        Assert.DoesNotContain("Beta Task", markdown);
+        Assert.Equal(1, (await service.ExportProjectMarkdownAsync("project-a", new ProjectManagementProjectMarkdownOptions(TaskIds: "task-a"))).RowCount);
+    }
+
+    [Fact]
+    public async Task Markdown_export_can_omit_project_info_but_keep_timeline()
+    {
+        using var db = CreateDatabase("report-markdown-project-info");
+        await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
+        await db.Insertable(new ProjectManagementProjectEntity
+        {
+            Id = "project-a",
+            TenantId = "tenant-a",
+            AppCode = "SYSTEM",
+            ProjectCode = "PRJ-001",
+            ProjectName = "Demo Project",
+            OwnerUserId = "operator",
+            Status = "Active",
+            Priority = "Medium",
+        }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementTaskEntity
+        {
+            Id = "task-a",
+            TenantId = "tenant-a",
+            AppCode = "SYSTEM",
+            ProjectId = "project-a",
+            TaskCode = "T-001",
+            Title = "Alpha Task",
+            Status = "Todo",
+        }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementActivityEntity
+        {
+            Id = "activity-a",
+            TenantId = "tenant-a",
+            AppCode = "SYSTEM",
+            ProjectId = "project-a",
+            AggregateType = "Project",
+            AggregateId = "project-a",
+            ActivityType = "task.created",
+            Summary = "Created task",
+            TraceId = "trace-a",
+            ActorUserId = "operator",
+        }).ExecuteCommandAsync();
+
+        var user = CreateUser("operator", "tenant-a", "SYSTEM");
+        Assert.True(ProjectManagementDataPermissionFilterRegistrar.TryRegister(db, typeof(ProjectManagementProjectEntity), user, "tenant-a", "SYSTEM"));
+        Assert.True(ProjectManagementDataPermissionFilterRegistrar.TryRegister(db, typeof(ProjectManagementTaskEntity), user, "tenant-a", "SYSTEM"));
+        Assert.True(ProjectManagementDataPermissionFilterRegistrar.TryRegister(db, typeof(ProjectManagementActivityEntity), user, "tenant-a", "SYSTEM"));
+        var service = new ProjectManagementReportService(new TestWorkspaceDatabaseAccessor(db), user);
+
+        var markdown = DecodeMarkdown(await service.ExportProjectMarkdownAsync("project-a", new ProjectManagementProjectMarkdownOptions(IncludeProjectInfo: false)));
+
+        Assert.DoesNotContain("项目编号", markdown);
+        Assert.DoesNotContain("## 概览", markdown);
+        Assert.DoesNotContain("## 里程碑", markdown);
+        Assert.Contains("## 任务进展", markdown);
+        Assert.Contains("Alpha Task", markdown);
+        Assert.Contains("## 动态时间线", markdown);
+        Assert.Contains("Created task", markdown);
+    }
+
+    private static string DecodeMarkdown(ProjectManagementReportFile file)
+    {
+        var content = file.Content;
+        if (content.Length >= 3 && content[0] == 0xEF && content[1] == 0xBB && content[2] == 0xBF)
+            content = content[3..];
+        return Encoding.UTF8.GetString(content);
+    }
+
     private static SqlSugarClient CreateDatabase(string name) => new(new ConnectionConfig
     {
         ConnectionString = $"Data Source=file:project-management-{name}-{Guid.NewGuid():N};Mode=Memory;Cache=Shared",
