@@ -36,6 +36,14 @@ internal static class ProjectManagementTaskScopeSqlPredicate
                                             .Any()))
                                     .Any()))
                             .Any()))
-                    .Any()))
+                    .Any()) ||
+                SqlFunc.Subqueryable<ProjectManagementTaskGrantEntity>()
+                    .Where(grant => grant.TaskId == task.Id &&
+                        grant.TenantId == tenantId &&
+                        grant.AppCode == appCode &&
+                        grant.GranteeUserId == userId &&
+                        grant.IsActive &&
+                        !grant.IsDeleted)
+                    .Any())
             .Any());
 }

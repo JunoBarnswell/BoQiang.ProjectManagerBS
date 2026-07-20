@@ -23,6 +23,7 @@ public static partial class PermissionCodes
     public const string ProjectManagementTaskRestore = "project-management:task:restore";
     public const string ProjectManagementTaskMove = "project-management:task:move";
     public const string ProjectManagementTaskAssign = "project-management:task:assign";
+    public const string ProjectManagementTaskShare = "project-management:task:share";
     public const string ProjectManagementTaskManageDependency = "project-management:task:manage-dependency";
     public const string ProjectManagementTaskOverrideWip = "project-management:task:override-wip";
     public const string ProjectManagementLabelView = "project-management:label:view";
@@ -68,6 +69,7 @@ public static partial class PermissionCodes
         ProjectManagementTaskRestore,
         ProjectManagementTaskMove,
         ProjectManagementTaskAssign,
+        ProjectManagementTaskShare,
         ProjectManagementTaskManageDependency,
         ProjectManagementTaskOverrideWip,
         ProjectManagementLabelView,

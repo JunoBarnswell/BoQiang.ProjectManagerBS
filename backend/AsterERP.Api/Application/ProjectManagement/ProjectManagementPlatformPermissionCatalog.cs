@@ -29,6 +29,7 @@ public static class ProjectManagementPlatformPermissionCatalog
         new(PermissionCodes.ProjectManagementTaskRestore, "任务恢复"),
         new(PermissionCodes.ProjectManagementTaskMove, "任务移动"),
         new(PermissionCodes.ProjectManagementTaskAssign, "任务分配"),
+        new(PermissionCodes.ProjectManagementTaskShare, "任务外部共享"),
         new(PermissionCodes.ProjectManagementTaskManageDependency, "任务依赖管理"),
         new(PermissionCodes.ProjectManagementTaskOverrideWip, "任务 WIP 强制绕过"),
         new(PermissionCodes.ProjectManagementLabelView, "标签查看"),

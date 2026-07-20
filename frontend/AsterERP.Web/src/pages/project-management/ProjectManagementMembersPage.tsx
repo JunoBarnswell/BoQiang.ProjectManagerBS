@@ -159,7 +159,7 @@ export function ProjectManagementMembersPage() {
                 .filter((candidate) => candidate.isSelectable || candidate.userId === form.userId)
                 .map((candidate) => (
                   <option key={candidate.userId} value={candidate.userId}>
-                    {candidate.displayName || candidate.userName}
+                    {formatMemberCandidate(candidate)}
                   </option>
                 ))}
             </select>
@@ -305,4 +305,10 @@ export function ProjectManagementMembersPage() {
       )}
     </ResponsivePage>
   );
+}
+
+function formatMemberCandidate(candidate: { displayName: string; userName: string; deptName?: string; positionName?: string }) {
+  const organization = [candidate.deptName, candidate.positionName].filter(Boolean).join(" · ");
+  const name = candidate.displayName || candidate.userName;
+  return organization ? `${name} · ${organization}` : name;
 }

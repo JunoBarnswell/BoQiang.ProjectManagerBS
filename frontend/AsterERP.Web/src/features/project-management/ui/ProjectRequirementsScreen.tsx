@@ -67,6 +67,7 @@ export function ProjectRequirementsScreen() {
   const risk = params.get('risk') ?? '';
   const requirementType = params.get('type') ?? '';
   const focusTaskId = params.get('taskId');
+  const focusComments = params.get('focus') === 'comments';
   const [editorTaskId, setEditorTaskId] = useState<string>();
   const [editorOpen, setEditorOpen] = useState(params.get('create') === '1');
   const [editorStartDate, setEditorStartDate] = useState<string>();
@@ -204,6 +205,7 @@ export function ProjectRequirementsScreen() {
     setEditorStartDate(undefined);
     updateUrl('create', '', false);
     if (params.get('taskId')) updateUrl('taskId', '', false);
+    if (params.get('focus')) updateUrl('focus', '', false);
   };
   useEffect(() => {
     if (focusTaskId && !editorOpen) {
@@ -369,6 +371,7 @@ export function ProjectRequirementsScreen() {
           open={editorOpen}
           projectId={projectId}
           taskId={editorTaskId}
+          focusComments={focusComments}
         />
       </Box>
     </ProjectWorkbenchFrame>

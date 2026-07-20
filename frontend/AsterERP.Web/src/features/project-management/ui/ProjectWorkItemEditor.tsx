@@ -1,6 +1,6 @@
 import { Box, Stack, Typography } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 
 import {
   addProjectManagementTaskParticipant,
@@ -56,6 +56,7 @@ const blank: ProjectManagementTaskUpsertRequest = {
 
 export function ProjectWorkItemEditor({
   initialStartDate,
+  focusComments = false,
   onClose,
   onSaved,
   open,
@@ -63,6 +64,7 @@ export function ProjectWorkItemEditor({
   taskId,
 }: {
   initialStartDate?: string;
+  focusComments?: boolean;
   onClose: () => void;
   onSaved: () => void;
   open: boolean;
@@ -74,7 +76,9 @@ export function ProjectWorkItemEditor({
   const confirm = useConfirm();
   const queryClient = useQueryClient();
   const { hasPermission: canEditTask } = usePermission('project-management:task:edit');
+  const { hasPermission: canAddComment } = usePermission('project-management:comment:add');
   const { hasPermission: canAssignTask } = usePermission('project-management:task:assign');
+  const { hasPermission: canShareTask } = usePermission('project-management:task:share');
   const { hasPermission: canManageAttachment } = usePermission('project-management:attachment:manage');
   const { hasPermission: canManageReminder } = usePermission('project-management:reminder:manage');
   const { hasPermission: canViewReminder } = usePermission('project-management:reminder:view');
@@ -86,6 +90,7 @@ export function ProjectWorkItemEditor({
   const [comment, setComment] = useState('');
   const [commentContentJson, setCommentContentJson] = useState<string>();
   const [commentMentionIds, setCommentMentionIds] = useState<string[]>([]);
+  const [allowMentionedComment, setAllowMentionedComment] = useState(false);
   const [commentFiles, setCommentFiles] = useState<File[]>([]);
   const [continueCreating, setContinueCreating] = useState(false);
   const [participantPicker, setParticipantPicker] = useState('');
@@ -167,12 +172,14 @@ export function ProjectWorkItemEditor({
         markdown: comment,
         mentionUserIds: commentMentionIds,
         attachmentIds: attachmentIds.length > 0 ? attachmentIds : undefined,
+        allowMentionedComment,
       });
     },
     onSuccess: () => {
       setComment('');
       setCommentContentJson(undefined);
       setCommentMentionIds([]);
+      setAllowMentionedComment(false);
       setCommentFiles([]);
       void comments.refetch();
       message.success(t('projectManagement.editor.commentPublished'));
@@ -275,6 +282,15 @@ export function ProjectWorkItemEditor({
     confirm({ title: t('projectManagement.editor.closeTitle'), content: t('projectManagement.editor.closeDescription'), confirmText: t('projectManagement.editor.discard'), onConfirm: onClose });
   };
   const candidateItems = useMemo(() => members.data?.data.items.filter((item) => item.isSelectable) ?? [], [members.data?.data.items]);
+  const canEditThisTask = !taskId || (canEditTask && (task.data?.data.access?.canEdit ?? true));
+  const canCommentThisTask = Boolean(taskId && canAddComment && (task.data?.data.access?.canComment ?? canEditThisTask));
+  const isReadOnlyGrant = Boolean(taskId && task.data?.data.access?.isReadOnlyGrant);
+  const collaborationRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open || !focusComments || !taskId) return;
+    const frame = window.requestAnimationFrame(() => collaborationRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    return () => window.cancelAnimationFrame(frame);
+  }, [focusComments, open, taskId]);
   const participantItems = participants.data?.data ?? [];
   const participantCandidateItems = participantCandidates.data?.data.items ?? [];
   const participantLabels = useMemo(
@@ -319,7 +335,7 @@ export function ProjectWorkItemEditor({
       <label className="pm-editor-checkbox"><input checked={continueCreating} onChange={(event) => setContinueCreating(event.target.checked)} type="checkbox" /> {t('projectManagement.editor.continueCreating')}</label>
       <Stack className="pm-editor-footer-actions" direction="row" spacing={2}>
         <button className="pm-workbench-command" onClick={requestClose} type="button">{t('projectManagement.editor.cancel')}</button>
-        <button className="pm-primary-button" disabled={!form.title.trim() || save.isPending || !canEditTask} onClick={() => save.mutate({})} type="button">{t('projectManagement.editor.save')}</button>
+        <button className="pm-primary-button" disabled={!form.title.trim() || save.isPending || !canEditThisTask} onClick={() => save.mutate({})} type="button">{t('projectManagement.editor.save')}</button>
       </Stack>
     </Stack>
   );
@@ -330,30 +346,38 @@ export function ProjectWorkItemEditor({
       <Box className="pm-editor-grid">
         <Box className="pm-editor-main">
           <div className="pm-editor-title-field">
-            <input aria-label={t('projectManagement.editor.titleAria')} className="pm-editor-title" maxLength={256} onChange={(event) => update({ title: event.target.value })} placeholder={t('projectManagement.editor.titlePlaceholder')} value={form.title} />
+            <input aria-label={t('projectManagement.editor.titleAria')} className="pm-editor-title" disabled={!canEditThisTask} maxLength={256} onChange={(event) => update({ title: event.target.value })} placeholder={t('projectManagement.editor.titlePlaceholder')} value={form.title} />
             <span aria-live="polite" className={`pm-editor-counter${form.title.length >= 256 ? ' is-at-limit' : form.title.length >= 230 ? ' is-near-limit' : ''}`}>{form.title.length}/256</span>
           </div>
+          {isReadOnlyGrant ? <Typography color="text.secondary" variant="caption">{t('projectManagement.editor.sharedReadOnly')}</Typography> : null}
           {taskId ? <CollaborationPanel
-            canManageAttachment={canManageAttachment}
+            canManageAttachment={canManageAttachment && canEditThisTask}
+            canComment={canCommentThisTask}
+            canShareTask={canShareTask && canEditThisTask}
             commentDateTime={commentDateTime}
             comments={comments.data?.data.items ?? []}
             comment={comment}
             commentContentJson={commentContentJson}
             commentFiles={commentFiles}
+            allowMentionedComment={allowMentionedComment}
             format={format}
             isPublishing={addComment.isPending}
             onCommentChange={setComment}
             onCommentContentJsonChange={setCommentContentJson}
             onCommentFilesChange={setCommentFiles}
             onCommentMentionsChange={setCommentMentionIds}
+            onAllowMentionedCommentChange={setAllowMentionedComment}
             onDownload={(item) => void downloadAttachment(item)}
             onPreview={(item) => void previewAttachment(item)}
             onPublish={() => addComment.mutate()}
             mentionCandidates={candidateItems}
+            onMentionSearch={async (keyword) => (await getProjectManagementMemberCandidates({ keyword, pageIndex: 1, pageSize: 20 })).data.items}
+            collaborationRef={collaborationRef}
             t={t}
           /> : <Typography color="text.secondary" variant="caption">{t('projectManagement.editor.saveFirst')}</Typography>}
         </Box>
-        <Stack className="pm-editor-properties" spacing={0}>
+        <fieldset className="pm-editor-properties" disabled={!canEditThisTask} style={{ border: 0, margin: 0, minWidth: 0, padding: 0 }}>
+        <Stack spacing={0}>
           <Box className="pm-editor-property-group">
             <Typography className="pm-editor-property-group__title" component="h3">{t('projectManagement.editor.group.basic')}</Typography>
             <SelectField label={t('projectManagement.editor.field.workItemType')} labels={enumLabels('workItemType', ['Requirement', 'UserStory', 'Task', 'Bug'])} onChange={(value) => update({ workItemType: value })} options={['Requirement', 'UserStory', 'Task', 'Bug']} value={form.workItemType ?? 'Requirement'} t={t} />
@@ -417,6 +441,7 @@ export function ProjectWorkItemEditor({
             {reminders.data?.data.map((item) => <Stack alignItems="center" className="pm-editor-list-item" direction="row" justifyContent="space-between" key={item.id}><Typography variant="caption">{dateTime(item.reminderAtUtc)} · {item.status}</Typography>{canManageReminder ? <button className="pm-workbench-command" onClick={() => removeReminder.mutate(item)} type="button">{t('projectManagement.editor.reminder.delete')}</button> : null}</Stack>)}
           </CollapsibleEditorGroup> : null}
         </Stack>
+        </fieldset>
       </Box>
       <FilePreviewDialog error={preview.error} file={preview.file} loading={preview.loading} onClose={() => setPreview({ loading: false, open: false })} open={preview.open} previewFile={preview.previewFile} />
     </ResponsiveModal>
@@ -424,40 +449,52 @@ export function ProjectWorkItemEditor({
 }
 
 function CollaborationPanel({
+  allowMentionedComment,
+  canComment,
   canManageAttachment,
+  canShareTask,
   commentDateTime,
   comments,
   comment,
   commentContentJson,
   commentFiles,
+  collaborationRef,
   format,
   isPublishing,
   mentionCandidates,
   onCommentChange,
   onCommentContentJsonChange,
   onCommentFilesChange,
+  onAllowMentionedCommentChange,
   onCommentMentionsChange,
   onDownload,
   onPreview,
   onPublish,
+  onMentionSearch,
   t,
 }: {
+  allowMentionedComment: boolean;
+  canComment: boolean;
   canManageAttachment: boolean;
+  canShareTask: boolean;
   commentDateTime: (value?: string | Date | null) => string;
   comments: ProjectManagementTaskComment[];
   comment: string;
   commentContentJson?: string;
   commentFiles: File[];
+  collaborationRef: RefObject<HTMLDivElement | null>;
   format: (key: string, values?: Record<string, string | number>) => string;
   isPublishing: boolean;
   mentionCandidates: ProjectManagementMemberCandidate[];
   onCommentChange: (value: string) => void;
   onCommentContentJsonChange: (value: string) => void;
   onCommentFilesChange: (files: File[]) => void;
+  onAllowMentionedCommentChange: (value: boolean) => void;
   onCommentMentionsChange: (value: string[]) => void;
   onDownload: (item: ProjectManagementTaskAttachment) => void;
   onPreview: (item: ProjectManagementTaskAttachment) => void;
   onPublish: () => void;
+  onMentionSearch: (keyword: string) => Promise<ProjectManagementMemberCandidate[]>;
   t: (key: string) => string;
 }) {
   const appendCommentFiles = (files: FileList | null | undefined) => {
@@ -470,10 +507,16 @@ function CollaborationPanel({
   };
 
   return (
-    <Box className="pm-collaboration">
+    <Box className="pm-collaboration" ref={collaborationRef}>
       <Typography className="pm-collaboration__title" component="h3" fontWeight={700}>{t('projectManagement.editor.comment')}</Typography>
-      <Stack className="pm-comment-composer" spacing={0.75}>
-        <ProjectManagementMarkdownEditor ariaLabel={t('projectManagement.editor.commentAria')} contentJson={commentContentJson} density="compact" mentionCandidates={mentionCandidates} onChange={onCommentChange} onContentJsonChange={onCommentContentJsonChange} onMentionUserIdsChange={onCommentMentionsChange} placeholder={t('projectManagement.editor.commentPlaceholder')} rows={2} showToolbar={false} value={comment} />
+      {canComment ? <Stack className="pm-comment-composer" spacing={0.75}>
+        <ProjectManagementMarkdownEditor ariaLabel={t('projectManagement.editor.commentAria')} contentJson={commentContentJson} density="compact" mentionCandidates={mentionCandidates} onChange={onCommentChange} onContentJsonChange={onCommentContentJsonChange} onMentionSearch={onMentionSearch} onMentionUserIdsChange={onCommentMentionsChange} placeholder={t('projectManagement.editor.commentPlaceholder')} rows={2} showToolbar={false} value={comment} />
+        {canShareTask ? (
+          <label className="pm-editor-checkbox">
+            <input checked={allowMentionedComment} onChange={(event) => onAllowMentionedCommentChange(event.target.checked)} type="checkbox" />
+            {t('projectManagement.editor.allowMentionedComment')}
+          </label>
+        ) : null}
         {commentFiles.length > 0 ? (
           <div className="pm-comment-composer__pending-files">
             {commentFiles.map((file, index) => (
@@ -496,7 +539,8 @@ function CollaborationPanel({
           ) : <span />}
           <button className="pm-primary-button" disabled={!comment.trim() || isPublishing} onClick={onPublish} type="button">{t('projectManagement.editor.publishComment')}</button>
         </Stack>
-      </Stack>
+      </Stack> : null}
+      {!canComment ? <Typography color="text.secondary" variant="caption">{t('projectManagement.editor.commentReadOnly')}</Typography> : null}
       <Box className="pm-comment-feed">
         {comments.length === 0 ? <Typography className="pm-comment-empty" color="text.secondary" variant="body2">{t('projectManagement.editor.comment.empty')}</Typography> : null}
         {comments.map((item) => {

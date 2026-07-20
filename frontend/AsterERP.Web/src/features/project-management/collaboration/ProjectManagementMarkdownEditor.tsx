@@ -21,6 +21,7 @@ interface ProjectManagementMarkdownEditorProps {
   value: string;
   contentJson?: string;
   mentionCandidates?: ProjectManagementMemberCandidate[];
+  onMentionSearch?: (keyword: string) => Promise<ProjectManagementMemberCandidate[]>;
   onContentJsonChange?: (value: string) => void;
   onMentionUserIdsChange?: (value: string[]) => void;
 }
@@ -28,6 +29,7 @@ interface ProjectManagementMarkdownEditorProps {
 interface MentionItem {
   id: string;
   label: string;
+  subtitle?: string;
 }
 
 const ProjectMentionNode = TiptapNode.create({
@@ -48,7 +50,7 @@ const ProjectMentionNode = TiptapNode.create({
   ],
 });
 
-function createProjectMentionSuggestion(candidatesRef: { current: ProjectManagementMemberCandidate[] }, onMentionIdsChangeRef: { current?: (value: string[]) => void }, textsRef: { current: Record<string, string> }) {
+function createProjectMentionSuggestion(candidatesRef: { current: ProjectManagementMemberCandidate[] }, onMentionIdsChangeRef: { current?: (value: string[]) => void }, textsRef: { current: Record<string, string> }, searchRef: { current?: (keyword: string) => Promise<ProjectManagementMemberCandidate[]> }) {
   return Extension.create({
     name: 'projectMentionSuggestion',
     addProseMirrorPlugins() {
@@ -56,10 +58,23 @@ function createProjectMentionSuggestion(candidatesRef: { current: ProjectManagem
         editor: this.editor,
         char: '@',
         allowSpaces: true,
-        items: ({ query }) => candidatesRef.current
-          .filter((candidate) => candidate.isSelectable && `${candidate.displayName} ${candidate.userName}`.toLowerCase().includes(query.trim().toLowerCase()))
-          .slice(0, 8)
-          .map((candidate) => ({ id: candidate.userId, label: candidate.displayName || candidate.userName })),
+        items: async ({ query }) => {
+          const normalized = query.trim();
+          const local = candidatesRef.current
+            .filter((candidate) => candidate.isSelectable && `${candidate.displayName} ${candidate.userName} ${candidate.deptName ?? ''}`.toLowerCase().includes(normalized.toLowerCase()));
+          const remote = searchRef.current
+            ? await debounceMentionSearch(searchRef.current, normalized)
+            : [];
+          const byId = new Map<string, ProjectManagementMemberCandidate>();
+          [...local, ...remote].forEach((candidate) => {
+            if (candidate.isSelectable && !byId.has(candidate.userId)) byId.set(candidate.userId, candidate);
+          });
+          return [...byId.values()].slice(0, 10).map((candidate) => ({
+            id: candidate.userId,
+            label: candidate.displayName || candidate.userName,
+            subtitle: [candidate.deptName, candidate.positionName].filter(Boolean).join(' · '),
+          }));
+        },
         command: ({ editor, range, props }) => {
           editor.chain().focus().insertContentAt(range, {
             type: 'projectMention',
@@ -97,7 +112,7 @@ function createProjectMentionSuggestion(candidatesRef: { current: ProjectManagem
               const button = document.createElement('button');
               button.type = 'button';
               button.className = `pm-mention-suggestion__item${index === selectedIndex ? ' is-active' : ''}`;
-              button.textContent = `@${item.label}`;
+              button.textContent = item.subtitle ? `@${item.label} · ${item.subtitle}` : `@${item.label}`;
               button.addEventListener('mousedown', (event) => {
                 event.preventDefault();
                 props.command(item);
@@ -148,31 +163,44 @@ function createProjectMentionSuggestion(candidatesRef: { current: ProjectManagem
   });
 }
 
+function debounceMentionSearch(
+  search: (keyword: string) => Promise<ProjectManagementMemberCandidate[]>,
+  keyword: string,
+): Promise<ProjectManagementMemberCandidate[]> {
+  return new Promise((resolve, reject) => {
+    window.setTimeout(() => {
+      void search(keyword).then(resolve, reject);
+    }, 180);
+  });
+}
+
 function resolveEditorDensity(density: ProjectManagementMarkdownEditorProps['density'], rows?: number): 'compact' | 'default' {
   if (density) return density;
   if (rows !== undefined && rows <= 3) return 'compact';
   return 'default';
 }
 
-export function ProjectManagementMarkdownEditor({ ariaLabel, contentJson, density, mentionCandidates = [], onChange, onContentJsonChange, onMentionUserIdsChange, placeholder, rows, showToolbar = true, value }: ProjectManagementMarkdownEditorProps) {
+export function ProjectManagementMarkdownEditor({ ariaLabel, contentJson, density, mentionCandidates = [], onChange, onContentJsonChange, onMentionSearch, onMentionUserIdsChange, placeholder, rows, showToolbar = true, value }: ProjectManagementMarkdownEditorProps) {
   const editorDensity = resolveEditorDensity(density, rows);
   const { t } = useProjectManagementI18n();
   const candidatesRef = useRef(mentionCandidates);
   const onChangeRef = useRef(onChange);
   const onContentJsonChangeRef = useRef(onContentJsonChange);
   const onMentionIdsChangeRef = useRef(onMentionUserIdsChange);
+  const mentionSearchRef = useRef(onMentionSearch);
   const textsRef = useRef<Record<string, string>>({ searchMembers: '', noMembers: '' });
   candidatesRef.current = mentionCandidates;
   onChangeRef.current = onChange;
   onContentJsonChangeRef.current = onContentJsonChange;
   onMentionIdsChangeRef.current = onMentionUserIdsChange;
+  mentionSearchRef.current = onMentionSearch;
   textsRef.current = { searchMembers: t('projectManagement.richEditor.searchMembers'), noMembers: t('projectManagement.richEditor.noMembers') };
   const extensions = useMemo(() => [
     StarterKit,
     Link.configure({ openOnClick: false, autolink: true, HTMLAttributes: { rel: 'noopener noreferrer', target: '_blank' } }),
     Placeholder.configure({ placeholder: placeholder ?? t('projectManagement.richEditor.placeholder') }),
     ProjectMentionNode,
-    createProjectMentionSuggestion(candidatesRef, onMentionIdsChangeRef, textsRef),
+    createProjectMentionSuggestion(candidatesRef, onMentionIdsChangeRef, textsRef, mentionSearchRef),
   ], [placeholder, t]);
   const editor = useEditor({
     immediatelyRender: false,

@@ -5,6 +5,7 @@ export const projectManagementWorkbenchMessagesZhCN = {
   'projectManagement.workbench.selector.title': '项目',
   'projectManagement.workbench.selector.description': '选择一个项目，进入项目概览和任务工作台。',
   'projectManagement.workbench.selector.create': '新建项目',
+  'projectManagement.workbench.selector.edit': '编辑项目',
   'projectManagement.workbench.selector.searchAria': '搜索项目',
   'projectManagement.workbench.selector.searchPlaceholder': '搜索项目名称或编号',
   'projectManagement.workbench.selector.name': '名称',

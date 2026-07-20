@@ -186,6 +186,29 @@ CREATE TABLE IF NOT EXISTS pm_task_participants (
     Remark TEXT NULL
 );
 """);
+        schema.Execute("""
+CREATE TABLE IF NOT EXISTS pm_task_grants (
+    Id TEXT NOT NULL PRIMARY KEY,
+    TenantId TEXT NOT NULL,
+    AppCode TEXT NOT NULL,
+    ProjectId TEXT NOT NULL,
+    TaskId TEXT NOT NULL,
+    GranteeUserId TEXT NOT NULL,
+    CanComment INTEGER NOT NULL DEFAULT 0,
+    GrantedByUserId TEXT NOT NULL,
+    SourceCommentId TEXT NULL,
+    IsActive INTEGER NOT NULL DEFAULT 1,
+    VersionNo INTEGER NOT NULL DEFAULT 1,
+    CreatedBy TEXT NULL,
+    CreatedTime TEXT NOT NULL,
+    UpdatedBy TEXT NULL,
+    UpdatedTime TEXT NULL,
+    DeletedBy TEXT NULL,
+    DeletedTime TEXT NULL,
+    IsDeleted INTEGER NOT NULL DEFAULT 0,
+    Remark TEXT NULL
+);
+""");
         schema.EnsureColumn("pm_project_members", "ScopeRootTaskId", "TEXT NULL");
         schema.EnsureColumn("pm_project_members", "SuggestedCapacityMinutes", "INTEGER NOT NULL DEFAULT 2400");
         schema.EnsureColumn("pm_milestones", "OwnerUserId", "TEXT NULL");
@@ -520,6 +543,9 @@ CREATE TABLE IF NOT EXISTS pm_reversible_commands (
         schema.Execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_pm_task_dependencies_pair ON pm_task_dependencies(TenantId, AppCode, ProjectId, PredecessorTaskId, SuccessorTaskId) WHERE IsDeleted = 0;");
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_task_dependencies_successor ON pm_task_dependencies(TenantId, AppCode, SuccessorTaskId, IsDeleted);");
         schema.Execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_pm_task_participants_user ON pm_task_participants(TenantId, AppCode, TaskId, UserId) WHERE IsDeleted = 0;");
+        schema.Execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_pm_task_grants_user ON pm_task_grants(TenantId, AppCode, TaskId, GranteeUserId) WHERE IsDeleted = 0;");
+        schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_task_grants_grantee ON pm_task_grants(TenantId, AppCode, GranteeUserId, IsActive, IsDeleted);");
+        schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_task_grants_project ON pm_task_grants(TenantId, AppCode, ProjectId, TaskId, IsActive, IsDeleted);");
         schema.Execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_pm_labels_project_name ON pm_labels(TenantId, AppCode, COALESCE(ProjectId, ''), LabelName) WHERE IsDeleted = 0;");
         schema.Execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_pm_task_labels_pair ON pm_task_labels(TenantId, AppCode, TaskId, LabelId) WHERE IsDeleted = 0;");
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_task_labels_project ON pm_task_labels(TenantId, AppCode, ProjectId, TaskId, IsDeleted);");
@@ -600,7 +626,7 @@ WHERE Id IN (SELECT Id FROM ordered);
     {
         schema.Execute("""
 INSERT INTO pm_schema_versions (ModuleKey, VersionNo, AppliedAt, AppliedBy)
-VALUES ('project-management', 5, CURRENT_TIMESTAMP, 'schema-migrator')
+VALUES ('project-management', 6, CURRENT_TIMESTAMP, 'schema-migrator')
 ON CONFLICT(ModuleKey) DO UPDATE SET VersionNo = excluded.VersionNo, AppliedAt = excluded.AppliedAt, AppliedBy = excluded.AppliedBy;
 """);
     }

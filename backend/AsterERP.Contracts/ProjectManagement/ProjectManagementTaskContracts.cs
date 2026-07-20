@@ -171,7 +171,13 @@ public sealed record ProjectManagementTaskDetailResponse(
     IReadOnlyList<string>? FollowerUserIds = null,
     int ChildCount = 0,
     int CompletedChildCount = 0,
-    bool HasAttachments = false);
+    bool HasAttachments = false,
+    ProjectManagementTaskAccessCapabilitiesResponse? Access = null);
+
+public sealed record ProjectManagementTaskAccessCapabilitiesResponse(
+    bool CanEdit,
+    bool CanComment,
+    bool IsReadOnlyGrant);
 
 /// <summary>
 /// 任务编辑发生乐观并发冲突时，保留客户端提交的字段，供详情抽屉逐字段比较。

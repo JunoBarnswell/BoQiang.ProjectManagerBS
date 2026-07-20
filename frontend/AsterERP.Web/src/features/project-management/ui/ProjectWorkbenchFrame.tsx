@@ -3,16 +3,19 @@ import type { ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import { PmIcon } from '../../../ui/project-management';
+import { usePermission } from '../../../core/auth/usePermission';
 import { useProjectManagementI18n } from '../projectManagementI18n';
 import { toProjectManagementPlatformRoute } from '../state/projectManagementPlatformRoutes';
 import './projectWorkbench.css';
 
-export function ProjectWorkbenchFrame({ children, active }: { children: ReactNode; active: 'overview' | 'requirements' }) {
+export function ProjectWorkbenchFrame({ children, active }: { children: ReactNode; active: 'overview' | 'requirements' | 'members' }) {
   const { t } = useProjectManagementI18n();
   const navigate = useNavigate();
+  const { hasPermission: canViewMembers } = usePermission('project-management:member:view');
   const { projectId = '' } = useParams<{ projectId: string }>();
   const overviewPath = toProjectManagementPlatformRoute(`projects/${encodeURIComponent(projectId)}/overview`);
   const requirementsPath = toProjectManagementPlatformRoute(`projects/${encodeURIComponent(projectId)}/requirements`);
+  const membersPath = toProjectManagementPlatformRoute(`projects/${encodeURIComponent(projectId)}/members`);
 
   return (
     <Box className="pm-workbench" sx={{ display: 'flex', flex: '1 1 auto', minHeight: 0, width: '100%', bgcolor: 'var(--app-bg-subtle)' }}>
@@ -20,11 +23,13 @@ export function ProjectWorkbenchFrame({ children, active }: { children: ReactNod
         <TooltipButton label={t('projectManagement.workbench.back')} onClick={() => navigate(toProjectManagementPlatformRoute())}><PmIcon name="briefcase" /></TooltipButton>
         <TooltipButton active={active === 'overview'} label={t('projectManagement.workbench.overview')} onClick={() => navigate(overviewPath)}><PmIcon name="layers" /></TooltipButton>
         <TooltipButton active={active === 'requirements'} label={t('projectManagement.workbench.requirementsNav')} onClick={() => navigate(requirementsPath)}><PmIcon name="folder" /></TooltipButton>
+        {canViewMembers ? <TooltipButton active={active === 'members'} label={t('projectManagement.home.members.title')} onClick={() => navigate(membersPath)}><PmIcon name="users" /></TooltipButton> : null}
       </Box>
       <Box sx={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto', minWidth: 0, minHeight: 0, bgcolor: 'var(--app-white)' }}>
         <Box component="nav" sx={{ display: 'flex', alignItems: 'center', gap: 2.5, minHeight: 44, px: 3, borderBottom: '1px solid var(--app-border-subtle)' }}>
           <button className={active === 'overview' ? 'pm-project-tab is-active' : 'pm-project-tab'} onClick={() => navigate(overviewPath)} type="button">{t('projectManagement.workbench.overview')}</button>
           <button className={active === 'requirements' ? 'pm-project-tab is-active' : 'pm-project-tab'} onClick={() => navigate(requirementsPath)} type="button">{t('projectManagement.workbench.requirementsNav')}</button>
+          {canViewMembers ? <button className={active === 'members' ? 'pm-project-tab is-active' : 'pm-project-tab'} onClick={() => navigate(membersPath)} type="button">{t('projectManagement.home.members.title')}</button> : null}
         </Box>
         <Box sx={{ display: 'flex', flex: '1 1 auto', minHeight: 0, minWidth: 0, overflow: 'hidden' }}>{children}</Box>
       </Box>

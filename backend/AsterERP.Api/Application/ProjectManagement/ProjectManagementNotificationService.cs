@@ -114,7 +114,9 @@ public sealed class ProjectManagementNotificationService(
             await (accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser)).EnsureCanViewProjectAsync(notification.ProjectId, cancellationToken);
             if (!string.IsNullOrWhiteSpace(notification.TaskId) && !await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskEntity>().AnyAsync(item => item.Id == notification.TaskId && item.ProjectId == notification.ProjectId && !item.IsDeleted, cancellationToken))
                 return Unavailable("projectManagement.api.notification.open.targetUnavailable");
-            var route = string.IsNullOrWhiteSpace(notification.TaskId) ? $"/projects/{notification.ProjectId}/tasks" : $"/projects/{notification.ProjectId}/tasks?selectedTaskId={notification.TaskId}";
+            var route = string.IsNullOrWhiteSpace(notification.TaskId)
+                ? $"/projects/{notification.ProjectId}/tasks"
+                : $"/projects/{notification.ProjectId}/tasks?selectedTaskId={notification.TaskId}&focus=comments";
             return new ProjectManagementNotificationOpenResponse(true, route, null);
         }
         catch (ValidationException)

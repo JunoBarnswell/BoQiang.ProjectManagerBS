@@ -488,6 +488,14 @@ export interface ProjectManagementProjectUpsertRequest {
   progressPercent?: number;
   versionNo?: number;
   clientMutationId?: string;
+  initialMembers?: ProjectManagementProjectInitialMemberUpsertRequest[];
+}
+
+export interface ProjectManagementProjectInitialMemberUpsertRequest {
+  userId: string;
+  employmentId?: string;
+  roleCode: 'Owner' | 'Manager' | 'Lead' | 'Member' | 'Viewer';
+  scopeRootTaskId?: string;
 }
 
 export interface ProjectManagementProject {
@@ -611,6 +619,13 @@ export interface ProjectManagementTaskDetail extends ProjectManagementTaskListIt
   mentionUserIds?: string[];
   followerUserIds?: string[];
   draftId?: string;
+  access?: ProjectManagementTaskAccessCapabilities;
+}
+
+export interface ProjectManagementTaskAccessCapabilities {
+  canEdit: boolean;
+  canComment: boolean;
+  isReadOnlyGrant: boolean;
 }
 
 export interface ProjectManagementTaskFollower {
@@ -853,6 +868,7 @@ export interface ProjectManagementTaskCommentUpsertRequest {
   mentionUserIds?: string[];
   versionNo?: number;
   attachmentIds?: string[];
+  allowMentionedComment?: boolean;
 }
 
 export interface ProjectManagementTaskReminder {

@@ -120,6 +120,7 @@ public sealed class AsterErpProjectManagementModule : AbpModule
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementTaskEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementTaskDependencyEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementTaskParticipantEntity));
+        registry.RegisterProjectManagementFilter(typeof(ProjectManagementTaskGrantEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementTaskFollowerEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementTaskDraftEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementTaskDraftAttachmentEntity));

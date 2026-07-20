@@ -24,7 +24,10 @@ public sealed class ProjectManagementAccessPolicy(IWorkspaceDatabaseAccessor dat
         var visible = await db.Queryable<ProjectManagementProjectEntity>()
             .Where(project => project.Id == projectId && project.TenantId == tenantId && project.AppCode == appCode && !project.IsDeleted &&
                 (project.OwnerUserId == userId || SqlSugar.SqlFunc.Subqueryable<ProjectManagementProjectMemberEntity>()
-                    .Where(member => member.ProjectId == project.Id && member.TenantId == tenantId && member.AppCode == appCode && member.UserId == userId && member.IsActive && !member.IsDeleted).Any()))
+                    .Where(member => member.ProjectId == project.Id && member.TenantId == tenantId && member.AppCode == appCode && member.UserId == userId && member.IsActive && !member.IsDeleted).Any() ||
+                 SqlSugar.SqlFunc.Subqueryable<ProjectManagementTaskGrantEntity>()
+                    .Where(grant => grant.ProjectId == project.Id && grant.TenantId == tenantId && grant.AppCode == appCode &&
+                        grant.GranteeUserId == userId && grant.IsActive && !grant.IsDeleted).Any()))
             .AnyAsync(cancellationToken);
         if (!visible) throw new ValidationException("当前用户无权查看该项目", ErrorCodes.PermissionDenied);
     }
@@ -64,6 +67,80 @@ public sealed class ProjectManagementAccessPolicy(IWorkspaceDatabaseAccessor dat
         if (role == "Member" && string.Equals(assigneeUserId, userId, StringComparison.OrdinalIgnoreCase)) return;
         throw new ValidationException("当前项目角色不能修改该任务", ErrorCodes.PermissionDenied);
     }
+
+    /// <summary>
+    /// Comments are the only mutation an external task grantee may receive.
+    /// All task-management, attachment and member operations remain governed by
+    /// <see cref="EnsureCanManageTaskAsync(string,string?,CancellationToken)"/>.
+    /// </summary>
+    public async Task EnsureCanCommentOnTaskAsync(
+        string projectId,
+        string taskId,
+        string? assigneeUserId,
+        CancellationToken cancellationToken = default)
+    {
+        if (await CanManageTaskAsync(projectId, taskId, assigneeUserId, cancellationToken)) return;
+        var canComment = await HasActiveTaskGrantAsync(projectId, taskId, RequireUserId(), requireComment: true, cancellationToken);
+        if (!canComment)
+            throw new ValidationException("当前用户无权在该任务发表评论", ErrorCodes.PermissionDenied);
+    }
+
+    public async Task<ProjectManagementTaskAccessCapabilities> GetTaskAccessCapabilitiesAsync(
+        string projectId,
+        string taskId,
+        string? assigneeUserId,
+        CancellationToken cancellationToken = default)
+    {
+        var canManage = await CanManageTaskAsync(projectId, taskId, assigneeUserId, cancellationToken);
+        if (canManage) return new ProjectManagementTaskAccessCapabilities(true, true, false);
+        var userId = RequireUserId();
+        var hasGrant = await HasActiveTaskGrantAsync(projectId, taskId, userId, requireComment: false, cancellationToken);
+        var canComment = hasGrant && await HasActiveTaskGrantAsync(projectId, taskId, userId, requireComment: true, cancellationToken);
+        return new ProjectManagementTaskAccessCapabilities(false, canComment, hasGrant);
+    }
+
+    public async Task EnsureCanCreateExternalTaskGrantAsync(
+        string projectId,
+        string taskId,
+        string? assigneeUserId,
+        CancellationToken cancellationToken = default)
+    {
+        await EnsureCanManageTaskAsync(projectId, taskId, null, assigneeUserId, cancellationToken: cancellationToken);
+        if (!currentUser.IsAsterErpPlatformAdmin() &&
+            !currentUser.HasAsterErpPermission("*") &&
+            !currentUser.HasAsterErpPermission(PermissionCodes.ProjectManagementTaskShare))
+            throw new ValidationException("没有向项目外人员共享任务的权限", ErrorCodes.PermissionDenied);
+    }
+
+    private async Task<bool> CanManageTaskAsync(
+        string projectId,
+        string taskId,
+        string? assigneeUserId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await EnsureCanManageTaskAsync(projectId, taskId, null, assigneeUserId, cancellationToken: cancellationToken);
+            return true;
+        }
+        catch (ValidationException)
+        {
+            return false;
+        }
+    }
+
+    private Task<bool> HasActiveTaskGrantAsync(
+        string projectId,
+        string taskId,
+        string userId,
+        bool requireComment,
+        CancellationToken cancellationToken) =>
+        databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementTaskGrantEntity>()
+            .Where(grant => grant.ProjectId == projectId && grant.TaskId == taskId &&
+                grant.TenantId == RequireTenantId() && grant.AppCode == RequireAppCode() &&
+                grant.GranteeUserId == userId && grant.IsActive && !grant.IsDeleted &&
+                (!requireComment || grant.CanComment))
+            .AnyAsync(cancellationToken);
 
     public async Task EnsureCanDeleteTaskAttachmentAsync(
         string projectId,
@@ -237,3 +314,8 @@ public sealed class ProjectManagementAccessPolicy(IWorkspaceDatabaseAccessor dat
     private string RequireAppCode() => currentUser.GetAsterErpAppCode()?.Trim().ToUpperInvariant() ?? throw new ValidationException("当前会话缺少应用", ErrorCodes.PermissionDenied);
     private string RequireUserId() => currentUser.GetAsterErpUserId()?.Trim() ?? throw new ValidationException("当前会话缺少用户", ErrorCodes.PermissionDenied);
 }
+
+public sealed record ProjectManagementTaskAccessCapabilities(
+    bool CanEdit,
+    bool CanComment,
+    bool IsReadOnlyGrant);

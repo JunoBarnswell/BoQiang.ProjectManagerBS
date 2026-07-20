@@ -1,6 +1,7 @@
 using AsterERP.Api.Infrastructure.Database;
 using AsterERP.Api.Infrastructure.Security;
 using AsterERP.Api.Modules.ProjectManagement;
+using AsterERP.Api.Modules.Platform;
 using AsterERP.Api.Modules.System.Users;
 using AsterERP.Contracts.ProjectManagement;
 using AsterERP.Shared;
@@ -117,11 +118,14 @@ public sealed class ProjectManagementProjectService(
             CreatedBy = RequireUserId(),
             CreatedTime = now
         };
+        var initialMembers = await CreateInitialMembersAsync(db, entity, request.InitialMembers, now, cancellationToken);
         db.Ado.BeginTran();
         try
         {
             await db.Insertable(entity).ExecuteCommandAsync(cancellationToken);
             await db.Insertable(ownerMember).ExecuteCommandAsync(cancellationToken);
+            if (initialMembers.Count > 0)
+                await db.Insertable(initialMembers.ToArray()).ExecuteCommandAsync(cancellationToken);
             await WriteActivityAsync(entity, "created", $"创建项目 {entity.ProjectName}", CreateChanges(null, entity), now, cancellationToken);
             await WriteSyncJournalAsync(entity, "created", cancellationToken);
             db.Ado.CommitTran();
@@ -132,6 +136,24 @@ public sealed class ProjectManagementProjectService(
             throw;
         }
         await PublishInvalidationAsync(entity, "project.created", ["projectCode", "projectName", "status", "priority", "ownerUserId", "startDate", "dueDate", "progressPercent"], request.ClientMutationId, null, cancellationToken);
+        if (realtimePublisher is not null)
+        {
+            foreach (var member in initialMembers)
+            {
+                await realtimePublisher.PublishInvalidationAsync(new ProjectManagementDataInvalidationEvent(
+                    tenantId,
+                    ProjectManagementPlatformScope.AppCode,
+                    "ProjectMember",
+                    member.Id,
+                    "project.member.added",
+                    member.VersionNo,
+                    Activity.Current?.Id ?? Guid.NewGuid().ToString("N"),
+                    entity.Id),
+                    cancellationToken);
+            }
+        }
+        if (imConversationService is not null)
+            await imConversationService.SynchronizeProjectLinksAsync(entity.Id, cancellationToken);
         return await MapAsync(entity, cancellationToken);
     }
 
@@ -387,6 +409,76 @@ public sealed class ProjectManagementProjectService(
         previousOwner.UpdatedBy = RequireUserId();
         previousOwner.UpdatedTime = now;
         await db.Updateable(previousOwner).ExecuteCommandAsync(cancellationToken);
+    }
+
+    private async Task<IReadOnlyList<ProjectManagementProjectMemberEntity>> CreateInitialMembersAsync(
+        ISqlSugarClient db,
+        ProjectManagementProjectEntity project,
+        IReadOnlyList<ProjectManagementProjectInitialMemberUpsertRequest>? requestedMembers,
+        DateTime now,
+        CancellationToken cancellationToken)
+    {
+        var requested = requestedMembers ?? [];
+        if (requested.Count > 100)
+            throw new ValidationException("项目初始成员不能超过 100 人");
+
+        var memberUserIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var result = new List<ProjectManagementProjectMemberEntity>();
+        foreach (var requestedMember in requested)
+        {
+            var userId = NormalizeRequired(requestedMember.UserId, "项目成员用户不能为空");
+            if (!memberUserIds.Add(userId))
+                throw new ValidationException("项目初始成员不能重复");
+            if (string.Equals(userId, project.OwnerUserId, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var roleCode = ProjectManagementDomainRules.RequireRole(requestedMember.RoleCode);
+            if (string.Equals(roleCode, "Owner", StringComparison.Ordinal))
+                throw new ValidationException("项目负责人只能通过负责人字段设置");
+            if (!string.IsNullOrWhiteSpace(requestedMember.ScopeRootTaskId))
+                throw new ValidationException("项目创建时尚不能为成员设置任务范围，请在创建后配置 Lead 范围");
+            await EnsureInitialMemberCandidateAsync(userId, NormalizeOptional(requestedMember.EmploymentId), cancellationToken);
+            result.Add(new ProjectManagementProjectMemberEntity
+            {
+                TenantId = project.TenantId,
+                AppCode = project.AppCode,
+                ProjectId = project.Id,
+                UserId = userId,
+                EmploymentId = NormalizeOptional(requestedMember.EmploymentId),
+                RoleCode = roleCode,
+                IsActive = true,
+                JoinedAt = now,
+                VersionNo = 1,
+                CreatedBy = RequireUserId(),
+                CreatedTime = now,
+            });
+        }
+
+        return result;
+    }
+
+    private async Task EnsureInitialMemberCandidateAsync(string userId, string? employmentId, CancellationToken cancellationToken)
+    {
+        var currentDb = databaseAccessor.GetCurrentDb();
+        if (currentDb.DbMaintenance.IsAnyTable("system_users", false))
+        {
+            var isEnabled = await currentDb.Queryable<SystemUserEntity>()
+                .Where(user => user.Id == userId && !user.IsDeleted && user.Status == "Enabled")
+                .AnyAsync(cancellationToken);
+            if (!isEnabled)
+                throw new ValidationException("项目成员不存在、已删除或已停用");
+        }
+
+        var mainDb = databaseAccessor.MainDb;
+        if (!mainDb.DbMaintenance.IsAnyTable("system_user_tenant_memberships", false))
+            return;
+        var isTenantMember = await mainDb.Queryable<SystemUserTenantMembershipEntity>()
+            .Where(member => member.UserId == userId && member.TenantId == RequireTenantId() &&
+                !member.IsDeleted && member.Status == "Enabled" &&
+                (string.IsNullOrWhiteSpace(employmentId) || member.Id == employmentId))
+            .AnyAsync(cancellationToken);
+        if (!isTenantMember)
+            throw new ValidationException("项目成员必须是当前租户的启用用户");
     }
 
     private async Task WriteActivityAsync(

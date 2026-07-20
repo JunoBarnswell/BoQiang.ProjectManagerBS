@@ -31,6 +31,8 @@ public sealed class ProjectManagementMyWorkService(
         {
             projects = projects.Where(project => project.OwnerUserId == userId || SqlFunc.Subqueryable<ProjectManagementProjectMemberEntity>()
                 .Where(member => member.ProjectId == project.Id && member.TenantId == tenantId && member.AppCode == appCode && member.UserId == userId && member.IsActive && !member.IsDeleted)
+                .Any() || SqlFunc.Subqueryable<ProjectManagementTaskGrantEntity>()
+                .Where(grant => grant.ProjectId == project.Id && grant.TenantId == tenantId && grant.AppCode == appCode && grant.GranteeUserId == userId && grant.IsActive && !grant.IsDeleted)
                 .Any());
         }
         if (keyword is not null)
@@ -68,7 +70,9 @@ public sealed class ProjectManagementMyWorkService(
             tasks = tasks.Where(task => SqlFunc.Subqueryable<ProjectManagementProjectEntity>()
                 .Where(project => project.Id == task.ProjectId && project.TenantId == tenantId && project.AppCode == appCode && !project.IsDeleted &&
                     (project.OwnerUserId == userId || SqlFunc.Subqueryable<ProjectManagementProjectMemberEntity>()
-                        .Where(member => member.ProjectId == project.Id && member.TenantId == tenantId && member.AppCode == appCode && member.UserId == userId && member.IsActive && !member.IsDeleted).Any())).Any());
+                        .Where(member => member.ProjectId == project.Id && member.TenantId == tenantId && member.AppCode == appCode && member.UserId == userId && member.IsActive && !member.IsDeleted).Any() ||
+                     SqlFunc.Subqueryable<ProjectManagementTaskGrantEntity>()
+                        .Where(grant => grant.TaskId == task.Id && grant.TenantId == tenantId && grant.AppCode == appCode && grant.GranteeUserId == userId && grant.IsActive && !grant.IsDeleted).Any())).Any());
         }
         if (!string.IsNullOrWhiteSpace(normalizedQuery.ProjectId)) tasks = tasks.Where(task => task.ProjectId == normalizedQuery.ProjectId);
         if (!normalizedQuery.IncludeCompleted) tasks = tasks.Where(task => task.Status != ProjectManagementDomainRules.TaskDone && task.Status != ProjectManagementDomainRules.TaskCancelled);
@@ -122,7 +126,8 @@ public sealed class ProjectManagementMyWorkService(
     {
         tasks = tasks.Where(task => task.AssigneeUserId == userId || task.CreatedBy == userId ||
             SqlFunc.Subqueryable<ProjectManagementTaskParticipantEntity>().Where(participant => participant.TaskId == task.Id && participant.TenantId == tenantId && participant.AppCode == appCode && participant.UserId == userId && !participant.IsDeleted).Any() ||
-            SqlFunc.Subqueryable<ProjectManagementTaskCommentEntity>().Where(comment => comment.TaskId == task.Id && comment.TenantId == tenantId && comment.AppCode == appCode && !comment.IsDeleted && comment.MentionUserIdsJson != null && comment.MentionUserIdsJson.Contains($"\"{userId}\"")).Any());
+            SqlFunc.Subqueryable<ProjectManagementTaskCommentEntity>().Where(comment => comment.TaskId == task.Id && comment.TenantId == tenantId && comment.AppCode == appCode && !comment.IsDeleted && comment.MentionUserIdsJson != null && comment.MentionUserIdsJson.Contains($"\"{userId}\"")).Any() ||
+            SqlFunc.Subqueryable<ProjectManagementTaskGrantEntity>().Where(grant => grant.TaskId == task.Id && grant.TenantId == tenantId && grant.AppCode == appCode && grant.GranteeUserId == userId && grant.IsActive && !grant.IsDeleted).Any());
         return category switch
         {
             "today" => tasks.Where(task => task.DueDate >= today && task.DueDate < tomorrow),

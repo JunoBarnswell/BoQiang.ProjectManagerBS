@@ -14,6 +14,7 @@ import { ImUnreadEntry } from '../../features/im/components/ImUnreadEntry';
 import { ProjectManagementWorkbenchLayout } from '../../features/project-management/components/ProjectManagementWorkbenchLayout';
 import { ProjectManagementImConversationTargetLink } from '../../features/project-management/im/ProjectManagementImConversationTargetLink';
 import { ProjectManagementNotificationEntry } from '../../features/project-management/notifications/ProjectManagementNotificationEntry';
+import { ProjectManagementNotificationToast } from '../../features/project-management/notifications/ProjectManagementNotificationToast';
 import { isProjectManagementWorkbenchPath, projectManagementPlatformRoutePrefix } from '../../features/project-management/state/projectManagementPlatformRoutes';
 import { useConfirm } from '../../shared/feedback/useConfirm';
 import { resolveMenuLabel } from '../navigation/menuLabels';
@@ -246,6 +247,7 @@ export function AppLayout() {
           ? <ProjectManagementImConversationTargetLink conversationId={conversation.id} />
           : null}
       />
+      <ProjectManagementNotificationToast />
     </ImProvider>
   );
 }

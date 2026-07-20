@@ -19,7 +19,18 @@ public sealed record ProjectManagementProjectUpsertRequest(
     int? WipLimit = null,
     decimal ProgressPercent = 0,
     long VersionNo = 0,
-    string? ClientMutationId = null);
+    string? ClientMutationId = null,
+    IReadOnlyList<ProjectManagementProjectInitialMemberUpsertRequest>? InitialMembers = null);
+
+/// <summary>
+/// Member configuration captured while a project is being created. The
+/// project owner is created by the server and must not be included here.
+/// </summary>
+public sealed record ProjectManagementProjectInitialMemberUpsertRequest(
+    string UserId,
+    string? EmploymentId = null,
+    string RoleCode = "Member",
+    string? ScopeRootTaskId = null);
 
 public sealed record ProjectManagementProjectArchiveRequest(long VersionNo, string? ClientMutationId = null);
 

@@ -91,6 +91,47 @@ public sealed class ProjectManagementProjectServiceTests
     }
 
     [Fact]
+    public async Task Project_create_persists_initial_members_atomically_and_keeps_owner_server_controlled()
+    {
+        using var db = CreateDb("initial-members");
+        await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
+        var service = new ProjectManagementProjectService(
+            new TestWorkspaceDatabaseAccessor(db),
+            CreateUser("owner", "tenant-a", "SYSTEM"));
+
+        var project = await service.CreateAsync(new ProjectManagementProjectUpsertRequest(
+            "PM-MEMBERS",
+            "成员配置项目",
+            InitialMembers:
+            [
+                new ProjectManagementProjectInitialMemberUpsertRequest("manager", RoleCode: "Manager"),
+                new ProjectManagementProjectInitialMemberUpsertRequest("lead", RoleCode: "Lead"),
+                new ProjectManagementProjectInitialMemberUpsertRequest("owner", RoleCode: "Member"),
+            ]));
+
+        var members = await db.Queryable<ProjectManagementProjectMemberEntity>()
+            .Where(member => member.ProjectId == project.Id && !member.IsDeleted)
+            .OrderBy(member => member.UserId)
+            .ToListAsync();
+        Assert.Equal(3, members.Count);
+        Assert.Equal("Owner", Assert.Single(members, member => member.UserId == "owner").RoleCode);
+        Assert.Equal("Manager", Assert.Single(members, member => member.UserId == "manager").RoleCode);
+        Assert.Equal("Lead", Assert.Single(members, member => member.UserId == "lead").RoleCode);
+
+        await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() =>
+            service.CreateAsync(new ProjectManagementProjectUpsertRequest(
+                "PM-MEMBERS-INVALID",
+                "重复成员项目",
+                InitialMembers:
+                [
+                    new ProjectManagementProjectInitialMemberUpsertRequest("duplicate"),
+                    new ProjectManagementProjectInitialMemberUpsertRequest("duplicate"),
+                ])));
+        Assert.False(await db.Queryable<ProjectManagementProjectEntity>()
+            .AnyAsync(item => item.ProjectCode == "PM-MEMBERS-INVALID" && !item.IsDeleted));
+    }
+
+    [Fact]
     public async Task Project_service_enforces_status_machine_and_dates_on_update()
     {
         using var db = new SqlSugarClient(new ConnectionConfig

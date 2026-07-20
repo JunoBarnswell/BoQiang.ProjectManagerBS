@@ -5,7 +5,8 @@ public sealed record ProjectManagementTaskCommentUpsertRequest(
     string? ParentCommentId = null,
     IReadOnlyList<string>? MentionUserIds = null,
     long VersionNo = 0,
-    IReadOnlyList<string>? AttachmentIds = null);
+    IReadOnlyList<string>? AttachmentIds = null,
+    bool AllowMentionedComment = false);
 
 public sealed record ProjectManagementTaskCommentQuery(
     int PageIndex = 1,

@@ -31,6 +31,10 @@ public static class ProjectManagementDataPermissionFilterRegistrar
                 (!restrictToMembership || project.OwnerUserId == userId ||
                  SqlFunc.Subqueryable<ProjectManagementProjectMemberEntity>()
                      .Where(member => member.ProjectId == project.Id && member.TenantId == tenantId && member.AppCode == appCode && member.UserId == userId && member.IsActive && !member.IsDeleted)
+                     .Any() ||
+                 SqlFunc.Subqueryable<ProjectManagementTaskGrantEntity>()
+                     .Where(grant => grant.ProjectId == project.Id && grant.TenantId == tenantId && grant.AppCode == appCode &&
+                         grant.GranteeUserId == userId && grant.IsActive && !grant.IsDeleted)
                      .Any()));
             return true;
         }
@@ -95,6 +99,21 @@ public static class ProjectManagementDataPermissionFilterRegistrar
             db.QueryFilter.AddTableFilter<ProjectManagementTaskParticipantEntity>(participant =>
                 participant.TenantId == tenantId && participant.AppCode == appCode &&
                 (!restrictToMembership || SqlFunc.Subqueryable<ProjectManagementTaskEntity>().Where(taskScopePredicate).Where(task => task.Id == participant.TaskId).Any()));
+            return true;
+        }
+
+        if (entityType == typeof(ProjectManagementTaskGrantEntity))
+        {
+            db.QueryFilter.AddTableFilter<ProjectManagementTaskGrantEntity>(grant =>
+                grant.TenantId == tenantId && grant.AppCode == appCode &&
+                (!restrictToMembership || grant.GranteeUserId == userId ||
+                 SqlFunc.Subqueryable<ProjectManagementProjectEntity>()
+                     .Where(project => project.Id == grant.ProjectId && project.TenantId == tenantId && project.AppCode == appCode &&
+                         (project.OwnerUserId == userId || SqlFunc.Subqueryable<ProjectManagementProjectMemberEntity>()
+                             .Where(member => member.ProjectId == project.Id && member.TenantId == tenantId && member.AppCode == appCode &&
+                                 member.UserId == userId && member.IsActive && !member.IsDeleted)
+                             .Any()))
+                     .Any()));
             return true;
         }
 

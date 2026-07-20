@@ -7,6 +7,7 @@ export const projectManagementWorkbenchMessagesEnUS = {
   'projectManagement.workbench.selector.title': 'Projects',
   'projectManagement.workbench.selector.description': 'Choose a project to open its overview and tasks workspace.',
   'projectManagement.workbench.selector.create': 'New project',
+  'projectManagement.workbench.selector.edit': 'Edit project',
   'projectManagement.workbench.selector.searchAria': 'Search projects',
   'projectManagement.workbench.selector.searchPlaceholder': 'Search by project name or code',
   'projectManagement.workbench.selector.name': 'Name',

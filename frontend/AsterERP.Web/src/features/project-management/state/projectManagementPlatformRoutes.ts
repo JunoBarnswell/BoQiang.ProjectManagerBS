@@ -3,6 +3,7 @@ export const projectManagementPlatformRoutePrefix = '/platform/project-managemen
 export const projectManagementRoutePaths = [
   'projects/:projectId/overview',
   'projects/:projectId/requirements',
+  'projects/:projectId/members',
 ] as const;
 
 export function isProjectManagementWorkbenchPath(pathname: string): boolean {
@@ -18,10 +19,15 @@ export function normalizeProjectManagementTargetRoute(targetRoute: string): stri
   if (!targetRoute.startsWith('/')) return targetRoute;
 
   const route = targetRoute.slice(1);
-  const taskMatch = /^projects\/([^/]+)\/tasks(?:\?taskId=([^&]+))?$/.exec(route);
+  const taskMatch = /^projects\/([^/]+)\/tasks(?:\?(.+))?$/.exec(route);
   if (taskMatch) {
-    const query = taskMatch[2] ? `?view=tree&taskId=${taskMatch[2]}` : '?view=tree';
-    return `${projectManagementPlatformRoutePrefix}/projects/${taskMatch[1]}/requirements${query}`;
+    const params = new URLSearchParams(taskMatch[2] ?? '');
+    const taskId = params.get('taskId') ?? params.get('selectedTaskId');
+    const focus = params.get('focus');
+    const query = new URLSearchParams({ view: 'tree' });
+    if (taskId) query.set('taskId', taskId);
+    if (focus) query.set('focus', focus);
+    return `${projectManagementPlatformRoutePrefix}/projects/${taskMatch[1]}/requirements?${query.toString()}`;
   }
   return route.startsWith('projects/')
     ? toProjectManagementPlatformRoute(route)
