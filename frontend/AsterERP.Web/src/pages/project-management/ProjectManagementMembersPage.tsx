@@ -1,61 +1,76 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useMemo, useState } from 'react';
+import { useParams } from 'react-router-dom';
 
 import {
   createProjectManagementMember,
   deleteProjectManagementMember,
-  getProjectManagementMemberCandidates,
   getProjectManagementMembers,
   getProjectManagementTasks,
   updateProjectManagementMember,
-} from "../../api/project-management/projectManagement.api";
+} from '../../api/project-management/projectManagement.api';
 import type {
   ProjectManagementMember,
   ProjectManagementMemberUpsertRequest,
-} from "../../api/project-management/projectManagement.types";
-import { isHttpError } from "../../core/http/httpError";
-import { projectManagementQueryKeys } from "../../core/query/projectManagementQueryKeys";
-import { useApiMutation } from "../../core/query/useApiMutation";
-import { useProjectManagementWorkspaceScope } from "../../features/project-management/state/projectManagementWorkspaceScope";
-import { PermissionButton } from "../../shared/auth/PermissionButton";
-import { PermissionGuard } from "../../shared/auth/PermissionGuard";
-import { useMessage } from "../../shared/feedback/useMessage";
-import { ResponsivePage } from "../../shared/responsive/ResponsivePage";
-import { Page403 } from "../../shared/status/Page403";
-import { PageError } from "../../shared/status/PageError";
-import { PageLoading } from "../../shared/status/PageLoading";
-import { getErrorMessage } from "../../shared/utils/errorMessage";
+} from '../../api/project-management/projectManagement.types';
+import { isHttpError } from '../../core/http/httpError';
+import { projectManagementQueryKeys } from '../../core/query/projectManagementQueryKeys';
+import { useApiMutation } from '../../core/query/useApiMutation';
+import { ProjectMemberFormPanel } from '../../features/project-management/members/ProjectMemberFormPanel';
+import { useProjectManagementI18n } from '../../features/project-management/projectManagementI18n';
+import { useProjectManagementWorkspaceScope } from '../../features/project-management/state/projectManagementWorkspaceScope';
+import '../../features/project-management/ui/projectWorkbench.css';
+import { PermissionButton } from '../../shared/auth/PermissionButton';
+import { PermissionGuard } from '../../shared/auth/PermissionGuard';
+import { useMessage } from '../../shared/feedback/useMessage';
+import { ResponsivePage } from '../../shared/responsive/ResponsivePage';
+import { Page403 } from '../../shared/status/Page403';
+import { PageError } from '../../shared/status/PageError';
+import { PageLoading } from '../../shared/status/PageLoading';
+import { getErrorMessage } from '../../shared/utils/errorMessage';
+import { PmChip } from '../../ui/project-management';
 
-const emptyForm: ProjectManagementMemberUpsertRequest = { userId: "", roleCode: "Member", versionNo: 0 };
-const projectMemberRoles = ["Owner", "Manager", "Lead", "Member", "Viewer"] as const;
+const emptyForm: ProjectManagementMemberUpsertRequest = { userId: '', roleCode: 'Member', versionNo: 0 };
+
+function roleChipColor(roleCode: string): 'default' | 'primary' | 'success' | 'warning' | 'error' {
+  switch (roleCode) {
+    case 'Owner':
+      return 'primary';
+    case 'Manager':
+      return 'success';
+    case 'Lead':
+      return 'warning';
+    case 'Viewer':
+      return 'default';
+    default:
+      return 'default';
+  }
+}
 
 export function ProjectManagementMembersPage() {
+  const { t } = useProjectManagementI18n();
   const scope = useProjectManagementWorkspaceScope();
-  const { projectId = "" } = useParams<{ projectId: string }>();
+  const { projectId = '' } = useParams<{ projectId: string }>();
   const message = useMessage();
   const queryClient = useQueryClient();
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
+
   const membersQuery = useQuery({
     queryKey: projectManagementQueryKeys.members(scope, projectId),
     queryFn: ({ signal }) => getProjectManagementMembers(projectId, signal),
     enabled: scope.isAvailable && Boolean(projectId),
   });
-  const candidatesQuery = useQuery({
-    queryKey: projectManagementQueryKeys.memberCandidates(scope, { pageIndex: 1, pageSize: 100 }),
-    queryFn: ({ signal }) => getProjectManagementMemberCandidates({ pageIndex: 1, pageSize: 100 }, signal),
-    enabled: scope.isAvailable && Boolean(projectId),
-  });
+
   const topicRootsQuery = useQuery({
     queryKey: projectManagementQueryKeys.tasks(scope, {
       projectId,
       pageIndex: 1,
       pageSize: 200,
-      viewKey: "tree",
-      sortBy: "tree",
-      sortDirection: "asc",
+      viewKey: 'tree',
+      sortBy: 'tree',
+      sortDirection: 'asc',
       includeCompleted: true,
     }),
     queryFn: ({ signal }) =>
@@ -64,9 +79,9 @@ export function ProjectManagementMembersPage() {
           projectId,
           pageIndex: 1,
           pageSize: 200,
-          viewKey: "tree",
-          sortBy: "tree",
-          sortDirection: "asc",
+          viewKey: 'tree',
+          sortBy: 'tree',
+          sortDirection: 'asc',
           includeCompleted: true,
         },
         signal,
@@ -78,36 +93,57 @@ export function ProjectManagementMembersPage() {
     const handler = (event: BeforeUnloadEvent) => {
       if (!dirty) return;
       event.preventDefault();
-      event.returnValue = "成员表单有未保存更改。";
+      event.returnValue = '成员表单有未保存更改。';
     };
-    window.addEventListener("beforeunload", handler);
-    return () => window.removeEventListener("beforeunload", handler);
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
   }, [dirty]);
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: projectManagementQueryKeys.members(scope, projectId) });
+
   const saveMutation = useApiMutation({
     mutationFn: () =>
       editingId
         ? updateProjectManagementMember(projectId, editingId, form)
         : createProjectManagementMember(projectId, form),
-    onError: (error) => message.error(getErrorMessage(error, editingId ? "成员保存失败" : "成员添加失败")),
+    onError: (error) => message.error(getErrorMessage(error, editingId ? '成员保存失败' : '成员添加失败')),
     onSuccess: async () => {
-      message.success(editingId ? "成员已更新" : "成员已添加");
+      message.success(editingId ? '成员已更新' : '成员已添加');
       setForm(emptyForm);
       setEditingId(null);
       setDirty(false);
       await refresh();
     },
   });
+
   const deleteMutation = useApiMutation({
     mutationFn: (member: ProjectManagementMember) =>
       deleteProjectManagementMember(projectId, member.id, member.versionNo),
-    onError: (error) => message.error(getErrorMessage(error, "成员移除失败")),
+    onError: (error) => message.error(getErrorMessage(error, '成员移除失败')),
     onSuccess: async () => {
-      message.success("成员已移除");
+      message.success('成员已移除');
       await refresh();
     },
   });
+
+  const members = membersQuery.data?.data?.items ?? [];
+  const excludeUserIds = useMemo(
+    () => new Set(members.filter((member) => member.isActive).map((member) => member.userId)),
+    [members],
+  );
+  const topicRoots = (topicRootsQuery.data?.data?.items ?? []).filter((task) => !task.parentTaskId);
+  const topicRootLabels = Object.fromEntries(topicRoots.map((task) => [task.id, `${task.taskCode} · ${task.title}`]));
+
+  const updateForm = (next: ProjectManagementMemberUpsertRequest) => {
+    setForm(next);
+    setDirty(true);
+  };
+
+  const selectedUserLabel = useMemo(() => {
+    if (!form.userId) return undefined;
+    const member = members.find((item) => item.userId === form.userId);
+    return member?.displayName;
+  }, [form.userId, members]);
 
   if (membersQuery.isLoading) return <PageLoading />;
   if (membersQuery.isError) {
@@ -123,154 +159,66 @@ export function ProjectManagementMembersPage() {
       />
     );
   }
-  const members = membersQuery.data?.data?.items ?? [];
-  const candidates = candidatesQuery.data?.data?.items ?? [];
-  const userCandidates = Array.from(candidates.reduce((byUser, candidate) => {
-    const current = byUser.get(candidate.userId);
-    if (!current || candidate.isSelectable && !current.isSelectable) byUser.set(candidate.userId, candidate);
-    return byUser;
-  }, new Map<string, (typeof candidates)[number]>()).values());
-  const memberDisplayNames = Object.fromEntries(userCandidates.map((candidate) => [candidate.userId, candidate.displayName || candidate.userName]));
-  const employmentCandidates = candidates.filter((candidate) => candidate.userId === form.userId);
-  const topicRoots = (topicRootsQuery.data?.data?.items ?? []).filter((task) => !task.parentTaskId);
-  const topicRootLabels = Object.fromEntries(topicRoots.map((task) => [task.id, `${task.taskCode} · ${task.title}`]));
-  const updateForm = (next: ProjectManagementMemberUpsertRequest) => {
-    setForm(next);
-    setDirty(true);
-  };
 
   return (
     <ResponsivePage title="项目成员" description="维护项目成员、角色与任务范围。" eyebrow="ProjectManagement / Members">
       <PermissionGuard code="project-management:member:manage" fallback={null}>
-        <section className="mb-4 rounded-lg border border-gray-200 p-4">
-          <h2 className="mb-3 font-semibold">{editingId ? "编辑成员" : "添加成员"}</h2>
-          <div className="grid gap-2 md:grid-cols-4">
-            <select
-              aria-label="成员用户"
-              value={form.userId}
-              disabled={Boolean(editingId)}
-              onChange={(event) => updateForm({ ...form, userId: event.target.value, employmentId: undefined })}
-            >
-              <option value="">选择用户</option>
-              {form.userId && !userCandidates.some((candidate) => candidate.userId === form.userId) ? (
-                <option value={form.userId}>用户别名暂不可用</option>
-              ) : null}
-              {userCandidates
-                .filter((candidate) => candidate.isSelectable || candidate.userId === form.userId)
-                .map((candidate) => (
-                  <option key={candidate.userId} value={candidate.userId}>
-                    {formatMemberCandidate(candidate)}
-                  </option>
-                ))}
-            </select>
-            <select
-              aria-label="成员任职"
-              value={form.employmentId ?? ""}
-              disabled={!form.userId || candidatesQuery.isLoading || candidatesQuery.isError}
-              onChange={(event) => {
-                const employmentId = event.target.value;
-                const candidate = employmentCandidates.find((item) => item.employmentId === employmentId);
-                updateForm({ ...form, employmentId: candidate?.employmentId });
-              }}
-            >
-              <option value="">选择任职关系</option>
-              {form.employmentId && !employmentCandidates.some((candidate) => candidate.employmentId === form.employmentId) ? (
-                <option value={form.employmentId}>任职关系暂不可用</option>
-              ) : null}
-              {employmentCandidates
-                .filter((candidate) => candidate.isSelectable || candidate.employmentId === form.employmentId)
-                .map((candidate) => (
-                  <option key={candidate.employmentId} value={candidate.employmentId}>
-                    {candidate.employmentName || candidate.positionName || "默认任职"}
-                  </option>
-                ))}
-            </select>
-            <select
-              aria-label="成员角色"
-              value={form.roleCode ?? ""}
-              onChange={(event) => {
-                const roleCode = event.target.value;
-                updateForm({ ...form, roleCode, scopeRootTaskId: roleCode === "Lead" ? form.scopeRootTaskId : undefined });
-              }}
-            >
-              {projectMemberRoles.map((roleCode) => (
-                <option key={roleCode} value={roleCode}>{roleCode}</option>
-              ))}
-            </select>
-            <select
-              aria-label="根主题任务范围"
-              value={form.scopeRootTaskId ?? ""}
-              disabled={form.roleCode !== "Lead" || topicRootsQuery.isLoading || topicRootsQuery.isError}
-              onChange={(event) => updateForm({ ...form, scopeRootTaskId: event.target.value || undefined })}
-            >
-              <option value="">整个项目（可选）</option>
-              {form.scopeRootTaskId && !topicRoots.some((task) => task.id === form.scopeRootTaskId) ? (
-                <option value={form.scopeRootTaskId}>任务范围暂不可用</option>
-              ) : null}
-              {topicRoots.map((task) => (
-                <option key={task.id} value={task.id}>{task.taskCode} · {task.title}</option>
-              ))}
-            </select>
-          </div>
-          <div className="mt-3 flex gap-2">
-            <PermissionButton
-              code="project-management:member:manage"
-              disabled={!form.userId.trim() || !form.employmentId || saveMutation.isPending}
-              onClick={() => saveMutation.mutate()}
-            >
-              {saveMutation.isPending ? "提交中…" : editingId ? "保存修改" : "添加成员"}
-            </PermissionButton>
-            {editingId ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setEditingId(null);
-                  setForm(emptyForm);
-                  setDirty(false);
-                }}
-              >
-                取消编辑
-              </button>
-            ) : null}
-          </div>
-          {candidatesQuery.isError ? (
-            <p className="mt-2 text-sm text-amber-700">
-              成员候选人加载失败，无法保存成员任职；现有成员仍可查看。
-              <button type="button" className="ml-2 underline" onClick={() => void candidatesQuery.refetch()}>重试</button>
-            </p>
-          ) : null}
-          {topicRootsQuery.isError ? (
-            <p className="mt-2 text-sm text-amber-700">
-              根主题任务加载失败，Lead 只能保存为整个项目范围。
-              <button type="button" className="ml-2 underline" onClick={() => void topicRootsQuery.refetch()}>重试</button>
-            </p>
-          ) : null}
-        </section>
+        <ProjectMemberFormPanel
+          editingId={editingId}
+          excludeUserIds={editingId ? [] : excludeUserIds}
+          form={form}
+          onCancelEdit={() => {
+            setEditingId(null);
+            setForm(emptyForm);
+            setDirty(false);
+          }}
+          onFormChange={updateForm}
+          onSubmit={() => saveMutation.mutate()}
+          pending={saveMutation.isPending}
+          projectId={projectId}
+          selectedUserLabel={selectedUserLabel}
+        />
       </PermissionGuard>
+
       {members.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-gray-300 p-8 text-center text-sm text-gray-500">
-          暂无项目成员
-        </div>
+        <div className="pm-member-table__empty">{t('projectManagement.members.list.empty')}</div>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-gray-200">
-          <table className="min-w-full text-left text-sm">
-            <thead className="bg-gray-50">
+        <div className="pm-member-table">
+          <table>
+            <thead>
               <tr>
-                <th className="px-3 py-2">用户</th>
-                <th className="px-3 py-2">角色</th>
-                <th className="px-3 py-2">任务范围</th>
-                <th className="px-3 py-2">状态</th>
-                <th className="px-3 py-2">操作</th>
+                <th>{t('projectManagement.members.list.user')}</th>
+                <th>{t('projectManagement.members.list.role')}</th>
+                <th>{t('projectManagement.members.list.scope')}</th>
+                <th>{t('projectManagement.members.list.status')}</th>
+                <th>{t('projectManagement.members.list.actions')}</th>
               </tr>
             </thead>
             <tbody>
               {members.map((member) => (
-                <tr className="border-t border-gray-100" key={member.id}>
-                  <td className="px-3 py-2">{member.displayName || memberDisplayNames[member.userId] || "用户别名暂不可用"}</td>
-                  <td className="px-3 py-2">{member.roleCode}</td>
-                  <td className="px-3 py-2">{member.scopeRootTaskId ? topicRootLabels[member.scopeRootTaskId] ?? "任务范围暂不可用" : "项目全部任务"}</td>
-                  <td className="px-3 py-2">{member.isActive ? "有效" : "已离开"}</td>
-                  <td className="px-3 py-2">
+                <tr key={member.id}>
+                  <td>
+                    <div className="pm-member-table__user">
+                      <span className="pm-member-table__user-name">
+                        {member.displayName || t('projectManagement.members.form.userUnavailable')}
+                      </span>
+                      <span className="pm-member-table__user-meta">{member.userId}</span>
+                    </div>
+                  </td>
+                  <td>
+                    <PmChip color={roleChipColor(member.roleCode)} label={member.roleCode} />
+                  </td>
+                  <td>
+                    {member.scopeRootTaskId
+                      ? topicRootLabels[member.scopeRootTaskId] ?? t('projectManagement.members.form.scopeUnavailable')
+                      : t('projectManagement.members.list.scopeAll')}
+                  </td>
+                  <td>
+                    {member.isActive
+                      ? t('projectManagement.members.list.active')
+                      : t('projectManagement.members.list.left')}
+                  </td>
+                  <td>
                     <div className="flex gap-2">
                       <PermissionButton
                         code="project-management:member:manage"
@@ -286,14 +234,14 @@ export function ProjectManagementMembersPage() {
                           setDirty(false);
                         }}
                       >
-                        编辑
+                        {t('projectManagement.members.list.edit')}
                       </PermissionButton>
                       <PermissionButton
                         code="project-management:member:manage"
                         disabled={deleteMutation.isPending}
                         onClick={() => deleteMutation.mutate(member)}
                       >
-                        移除
+                        {t('projectManagement.members.list.remove')}
                       </PermissionButton>
                     </div>
                   </td>
@@ -305,10 +253,4 @@ export function ProjectManagementMembersPage() {
       )}
     </ResponsivePage>
   );
-}
-
-function formatMemberCandidate(candidate: { displayName: string; userName: string; deptName?: string; positionName?: string }) {
-  const organization = [candidate.deptName, candidate.positionName].filter(Boolean).join(" · ");
-  const name = candidate.displayName || candidate.userName;
-  return organization ? `${name} · ${organization}` : name;
 }
