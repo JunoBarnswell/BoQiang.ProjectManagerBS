@@ -223,17 +223,6 @@ export function ProjectRequirementsScreen() {
             <input aria-label={t('projectManagement.workItems.searchAria')} className="pm-project-search" onChange={(event) => updateUrl('keyword', event.target.value)} placeholder={t('projectManagement.workItems.searchPlaceholder')} value={keyword} />
             <button className={filterOpen ? 'pm-workbench-command is-active' : 'pm-workbench-command'} onClick={() => setFilterOpen((current) => !current)} type="button">{t('projectManagement.workItems.filter')}</button>
             <button className={viewOpen ? 'pm-workbench-command is-active' : 'pm-workbench-command'} onClick={() => setViewOpen((current) => !current)} type="button">{t('projectManagement.workItems.view')}</button>
-            <button
-              aria-label={t('projectManagement.workItems.notifications')}
-              className="pm-workbench-command"
-              onClick={() => {
-                const trigger = document.querySelector<HTMLButtonElement>('[data-pm-notification-entry]');
-                trigger?.click();
-              }}
-              type="button"
-            >
-              <PmIcon name="bell" size={14} /> {t('projectManagement.workItems.notifications')}
-            </button>
             <button aria-busy={refreshing} aria-label={t('projectManagement.workItems.refresh')} className="pm-workbench-command" disabled={refreshing} onClick={() => { void refresh(); }} type="button">
               <span className={refreshing ? 'pm-refresh-icon is-spinning' : 'pm-refresh-icon'}><PmIcon name="refresh" size={14} /></span> {t('projectManagement.workItems.refresh')}
             </button>

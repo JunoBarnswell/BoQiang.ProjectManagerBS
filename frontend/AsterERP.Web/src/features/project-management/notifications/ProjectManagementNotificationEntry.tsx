@@ -1,11 +1,12 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 
 import {
   getProjectManagementNotifications,
-  markProjectManagementNotificationRead,
   markAllProjectManagementNotificationsRead,
+  markProjectManagementNotificationRead,
   openProjectManagementNotification,
 } from '../../../api/project-management/projectManagement.api';
 import type { ProjectManagementNotification } from '../../../api/project-management/projectManagement.types';
@@ -23,9 +24,44 @@ import { useProjectManagementWorkspaceScope } from '../state/projectManagementWo
 import { useProjectManagementBrowserNotifications } from './useProjectManagementBrowserNotifications';
 import { useProjectManagementNotificationRealtime } from './useProjectManagementNotificationRealtime';
 
+import './projectManagementNotificationEntry.css';
+
+const PANEL_WIDTH = 400;
+const PANEL_GAP = 8;
+const VIEWPORT_PADDING = 8;
+
 const notificationTypeOptions = [
-  ['', 'projectManagement.notification.type.all'], ['task.reminder', 'projectManagement.notification.type.taskReminder'], ['task.comment.mentioned', 'projectManagement.notification.type.mentioned'], ['task.assigned', 'projectManagement.notification.type.assigned'], ['task.participant.added', 'projectManagement.notification.type.participantAdded'], ['task.participant.removed', 'projectManagement.notification.type.participantRemoved'], ['task.status.changed', 'projectManagement.notification.type.statusChanged'], ['task.due-date.changed', 'projectManagement.notification.type.dueDateChanged'], ['milestone.risk.detected', 'projectManagement.notification.type.milestoneRisk'], ['project.excel-import', 'projectManagement.notification.type.excelImport'], ['sync.export', 'projectManagement.notification.type.syncExport'], ['sync.import', 'projectManagement.notification.type.syncImport'], ['operation.succeeded', 'projectManagement.notification.type.succeeded'], ['operation.failed', 'projectManagement.notification.type.failed'],
+  ['', 'projectManagement.notification.type.all'],
+  ['task.reminder', 'projectManagement.notification.type.taskReminder'],
+  ['task.comment.mentioned', 'projectManagement.notification.type.mentioned'],
+  ['task.assigned', 'projectManagement.notification.type.assigned'],
+  ['task.participant.added', 'projectManagement.notification.type.participantAdded'],
+  ['task.participant.removed', 'projectManagement.notification.type.participantRemoved'],
+  ['task.status.changed', 'projectManagement.notification.type.statusChanged'],
+  ['task.due-date.changed', 'projectManagement.notification.type.dueDateChanged'],
+  ['milestone.risk.detected', 'projectManagement.notification.type.milestoneRisk'],
+  ['project.excel-import', 'projectManagement.notification.type.excelImport'],
+  ['sync.export', 'projectManagement.notification.type.syncExport'],
+  ['sync.import', 'projectManagement.notification.type.syncImport'],
+  ['operation.succeeded', 'projectManagement.notification.type.succeeded'],
+  ['operation.failed', 'projectManagement.notification.type.failed'],
 ] as const;
+
+const notificationToneByType: Record<string, string> = {
+  'task.reminder': 'is-reminder',
+  'task.comment.mentioned': 'is-mention',
+  'task.assigned': 'is-assign',
+  'task.participant.added': 'is-assign',
+  'task.participant.removed': 'is-muted',
+  'task.status.changed': 'is-status',
+  'task.due-date.changed': 'is-due',
+  'milestone.risk.detected': 'is-risk',
+  'project.excel-import': 'is-sync',
+  'sync.export': 'is-sync',
+  'sync.import': 'is-sync',
+  'operation.succeeded': 'is-success',
+  'operation.failed': 'is-danger',
+};
 
 export function ProjectManagementNotificationEntry() {
   return (
@@ -42,10 +78,16 @@ function ProjectManagementNotificationEntryContent() {
   const userId = useAuthStore((state) => state.user?.userId ?? '');
   const queryClient = useQueryClient();
   const message = useMessage();
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
+  const [panelStyle, setPanelStyle] = useState<CSSProperties>({});
   const [unreadOnly, setUnreadOnly] = useState(false);
   const [notificationType, setNotificationType] = useState('');
-  const notificationQuery = useMemo(() => ({ pageIndex: 1, pageSize: 20, unreadOnly, ...(notificationType ? { notificationType } : {}) }), [notificationType, unreadOnly]);
+  const notificationQuery = useMemo(
+    () => ({ pageIndex: 1, pageSize: 20, unreadOnly, ...(notificationType ? { notificationType } : {}) }),
+    [notificationType, unreadOnly],
+  );
   const notifications = useQuery({
     enabled: scope.isAvailable,
     queryFn: ({ signal }) => getProjectManagementNotifications(notificationQuery, signal),
@@ -61,7 +103,11 @@ function ProjectManagementNotificationEntryContent() {
       await refresh();
       const target = result.data;
       if (!target?.isAvailable || !target.targetRoute) {
-        message.error(target?.unavailableReasonText ? format(target.unavailableReasonText.key, target.unavailableReasonText.arguments) : target?.unavailableReason ?? t('projectManagement.notification.unavailable'));
+        message.error(
+          target?.unavailableReasonText
+            ? format(target.unavailableReasonText.key, target.unavailableReasonText.arguments)
+            : target?.unavailableReason ?? t('projectManagement.notification.unavailable'),
+        );
         return;
       }
       setOpen(false);
@@ -86,42 +132,222 @@ function ProjectManagementNotificationEntryContent() {
   const page = notifications.data?.data;
   const browser = useProjectManagementBrowserNotifications({
     notifications: page?.items ?? [],
-    onOpen: (notificationId) => { void openNotificationById(notificationId).catch((error: unknown) => message.error(getErrorMessage(error, t('projectManagement.notification.openFailed')))); },
+    onOpen: (notificationId) => {
+      void openNotificationById(notificationId).catch((error: unknown) =>
+        message.error(getErrorMessage(error, t('projectManagement.notification.openFailed'))),
+      );
+    },
     scope,
     userId,
   });
   const realtimeState = useProjectManagementNotificationRealtime('/hubs/system-notification', scope, scope.isAvailable, refresh);
 
+  const updatePanelPosition = useCallback(() => {
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+    const rect = trigger.getBoundingClientRect();
+    const width = Math.min(PANEL_WIDTH, window.innerWidth - VIEWPORT_PADDING * 2);
+    const preferredRight = window.innerWidth - rect.right;
+    const right = Math.max(VIEWPORT_PADDING, Math.min(preferredRight, window.innerWidth - VIEWPORT_PADDING - width));
+    const top = Math.min(rect.bottom + PANEL_GAP, window.innerHeight - VIEWPORT_PADDING - 120);
+    setPanelStyle({
+      position: 'fixed',
+      top,
+      right,
+      width,
+      maxHeight: Math.max(240, window.innerHeight - top - VIEWPORT_PADDING),
+    });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open) return undefined;
+    updatePanelPosition();
+    window.addEventListener('resize', updatePanelPosition);
+    window.addEventListener('scroll', updatePanelPosition, true);
+    return () => {
+      window.removeEventListener('resize', updatePanelPosition);
+      window.removeEventListener('scroll', updatePanelPosition, true);
+    };
+  }, [open, updatePanelPosition]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (triggerRef.current?.contains(target) || panelRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open]);
+
   if (!scope.isAvailable) return null;
   const unread = page?.unreadCount ?? 0;
-  return (
-    <div className="relative hidden sm:block">
-      <button aria-expanded={open} className="relative cursor-pointer transition-colors hover:text-white" data-pm-notification-entry onClick={() => setOpen((value) => !value)} title={t('projectManagement.notification.title')} type="button">
-        <AppIcon className="text-lg" name="bell" />
-        {unread > 0 ? <span className="absolute -right-2 -top-2 min-w-4 rounded-full bg-red-500 px-1 text-[10px] font-semibold leading-4 text-white">{unread > 99 ? t('projectManagement.notification.countOverflow') : unread}</span> : null}
-      </button>
-      {open ? (
-        <div className="absolute right-0 top-8 z-50 w-96 rounded border border-gray-200 bg-white p-3 text-gray-800 shadow-xl">
-          <div className="mb-2 flex items-center justify-between">
-            <strong>{t('projectManagement.notification.title')}</strong>
-            <div className="flex items-center gap-2 text-xs">
-              <button className={!unreadOnly ? 'font-semibold text-blue-700' : ''} onClick={() => setUnreadOnly(false)} type="button">{t('projectManagement.notification.all')}</button>
-              <button className={unreadOnly ? 'font-semibold text-blue-700' : ''} onClick={() => setUnreadOnly(true)} type="button">{t('projectManagement.notification.unread')}</button>
-              <select aria-label={t('projectManagement.notification.typeAria')} className="max-w-24 rounded border border-gray-300 bg-white px-1 py-0.5" onChange={(event) => setNotificationType(event.target.value)} value={notificationType}>
-                {notificationTypeOptions.map(([value, key]) => <option key={value} value={value}>{t(key)}</option>)}
-              </select>
-              <button disabled={markAll.isPending || unread === 0} onClick={() => markAll.mutate()} type="button">{t('projectManagement.notification.markAllRead')}</button>
-            </div>
+  const items = page?.items ?? [];
+  const typeLabel = (type: string) => {
+    const matched = notificationTypeOptions.find(([value]) => value === type);
+    return matched ? t(matched[1]) : type;
+  };
+
+  const panel = open
+    ? createPortal(
+      <div
+        aria-label={t('projectManagement.notification.title')}
+        className="pm-notify__panel"
+        ref={panelRef}
+        role="dialog"
+        style={panelStyle}
+      >
+        <div className="pm-notify__head">
+          <div className="pm-notify__title-wrap">
+            <strong className="pm-notify__title">{t('projectManagement.notification.title')}</strong>
+            {unread > 0 ? <span className="pm-notify__count">{unread}</span> : null}
           </div>
-          {realtimeState !== 'connected' ? <p className="mb-2 text-xs text-amber-700">{t('projectManagement.notification.realtimeUnavailable')}</p> : null}
-          {browser.canRequestPermission ? <button className="mb-2 text-sm text-blue-700 underline" onClick={() => { void browser.requestPermission(); }} type="button">{t('projectManagement.notification.enableBrowser')}</button> : null}
-          {browser.supported && browser.permission === 'denied' ? <p className="mb-2 text-xs text-gray-500">{t('projectManagement.notification.browserDenied')}</p> : null}
-          {notifications.isLoading ? <div className="py-4 text-sm text-gray-500">{t('projectManagement.notification.loading')}</div> : null}
-          {notifications.isError ? <div className="py-4 text-sm text-red-600">{t('projectManagement.notification.loadFailed')}<button className="ml-2 underline" onClick={() => void notifications.refetch()} type="button">{t('projectManagement.operation.retry')}</button></div> : null}
-          {!notifications.isLoading && !notifications.isError && (page?.items.length ?? 0) === 0 ? <div className="py-4 text-sm text-gray-500">{t('projectManagement.notification.empty')}</div> : null}
-          {!notifications.isLoading && !notifications.isError && (page?.items.length ?? 0) > 0 ? <div className="max-h-96 space-y-2 overflow-y-auto">{page?.items.map((item) => <div className={`rounded border p-2 text-sm ${item.isRead ? 'border-gray-100' : 'border-blue-200 bg-blue-50'}`} key={item.id}><button className="block w-full text-left hover:bg-gray-50" disabled={openNotification.isPending} onClick={() => openNotification.mutate(item)} type="button"><div className="font-medium">{item.titleText ? format(item.titleText.key, item.titleText.arguments) : item.title}</div><div className="mt-1 text-gray-600">{item.messageText ? format(item.messageText.key, item.messageText.arguments) : item.message}</div><div className="mt-1 text-xs text-gray-400">{dateTime(item.createdTime)}</div></button>{!item.isRead ? <button className="mt-1 text-xs text-blue-700 underline" disabled={markRead.isPending} onClick={() => markRead.mutate(item)} type="button">{t('projectManagement.notification.markRead')}</button> : null}</div>)}</div> : null}
+          <button aria-label={t('common.close')} className="pm-notify__close" onClick={() => setOpen(false)} type="button">
+            <AppIcon name="x" />
+          </button>
         </div>
-      ) : null}
+
+        <div className="pm-notify__toolbar">
+          <div className="pm-notify__tabs" role="tablist">
+            <button
+              aria-selected={!unreadOnly}
+              className={!unreadOnly ? 'is-active' : undefined}
+              onClick={() => setUnreadOnly(false)}
+              role="tab"
+              type="button"
+            >
+              {t('projectManagement.notification.all')}
+            </button>
+            <button
+              aria-selected={unreadOnly}
+              className={unreadOnly ? 'is-active' : undefined}
+              onClick={() => setUnreadOnly(true)}
+              role="tab"
+              type="button"
+            >
+              {t('projectManagement.notification.unread')}
+              {unread > 0 ? <span>{unread}</span> : null}
+            </button>
+          </div>
+          <select
+            aria-label={t('projectManagement.notification.typeAria')}
+            className="pm-notify__type"
+            onChange={(event) => setNotificationType(event.target.value)}
+            value={notificationType}
+          >
+            {notificationTypeOptions.map(([value, key]) => (
+              <option key={value || 'all'} value={value}>{t(key)}</option>
+            ))}
+          </select>
+          <button
+            className="pm-notify__mark-all"
+            disabled={markAll.isPending || unread === 0}
+            onClick={() => markAll.mutate()}
+            type="button"
+          >
+            {t('projectManagement.notification.markAllRead')}
+          </button>
+        </div>
+
+        {realtimeState !== 'connected' ? (
+          <p className="pm-notify__alert is-warning">{t('projectManagement.notification.realtimeUnavailable')}</p>
+        ) : null}
+        {browser.canRequestPermission ? (
+          <button className="pm-notify__browser" onClick={() => { void browser.requestPermission(); }} type="button">
+            {t('projectManagement.notification.enableBrowser')}
+          </button>
+        ) : null}
+        {browser.supported && browser.permission === 'denied' ? (
+          <p className="pm-notify__alert is-muted">{t('projectManagement.notification.browserDenied')}</p>
+        ) : null}
+
+        <div className="pm-notify__body">
+          {notifications.isLoading ? <div className="pm-notify__state">{t('projectManagement.notification.loading')}</div> : null}
+          {notifications.isError ? (
+            <div className="pm-notify__state is-error">
+              <span>{t('projectManagement.notification.loadFailed')}</span>
+              <button onClick={() => void notifications.refetch()} type="button">{t('projectManagement.operation.retry')}</button>
+            </div>
+          ) : null}
+          {!notifications.isLoading && !notifications.isError && items.length === 0 ? (
+            <div className="pm-notify__empty">
+              <AppIcon name="inbox" />
+              <strong>{t('projectManagement.notification.empty')}</strong>
+            </div>
+          ) : null}
+          {!notifications.isLoading && !notifications.isError && items.length > 0 ? (
+            <ul className="pm-notify__list">
+              {items.map((item) => {
+                const title = item.titleText ? format(item.titleText.key, item.titleText.arguments) : item.title;
+                const body = item.messageText ? format(item.messageText.key, item.messageText.arguments) : item.message;
+                const tone = notificationToneByType[item.notificationType] ?? 'is-muted';
+                return (
+                  <li className={`pm-notify__item${item.isRead ? '' : ' is-unread'}`} key={item.id}>
+                    <button
+                      className="pm-notify__item-main"
+                      disabled={openNotification.isPending}
+                      onClick={() => openNotification.mutate(item)}
+                      type="button"
+                    >
+                      <span aria-hidden className={`pm-notify__dot ${tone}`} />
+                      <span className="pm-notify__item-content">
+                        <span className="pm-notify__item-meta">
+                          <span className={`pm-notify__chip ${tone}`}>{typeLabel(item.notificationType)}</span>
+                          <time dateTime={item.createdTime}>{dateTime(item.createdTime)}</time>
+                        </span>
+                        <span className="pm-notify__item-title">{title}</span>
+                        {body ? <span className="pm-notify__item-message">{body}</span> : null}
+                      </span>
+                    </button>
+                    {!item.isRead ? (
+                      <button
+                        className="pm-notify__mark-read"
+                        disabled={markRead.isPending}
+                        onClick={() => markRead.mutate(item)}
+                        type="button"
+                      >
+                        {t('projectManagement.notification.markRead')}
+                      </button>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
+          ) : null}
+        </div>
+      </div>,
+      document.body,
+    )
+    : null;
+
+  return (
+    <div className="pm-notify hidden sm:block">
+      <button
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        className={`pm-notify__trigger${open ? ' is-open' : ''}`}
+        data-pm-notification-entry
+        onClick={() => setOpen((value) => !value)}
+        ref={triggerRef}
+        title={t('projectManagement.notification.title')}
+        type="button"
+      >
+        <AppIcon className="text-lg" name="bell" />
+        {unread > 0 ? (
+          <span className="pm-notify__badge">
+            {unread > 99 ? t('projectManagement.notification.countOverflow') : unread}
+          </span>
+        ) : null}
+      </button>
+      {panel}
     </div>
   );
 }
