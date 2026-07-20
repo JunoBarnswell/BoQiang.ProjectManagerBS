@@ -18,6 +18,10 @@ describe('projectManagementWorkbenchNavigation', () => {
     expect(projectManagementTaskViewFromSearch('?view=calendar', 'tree')).toBe('calendar');
   });
 
+  it('uses the existing HOME route when no project is selected', () => {
+    expect(projectManagementWorkbenchPath({ area: 'projects' })).toBe('/platform/project-management');
+  });
+
   it('resolves the project settings section instead of the task fallback', () => {
     expect(parseProjectManagementWorkbenchRoute('/platform/project-management/projects/p-1/settings')).toEqual({
       area: 'projects',

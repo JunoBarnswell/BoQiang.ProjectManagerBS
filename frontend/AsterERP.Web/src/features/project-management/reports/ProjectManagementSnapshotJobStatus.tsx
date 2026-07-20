@@ -1,6 +1,6 @@
 import type { ProjectManagementOperation } from '../../../api/project-management/projectManagement.types';
-import { ProjectManagementOperationProgress } from '../components/ProjectManagementOperationProgress';
 import { PermissionButton } from '../../../shared/auth/PermissionButton';
+import { ProjectManagementOperationProgress } from '../components/ProjectManagementOperationProgress';
 
 interface ProjectManagementSnapshotJobStatusProps {
   completedSnapshot: ProjectManagementOperation | null;

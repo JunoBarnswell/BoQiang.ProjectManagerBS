@@ -274,7 +274,7 @@ function TaskCollaborationPanel({
             <div className="mt-2 flex gap-2"><PermissionButton code="project-management:comment:add" disabled={!commentEditForm.markdown.trim() || commentEditSubmitting} onClick={onCommentEditSubmit}>{commentEditSubmitting ? '保存中…' : '保存修改'}</PermissionButton><button type="button" onClick={onCommentEditCancel}>取消</button></div>
           </> : <>
             <ProjectManagementMarkdownContent className="text-sm" value={comment.markdown} />
-            <div className="mt-1 flex items-center justify-between text-xs text-gray-500"><span>{comment.authorUserId} · {new Date(comment.createdTime).toLocaleString()}{comment.editedTime ? ' · 已编辑' : ''}</span><span className="flex gap-2"><button type="button" onClick={() => onCommentEditStart(comment)}>编辑</button><button className="text-red-600" type="button" onClick={() => onCommentDelete(comment)}>删除</button></span></div>
+            <div className="mt-1 flex items-center justify-between text-xs text-gray-500"><span>{comment.authorDisplayName ?? '用户别名暂不可用'} · {new Date(comment.createdTime).toLocaleString()}{comment.editedTime ? ' · 已编辑' : ''}</span><span className="flex gap-2"><button type="button" onClick={() => onCommentEditStart(comment)}>编辑</button><button className="text-red-600" type="button" onClick={() => onCommentDelete(comment)}>删除</button></span></div>
           </>}
         </article>)}
       </div>}

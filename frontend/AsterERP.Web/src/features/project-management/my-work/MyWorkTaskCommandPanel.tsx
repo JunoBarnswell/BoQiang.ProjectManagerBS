@@ -4,10 +4,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { getProjectManagementMemberCandidates } from '../../../api/project-management/projectManagement.api';
 import type { ProjectManagementMyWorkItem, ProjectManagementTaskUpsertRequest } from '../../../api/project-management/projectManagement.types';
 import { projectManagementQueryKeys } from '../../../core/query/projectManagementQueryKeys';
+import type { FormFieldConfig } from '../../../shared/forms/formTypes';
+import { ModalForm } from '../../../shared/forms/ModalForm';
 import { priorityLabel, taskStatusLabel } from '../projectManagementPresentation';
 import { useProjectManagementWorkspaceScope } from '../state/projectManagementWorkspaceScope';
-import { ModalForm } from '../../../shared/forms/ModalForm';
-import type { FormFieldConfig } from '../../../shared/forms/formTypes';
 
 interface MyWorkTaskCommandPanelProps {
   item: ProjectManagementMyWorkItem | null;
@@ -47,7 +47,7 @@ export function MyWorkTaskCommandPanel({ item, onCancel, onSubmit, saving }: MyW
   });
   useEffect(() => setRequest(item ? toRequest(item) : null), [item]);
 
-  const candidates = candidatesQuery.data?.data.items ?? [];
+  const candidates = useMemo(() => candidatesQuery.data?.data.items ?? [], [candidatesQuery.data?.data.items]);
   const assigneeOptions = useMemo(() => candidates.map((candidate) => ({ label: `${candidate.displayName || candidate.userName} · ${candidate.employmentName}`, value: candidate.userId })), [candidates]);
   const fields: FormFieldConfig<ProjectManagementTaskUpsertRequest>[] = [
     { label: '状态', name: 'status', options: ['Todo', 'InProgress', 'Blocked', 'Done', 'Cancelled'].map((status) => ({ label: taskStatusLabel(status), value: status })), section: '快速更新', type: 'select' },

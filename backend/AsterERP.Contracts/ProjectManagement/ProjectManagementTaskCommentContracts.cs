@@ -21,7 +21,8 @@ public sealed record ProjectManagementTaskCommentResponse(
     string AuthorUserId,
     long VersionNo,
     DateTime CreatedTime,
-    DateTime? EditedTime);
+    DateTime? EditedTime,
+    string? AuthorDisplayName = null);
 
 public sealed record ProjectManagementTaskCommentMentionResponse(
     string UserId,

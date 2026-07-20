@@ -1,6 +1,7 @@
 using AsterERP.Api.Infrastructure.Security;
 using AsterERP.Api.Application.ProjectManagement;
 using AsterERP.Api.Modules.ProjectManagement;
+using AsterERP.Contracts.ProjectManagement;
 using SqlSugar;
 using Volo.Abp.Users;
 
@@ -55,6 +56,19 @@ public static class ProjectManagementDataPermissionFilterRegistrar
                     .Where(project => project.Id == milestone.ProjectId && project.TenantId == tenantId && project.AppCode == appCode &&
                         (project.OwnerUserId == userId || SqlFunc.Subqueryable<ProjectManagementProjectMemberEntity>()
                             .Where(projectMember => projectMember.ProjectId == project.Id && projectMember.TenantId == tenantId && projectMember.AppCode == appCode && projectMember.UserId == userId && projectMember.IsActive && !projectMember.IsDeleted)
+                            .Any()))
+                    .Any()));
+            return true;
+        }
+
+        if (entityType == typeof(ProjectManagementResourceEntity))
+        {
+            db.QueryFilter.AddTableFilter<ProjectManagementResourceEntity>(resource =>
+                resource.TenantId == tenantId && resource.AppCode == appCode &&
+                (!restrictToMembership || SqlFunc.Subqueryable<ProjectManagementProjectEntity>()
+                    .Where(project => project.Id == resource.ProjectId && project.TenantId == tenantId && project.AppCode == appCode &&
+                        (project.OwnerUserId == userId || SqlFunc.Subqueryable<ProjectManagementProjectMemberEntity>()
+                            .Where(member => member.ProjectId == project.Id && member.TenantId == tenantId && member.AppCode == appCode && member.UserId == userId && member.IsActive && !member.IsDeleted)
                             .Any()))
                     .Any()));
             return true;
@@ -173,9 +187,21 @@ public static class ProjectManagementDataPermissionFilterRegistrar
             return true;
         }
 
+        if (entityType == typeof(ProjectManagementProjectSubscriptionEntity))
+        {
+            db.QueryFilter.AddTableFilter<ProjectManagementProjectSubscriptionEntity>(subscription => subscription.TenantId == tenantId && subscription.AppCode == appCode && subscription.UserId == userId);
+            return true;
+        }
+
+        if (entityType == typeof(ProjectManagementProjectReminderEntity))
+        {
+            db.QueryFilter.AddTableFilter<ProjectManagementProjectReminderEntity>(reminder => reminder.TenantId == tenantId && reminder.AppCode == appCode && reminder.RecipientUserId == userId);
+            return true;
+        }
+
         if (entityType == typeof(ProjectManagementSavedViewEntity))
         {
-            db.QueryFilter.AddTableFilter<ProjectManagementSavedViewEntity>(view => view.TenantId == tenantId && view.AppCode == appCode && (!restrictToMembership || view.OwnerUserId == userId || (view.IsShared && SqlFunc.Subqueryable<ProjectManagementProjectEntity>().Where(project => project.Id == view.ProjectId && (project.OwnerUserId == userId || SqlFunc.Subqueryable<ProjectManagementProjectMemberEntity>().Where(member => member.ProjectId == project.Id && member.UserId == userId && member.IsActive && !member.IsDeleted).Any())).Any())));
+            db.QueryFilter.AddTableFilter<ProjectManagementSavedViewEntity>(view => view.TenantId == tenantId && view.AppCode == appCode && (!restrictToMembership || view.OwnerUserId == userId || (view.IsShared && (view.ProjectId == ProjectManagementSavedViewScopes.Home || SqlFunc.Subqueryable<ProjectManagementProjectEntity>().Where(project => project.Id == view.ProjectId && (project.OwnerUserId == userId || SqlFunc.Subqueryable<ProjectManagementProjectMemberEntity>().Where(member => member.ProjectId == project.Id && member.UserId == userId && member.IsActive && !member.IsDeleted).Any())).Any()))));
             return true;
         }
 

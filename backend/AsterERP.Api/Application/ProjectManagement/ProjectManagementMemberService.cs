@@ -17,7 +17,8 @@ public sealed class ProjectManagementMemberService(
     ProjectManagementAccessPolicy? accessPolicy = null,
     IProjectManagementRealtimePublisher? realtimePublisher = null,
     IProjectManagementImConversationService? imConversationService = null,
-    IProjectManagementActivityWriter? activityWriter = null) : IProjectManagementMemberService
+    IProjectManagementActivityWriter? activityWriter = null,
+    IProjectManagementDisplayProjectionService? displayProjection = null) : IProjectManagementMemberService
 {
 
     public async Task<GridPageResult<ProjectManagementMemberResponse>> QueryAsync(string projectId, CancellationToken cancellationToken = default)
@@ -31,7 +32,8 @@ public sealed class ProjectManagementMemberService(
             .Where(item => item.ProjectId == projectId && item.TenantId == tenantId && item.AppCode == appCode && !item.IsDeleted && item.IsActive)
             .OrderBy(item => item.JoinedAt, OrderByType.Asc)
             .ToPageListAsync(1, 500, total, cancellationToken);
-        return new GridPageResult<ProjectManagementMemberResponse> { Total = total.Value, Items = items.Select(Map).ToList() };
+        var displays = await DisplayProjection.ResolveAsync([], [], items.Select(item => item.UserId), cancellationToken);
+        return new GridPageResult<ProjectManagementMemberResponse> { Total = total.Value, Items = items.Select(item => Map(item, displays.User(item.UserId))).ToList() };
     }
 
     public async Task<ProjectManagementMemberResponse> AddAsync(string projectId, ProjectManagementMemberUpsertRequest request, CancellationToken cancellationToken = default)
@@ -90,7 +92,7 @@ public sealed class ProjectManagementMemberService(
         {
             await imConversationService.SynchronizeProjectLinksAsync(projectId, cancellationToken);
         }
-        return Map(entity);
+        return Map(entity, (await DisplayProjection.ResolveAsync([], [], [entity.UserId], cancellationToken)).User(entity.UserId));
     }
 
     public async Task<ProjectManagementMemberResponse> UpdateAsync(string projectId, string id, ProjectManagementMemberUpsertRequest request, CancellationToken cancellationToken = default)
@@ -127,7 +129,7 @@ public sealed class ProjectManagementMemberService(
         {
             await imConversationService.SynchronizeProjectLinksAsync(projectId, cancellationToken);
         }
-        return Map(entity);
+        return Map(entity, (await DisplayProjection.ResolveAsync([], [], [entity.UserId], cancellationToken)).User(entity.UserId));
     }
 
     public async Task RemoveAsync(string projectId, string id, long versionNo, CancellationToken cancellationToken = default)
@@ -155,7 +157,7 @@ public sealed class ProjectManagementMemberService(
         });
         if (realtimePublisher is not null)
         {
-            await realtimePublisher.RevokeProjectAccessAsync(RequireTenantId(), RequireAppCode(), projectId, entity.UserId, cancellationToken);
+            await realtimePublisher.RevokeProjectAccessAsync(RequireTenantId(), RequireAppCode(), projectId, entity.UserId, entity.VersionNo, cancellationToken);
             await PublishInvalidationAsync(entity, "project.member.removed", cancellationToken);
         }
     }
@@ -243,5 +245,6 @@ public sealed class ProjectManagementMemberService(
     {
         public static MemberActivitySnapshot From(ProjectManagementProjectMemberEntity entity) => new(entity.UserId, entity.EmploymentId, entity.RoleCode, entity.ScopeRootTaskId, entity.IsActive, entity.LeftAt, entity.IsDeleted);
     }
-    private static ProjectManagementMemberResponse Map(ProjectManagementProjectMemberEntity entity) => new(entity.Id, entity.ProjectId, entity.UserId, entity.EmploymentId, entity.RoleCode, entity.ScopeRootTaskId, entity.IsActive, entity.JoinedAt, entity.LeftAt, entity.VersionNo);
+    private IProjectManagementDisplayProjectionService DisplayProjection => displayProjection ?? new ProjectManagementDisplayProjectionService(databaseAccessor);
+    private static ProjectManagementMemberResponse Map(ProjectManagementProjectMemberEntity entity, string? displayName = null) => new(entity.Id, entity.ProjectId, entity.UserId, entity.EmploymentId, entity.RoleCode, entity.ScopeRootTaskId, entity.IsActive, entity.JoinedAt, entity.LeftAt, entity.VersionNo, displayName);
 }

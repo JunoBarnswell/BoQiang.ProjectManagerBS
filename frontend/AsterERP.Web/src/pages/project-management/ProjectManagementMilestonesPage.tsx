@@ -22,8 +22,8 @@ import { PermissionButton } from '../../shared/auth/PermissionButton';
 import { PermissionGuard } from '../../shared/auth/PermissionGuard';
 import { useConfirm } from '../../shared/feedback/useConfirm';
 import { useMessage } from '../../shared/feedback/useMessage';
-import { ModalForm } from '../../shared/forms/ModalForm';
 import type { FormFieldConfig } from '../../shared/forms/formTypes';
+import { ModalForm } from '../../shared/forms/ModalForm';
 import { ResponsivePage } from '../../shared/responsive/ResponsivePage';
 import { Page403 } from '../../shared/status/Page403';
 import { PageError } from '../../shared/status/PageError';
@@ -99,10 +99,10 @@ export function ProjectManagementMilestonesPage() {
   const milestones = milestonesQuery.data?.data.items ?? [];
   const editingMilestone = milestones.find((item) => item.id === editingId);
   const progressIsDerived = Boolean(editingMilestone && editingMilestone.leafTaskCount > 0);
-  const candidates = candidatesQuery.data?.data.items ?? [];
+  const candidates = useMemo(() => candidatesQuery.data?.data.items ?? [], [candidatesQuery.data?.data.items]);
   const ownerOptions = useMemo(() => {
     const selectedOwner = form.ownerUserId && !candidates.some((candidate) => candidate.userId === form.ownerUserId)
-      ? [{ label: `当前负责人 · ${form.ownerUserId}`, value: form.ownerUserId }]
+      ? [{ label: '当前负责人暂不可用', value: form.ownerUserId }]
       : [];
     return [
       ...selectedOwner,
@@ -160,7 +160,7 @@ export function ProjectManagementMilestonesPage() {
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <h3 className="font-semibold">{milestone.milestoneName}</h3>
-                  <p className="mt-1 text-sm text-gray-500">{milestoneStatusLabel(milestone.status)} · 健康度 {milestone.healthStatus} · 负责人 {milestone.ownerUserId ?? '未设置'}</p>
+                  <p className="mt-1 text-sm text-gray-500">{milestoneStatusLabel(milestone.status)} · 健康度 {milestone.healthStatus} · 负责人 {milestone.ownerDisplayName || candidates.find((candidate) => candidate.userId === milestone.ownerUserId)?.displayName || (milestone.ownerUserId ? '用户别名暂不可用' : '未设置')}</p>
                   <p className="mt-1 text-sm text-gray-500">目标日期 {milestone.dueDate?.slice(0, 10) ?? '未设置'} · 叶子任务 {milestone.completedLeafTaskCount}/{milestone.leafTaskCount}</p>
                 </div>
                 <div className="flex gap-2">

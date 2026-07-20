@@ -130,8 +130,10 @@ export function ProjectManagementMembersPage() {
     if (!current || candidate.isSelectable && !current.isSelectable) byUser.set(candidate.userId, candidate);
     return byUser;
   }, new Map<string, (typeof candidates)[number]>()).values());
+  const memberDisplayNames = Object.fromEntries(userCandidates.map((candidate) => [candidate.userId, candidate.displayName || candidate.userName]));
   const employmentCandidates = candidates.filter((candidate) => candidate.userId === form.userId);
   const topicRoots = (topicRootsQuery.data?.data?.items ?? []).filter((task) => !task.parentTaskId);
+  const topicRootLabels = Object.fromEntries(topicRoots.map((task) => [task.id, `${task.taskCode} · ${task.title}`]));
   const updateForm = (next: ProjectManagementMemberUpsertRequest) => {
     setForm(next);
     setDirty(true);
@@ -151,13 +153,13 @@ export function ProjectManagementMembersPage() {
             >
               <option value="">选择用户</option>
               {form.userId && !userCandidates.some((candidate) => candidate.userId === form.userId) ? (
-                <option value={form.userId}>{form.userId}</option>
+                <option value={form.userId}>用户别名暂不可用</option>
               ) : null}
               {userCandidates
                 .filter((candidate) => candidate.isSelectable || candidate.userId === form.userId)
                 .map((candidate) => (
                   <option key={candidate.userId} value={candidate.userId}>
-                    {candidate.displayName || candidate.userName} · {candidate.userId}
+                    {candidate.displayName || candidate.userName}
                   </option>
                 ))}
             </select>
@@ -173,13 +175,13 @@ export function ProjectManagementMembersPage() {
             >
               <option value="">选择任职关系</option>
               {form.employmentId && !employmentCandidates.some((candidate) => candidate.employmentId === form.employmentId) ? (
-                <option value={form.employmentId}>{form.employmentId}</option>
+                <option value={form.employmentId}>任职关系暂不可用</option>
               ) : null}
               {employmentCandidates
                 .filter((candidate) => candidate.isSelectable || candidate.employmentId === form.employmentId)
                 .map((candidate) => (
                   <option key={candidate.employmentId} value={candidate.employmentId}>
-                    {candidate.employmentName || candidate.positionName || "默认任职"} · {candidate.employmentId}
+                    {candidate.employmentName || candidate.positionName || "默认任职"}
                   </option>
                 ))}
             </select>
@@ -203,7 +205,7 @@ export function ProjectManagementMembersPage() {
             >
               <option value="">整个项目（可选）</option>
               {form.scopeRootTaskId && !topicRoots.some((task) => task.id === form.scopeRootTaskId) ? (
-                <option value={form.scopeRootTaskId}>{form.scopeRootTaskId}</option>
+                <option value={form.scopeRootTaskId}>任务范围暂不可用</option>
               ) : null}
               {topicRoots.map((task) => (
                 <option key={task.id} value={task.id}>{task.taskCode} · {task.title}</option>
@@ -264,9 +266,9 @@ export function ProjectManagementMembersPage() {
             <tbody>
               {members.map((member) => (
                 <tr className="border-t border-gray-100" key={member.id}>
-                  <td className="px-3 py-2">{member.userId}</td>
+                  <td className="px-3 py-2">{member.displayName || memberDisplayNames[member.userId] || "用户别名暂不可用"}</td>
                   <td className="px-3 py-2">{member.roleCode}</td>
-                  <td className="px-3 py-2">{member.scopeRootTaskId ?? "项目全部任务"}</td>
+                  <td className="px-3 py-2">{member.scopeRootTaskId ? topicRootLabels[member.scopeRootTaskId] ?? "任务范围暂不可用" : "项目全部任务"}</td>
                   <td className="px-3 py-2">{member.isActive ? "有效" : "已离开"}</td>
                   <td className="px-3 py-2">
                     <div className="flex gap-2">

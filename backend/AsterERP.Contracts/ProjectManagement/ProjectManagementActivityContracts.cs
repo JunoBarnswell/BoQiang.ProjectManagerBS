@@ -17,7 +17,8 @@ public sealed record ProjectManagementActivityResponse(
     IReadOnlyList<ProjectManagementActivityFieldChange>? FieldChanges = null,
     ProjectManagementActivityBatch? Batch = null,
     string? TargetRoute = null,
-    bool IsTargetDeleted = false);
+    bool IsTargetDeleted = false,
+    string? ActorDisplayName = null);
 
 public sealed record ProjectManagementActivityQuery(
     int PageIndex = 1,

@@ -17,7 +17,9 @@ public sealed class ProjectManagementMilestoneService(
     IProjectManagementActivityWriter? activityWriter = null,
     IProjectManagementSyncJournalWriter? syncJournalWriter = null,
     ProjectManagementAccessPolicy? accessPolicy = null,
-    IProjectManagementNotificationPublisher? notificationPublisher = null) : IProjectManagementMilestoneService
+    IProjectManagementNotificationPublisher? notificationPublisher = null,
+    IProjectManagementRealtimePublisher? realtimePublisher = null,
+    IProjectManagementDisplayProjectionService? displayProjection = null) : IProjectManagementMilestoneService
 {
     public async Task<GridPageResult<ProjectManagementMilestoneResponse>> QueryAsync(string projectId, CancellationToken cancellationToken = default)
     {
@@ -32,7 +34,8 @@ public sealed class ProjectManagementMilestoneService(
         var taskRows = items.Count == 0 ? [] : await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskEntity>()
             .Where(task => task.ProjectId == projectId && task.MilestoneId != null && !task.IsDeleted)
             .ToListAsync(cancellationToken);
-        return new GridPageResult<ProjectManagementMilestoneResponse> { Total = total.Value, Items = items.Select(item => Map(item, taskRows.Where(task => task.MilestoneId == item.Id).ToList())).ToList() };
+        var displays = await DisplayProjection.ResolveAsync([], [], items.Select(item => item.OwnerUserId), cancellationToken);
+        return new GridPageResult<ProjectManagementMilestoneResponse> { Total = total.Value, Items = items.Select(item => Map(item, taskRows.Where(task => task.MilestoneId == item.Id).ToList(), displays.User(item.OwnerUserId))).ToList() };
     }
 
     public async Task<ProjectManagementMilestoneResponse> CreateAsync(string projectId, ProjectManagementMilestoneUpsertRequest request, CancellationToken cancellationToken = default)
@@ -57,6 +60,7 @@ public sealed class ProjectManagementMilestoneService(
             await WriteActivityAsync(entity, "created", $"创建里程碑 {entity.MilestoneName}", CreateChanges(null, entity), now, cancellationToken);
             await WriteSyncJournalAsync(entity, "created", cancellationToken);
         });
+        await PublishInvalidationAsync(entity, "milestone.created", cancellationToken);
         return await MapAsync(entity, cancellationToken);
     }
 
@@ -91,6 +95,7 @@ public sealed class ProjectManagementMilestoneService(
             await WriteActivityAsync(entity, "updated", $"更新里程碑 {entity.MilestoneName}", CreateChanges(before, entity), entity.UpdatedTime ?? DateTime.UtcNow, cancellationToken);
             await WriteSyncJournalAsync(entity, "updated", cancellationToken);
         });
+        await PublishInvalidationAsync(entity, "milestone.updated", cancellationToken);
         var response = await MapAsync(entity, cancellationToken);
         await PublishRiskNotificationAsync(entity, beforeResponse.HealthStatus, response.HealthStatus, cancellationToken);
         return response;
@@ -116,9 +121,34 @@ public sealed class ProjectManagementMilestoneService(
             await WriteActivityAsync(entity, "deleted", $"删除里程碑 {entity.MilestoneName}", CreateChanges(before, entity), entity.UpdatedTime ?? DateTime.UtcNow, cancellationToken);
             await WriteSyncJournalAsync(entity, "deleted", cancellationToken);
         });
+        await PublishInvalidationAsync(entity, "milestone.deleted", cancellationToken);
     }
 
     private ProjectManagementAccessPolicy AccessPolicy => accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser);
+
+    private Task PublishInvalidationAsync(ProjectManagementMilestoneEntity entity, string eventType, CancellationToken cancellationToken) =>
+        realtimePublisher is null
+            ? Task.CompletedTask
+            : realtimePublisher.PublishInvalidationAsync(new ProjectManagementDataInvalidationEvent(
+                RequireTenantId(),
+                RequireAppCode(),
+                "Milestone",
+                entity.Id,
+                eventType,
+                entity.VersionNo,
+                Activity.Current?.Id ?? Guid.NewGuid().ToString("N"),
+                entity.ProjectId,
+                ChangedFields: ["milestoneName", "status", "startDate", "dueDate", "progressPercent", "updatedTime"],
+                Patch: new Dictionary<string, object?>
+                {
+                    ["milestoneName"] = entity.MilestoneName,
+                    ["status"] = entity.Status,
+                    ["startDate"] = entity.StartDate,
+                    ["dueDate"] = entity.DueDate,
+                    ["progressPercent"] = entity.ProgressPercent,
+                    ["versionNo"] = entity.VersionNo,
+                    ["updatedTime"] = entity.UpdatedTime
+                }), cancellationToken);
 
     private async Task<ProjectManagementProjectEntity> EnsureProjectAsync(string projectId, CancellationToken cancellationToken)
     {
@@ -231,10 +261,11 @@ public sealed class ProjectManagementMilestoneService(
         var tasks = await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskEntity>()
             .Where(task => task.ProjectId == entity.ProjectId && task.MilestoneId == entity.Id && !task.IsDeleted)
             .ToListAsync(cancellationToken);
-        return Map(entity, tasks);
+        var displays = await DisplayProjection.ResolveAsync([], [], [entity.OwnerUserId], cancellationToken);
+        return Map(entity, tasks, displays.User(entity.OwnerUserId));
     }
 
-    private static ProjectManagementMilestoneResponse Map(ProjectManagementMilestoneEntity entity, IReadOnlyList<ProjectManagementTaskEntity>? tasks = null)
+    private static ProjectManagementMilestoneResponse Map(ProjectManagementMilestoneEntity entity, IReadOnlyList<ProjectManagementTaskEntity>? tasks = null, string? ownerDisplayName = null)
     {
         var taskList = tasks ?? [];
         var leaves = taskList.Where(task => !taskList.Any(child => child.ParentTaskId == task.Id)).ToList();
@@ -243,6 +274,8 @@ public sealed class ProjectManagementMilestoneService(
         var health = entity.Status == ProjectManagementDomainRules.MilestoneCompleted || progress >= 100 ? "Done" :
             entity.DueDate.HasValue && entity.DueDate.Value.Date < DateTime.UtcNow.Date ? "OffTrack" :
             entity.DueDate.HasValue && entity.DueDate.Value.Date <= DateTime.UtcNow.Date.AddDays(7) && progress < 80 ? "AtRisk" : "OnTrack";
-        return new(entity.Id, entity.ProjectId, entity.MilestoneName, entity.Description, entity.OwnerUserId, entity.Status, health, entity.StartDate, entity.DueDate, entity.CompletedAt, progress, leaves.Count, leaves.Count(task => task.Status == ProjectManagementDomainRules.TaskDone), entity.SortOrder, entity.VersionNo);
+        return new(entity.Id, entity.ProjectId, entity.MilestoneName, entity.Description, entity.OwnerUserId, entity.Status, health, entity.StartDate, entity.DueDate, entity.CompletedAt, progress, leaves.Count, leaves.Count(task => task.Status == ProjectManagementDomainRules.TaskDone), entity.SortOrder, entity.VersionNo, ownerDisplayName);
     }
+
+    private IProjectManagementDisplayProjectionService DisplayProjection => displayProjection ?? new ProjectManagementDisplayProjectionService(databaseAccessor);
 }

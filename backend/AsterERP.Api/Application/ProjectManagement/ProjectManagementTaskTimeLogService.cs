@@ -16,7 +16,8 @@ namespace AsterERP.Api.Application.ProjectManagement;
 public sealed class ProjectManagementTaskTimeLogService(
     IWorkspaceDatabaseAccessor databaseAccessor,
     ICurrentUser currentUser,
-    ProjectManagementAccessPolicy? accessPolicy = null) : IProjectManagementTaskTimeLogService
+    ProjectManagementAccessPolicy? accessPolicy = null,
+    IProjectManagementDisplayProjectionService? displayProjection = null) : IProjectManagementTaskTimeLogService
 {
     public async Task<IReadOnlyList<ProjectManagementTaskTimeLogResponse>> QueryAsync(string taskId, CancellationToken cancellationToken = default)
     {
@@ -171,7 +172,10 @@ public sealed class ProjectManagementTaskTimeLogService(
             })
             .ToListAsync(cancellationToken);
 
-        return ProjectManagementTaskWorkloadProjection.Create(taskAggregates, logAggregates);
+        var workload = ProjectManagementTaskWorkloadProjection.Create(taskAggregates, logAggregates);
+        var displays = await (displayProjection ?? new ProjectManagementDisplayProjectionService(databaseAccessor))
+            .ResolveAsync([], [], workload.Select(item => item.UserId), cancellationToken);
+        return workload.Select(item => item with { DisplayName = displays.User(item.UserId) }).ToList();
     }
 
     private async Task RefreshTaskActualTimeAsync(ISqlSugarClient db, ProjectManagementTaskEntity task, CancellationToken cancellationToken)

@@ -1,12 +1,13 @@
 import { useMemo } from 'react';
 
 import type { CurrentWorkspaceDto } from '../../../api/platform/auth.types';
-import { useWorkspaceStore } from '../../../core/state/workspaceStore';
+import { useAuthStore, useWorkspaceStore } from '../../../core/state';
 
 export interface ProjectManagementWorkspaceScope {
   appCode: string;
   isAvailable: boolean;
   tenantId: string;
+  userId?: string;
 }
 
 type ProjectManagementWorkspace = Pick<CurrentWorkspaceDto, 'appCode' | 'tenantId' | 'workspaceLevel'>;
@@ -26,9 +27,13 @@ export function resolveProjectManagementWorkspaceScope(
 
 export function useProjectManagementWorkspaceScope(): ProjectManagementWorkspaceScope {
   const workspace = useWorkspaceStore((state) => state.currentWorkspace);
+  const userId = useAuthStore((state) => state.user?.userId?.trim() ?? '');
 
   return useMemo(
-    () => resolveProjectManagementWorkspaceScope(workspace),
-    [workspace],
+    () => {
+      const scope = resolveProjectManagementWorkspaceScope(workspace);
+      return userId ? { ...scope, userId } : scope;
+    },
+    [userId, workspace],
   );
 }

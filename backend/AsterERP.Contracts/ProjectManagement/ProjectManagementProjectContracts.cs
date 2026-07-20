@@ -18,9 +18,10 @@ public sealed record ProjectManagementProjectUpsertRequest(
     DateTime? DueDate = null,
     int? WipLimit = null,
     decimal ProgressPercent = 0,
-    long VersionNo = 0);
+    long VersionNo = 0,
+    string? ClientMutationId = null);
 
-public sealed record ProjectManagementProjectArchiveRequest(long VersionNo);
+public sealed record ProjectManagementProjectArchiveRequest(long VersionNo, string? ClientMutationId = null);
 
 /// <summary>
 /// 发生乐观并发冲突时，原始客户端提交的项目值。

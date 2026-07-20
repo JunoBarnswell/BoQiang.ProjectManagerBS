@@ -12,7 +12,7 @@ namespace AsterERP.Api.Application.ProjectManagement;
 
 public sealed class ProjectManagementSavedViewService(IWorkspaceDatabaseAccessor databaseAccessor, ICurrentUser currentUser, ProjectManagementAccessPolicy? accessPolicy = null) : IProjectManagementSavedViewService
 {
-    private static readonly string[] ViewKeys = ["tree", "list", "card", "board", "gantt", "calendar"];
+    private static readonly string[] ViewKeys = ["tree", "list", "card", "board", "gantt", "calendar", "home"];
 
     public async Task<IReadOnlyList<ProjectManagementSavedViewResponse>> QueryAsync(string projectId, CancellationToken cancellationToken = default)
     {
@@ -78,9 +78,15 @@ public sealed class ProjectManagementSavedViewService(IWorkspaceDatabaseAccessor
         if (rows.Count > 0) await db.Updateable(rows).ExecuteCommandAsync(cancellationToken);
     }
 
-    private async Task EnsureProjectAsync(string projectId, CancellationToken cancellationToken) { Tenant(); App(); if (!await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementProjectEntity>().Where(item => item.Id == projectId && !item.IsDeleted).AnyAsync(cancellationToken)) throw new NotFoundException("项目不存在", ErrorCodes.PlatformResourceNotFound); }
+    private async Task EnsureProjectAsync(string projectId, CancellationToken cancellationToken)
+    {
+        Tenant();
+        App();
+        if (string.Equals(projectId, ProjectManagementSavedViewScopes.Home, StringComparison.Ordinal)) return;
+        if (!await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementProjectEntity>().Where(item => item.Id == projectId && !item.IsDeleted).AnyAsync(cancellationToken)) throw new NotFoundException("项目不存在", ErrorCodes.PlatformResourceNotFound);
+    }
     private ProjectManagementAccessPolicy Policy() => accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser);
-    private string Validate(ProjectManagementSavedViewUpsertRequest request) { if (string.IsNullOrWhiteSpace(request.ViewName) || request.ViewName.Trim().Length > 100) throw new ValidationException("视图名称不能为空且不能超过 100 个字符"); if (!ViewKeys.Contains(request.ViewKey, StringComparer.Ordinal)) throw new ValidationException("视图类型不受支持"); return ProjectManagementSavedViewState.Normalize(request.QueryJson, request.ViewKey, request.IsShared); }
+    private string Validate(ProjectManagementSavedViewUpsertRequest request) { if (string.IsNullOrWhiteSpace(request.ViewName) || request.ViewName.Trim().Length > 100) throw new ValidationException("视图名称不能为空且不能超过 100 个字符"); if (!ViewKeys.Contains(request.ViewKey, StringComparer.Ordinal)) throw new ValidationException("视图类型不受支持"); return request.ViewKey == "home" ? ProjectManagementHomeSavedViewState.Normalize(request.QueryJson, request.ViewKey, request.IsShared) : ProjectManagementSavedViewState.Normalize(request.QueryJson, request.ViewKey, request.IsShared); }
     private string Tenant() => currentUser.GetAsterErpTenantId()?.Trim() ?? throw new ValidationException("当前会话缺少租户", ErrorCodes.PermissionDenied);
     private string App() => currentUser.GetAsterErpAppCode()?.Trim().ToUpperInvariant() ?? throw new ValidationException("当前会话缺少应用", ErrorCodes.PermissionDenied);
     private string User() => currentUser.GetAsterErpUserId()?.Trim() ?? throw new ValidationException("当前会话缺少用户", ErrorCodes.PermissionDenied);

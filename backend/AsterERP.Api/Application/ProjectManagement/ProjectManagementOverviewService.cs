@@ -14,6 +14,7 @@ public sealed class ProjectManagementOverviewService(
     IWorkspaceDatabaseAccessor databaseAccessor,
     ICurrentUser currentUser,
     ProjectManagementAccessPolicy accessPolicy,
+    ProjectManagementHomeHealthProjector? healthProjector = null,
     IProjectManagementDisplayProjectionService? displayProjection = null) : IProjectManagementOverviewService, ITransientDependency
 {
     public async Task<GridPageResult<ProjectManagementOverviewItem>> QueryAsync(ProjectManagementOverviewQuery query, CancellationToken cancellationToken = default)
@@ -50,8 +51,9 @@ public sealed class ProjectManagementOverviewService(
         var milestones = await db.Queryable<ProjectManagementMilestoneEntity>().Where(milestone => ids.Contains(milestone.ProjectId) && milestone.TenantId == tenantId && milestone.AppCode == appCode && !milestone.IsDeleted)
             .OrderBy(milestone => milestone.DueDate, OrderByType.Asc).ToListAsync(cancellationToken);
         var members = await db.Queryable<ProjectManagementProjectMemberEntity>().Where(member => ids.Contains(member.ProjectId) && member.TenantId == tenantId && member.AppCode == appCode && member.IsActive && !member.IsDeleted).ToListAsync(cancellationToken);
-        var displays = await DisplayProjection.ResolveAsync([], [], page.Select(project => project.OwnerUserId), cancellationToken);
+        var displays = await DisplayProjection.ResolveAsync([], [], page.Select(project => project.OwnerUserId).Concat(tasks.Select(task => task.AssigneeUserId)), cancellationToken);
         var now = DateTime.UtcNow;
+        var projector = healthProjector ?? new ProjectManagementHomeHealthProjector();
         return new GridPageResult<ProjectManagementOverviewItem>
         {
             Total = total.Value,
@@ -63,17 +65,19 @@ public sealed class ProjectManagementOverviewService(
                 var overdueIds = overdue.Select(task => task.Id).ToHashSet(StringComparer.Ordinal);
                 var inProgressCount = leaves.Count(task => task.Status == ProjectManagementDomainRules.TaskInProgress);
                 var blockedCount = leaves.Count(task => task.Status == ProjectManagementDomainRules.TaskBlocked);
+                var openCount = leaves.Count(task => !ProjectManagementTaskProgressCalculator.IsCompleted(task));
                 var dueSoonCount = leaves.Count(task => task.DueDate.HasValue && task.DueDate.Value >= now && task.DueDate.Value <= now.AddDays(7) && !ProjectManagementTaskProgressCalculator.IsCompleted(task));
                 var wipExceededBy = project.WipLimit.HasValue ? Math.Max(0, inProgressCount - project.WipLimit.Value) : 0;
                 var people = leaves.Where(task => !string.IsNullOrWhiteSpace(task.AssigneeUserId)).GroupBy(task => task.AssigneeUserId!, StringComparer.Ordinal)
-                    .Select(group => new ProjectManagementOverviewPersonSummary(group.Key, group.Count(), group.Count(ProjectManagementTaskProgressCalculator.IsCompleted), group.Count(task => overdueIds.Contains(task.Id))))
+                    .Select(group => new ProjectManagementOverviewPersonSummary(group.Key, group.Count(), group.Count(ProjectManagementTaskProgressCalculator.IsCompleted), group.Count(task => overdueIds.Contains(task.Id)), displays.User(group.Key)))
                     .OrderByDescending(item => item.TaskCount).Take(10).ToList();
                 return new ProjectManagementOverviewItem(
                     new ProjectManagementProjectResponse(project.Id, project.TenantId, project.AppCode, project.ProjectCode, project.ProjectName, project.Description, project.Status, project.Priority, project.OwnerUserId, project.StartDate, project.DueDate, project.CompletedAt, project.WipLimit, project.ProgressPercent, project.VersionNo, project.CreatedTime, project.UpdatedTime, displays.User(project.OwnerUserId)),
                     leaves.Count, leaves.Count(ProjectManagementTaskProgressCalculator.IsCompleted), inProgressCount, overdue.Count, blockedCount, snapshot.ProjectProgressPercent,
                     milestones.Count(item => item.ProjectId == project.Id), members.Count(item => item.ProjectId == project.Id),
                     milestones.Where(item => item.ProjectId == project.Id).Take(10).Select(item => new ProjectManagementOverviewMilestoneSummary(item.Id, item.MilestoneName, item.Status, item.HealthStatus, item.ProgressPercent, item.DueDate)).ToList(), people,
-                    new ProjectManagementProjectRiskSummary(overdue.Count, blockedCount, dueSoonCount, inProgressCount, project.WipLimit, wipExceededBy > 0, wipExceededBy, overdue.Count > 0 || blockedCount > 0 || dueSoonCount > 0));
+                    new ProjectManagementProjectRiskSummary(overdue.Count, blockedCount, dueSoonCount, inProgressCount, project.WipLimit, wipExceededBy > 0, wipExceededBy, overdue.Count > 0 || blockedCount > 0 || dueSoonCount > 0),
+                    projector.Project(project, openCount, blockedCount, now));
             }).ToList()
         };
     }

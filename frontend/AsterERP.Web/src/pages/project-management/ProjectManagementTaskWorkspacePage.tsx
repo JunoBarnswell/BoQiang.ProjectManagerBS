@@ -371,7 +371,7 @@ export function ProjectManagementTaskWorkspacePage() {
         if (validLabels.length !== sanitized.labelIds.length) unavailable.push('标签');
         sanitized.labelIds = validLabels;
       }
-      const targetView = parsed.viewKey ?? view.viewKey;
+      const targetView = parsed.viewKey ?? (view.viewKey === 'home' ? 'tree' : view.viewKey);
       const targetState = normalizeTaskWorkspaceState(targetView, sanitized);
       const nextSearch = createTaskWorkspaceSearchParams(targetView, targetState).toString();
       const path = targetView === 'tree' ? 'tasks' : targetView;
@@ -1038,7 +1038,7 @@ export function ProjectManagementTaskWorkspacePage() {
           scope="project"
         />}
         savedViews={<SavedViewManager
-          onCopy={(view, viewName) => copySavedViewMutation.mutate({ queryJson: view.queryJson, viewKey: view.viewKey, viewName })}
+          onCopy={(view, viewName) => copySavedViewMutation.mutate({ queryJson: view.queryJson, viewKey: view.viewKey === 'home' ? 'tree' : view.viewKey, viewName })}
           onDelete={(view) => deleteSavedViewMutation.mutate({ id: view.id, versionNo: view.versionNo })}
           onUpdate={(view, request) => updateSavedViewMutation.mutate({ id: view.id, request })}
           pending={savedViewMutation.isPending || copySavedViewMutation.isPending || updateSavedViewMutation.isPending || deleteSavedViewMutation.isPending}

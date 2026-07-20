@@ -20,6 +20,7 @@ export type ProjectManagementDashboardOverview = ProjectManagementOverviewItem &
 
 export interface ProjectManagementDashboardWorkload {
   userId: string;
+  displayName?: string;
   todoTaskCount: number;
   inProgressTaskCount: number;
   completedTaskCount: number;

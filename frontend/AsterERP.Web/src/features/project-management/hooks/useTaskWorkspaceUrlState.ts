@@ -38,7 +38,7 @@ export function useTaskWorkspaceUrlState(viewKey: ProjectManagementTaskView) {
       const normalized = normalizeTaskWorkspaceState(nextViewKey, { ...state, ...next });
       setSearchParams(createTaskWorkspaceSearchParams(nextViewKey, normalized), { replace: options.replace ?? false });
     },
-    [setSearchParams, state, viewKey],
+    [setSearchParams, state],
   );
 
   return { state, setState };

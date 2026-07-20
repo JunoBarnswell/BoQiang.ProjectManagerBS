@@ -276,6 +276,25 @@ CREATE TABLE IF NOT EXISTS pm_task_comments (
     UpdatedBy TEXT NULL, UpdatedTime TEXT NULL, DeletedBy TEXT NULL, DeletedTime TEXT NULL,
     IsDeleted INTEGER NOT NULL DEFAULT 0, Remark TEXT NULL
 );
+
+CREATE TABLE IF NOT EXISTS pm_project_resources (
+    Id TEXT NOT NULL PRIMARY KEY,
+    TenantId TEXT NOT NULL,
+    AppCode TEXT NOT NULL,
+    ProjectId TEXT NOT NULL,
+    ResourceName TEXT NOT NULL,
+    ResourceUrl TEXT NOT NULL,
+    Description TEXT NULL,
+    VersionNo INTEGER NOT NULL DEFAULT 1,
+    CreatedBy TEXT NULL,
+    CreatedTime TEXT NOT NULL,
+    UpdatedBy TEXT NULL,
+    UpdatedTime TEXT NULL,
+    DeletedBy TEXT NULL,
+    DeletedTime TEXT NULL,
+    IsDeleted INTEGER NOT NULL DEFAULT 0,
+    Remark TEXT NULL
+);
 CREATE TABLE IF NOT EXISTS pm_notifications (
     Id TEXT NOT NULL PRIMARY KEY, TenantId TEXT NOT NULL, AppCode TEXT NOT NULL, RecipientUserId TEXT NOT NULL,
     NotificationType TEXT NOT NULL, Title TEXT NOT NULL, Message TEXT NOT NULL, TargetRoute TEXT NOT NULL, ProjectId TEXT NULL, TaskId TEXT NULL,
@@ -286,6 +305,20 @@ CREATE TABLE IF NOT EXISTS pm_notifications (
 CREATE TABLE IF NOT EXISTS pm_task_reminders (
     Id TEXT NOT NULL PRIMARY KEY, TenantId TEXT NOT NULL, AppCode TEXT NOT NULL, ProjectId TEXT NOT NULL, TaskId TEXT NOT NULL,
     RecipientUserId TEXT NOT NULL, ReminderAtUtc TEXT NOT NULL, TimeZoneId TEXT NOT NULL, Note TEXT NULL, Status TEXT NOT NULL,
+    IdempotencyKey TEXT NOT NULL, HangfireJobId TEXT NULL, AttemptCount INTEGER NOT NULL DEFAULT 0, MaxAttempts INTEGER NOT NULL DEFAULT 3,
+    LastAttemptAt TEXT NULL, TriggeredAt TEXT NULL, LastError TEXT NULL, VersionNo INTEGER NOT NULL DEFAULT 1,
+    CreatedBy TEXT NULL, CreatedTime TEXT NOT NULL, UpdatedBy TEXT NULL, UpdatedTime TEXT NULL,
+    DeletedBy TEXT NULL, DeletedTime TEXT NULL, IsDeleted INTEGER NOT NULL DEFAULT 0, Remark TEXT NULL
+);
+CREATE TABLE IF NOT EXISTS pm_project_subscriptions (
+    Id TEXT NOT NULL PRIMARY KEY, TenantId TEXT NOT NULL, AppCode TEXT NOT NULL, ProjectId TEXT NOT NULL, UserId TEXT NOT NULL,
+    Mode TEXT NOT NULL DEFAULT 'AllUpdates', VersionNo INTEGER NOT NULL DEFAULT 1,
+    CreatedBy TEXT NULL, CreatedTime TEXT NOT NULL, UpdatedBy TEXT NULL, UpdatedTime TEXT NULL,
+    DeletedBy TEXT NULL, DeletedTime TEXT NULL, IsDeleted INTEGER NOT NULL DEFAULT 0, Remark TEXT NULL
+);
+CREATE TABLE IF NOT EXISTS pm_project_reminders (
+    Id TEXT NOT NULL PRIMARY KEY, TenantId TEXT NOT NULL, AppCode TEXT NOT NULL, ProjectId TEXT NOT NULL, RecipientUserId TEXT NOT NULL,
+    ReminderAtUtc TEXT NOT NULL, TimeZoneId TEXT NOT NULL, Note TEXT NULL, Status TEXT NOT NULL,
     IdempotencyKey TEXT NOT NULL, HangfireJobId TEXT NULL, AttemptCount INTEGER NOT NULL DEFAULT 0, MaxAttempts INTEGER NOT NULL DEFAULT 3,
     LastAttemptAt TEXT NULL, TriggeredAt TEXT NULL, LastError TEXT NULL, VersionNo INTEGER NOT NULL DEFAULT 1,
     CreatedBy TEXT NULL, CreatedTime TEXT NOT NULL, UpdatedBy TEXT NULL, UpdatedTime TEXT NULL,
@@ -463,6 +496,7 @@ CREATE TABLE IF NOT EXISTS pm_reversible_commands (
         schema.Execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_pm_task_recurrence_occurrences_key ON pm_task_recurrence_occurrences(TenantId, AppCode, RecurrenceId, RecurrenceKey) WHERE IsDeleted = 0;");
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_task_recurrence_occurrences_schedule ON pm_task_recurrence_occurrences(TenantId, AppCode, RecurrenceId, ScheduledAtUtc, IsDeleted);");
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_activities_project_time ON pm_activities(TenantId, AppCode, ProjectId, CreatedTime, IsDeleted);");
+        schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_project_resources_project ON pm_project_resources(TenantId, AppCode, ProjectId, CreatedTime, IsDeleted);");
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_task_comments_task_time ON pm_task_comments(TenantId, AppCode, ProjectId, TaskId, CreatedTime, IsDeleted);");
         schema.Execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_pm_notifications_idempotency ON pm_notifications(TenantId, AppCode, IdempotencyKey) WHERE IsDeleted = 0;");
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_notifications_recipient ON pm_notifications(TenantId, AppCode, RecipientUserId, IsRead, CreatedTime, IsDeleted);");
@@ -470,8 +504,14 @@ CREATE TABLE IF NOT EXISTS pm_reversible_commands (
         schema.Execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_pm_task_reminders_idempotency ON pm_task_reminders(TenantId, AppCode, IdempotencyKey) WHERE IsDeleted = 0;");
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_task_reminders_due ON pm_task_reminders(TenantId, AppCode, Status, ReminderAtUtc, IsDeleted);");
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_task_reminders_task ON pm_task_reminders(TenantId, AppCode, ProjectId, TaskId, RecipientUserId, IsDeleted);");
+        schema.Execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_pm_project_subscriptions_user ON pm_project_subscriptions(TenantId, AppCode, ProjectId, UserId) WHERE IsDeleted = 0;");
+        schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_project_subscriptions_user ON pm_project_subscriptions(TenantId, AppCode, UserId, ProjectId, IsDeleted);");
+        schema.Execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_pm_project_reminders_idempotency ON pm_project_reminders(TenantId, AppCode, IdempotencyKey) WHERE IsDeleted = 0;");
+        schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_project_reminders_due ON pm_project_reminders(TenantId, AppCode, Status, ReminderAtUtc, IsDeleted);");
+        schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_project_reminders_project_user ON pm_project_reminders(TenantId, AppCode, ProjectId, RecipientUserId, IsDeleted);");
         schema.Execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_pm_saved_views_owner_name ON pm_saved_views(TenantId, AppCode, ProjectId, OwnerUserId, ViewName) WHERE IsDeleted = 0;");
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_saved_views_project ON pm_saved_views(TenantId, AppCode, ProjectId, IsShared, IsDefault, IsDeleted);");
+        schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_saved_views_scope ON pm_saved_views(TenantId, AppCode, ProjectId, OwnerUserId, IsShared, IsDeleted);");
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_task_attachments_task ON pm_task_attachments(TenantId, AppCode, ProjectId, TaskId, CreatedTime, IsDeleted);");
         schema.Execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_pm_external_api_requests_idempotency ON pm_external_api_requests(TenantId, AppCode, CallerUserId, Operation, IdempotencyKey) WHERE IsDeleted = 0;");
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_external_api_requests_audit ON pm_external_api_requests(TenantId, AppCode, ProjectId, CreatedTime, IsDeleted);");

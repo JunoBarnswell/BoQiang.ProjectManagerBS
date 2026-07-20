@@ -16,6 +16,7 @@ public sealed record ProjectManagementRecycleProjectItem(
     long VersionNo,
     DateTime? DeletedTime,
     string? DeletedBy,
+    string? DeletedByDisplayName,
     int AffectedTaskCount,
     bool CanRestore,
     bool CanPurge);
@@ -29,6 +30,8 @@ public sealed record ProjectManagementRecycleTaskItem(
     long VersionNo,
     DateTime? DeletedTime,
     string? DeletedBy,
+    string? ProjectDisplayName,
+    string? DeletedByDisplayName,
     int AffectedDescendantCount,
     bool CanRestore,
     bool CanPurge);

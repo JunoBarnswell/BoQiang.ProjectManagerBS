@@ -28,7 +28,8 @@ public sealed class ProjectManagementTaskService(
     ProjectManagementTaskStateMachine? taskStateMachine = null,
     IProjectManagementReversibleCommandWriter? reversibleCommandWriter = null,
     ProjectManagementWipCoordinator? wipCoordinator = null,
-    IProjectManagementNotificationPublisher? notificationPublisher = null) : IProjectManagementTaskService, IProjectManagementTaskOccurrenceCommandService, IProjectManagementTaskTemplateCommandService
+    IProjectManagementNotificationPublisher? notificationPublisher = null,
+    IProjectManagementDisplayProjectionService? displayProjection = null) : IProjectManagementTaskService, IProjectManagementTaskOccurrenceCommandService, IProjectManagementTaskTemplateCommandService
 {
     private static readonly string[] Priorities = ["Low", "Medium", "High", "Urgent"];
 
@@ -125,6 +126,14 @@ public sealed class ProjectManagementTaskService(
         var participantUserIdsByTask = participantRows
             .GroupBy(item => item.TaskId, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => (IReadOnlyList<string>)group.Select(item => item.UserId).Distinct(StringComparer.Ordinal).ToList(), StringComparer.Ordinal);
+        var displayUserIds = items.Select(item => item.AssigneeUserId)
+            .Concat(participantRows.Select(item => item.UserId))
+            .Where(item => !string.IsNullOrWhiteSpace(item))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var displays = displayUserIds.Length == 0
+            ? null
+            : await DisplayProjection.ResolveAsync([], [], displayUserIds, cancellationToken);
         var dependencyRows = ids.Count == 0 ? [] : await databaseAccessor.GetCurrentDb().Queryable<ProjectManagementTaskDependencyEntity>()
             .Where(item => item.ProjectId == query.ProjectId && ids.Contains(item.SuccessorTaskId) && !item.IsDeleted)
             .ToListAsync(cancellationToken);
@@ -147,7 +156,9 @@ public sealed class ProjectManagementTaskService(
                     blockers.Count == 0 || forceStarted ? item.BlockedReason : $"存在 {blockers.Count} 个未完成前置任务",
                     parentIdsWithChildren.Contains(item.Id),
                     labelsByTask.GetValueOrDefault(item.Id),
-                    participantUserIdsByTask.GetValueOrDefault(item.Id));
+                    participantUserIdsByTask.GetValueOrDefault(item.Id),
+                    displays?.User(item.AssigneeUserId),
+                    participantUserIdsByTask.GetValueOrDefault(item.Id)?.Select(userId => displays?.User(userId) ?? "用户别名暂不可用").ToList());
             }).ToList()
         };
     }
@@ -647,6 +658,7 @@ public sealed class ProjectManagementTaskService(
     }
 
     private ProjectManagementAccessPolicy AccessPolicy => accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser);
+    private IProjectManagementDisplayProjectionService DisplayProjection => displayProjection ?? new ProjectManagementDisplayProjectionService(databaseAccessor);
     private ProjectManagementWipCoordinator WipCoordinator => wipCoordinator ?? new ProjectManagementWipCoordinator();
     private ProjectManagementTaskHierarchy TaskHierarchy => taskHierarchy ?? new ProjectManagementTaskHierarchy();
     private ProjectManagementTaskStateMachine StateMachine => taskStateMachine ?? new ProjectManagementTaskStateMachine();
@@ -1014,7 +1026,7 @@ public sealed class ProjectManagementTaskService(
         return MapDetail(entity, blockedByCount, blockedByCount == 0 || forceStarted, blockedByCount == 0 || forceStarted ? entity.BlockedReason : $"存在 {blockedByCount} 个未完成前置任务");
     }
 
-    private static ProjectManagementTaskListItemResponse MapList(ProjectManagementTaskEntity entity, int blockedByCount, bool canStart, string? blockedReason, bool hasChildren, IReadOnlyList<ProjectManagementTaskLabelResponse>? labels, IReadOnlyList<string>? participantUserIds) => new(entity.Id, entity.ProjectId, entity.MilestoneId, entity.ParentTaskId, entity.TaskCode, entity.Title, entity.Status, entity.Priority, entity.AssigneeUserId, entity.StartDate, entity.DueDate, entity.ProgressPercent, entity.SortOrder, entity.Depth, entity.VersionNo, blockedByCount, canStart, blockedReason, ProjectManagementDomainRules.IsTaskOverdue(entity.Status, entity.DueDate, DateTime.UtcNow), entity.ActualStartAt, entity.ActualEndAt, entity.Summary, hasChildren, labels, participantUserIds);
+    private static ProjectManagementTaskListItemResponse MapList(ProjectManagementTaskEntity entity, int blockedByCount, bool canStart, string? blockedReason, bool hasChildren, IReadOnlyList<ProjectManagementTaskLabelResponse>? labels, IReadOnlyList<string>? participantUserIds, string? assigneeDisplayName, IReadOnlyList<string>? participantDisplayNames) => new(entity.Id, entity.ProjectId, entity.MilestoneId, entity.ParentTaskId, entity.TaskCode, entity.Title, entity.Status, entity.Priority, entity.AssigneeUserId, entity.StartDate, entity.DueDate, entity.ProgressPercent, entity.SortOrder, entity.Depth, entity.VersionNo, blockedByCount, canStart, blockedReason, ProjectManagementDomainRules.IsTaskOverdue(entity.Status, entity.DueDate, DateTime.UtcNow), entity.ActualStartAt, entity.ActualEndAt, entity.Summary, hasChildren, labels, participantUserIds, assigneeDisplayName, participantDisplayNames);
 
     private static ProjectManagementTaskDetailResponse MapDetail(ProjectManagementTaskEntity entity, int blockedByCount, bool canStart, string? blockedReason) => new(entity.Id, entity.ProjectId, entity.MilestoneId, entity.ParentTaskId, entity.TaskCode, entity.Title, entity.Description, entity.Status, entity.Priority, entity.AssigneeUserId, entity.AssigneeEmploymentId, entity.StartDate, entity.DueDate, entity.ProgressPercent, entity.Weight, entity.EstimateMinutes, entity.ActualMinutes, entity.SortOrder, entity.Depth, entity.VersionNo, entity.CreatedTime, entity.UpdatedTime, blockedByCount, canStart, blockedReason, ProjectManagementDomainRules.IsTaskOverdue(entity.Status, entity.DueDate, DateTime.UtcNow), entity.ActualStartAt, entity.ActualEndAt, Summary: entity.Summary, Markdown: entity.Description);
     private static ProjectManagementTaskResponse ToTemplateResponse(ProjectManagementTaskEntity entity) => new(entity.Id, entity.ProjectId, entity.MilestoneId, entity.ParentTaskId, entity.TaskCode, entity.Title, entity.Description, entity.Status, entity.Priority, entity.AssigneeUserId, entity.AssigneeEmploymentId, entity.StartDate, entity.DueDate, entity.ProgressPercent, entity.Weight, entity.EstimateMinutes, entity.ActualMinutes, entity.SortOrder, entity.Depth, entity.VersionNo, entity.CreatedTime, entity.UpdatedTime, IsOverdue: ProjectManagementDomainRules.IsTaskOverdue(entity.Status, entity.DueDate, DateTime.UtcNow), Summary: entity.Summary, Markdown: entity.Description);

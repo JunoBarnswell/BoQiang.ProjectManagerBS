@@ -11,11 +11,11 @@ import { getWorkspaceTransitionBlockers } from '../../core/state/workspaceTransi
 import { ImConversationDrawer } from '../../features/im/components/ImConversationDrawer';
 import { ImProvider } from '../../features/im/components/ImProvider';
 import { ImUnreadEntry } from '../../features/im/components/ImUnreadEntry';
+import { ProjectManagementWorkbenchLayout } from '../../features/project-management/components/ProjectManagementWorkbenchLayout';
 import { ProjectManagementImConversationTargetLink } from '../../features/project-management/im/ProjectManagementImConversationTargetLink';
 import { ProjectManagementNotificationEntry } from '../../features/project-management/notifications/ProjectManagementNotificationEntry';
-import { ProjectManagementWorkbenchLayout } from '../../features/project-management/components/ProjectManagementWorkbenchLayout';
-import { isProjectManagementWorkbenchPath } from '../../features/project-management/state/projectManagementWorkbenchNavigation';
 import { projectManagementPlatformRoutePrefix } from '../../features/project-management/state/projectManagementPlatformRoutes';
+import { isProjectManagementWorkbenchPath } from '../../features/project-management/state/projectManagementWorkbenchNavigation';
 import { useConfirm } from '../../shared/feedback/useConfirm';
 import { resolveMenuLabel } from '../navigation/menuLabels';
 

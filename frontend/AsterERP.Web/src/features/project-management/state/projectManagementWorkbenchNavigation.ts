@@ -56,7 +56,7 @@ export function projectManagementWorkbenchPath(route: ProjectManagementWorkbench
   if (route.area === 'recycle-bin') return `${projectManagementPlatformRoutePrefix}/project-recycle-bin`;
   if (route.area === 'sync') return `${projectManagementPlatformRoutePrefix}/project-sync`;
   if (route.area === 'audit') return `${projectManagementPlatformRoutePrefix}/project-audit-center`;
-  if (!route.projectId) return `${projectManagementPlatformRoutePrefix}/projects`;
+  if (!route.projectId) return projectManagementPlatformRoutePrefix;
 
   const projectPrefix = `${projectManagementPlatformRoutePrefix}/projects/${encodeURIComponent(route.projectId)}`;
   if (route.projectSection === 'tasks') return `${projectPrefix}/tasks`;

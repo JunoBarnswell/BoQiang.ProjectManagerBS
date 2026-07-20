@@ -13,7 +13,23 @@ public sealed record ProjectManagementHomeQuery(
     string SortBy = "updated",
     string SortDirection = "desc",
     int PageIndex = 1,
-    int PageSize = 50);
+    int PageSize = 50,
+    string? Filter = null,
+    string? View = null,
+    string? Columns = null,
+    string? Density = null,
+    bool? Insights = null,
+    string? InsightsTab = null,
+    string? ProjectIds = null);
+
+public sealed record ProjectManagementHomeFilterRule(
+    string Field,
+    string Operator,
+    IReadOnlyList<string> Values);
+
+public sealed record ProjectManagementHomeFilterGroup(
+    string Conjunction,
+    IReadOnlyList<ProjectManagementHomeFilterRule> Rules);
 
 public sealed record ProjectManagementHomeProjectItem(
     string Id,
@@ -49,8 +65,13 @@ public sealed record ProjectManagementHomeLeadSummary(
     string DisplayName,
     int Count);
 
+public sealed record ProjectManagementHomeStatusSummary(string Key, int Count);
+
 public sealed record ProjectManagementHomeSummaryResponse(
     IReadOnlyList<ProjectManagementHomeHealthSummary> Health,
     IReadOnlyList<ProjectManagementHomeLeadSummary> Leads,
     int UnassignedCount,
-    long Sequence);
+    long Sequence,
+    int Total = 0,
+    IReadOnlyList<ProjectManagementHomeStatusSummary>? Status = null,
+    DateTime? UpdatedTime = null);

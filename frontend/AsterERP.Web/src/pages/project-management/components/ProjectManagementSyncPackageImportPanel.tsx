@@ -163,7 +163,7 @@ export function ProjectManagementSyncPackageImportPanel({ deviceId, retryHistory
             <div className="mt-2 space-y-2" aria-label="冲突详情">
               {preview.conflictDetails.map((conflict) => (
                 <div className="rounded border border-amber-200 bg-amber-50 p-2 text-amber-900" key={`${conflict.aggregateType}-${conflict.aggregateId}`}>
-                  <div>{conflict.aggregateType} / {conflict.aggregateId} · 建议 {conflict.recommendedStrategy}</div>
+                  <div>{conflict.aggregateType} · 建议 {conflict.recommendedStrategy}</div>
                   <div className="mt-1 break-all text-xs">本地：{conflict.localValue ?? '无'}</div>
                   <div className="break-all text-xs">远端：{conflict.remoteValue ?? '无'}</div>
                 </div>

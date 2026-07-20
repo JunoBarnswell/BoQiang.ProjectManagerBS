@@ -26,6 +26,8 @@ public sealed class AsterErpProjectManagementModule : AbpModule
         context.Services.AddScoped<ProjectManagementSchemaMigrator>();
         context.Services.AddScoped<ProjectManagementAccessPolicy>();
         context.Services.AddScoped<IProjectManagementActivityService, ProjectManagementActivityService>();
+        context.Services.AddScoped<IProjectManagementProjectUpdateService, ProjectManagementProjectUpdateService>();
+        context.Services.AddScoped<IProjectManagementResourceService, ProjectManagementResourceService>();
         context.Services.AddScoped<IProjectManagementActivityWriter>(provider => provider.GetRequiredService<IProjectManagementActivityService>());
         context.Services.AddScoped<IProjectManagementWebhookService, ProjectManagementWebhookService>();
         context.Services.AddTransient<ProjectManagementWebhookDeliveryRunner>();
@@ -64,6 +66,8 @@ public sealed class AsterErpProjectManagementModule : AbpModule
         context.Services.AddScoped<IProjectManagementNotificationPublisher>(provider => provider.GetRequiredService<IProjectManagementNotificationService>());
         context.Services.AddScoped<IProjectManagementReminderScheduler, HangfireProjectManagementReminderScheduler>();
         context.Services.AddScoped<IProjectManagementTaskReminderService, ProjectManagementTaskReminderService>();
+        context.Services.AddScoped<IProjectManagementProjectSubscriptionService, ProjectManagementProjectSubscriptionService>();
+        context.Services.AddScoped<IProjectManagementProjectReminderService, ProjectManagementProjectReminderService>();
         context.Services.AddScoped<ProjectManagementReminderExecutionService>();
         context.Services.AddTransient<ProjectManagementReminderExecutionRunner>();
         context.Services.AddTransient<ProjectManagementReminderExecutionJob>();
@@ -110,6 +114,7 @@ public sealed class AsterErpProjectManagementModule : AbpModule
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementProjectEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementProjectMemberEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementMilestoneEntity));
+        registry.RegisterProjectManagementFilter(typeof(ProjectManagementResourceEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementTaskEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementTaskDependencyEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementTaskParticipantEntity));
@@ -127,6 +132,8 @@ public sealed class AsterErpProjectManagementModule : AbpModule
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementExternalApiRequestEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementNotificationEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementTaskReminderEntity));
+        registry.RegisterProjectManagementFilter(typeof(ProjectManagementProjectSubscriptionEntity));
+        registry.RegisterProjectManagementFilter(typeof(ProjectManagementProjectReminderEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementSavedViewEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementSyncJournalEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementSyncDeviceEntity));

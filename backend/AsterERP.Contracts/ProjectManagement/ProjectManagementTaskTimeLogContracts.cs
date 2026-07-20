@@ -33,4 +33,5 @@ public sealed record ProjectManagementTaskWorkloadResponse(
     int CompletedTaskCount,
     int OverdueTaskCount,
     int EstimatedMinutes,
-    int LoggedMinutes);
+    int LoggedMinutes,
+    string? DisplayName = null);

@@ -25,38 +25,40 @@ export function setAccessToken(token: string): void {
 
 export function clearAccessToken(): void {
   ensureStorageSchema();
-  localStorage.removeItem(legacyAccessTokenKey);
-  localStorage.removeItem(platformAccessTokenKey);
-  localStorage.removeItem(applicationAccessTokenKey);
-  localStorage.removeItem(activeTokenSlotKey);
-  localStorage.setItem(storageSchemaVersionKey, String(TOKEN_STORAGE_SCHEMA_VERSION));
+  const storage = getTokenStorage();
+  if (!storage) return;
+  storage.removeItem(legacyAccessTokenKey);
+  storage.removeItem(platformAccessTokenKey);
+  storage.removeItem(applicationAccessTokenKey);
+  storage.removeItem(activeTokenSlotKey);
+  storage.setItem(storageSchemaVersionKey, String(TOKEN_STORAGE_SCHEMA_VERSION));
 }
 
 export function getPlatformAccessToken(): string {
   ensureStorageSchema();
-  return localStorage.getItem(platformAccessTokenKey) ?? "";
+  return getTokenStorage()?.getItem(platformAccessTokenKey) ?? "";
 }
 
 export function setPlatformAccessToken(token: string): void {
   ensureStorageSchema();
-  localStorage.setItem(platformAccessTokenKey, token.trim());
+  getTokenStorage()?.setItem(platformAccessTokenKey, token.trim());
   setActiveTokenSlot("platform");
 }
 
 export function getApplicationAccessToken(): string {
   ensureStorageSchema();
-  return localStorage.getItem(applicationAccessTokenKey) ?? "";
+  return getTokenStorage()?.getItem(applicationAccessTokenKey) ?? "";
 }
 
 export function setApplicationAccessToken(token: string): void {
   ensureStorageSchema();
-  localStorage.setItem(applicationAccessTokenKey, token.trim());
+  getTokenStorage()?.setItem(applicationAccessTokenKey, token.trim());
   setActiveTokenSlot("application");
 }
 
 export function clearApplicationAccessToken(): void {
   ensureStorageSchema();
-  localStorage.removeItem(applicationAccessTokenKey);
+  getTokenStorage()?.removeItem(applicationAccessTokenKey);
   if (getActiveTokenSlot() === "application") {
     setActiveTokenSlot(getPlatformAccessToken() ? "platform" : "application");
   }
@@ -82,11 +84,11 @@ export function hasPlatformAccessToken(): boolean {
 
 export function getActiveTokenSlot(): TokenSlot {
   ensureStorageSchema();
-  return localStorage.getItem(activeTokenSlotKey) === "application" ? "application" : "platform";
+  return getTokenStorage()?.getItem(activeTokenSlotKey) === "application" ? "application" : "platform";
 }
 
 export function getTokenStorageMigrationMetrics(): TokenStorageMigrationMetrics {
-  const raw = localStorage.getItem(migrationMetricsKey);
+  const raw = getTokenStorage()?.getItem(migrationMetricsKey);
   if (!raw) return { legacyReads: 0, migrated: 0, blockedAfterWindow: 0 };
   try {
     const parsed = JSON.parse(raw) as Partial<TokenStorageMigrationMetrics>;
@@ -101,7 +103,10 @@ export function getTokenStorageMigrationMetrics(): TokenStorageMigrationMetrics 
 }
 
 function ensureStorageSchema(): void {
-  const current = localStorage.getItem(storageSchemaVersionKey);
+  const storage = getTokenStorage();
+  if (!storage) return;
+
+  const current = storage.getItem(storageSchemaVersionKey);
   if (current === String(TOKEN_STORAGE_SCHEMA_VERSION)) return;
 
   if (isLegacyMigrationWindowOpen()) {
@@ -110,28 +115,34 @@ function ensureStorageSchema(): void {
     incrementMetrics("blockedAfterWindow");
   }
 
-  localStorage.removeItem(legacyAccessTokenKey);
-  localStorage.setItem(storageSchemaVersionKey, String(TOKEN_STORAGE_SCHEMA_VERSION));
-  const activeSlot = localStorage.getItem(activeTokenSlotKey);
+  storage.removeItem(legacyAccessTokenKey);
+  storage.setItem(storageSchemaVersionKey, String(TOKEN_STORAGE_SCHEMA_VERSION));
+  const activeSlot = storage.getItem(activeTokenSlotKey);
   if (activeSlot !== "application" && activeSlot !== "platform") {
-    localStorage.removeItem(activeTokenSlotKey);
+    storage.removeItem(activeTokenSlotKey);
   }
 }
 
 function migrateLegacyAccessTokenOnce(): void {
-  const legacyToken = localStorage.getItem(legacyAccessTokenKey);
+  const storage = getTokenStorage();
+  if (!storage) return;
+
+  const legacyToken = storage.getItem(legacyAccessTokenKey);
   if (!legacyToken) return;
 
   incrementMetrics("legacyReads");
-  if (localStorage.getItem(platformAccessTokenKey)) return;
+  if (storage.getItem(platformAccessTokenKey)) return;
 
-  localStorage.setItem(platformAccessTokenKey, legacyToken.trim());
+  storage.setItem(platformAccessTokenKey, legacyToken.trim());
   incrementMetrics("migrated");
 }
 
 function hasStorageKey(expectedKey: string): boolean {
-  for (let index = 0; index < localStorage.length; index += 1) {
-    if (localStorage.key(index) === expectedKey) return true;
+  const storage = getTokenStorage();
+  if (!storage) return false;
+
+  for (let index = 0; index < storage.length; index += 1) {
+    if (storage.key(index) === expectedKey) return true;
   }
 
   return false;
@@ -145,11 +156,24 @@ function isLegacyMigrationWindowOpen(): boolean {
 }
 
 function incrementMetrics(key: keyof TokenStorageMigrationMetrics): void {
+  const storage = getTokenStorage();
+  if (!storage) return;
+
   const metrics = getTokenStorageMigrationMetrics();
   metrics[key] += 1;
-  localStorage.setItem(migrationMetricsKey, JSON.stringify(metrics));
+  storage.setItem(migrationMetricsKey, JSON.stringify(metrics));
 }
 
 function setActiveTokenSlot(slot: TokenSlot): void {
-  localStorage.setItem(activeTokenSlotKey, slot);
+  getTokenStorage()?.setItem(activeTokenSlotKey, slot);
+}
+
+function getTokenStorage(): Storage | null {
+  if (typeof window === "undefined") return null;
+
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
 }

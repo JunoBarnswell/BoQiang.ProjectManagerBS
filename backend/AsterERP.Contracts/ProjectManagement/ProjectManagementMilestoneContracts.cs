@@ -15,7 +15,8 @@ public sealed record ProjectManagementMilestoneResponse(
     int LeafTaskCount,
     int CompletedLeafTaskCount,
     int SortOrder,
-    long VersionNo);
+    long VersionNo,
+    string? OwnerDisplayName = null);
 
 public sealed record ProjectManagementMilestoneUpsertRequest(
     string MilestoneName,

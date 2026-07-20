@@ -22,4 +22,5 @@ export const PmStack = (props: StackProps) => <Stack {...props} />;
 export const PmInline = styled(Box)({ display: 'flex', alignItems: 'center', minWidth: 0 });
 export const PmBox = Box;
 export const PmContent = styled(Box)({ position: 'relative', display: 'flex', flex: 1, minWidth: 0, minHeight: 0, overflow: 'hidden' });
-export const PmMobileTrigger = styled('button')(({ theme }) => ({ display: 'none', position: 'absolute', top: 10, left: 10, zIndex: 5, width: 32, height: 32, border: `1px solid ${theme.palette.divider}`, borderRadius: theme.shape.borderRadius, background: theme.palette.background.paper, color: theme.palette.text.primary, cursor: 'pointer', '@media (max-width: 899px)': { display: 'inline-grid', placeItems: 'center' } }));
+export const PmWorkbenchBody = styled(Box)({ display: 'flex', flex: 1, minWidth: 0, minHeight: 0, overflow: 'auto' });
+export const PmMobileTrigger = styled('button')(({ theme }) => ({ display: 'none', position: 'absolute', top: 10, left: 10, zIndex: 5, width: 32, height: 32, border: `1px solid ${theme.palette.divider}`, borderRadius: theme.shape.borderRadius, background: theme.palette.background.paper, color: theme.palette.text.primary, cursor: 'pointer', '@media (max-width: 1023px)': { display: 'inline-grid', placeItems: 'center' } }));

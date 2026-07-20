@@ -18,7 +18,8 @@ public sealed class ProjectManagementTaskCommentService(
     ProjectManagementAccessPolicy? accessPolicy = null,
     IProjectManagementActivityWriter? activityWriter = null,
     IProjectManagementNotificationPublisher? notificationPublisher = null,
-    IProjectManagementRealtimePublisher? realtimePublisher = null) : IProjectManagementTaskCommentService
+    IProjectManagementRealtimePublisher? realtimePublisher = null,
+    IProjectManagementDisplayProjectionService? displayProjection = null) : IProjectManagementTaskCommentService
 {
     public async Task<IReadOnlyList<ProjectManagementTaskCommentResponse>> QueryAsync(string taskId, CancellationToken cancellationToken = default)
     {
@@ -318,13 +319,16 @@ public sealed class ProjectManagementTaskCommentService(
         IReadOnlyList<ProjectManagementTaskCommentEntity> comments,
         CancellationToken cancellationToken)
     {
+        var displays = displayProjection is null
+            ? null
+            : await displayProjection.ResolveAsync([], [], comments.Select(comment => comment.AuthorUserId), cancellationToken);
         var mentionedUserIds = comments
             .SelectMany(comment => DeserializeMentionUserIds(comment.MentionUserIdsJson))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
         if (mentionedUserIds.Count == 0)
         {
-            return comments.Select(comment => Map(comment, [])).ToList();
+            return comments.Select(comment => Map(comment, [], displays)).ToList();
         }
 
         var snapshots = comments
@@ -341,13 +345,14 @@ public sealed class ProjectManagementTaskCommentService(
             DeserializeMentionUserIds(comment.MentionUserIdsJson)
                 .Where(userId => snapshots.ContainsKey(userId))
                 .Select(userId => new ProjectManagementTaskCommentMentionResponse(userId, snapshots[userId]))
-                .ToList())).ToList();
+                .ToList(), displays)).ToList();
     }
 
     private static ProjectManagementTaskCommentResponse Map(
         ProjectManagementTaskCommentEntity entity,
-        IReadOnlyList<ProjectManagementTaskCommentMentionResponse> mentions)
-        => new(entity.Id, entity.ProjectId, entity.TaskId, entity.ParentCommentId, entity.Markdown, mentions, entity.AuthorUserId, entity.VersionNo, entity.CreatedTime, entity.EditedTime);
+        IReadOnlyList<ProjectManagementTaskCommentMentionResponse> mentions,
+        ProjectManagementDisplayProjection? displays = null)
+        => new(entity.Id, entity.ProjectId, entity.TaskId, entity.ParentCommentId, entity.Markdown, mentions, entity.AuthorUserId, entity.VersionNo, entity.CreatedTime, entity.EditedTime, displays?.User(entity.AuthorUserId));
 
     private static IReadOnlyList<string> DeserializeMentionUserIds(string? json)
     {

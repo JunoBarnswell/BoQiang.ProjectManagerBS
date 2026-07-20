@@ -71,7 +71,7 @@ export function ProjectManagementSearchPage() {
           <form className="flex flex-wrap items-center gap-2" onSubmit={(event) => { event.preventDefault(); setSubmittedKeyword(keyword.trim()); }}>
             <input aria-label="搜索关键字" className="min-w-64" maxLength={200} placeholder="搜索项目、任务、成员或评论" value={keyword} onChange={(event) => setKeyword(event.target.value)} />
             <select aria-label="搜索范围" value={searchScope} onChange={(event) => setSearchScope(event.target.value as ProjectManagementSearchScope)}>{scopes.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select>
-            <input aria-label="按项目筛选" placeholder="项目 ID（可选）" value={projectId} onChange={(event) => setProjectId(event.target.value)} />
+            <input aria-label="按项目筛选" placeholder="项目编码或名称（可选）" value={projectId} onChange={(event) => setProjectId(event.target.value)} />
             <input aria-label="按状态筛选" placeholder="状态（可选）" value={status} onChange={(event) => setStatus(event.target.value)} />
             <label className="text-sm">从 <input aria-label="开始时间" type="date" value={from} onChange={(event) => setFrom(event.target.value)} /></label>
             <label className="text-sm">至 <input aria-label="结束时间" type="date" value={to} onChange={(event) => setTo(event.target.value)} /></label>

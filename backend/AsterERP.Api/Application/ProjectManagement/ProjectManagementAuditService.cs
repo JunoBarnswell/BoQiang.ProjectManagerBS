@@ -237,7 +237,9 @@ public sealed class ProjectManagementAuditService(
         if (activityType is not null) activityQuery = activityQuery.Where(item => item.ActivityType == activityType);
         var actorName = NormalizeOptional(query.ActorUserId, 128, "操作者名称");
         var actorUserIds = actorName is null ? null : await DisplayProjection.FindUserIdsAsync(actorName, cancellationToken);
-        if (actorUserIds is not null) activityQuery = actorUserIds.Count == 0 ? activityQuery.Where(_ => false) : activityQuery.Where(item => actorUserIds.Contains(item.ActorUserId));
+        if (actorUserIds is not null) activityQuery = actorUserIds.Count == 0
+            ? activityQuery.Where(item => item.ActorUserId == actorName)
+            : activityQuery.Where(item => item.ActorUserId == actorName || actorUserIds.Contains(item.ActorUserId));
         var actorRole = NormalizeOptional(query.ActorRole, 64, "项目角色");
         if (actorRole is not null)
         {

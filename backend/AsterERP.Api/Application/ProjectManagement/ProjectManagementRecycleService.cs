@@ -31,7 +31,9 @@ public sealed class ProjectManagementRecycleService(
     IProjectManagementReversibleCommandWriter? reversibleCommandWriter = null,
     IProjectManagementPurgeFileDeletionService? purgeFileDeletionService = null,
     IBackgroundJobManager? backgroundJobManager = null,
-    ProjectManagementWipCoordinator? wipCoordinator = null) : IProjectManagementRecycleService, ITransientDependency
+    IProjectManagementReminderScheduler? reminderScheduler = null,
+    ProjectManagementWipCoordinator? wipCoordinator = null,
+    IProjectManagementDisplayProjectionService? displayProjection = null) : IProjectManagementRecycleService, ITransientDependency
 {
     public async Task<ProjectManagementRecycleResponse> QueryAsync(ProjectManagementRecycleQuery query, CancellationToken cancellationToken = default)
     {
@@ -67,10 +69,17 @@ public sealed class ProjectManagementRecycleService(
         var canPurgeProject = (ProjectManagementProjectEntity item) => (isAdministrator || string.Equals(item.OwnerUserId, userId, StringComparison.OrdinalIgnoreCase)) && currentUser.HasAsterErpPermission(PermissionCodes.ProjectManagementProjectPurge);
         var canPurgeTask = (ProjectManagementTaskEntity item) => impact.ProjectsById.TryGetValue(item.ProjectId, out var project) &&
             (isAdministrator || string.Equals(project.OwnerUserId, userId, StringComparison.OrdinalIgnoreCase)) && currentUser.HasAsterErpPermission(PermissionCodes.ProjectManagementTaskPurge);
+        var displays = await DisplayProjection.ResolveAsync(
+            projectRows.Select(item => item.Id).Concat(taskRows.Select(item => item.ProjectId)),
+            [],
+            projectRows.Select(item => item.DeletedBy).Concat(taskRows.Select(item => item.DeletedBy)),
+            cancellationToken);
         return new ProjectManagementRecycleResponse(
-            new GridPageResult<ProjectManagementRecycleProjectItem> { Total = projectTotal.Value, Items = projectRows.Select(item => new ProjectManagementRecycleProjectItem(item.Id, item.ProjectCode, item.ProjectName, item.Status, item.VersionNo, item.DeletedTime, item.DeletedBy, impact.TaskCountByProjectId.GetValueOrDefault(item.Id), manageableProjectIds.Contains(item.Id), canPurgeProject(item))).ToList() },
-            new GridPageResult<ProjectManagementRecycleTaskItem> { Total = taskTotal.Value, Items = taskRows.Select(item => new ProjectManagementRecycleTaskItem(item.Id, item.ProjectId, item.TaskCode, item.Title, item.Status, item.VersionNo, item.DeletedTime, item.DeletedBy, impact.DescendantCountByTaskId.GetValueOrDefault(item.Id), manageableProjectIds.Contains(item.ProjectId), canPurgeTask(item))).ToList() });
+            new GridPageResult<ProjectManagementRecycleProjectItem> { Total = projectTotal.Value, Items = projectRows.Select(item => new ProjectManagementRecycleProjectItem(item.Id, item.ProjectCode, item.ProjectName, item.Status, item.VersionNo, item.DeletedTime, item.DeletedBy, displays.User(item.DeletedBy), impact.TaskCountByProjectId.GetValueOrDefault(item.Id), manageableProjectIds.Contains(item.Id), canPurgeProject(item))).ToList() },
+            new GridPageResult<ProjectManagementRecycleTaskItem> { Total = taskTotal.Value, Items = taskRows.Select(item => new ProjectManagementRecycleTaskItem(item.Id, item.ProjectId, item.TaskCode, item.Title, item.Status, item.VersionNo, item.DeletedTime, item.DeletedBy, impact.ProjectsById.TryGetValue(item.ProjectId, out var project) ? project.ProjectName : null, displays.User(item.DeletedBy), impact.DescendantCountByTaskId.GetValueOrDefault(item.Id), manageableProjectIds.Contains(item.ProjectId), canPurgeTask(item))).ToList() });
     }
+
+    private IProjectManagementDisplayProjectionService DisplayProjection => displayProjection ?? new ProjectManagementDisplayProjectionService(databaseAccessor);
 
     public async Task RestoreProjectAsync(string id, ProjectManagementRecycleRestoreRequest request, CancellationToken cancellationToken = default)
     {
@@ -364,6 +373,16 @@ public sealed class ProjectManagementRecycleService(
 
     private async Task<int> DeleteProjectGraphAsync(ISqlSugarClient db, string projectId, long versionNo, CancellationToken cancellationToken)
     {
+        if (reminderScheduler is not null)
+        {
+            var reminderJobs = await db.Queryable<ProjectManagementProjectReminderEntity>()
+                .ClearFilter()
+                .Where(item => item.ProjectId == projectId && item.TenantId == RequireTenantId() && item.AppCode == RequireAppCode() && !item.IsDeleted)
+                .Select(item => item.HangfireJobId)
+                .ToListAsync(cancellationToken);
+            foreach (var jobId in reminderJobs.Where(item => !string.IsNullOrWhiteSpace(item)))
+                await reminderScheduler.DeleteAsync(jobId, cancellationToken);
+        }
         var taskIds = await db.Queryable<ProjectManagementTaskEntity>().Where(item => item.ProjectId == projectId).Select(item => item.Id).ToListAsync(cancellationToken);
         if (taskIds.Count > 0) await DeleteTaskTreeAsync(db, projectId, taskIds, cancellationToken);
         await db.Deleteable<ProjectManagementTaskRecurrenceOccurrenceEntity>().Where(item => item.ProjectId == projectId).ExecuteCommandAsync(cancellationToken);
@@ -376,6 +395,8 @@ public sealed class ProjectManagementRecycleService(
         await db.Deleteable<ProjectManagementLabelEntity>().Where(item => item.ProjectId == projectId).ExecuteCommandAsync(cancellationToken);
         await db.Deleteable<ProjectManagementNotificationEntity>().Where(item => item.ProjectId == projectId).ExecuteCommandAsync(cancellationToken);
         await db.Deleteable<ProjectManagementTaskReminderEntity>().Where(item => item.ProjectId == projectId).ExecuteCommandAsync(cancellationToken);
+        await db.Deleteable<ProjectManagementProjectReminderEntity>().Where(item => item.ProjectId == projectId && item.TenantId == RequireTenantId() && item.AppCode == RequireAppCode()).ExecuteCommandAsync(cancellationToken);
+        await db.Deleteable<ProjectManagementProjectSubscriptionEntity>().Where(item => item.ProjectId == projectId && item.TenantId == RequireTenantId() && item.AppCode == RequireAppCode()).ExecuteCommandAsync(cancellationToken);
         await db.Deleteable<ProjectManagementTaskParticipantEntity>().Where(item => item.ProjectId == projectId).ExecuteCommandAsync(cancellationToken);
         await db.Deleteable<ProjectManagementTaskTimeLogEntity>().Where(item => item.ProjectId == projectId).ExecuteCommandAsync(cancellationToken);
         await db.Deleteable<ProjectManagementTaskCommentEntity>().Where(item => item.ProjectId == projectId).ExecuteCommandAsync(cancellationToken);
@@ -525,10 +546,9 @@ public sealed class ProjectManagementRecycleService(
             }
             descendantCountByTaskId[task.Id] = Math.Max(0, visited.Count - 1);
         }
-        var taskProjects = taskRows.Where(item => projectIds.Contains(item.ProjectId)).Select(item => item.ProjectId).Distinct(StringComparer.Ordinal).ToList();
-        var projectsById = taskProjects.Count == 0
+        var projectsById = projectIds.Count == 0
             ? new Dictionary<string, ProjectManagementProjectEntity>(StringComparer.Ordinal)
-            : (await db.Queryable<ProjectManagementProjectEntity>().Where(item => taskProjects.Contains(item.Id)).ToListAsync(cancellationToken))
+            : (await db.Queryable<ProjectManagementProjectEntity>().Where(item => projectIds.Contains(item.Id)).ToListAsync(cancellationToken))
                 .ToDictionary(item => item.Id, StringComparer.Ordinal);
         return new RecycleImpact(taskCountByProjectId, descendantCountByTaskId, projectsById);
     }

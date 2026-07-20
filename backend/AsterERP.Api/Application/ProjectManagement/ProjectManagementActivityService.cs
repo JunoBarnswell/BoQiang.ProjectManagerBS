@@ -13,7 +13,11 @@ namespace AsterERP.Api.Application.ProjectManagement;
 /// <summary>
 /// 项目成员可见的业务时间线。平台安全/操作审计由独立的审计基础设施负责，不能把原始敏感值写入此处。
 /// </summary>
-public sealed class ProjectManagementActivityService(IWorkspaceDatabaseAccessor databaseAccessor, ICurrentUser currentUser, IProjectManagementWebhookService? webhookService = null) : IProjectManagementActivityService
+public sealed class ProjectManagementActivityService(
+    IWorkspaceDatabaseAccessor databaseAccessor,
+    ICurrentUser currentUser,
+    IProjectManagementWebhookService? webhookService = null,
+    IProjectManagementDisplayProjectionService? displayProjection = null) : IProjectManagementActivityService
 {
     private const int MaxPayloadBytes = 64 * 1024;
     private const int MaxFieldChanges = 64;
@@ -173,7 +177,13 @@ public sealed class ProjectManagementActivityService(IWorkspaceDatabaseAccessor 
         if (!string.IsNullOrWhiteSpace(query.ActivityType))
             activityQuery = activityQuery.Where(item => item.ActivityType == query.ActivityType.Trim());
         if (!string.IsNullOrWhiteSpace(query.ActorUserId))
-            activityQuery = activityQuery.Where(item => item.ActorUserId == query.ActorUserId.Trim());
+        {
+            var actor = query.ActorUserId.Trim();
+            var actorIds = displayProjection is null ? [] : await displayProjection.FindUserIdsAsync(actor, cancellationToken);
+            activityQuery = actorIds.Count == 0
+                ? activityQuery.Where(item => item.ActorUserId == actor)
+                : activityQuery.Where(item => item.ActorUserId == actor || actorIds.Contains(item.ActorUserId));
+        }
         if (query.From.HasValue)
             activityQuery = activityQuery.Where(item => item.CreatedTime >= query.From.Value);
         if (query.To.HasValue)
@@ -257,14 +267,21 @@ public sealed class ProjectManagementActivityService(IWorkspaceDatabaseAccessor 
         foreach (var item in conversations.Where(item => item.TaskId is not null))
             targets[TargetKey("ImConversationLink", item.Id)] = new(item.TaskId!, item.IsDeleted || taskDeleted.GetValueOrDefault(item.TaskId!));
 
+        var displays = displayProjection is null
+            ? null
+            : await displayProjection.ResolveAsync([], [], entities.Select(item => item.ActorUserId), cancellationToken);
+
         return entities.Select(entity =>
         {
             targets.TryGetValue(TargetKey(entity.AggregateType, entity.AggregateId), out var target);
-            return Map(entity, target);
+            return Map(entity, target, displays);
         }).ToList();
     }
 
-    private static ProjectManagementActivityResponse Map(ProjectManagementActivityEntity entity, ActivityTarget? target = null)
+    private static ProjectManagementActivityResponse Map(
+        ProjectManagementActivityEntity entity,
+        ActivityTarget? target = null,
+        ProjectManagementDisplayProjection? displays = null)
     {
         var payload = DeserializePayload(entity.Remark);
         var targetRoute = target is null || target.IsDeleted
@@ -284,7 +301,8 @@ public sealed class ProjectManagementActivityService(IWorkspaceDatabaseAccessor 
             payload?.FieldChanges ?? [],
             payload?.Batch,
             targetRoute,
-            target?.IsDeleted ?? false);
+            target?.IsDeleted ?? false,
+            displays?.User(entity.ActorUserId));
     }
 
     private static string TargetKey(string aggregateType, string aggregateId) => $"{aggregateType}\u001f{aggregateId}";

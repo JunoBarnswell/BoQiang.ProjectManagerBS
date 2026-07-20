@@ -18,15 +18,17 @@ public sealed class ProjectManagementRealtimePublisher(
             invalidation.EventType,
             invalidation.Version,
             projectId,
-            invalidation.TraceId,
-            invalidation.Version,
-            [invalidation.AggregateType, "updatedTime"],
-            invalidation.TraceId,
-            invalidation.TenantId,
-            invalidation.AppCode,
-            invalidation.Version,
-            invalidation.Version,
-            invalidation.Version);
+            EventId: invalidation.EventId ?? Guid.NewGuid().ToString("N"),
+            Sequence: invalidation.Version,
+            ChangedFields: invalidation.ChangedFields ?? [invalidation.AggregateType, "updatedTime"],
+            TraceId: invalidation.TraceId,
+            TenantId: invalidation.TenantId,
+            AppCode: invalidation.AppCode,
+            AggregateVersion: invalidation.Version,
+            WorkspaceSequence: invalidation.Version,
+            ProjectSequence: invalidation.Version,
+            Patch: invalidation.Patch,
+            ClientMutationId: invalidation.ClientMutationId);
         return PublishAsync(invalidation, projectId, payload, cancellationToken);
     }
 
@@ -50,10 +52,16 @@ public sealed class ProjectManagementRealtimePublisher(
             .Where(item => item.ProjectId == projectId && item.TenantId == invalidation.TenantId && item.AppCode == invalidation.AppCode && item.IsActive && !item.IsDeleted)
             .Select(item => item.UserId)
             .ToListAsync(cancellationToken);
-        return members.Append(owner).OfType<string>().Where(item => !string.IsNullOrWhiteSpace(item)).Distinct(StringComparer.Ordinal).ToArray();
+        return members
+            .Append(owner)
+            .Concat(invalidation.AdditionalHomeUserIds ?? [])
+            .OfType<string>()
+            .Where(item => !string.IsNullOrWhiteSpace(item))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
     }
 
-    public async Task RevokeProjectAccessAsync(string tenantId, string appCode, string projectId, string userId, CancellationToken cancellationToken = default)
+    public async Task RevokeProjectAccessAsync(string tenantId, string appCode, string projectId, string userId, long aggregateVersion = 0, CancellationToken cancellationToken = default)
     {
         var connections = subscriptions.GetConnectionIds(tenantId, appCode, projectId, userId);
         foreach (var connectionId in connections)
@@ -61,5 +69,24 @@ public sealed class ProjectManagementRealtimePublisher(
             await realtimeTransport.RevokeProjectAccessAsync(tenantId, appCode, projectId, connectionId, cancellationToken);
             subscriptions.Unregister(connectionId, tenantId, appCode, projectId);
         }
+
+        var version = aggregateVersion > 0 ? aggregateVersion : 1;
+        var invalidation = new ProjectManagementRealtimeEvent(
+            "Project",
+            projectId,
+            "project.access.revoked",
+            version,
+            projectId,
+            EventId: Guid.NewGuid().ToString("N"),
+            Sequence: version,
+            ChangedFields: ["access"],
+            TraceId: Guid.NewGuid().ToString("N"),
+            TenantId: tenantId,
+            AppCode: appCode,
+            AggregateVersion: version,
+            WorkspaceSequence: version,
+            ProjectSequence: version,
+            Patch: new Dictionary<string, object?> { ["isDeleted"] = true });
+        await realtimeTransport.PublishHomeInvalidationAsync(tenantId, appCode, [userId], invalidation, cancellationToken);
     }
 }

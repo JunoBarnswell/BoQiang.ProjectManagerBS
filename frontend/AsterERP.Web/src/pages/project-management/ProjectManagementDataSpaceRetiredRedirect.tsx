@@ -12,7 +12,7 @@ export function ProjectManagementDataSpaceRetiredRedirect() {
     if (completed.current) return;
     completed.current = true;
     message.info('数据空间功能已移除，已返回项目中心。');
-    navigate('/platform/project-management/projects', { replace: true });
+    navigate('/platform/project-management', { replace: true });
   }, [message, navigate]);
 
   return null;

@@ -222,9 +222,22 @@ export interface ProjectManagementProjectQuery {
 
 export type ProjectManagementHomeCollection = 'all' | 'favorites' | 'recent';
 export type ProjectManagementHomeHealth = 'Completed' | 'UpdateMissing' | 'AtRisk' | 'OffTrack' | 'OnTrack' | 'NoUpdateExpected';
+export type ProjectManagementHomeView = 'all' | 'my-projects' | 'due-this-week' | 'at-risk' | 'archived' | string;
+
+export interface ProjectManagementHomeFilterRule {
+  field: string;
+  operator: string;
+  values: string[];
+}
+
+export interface ProjectManagementHomeFilterGroup {
+  conjunction: 'and';
+  rules: ProjectManagementHomeFilterRule[];
+}
 
 export interface ProjectManagementHomeQuery {
   collection?: ProjectManagementHomeCollection;
+  view?: ProjectManagementHomeView;
   keyword?: string;
   health?: ProjectManagementHomeHealth;
   priority?: string;
@@ -237,6 +250,12 @@ export interface ProjectManagementHomeQuery {
   sortDirection?: 'asc' | 'desc';
   pageIndex?: number;
   pageSize?: number;
+  filter?: string;
+  columns?: string;
+  density?: 'compact' | 'default' | 'comfortable' | string;
+  insights?: boolean;
+  insightsTab?: 'health' | 'leads' | string;
+  projectIds?: string;
 }
 
 export interface ProjectManagementHomeProjectItem extends ProjectManagementProject {
@@ -262,6 +281,9 @@ export interface ProjectManagementHomeSummaryResponse {
   leads: Array<{ userId?: string; displayName: string; count: number }>;
   unassignedCount: number;
   sequence: number;
+  total?: number;
+  status?: Array<{ key: string; count: number }>;
+  updatedTime?: string;
 }
 
 export interface ProjectManagementRecycleQuery {
@@ -279,6 +301,7 @@ export interface ProjectManagementRecycleProjectItem {
   versionNo: number;
   deletedTime?: string;
   deletedBy?: string;
+  deletedByDisplayName?: string;
   affectedTaskCount?: number;
   canRestore: boolean;
   canPurge: boolean;
@@ -342,6 +365,8 @@ export interface ProjectManagementRecycleTaskItem {
   versionNo: number;
   deletedTime?: string;
   deletedBy?: string;
+  projectDisplayName?: string;
+  deletedByDisplayName?: string;
   affectedDescendantCount?: number;
   canRestore: boolean;
   canPurge: boolean;
@@ -373,6 +398,7 @@ export interface ProjectManagementOverviewPerson {
   taskCount: number;
   completedTaskCount: number;
   overdueTaskCount: number;
+  displayName?: string;
 }
 
 export interface ProjectManagementOverviewItem {
@@ -387,6 +413,7 @@ export interface ProjectManagementOverviewItem {
   memberCount: number;
   milestones: ProjectManagementOverviewMilestone[];
   people: ProjectManagementOverviewPerson[];
+  health?: string;
 }
 
 export type ProjectManagementMyWorkCategory = 'all' | 'assigned' | 'participating' | 'created' | 'mentioned' | 'today' | 'upcoming' | 'overdue' | 'blocked';
@@ -434,6 +461,7 @@ export interface ProjectManagementProjectUpsertRequest {
   wipLimit?: number;
   progressPercent?: number;
   versionNo?: number;
+  clientMutationId?: string;
 }
 
 export interface ProjectManagementProject {
@@ -524,6 +552,8 @@ export interface ProjectManagementTaskListItem {
   hasChildren?: boolean;
   labels?: ProjectManagementTaskLabel[];
   participantUserIds?: string[];
+  assigneeDisplayName?: string;
+  participantDisplayNames?: string[];
 }
 
 export interface ProjectManagementTaskDetail extends ProjectManagementTaskListItem {
@@ -677,6 +707,7 @@ export interface ProjectManagementTaskComment {
   versionNo: number;
   createdTime: string;
   editedTime?: string;
+  authorDisplayName?: string;
 }
 
 export interface ProjectManagementTaskCommentMention {
@@ -734,6 +765,43 @@ export interface ProjectManagementTaskReminderUpdateRequest {
   timeZoneId: string;
   note?: string;
   versionNo: number;
+}
+
+export interface ProjectManagementProjectSubscription {
+  projectId: string;
+  userId: string;
+  mode: 'AllUpdates' | 'Important' | 'Mentions';
+  versionNo: number;
+  updatedTime?: string;
+}
+
+export interface ProjectManagementProjectSubscriptionUpsertRequest {
+  mode: ProjectManagementProjectSubscription['mode'];
+  versionNo?: number;
+}
+
+export interface ProjectManagementProjectReminder {
+  id: string;
+  projectId: string;
+  recipientUserId: string;
+  reminderAtUtc: string;
+  timeZoneId: string;
+  note?: string;
+  status: 'Pending' | 'Sent' | 'Canceled' | 'Failed';
+  attemptCount: number;
+  maxAttempts: number;
+  lastAttemptAt?: string;
+  triggeredAt?: string;
+  lastError?: string;
+  versionNo: number;
+  createdTime: string;
+}
+
+export interface ProjectManagementProjectReminderCreateRequest {
+  reminderAt: string;
+  timeZoneId: string;
+  note?: string;
+  clientRequestId: string;
 }
 
 export interface ProjectManagementNotificationQuery {
@@ -1056,7 +1124,7 @@ export interface ProjectManagementSavedView {
   id: string;
   projectId: string;
   viewName: string;
-  viewKey: ProjectManagementTaskView;
+  viewKey: ProjectManagementTaskView | 'home';
   queryJson: string;
   ownerUserId: string;
   isShared: boolean;
@@ -1068,7 +1136,7 @@ export interface ProjectManagementSavedView {
 
 export interface ProjectManagementSavedViewUpsertRequest {
   viewName: string;
-  viewKey: ProjectManagementTaskView;
+  viewKey: ProjectManagementTaskView | 'home';
   queryJson: string;
   isShared?: boolean;
   isDefault?: boolean;
@@ -1091,6 +1159,7 @@ export interface ProjectManagementMilestone {
   completedLeafTaskCount: number;
   sortOrder: number;
   versionNo: number;
+  ownerDisplayName?: string;
 }
 
 export interface ProjectManagementMember {
@@ -1104,6 +1173,7 @@ export interface ProjectManagementMember {
   joinedAt: string;
   leftAt?: string;
   versionNo: number;
+  displayName?: string;
 }
 
 export interface ProjectManagementMemberUpsertRequest {
@@ -1145,6 +1215,7 @@ export interface ProjectManagementActivity {
   };
   targetRoute?: string;
   isTargetDeleted?: boolean;
+  actorDisplayName?: string;
 }
 
 export interface ProjectManagementActivityQuery {
@@ -1161,6 +1232,29 @@ export interface ProjectManagementActivityQuery {
 export interface ProjectManagementActivityPage {
   total: number;
   items: ProjectManagementActivity[];
+}
+
+export interface ProjectManagementProjectUpdateRequest {
+  body: string;
+  clientMutationId?: string;
+}
+
+export interface ProjectManagementResource {
+  id: string;
+  projectId: string;
+  resourceName: string;
+  resourceUrl: string;
+  description?: string;
+  versionNo: number;
+  createdTime: string;
+  updatedTime?: string;
+}
+
+export interface ProjectManagementResourceUpsertRequest {
+  resourceName: string;
+  resourceUrl: string;
+  description?: string;
+  versionNo?: number;
 }
 
 export interface ProjectManagementWebhookSubscription {

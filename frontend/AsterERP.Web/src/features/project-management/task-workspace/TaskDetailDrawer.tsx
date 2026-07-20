@@ -114,7 +114,7 @@ export function TaskDetailDependenciesSection({ dependencies, error, labels, loa
   if (loading) return <p className="pm-task-drawer__empty">正在加载依赖…</p>;
   if (error) return <p className="pm-task-drawer__error">依赖加载失败。<button type="button" onClick={onRetry}>重试</button></p>;
   if (!dependencies.length) return <p className="pm-task-drawer__empty">暂无依赖。</p>;
-  return <div className="pm-task-drawer__list">{dependencies.map((dependency) => <div className="pm-task-drawer__list-item" key={dependency.id}><span>{labels[dependency.predecessorTaskId] ?? dependency.predecessorTaskId} → {labels[dependency.successorTaskId] ?? dependency.successorTaskId}</span><span>{dependency.dependencyType} · {dependency.lagMinutes} 分钟</span></div>)}</div>;
+  return <div className="pm-task-drawer__list">{dependencies.map((dependency) => <div className="pm-task-drawer__list-item" key={dependency.id}><span>{labels[dependency.predecessorTaskId] ?? '任务名称暂不可用'} → {labels[dependency.successorTaskId] ?? '任务名称暂不可用'}</span><span>{dependency.dependencyType} · {dependency.lagMinutes} 分钟</span></div>)}</div>;
 }
 
 function formatConflictValue(value: unknown): string {

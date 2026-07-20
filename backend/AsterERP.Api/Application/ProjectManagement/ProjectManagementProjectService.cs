@@ -1,6 +1,7 @@
 using AsterERP.Api.Infrastructure.Database;
 using AsterERP.Api.Infrastructure.Security;
 using AsterERP.Api.Modules.ProjectManagement;
+using AsterERP.Api.Modules.System.Users;
 using AsterERP.Contracts.ProjectManagement;
 using AsterERP.Shared;
 using AsterERP.Shared.Exceptions;
@@ -19,7 +20,8 @@ public sealed class ProjectManagementProjectService(
     IProjectManagementSyncJournalWriter? syncJournalWriter = null,
     IProjectManagementImConversationService? imConversationService = null,
     IProjectManagementReversibleCommandWriter? reversibleCommandWriter = null,
-    IProjectManagementDisplayProjectionService? displayProjection = null) : IProjectManagementProjectService
+    IProjectManagementDisplayProjectionService? displayProjection = null,
+    IProjectManagementRealtimePublisher? realtimePublisher = null) : IProjectManagementProjectService
 {
     public async Task<GridPageResult<ProjectManagementProjectResponse>> QueryAsync(
         ProjectManagementProjectQuery query,
@@ -50,8 +52,8 @@ public sealed class ProjectManagementProjectService(
         {
             var ownerUserIds = await DisplayProjection.FindUserIdsAsync(ownerUserId, cancellationToken);
             projectQuery = ownerUserIds.Count == 0
-                ? projectQuery.Where(_ => false)
-                : projectQuery.Where(item => ownerUserIds.Contains(item.OwnerUserId));
+                ? projectQuery.Where(item => item.OwnerUserId == ownerUserId)
+                : projectQuery.Where(item => item.OwnerUserId == ownerUserId || ownerUserIds.Contains(item.OwnerUserId));
         }
 
         var total = new RefAsync<int>();
@@ -76,6 +78,7 @@ public sealed class ProjectManagementProjectService(
         var db = databaseAccessor.GetProjectManagementDb();
         ValidateRequest(request);
         var projectCode = NormalizeRequired(request.ProjectCode, "项目编码不能为空");
+        var ownerUserId = await ResolveOwnerUserIdAsync(request.OwnerUserId, cancellationToken);
         if (await db.Queryable<ProjectManagementProjectEntity>().AnyAsync(item =>
                 item.ProjectCode == projectCode && !item.IsDeleted, cancellationToken))
         {
@@ -92,7 +95,7 @@ public sealed class ProjectManagementProjectService(
             Description = NormalizeOptional(request.Description),
             Status = ProjectManagementDomainRules.RequireProjectStatus(request.Status),
             Priority = NormalizePriority(request.Priority),
-            OwnerUserId = NormalizeOptional(request.OwnerUserId) ?? RequireUserId(),
+            OwnerUserId = ownerUserId,
             StartDate = request.StartDate,
             DueDate = request.DueDate,
             WipLimit = request.WipLimit,
@@ -128,6 +131,7 @@ public sealed class ProjectManagementProjectService(
             db.Ado.RollbackTran();
             throw;
         }
+        await PublishInvalidationAsync(entity, "project.created", ["projectCode", "projectName", "status", "priority", "ownerUserId", "startDate", "dueDate", "progressPercent"], request.ClientMutationId, null, cancellationToken);
         return await MapAsync(entity, cancellationToken);
     }
 
@@ -162,7 +166,9 @@ public sealed class ProjectManagementProjectService(
         ProjectManagementDomainRules.EnsureProjectStatusTransition(entity.Status, nextStatus);
         entity.Status = nextStatus;
         entity.Priority = NormalizePriority(request.Priority);
-        entity.OwnerUserId = NormalizeOptional(request.OwnerUserId) ?? entity.OwnerUserId;
+        var requestedOwnerUserId = NormalizeOptional(request.OwnerUserId);
+        if (requestedOwnerUserId is not null)
+            entity.OwnerUserId = await ResolveOwnerUserIdAsync(requestedOwnerUserId, cancellationToken);
         entity.StartDate = request.StartDate;
         entity.DueDate = request.DueDate;
         entity.WipLimit = request.WipLimit;
@@ -174,9 +180,20 @@ public sealed class ProjectManagementProjectService(
         await ProjectManagementMutationTransaction.RunAsync(db, async () =>
         {
             await UpdateWithExpectedVersionAsync(db, entity, expectedVersion, expectedDeleted: false, localValues, cancellationToken);
+            if (!string.Equals(before.OwnerUserId, entity.OwnerUserId, StringComparison.Ordinal))
+                await EnsureOwnerMembershipAsync(db, entity, before.OwnerUserId, cancellationToken);
             await WriteActivityAsync(entity, "updated", $"更新项目 {entity.ProjectName}", CreateChanges(before, entity), entity.UpdatedTime ?? DateTime.UtcNow, cancellationToken);
             await WriteSyncJournalAsync(entity, "updated", cancellationToken);
         });
+        var changedFields = CreateChanges(before, entity)
+            .Where(change => !string.Equals(change.Field, "Description", StringComparison.Ordinal))
+            .Select(change => ToRealtimeFieldName(change.Field))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var additionalHomeUsers = !string.Equals(before.OwnerUserId, entity.OwnerUserId, StringComparison.Ordinal)
+            ? [before.OwnerUserId]
+            : Array.Empty<string>();
+        await PublishInvalidationAsync(entity, "project.updated", changedFields, request.ClientMutationId, additionalHomeUsers, cancellationToken);
         if (imConversationService is not null)
         {
             await imConversationService.SynchronizeProjectLinksAsync(entity.Id, cancellationToken);
@@ -213,6 +230,7 @@ public sealed class ProjectManagementProjectService(
             await WriteActivityAsync(entity, "archived", $"归档项目 {entity.ProjectName}", CreateChanges(before, entity), entity.UpdatedTime ?? DateTime.UtcNow, cancellationToken);
             await WriteSyncJournalAsync(entity, "archived", cancellationToken);
         });
+        await PublishInvalidationAsync(entity, "project.archived", ["status", "updatedTime"], request.ClientMutationId, null, cancellationToken);
         if (imConversationService is not null)
             await imConversationService.ArchiveProjectLinksAsync(entity.Id, cancellationToken);
         return await MapAsync(entity, cancellationToken);
@@ -254,7 +272,7 @@ public sealed class ProjectManagementProjectService(
         return result;
     }
 
-    public async Task DeleteAsync(string id, long versionNo, CancellationToken cancellationToken = default)
+    public async Task DeleteAsync(string id, long versionNo, string? clientMutationId = null, CancellationToken cancellationToken = default)
     {
         RequirePlatformScope();
         var entity = await GetRequiredAsync(id, cancellationToken);
@@ -280,6 +298,7 @@ public sealed class ProjectManagementProjectService(
             await WriteActivityAsync(entity, "deleted", $"删除项目 {entity.ProjectName}", CreateChanges(before, entity), entity.UpdatedTime ?? DateTime.UtcNow, cancellationToken);
             await WriteSyncJournalAsync(entity, "deleted", cancellationToken);
         });
+        await PublishInvalidationAsync(entity, "project.deleted", ["isDeleted", "status", "updatedTime"], clientMutationId, null, cancellationToken);
         await RecordReversibleAsync(ProjectManagementReversibleCommandTypes.ProjectSoftDeleted, entity.Id, "Project", entity.Id,
             ProjectManagementReversibleCommandHandler.Serialize(new ProjectManagementProjectDeleteCommand(entity.Id, versionNo)),
             ProjectManagementReversibleCommandHandler.Serialize(new ProjectManagementProjectRestoreCommand(entity.Id, entity.VersionNo)),
@@ -301,6 +320,74 @@ public sealed class ProjectManagementProjectService(
     private string RequireUserId() => currentUser.GetAsterErpUserId()?.Trim() ?? throw new ValidationException("当前会话缺少用户");
 
     private void RequirePlatformScope() => ProjectManagementPlatformScope.RequireSystemWorkspace(currentUser);
+
+    private async Task<string> ResolveOwnerUserIdAsync(string? requestedOwnerUserId, CancellationToken cancellationToken)
+    {
+        var ownerUserId = NormalizeOptional(requestedOwnerUserId) ?? RequireUserId();
+        var currentDb = databaseAccessor.GetCurrentDb();
+        if (!currentDb.DbMaintenance.IsAnyTable("system_users", false))
+            return ownerUserId;
+
+        var isAvailable = await currentDb.Queryable<SystemUserEntity>()
+            .Where(user => user.Id == ownerUserId && !user.IsDeleted && user.Status == "Enabled")
+            .AnyAsync(cancellationToken);
+        if (!isAvailable)
+            throw new ValidationException("负责人不存在、已删除或已停用");
+        return ownerUserId;
+    }
+
+    private async Task EnsureOwnerMembershipAsync(
+        ISqlSugarClient db,
+        ProjectManagementProjectEntity project,
+        string previousOwnerUserId,
+        CancellationToken cancellationToken)
+    {
+        var now = project.UpdatedTime ?? DateTime.UtcNow;
+        var members = await db.Queryable<ProjectManagementProjectMemberEntity>()
+            .Where(member => member.ProjectId == project.Id && member.TenantId == project.TenantId && member.AppCode == project.AppCode &&
+                (member.UserId == project.OwnerUserId || member.UserId == previousOwnerUserId))
+            .ToListAsync(cancellationToken);
+        var nextOwner = members.FirstOrDefault(member => member.UserId == project.OwnerUserId);
+        if (nextOwner is null)
+        {
+            await db.Insertable(new ProjectManagementProjectMemberEntity
+            {
+                TenantId = project.TenantId,
+                AppCode = project.AppCode,
+                ProjectId = project.Id,
+                UserId = project.OwnerUserId,
+                RoleCode = "Owner",
+                IsActive = true,
+                JoinedAt = now,
+                VersionNo = 1,
+                CreatedBy = RequireUserId(),
+                CreatedTime = now,
+            }).ExecuteCommandAsync(cancellationToken);
+        }
+        else if (nextOwner.IsDeleted || !nextOwner.IsActive || !string.Equals(nextOwner.RoleCode, "Owner", StringComparison.Ordinal))
+        {
+            nextOwner.RoleCode = "Owner";
+            nextOwner.ScopeRootTaskId = null;
+            nextOwner.IsActive = true;
+            nextOwner.LeftAt = null;
+            nextOwner.IsDeleted = false;
+            nextOwner.DeletedBy = null;
+            nextOwner.DeletedTime = null;
+            nextOwner.VersionNo = nextOwner.VersionNo <= 0 ? 1 : nextOwner.VersionNo + 1;
+            nextOwner.UpdatedBy = RequireUserId();
+            nextOwner.UpdatedTime = now;
+            await db.Updateable(nextOwner).ExecuteCommandAsync(cancellationToken);
+        }
+
+        var previousOwner = members.FirstOrDefault(member => member.UserId == previousOwnerUserId && member.UserId != project.OwnerUserId &&
+            member.IsActive && !member.IsDeleted && string.Equals(member.RoleCode, "Owner", StringComparison.Ordinal));
+        if (previousOwner is null) return;
+        previousOwner.RoleCode = "Member";
+        previousOwner.VersionNo = previousOwner.VersionNo <= 0 ? 1 : previousOwner.VersionNo + 1;
+        previousOwner.UpdatedBy = RequireUserId();
+        previousOwner.UpdatedTime = now;
+        await db.Updateable(previousOwner).ExecuteCommandAsync(cancellationToken);
+    }
 
     private async Task WriteActivityAsync(
         ProjectManagementProjectEntity entity,
@@ -421,6 +508,59 @@ public sealed class ProjectManagementProjectService(
         Equals(serverValue, localValue) ? null : new ProjectManagementProjectConflictField(field, displayName, serverValue, localValue);
 
     private static string NormalizeRequired(string value, string message) => string.IsNullOrWhiteSpace(value) ? throw new ValidationException(message) : value.Trim();
+
+    private async Task PublishInvalidationAsync(
+        ProjectManagementProjectEntity entity,
+        string eventType,
+        IReadOnlyList<string> changedFields,
+        string? clientMutationId,
+        IReadOnlyCollection<string>? additionalHomeUserIds,
+        CancellationToken cancellationToken)
+    {
+        if (realtimePublisher is null) return;
+        await realtimePublisher.PublishInvalidationAsync(new ProjectManagementDataInvalidationEvent(
+            RequireTenantId(),
+            ProjectManagementPlatformScope.AppCode,
+            "Project",
+            entity.Id,
+            eventType,
+            entity.VersionNo,
+            Activity.Current?.Id ?? Guid.NewGuid().ToString("N"),
+            entity.Id,
+            ChangedFields: changedFields,
+            Patch: ToRealtimePatch(entity),
+            ClientMutationId: clientMutationId,
+            AdditionalHomeUserIds: additionalHomeUserIds), cancellationToken);
+    }
+
+    private static string ToRealtimeFieldName(string field) => field switch
+    {
+        "ProjectCode" => "projectCode",
+        "ProjectName" => "projectName",
+        "OwnerUserId" => "ownerUserId",
+        "StartDate" => "startDate",
+        "DueDate" => "dueDate",
+        "WipLimit" => "wipLimit",
+        "ProgressPercent" => "progressPercent",
+        "IsDeleted" => "isDeleted",
+        _ => char.ToLowerInvariant(field[0]) + field[1..]
+    };
+
+    private static IReadOnlyDictionary<string, object?> ToRealtimePatch(ProjectManagementProjectEntity entity) => new Dictionary<string, object?>
+    {
+        ["projectCode"] = entity.ProjectCode,
+        ["projectName"] = entity.ProjectName,
+        ["status"] = entity.Status,
+        ["priority"] = entity.Priority,
+        ["ownerUserId"] = entity.OwnerUserId,
+        ["startDate"] = entity.StartDate,
+        ["dueDate"] = entity.DueDate,
+        ["wipLimit"] = entity.WipLimit,
+        ["progressPercent"] = entity.ProgressPercent,
+        ["isDeleted"] = entity.IsDeleted,
+        ["versionNo"] = entity.VersionNo,
+        ["updatedTime"] = entity.UpdatedTime
+    };
 
     private static string? NormalizeOptional(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 

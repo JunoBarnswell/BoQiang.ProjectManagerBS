@@ -63,11 +63,11 @@ public sealed class ProjectManagementProjectsController(IProjectManagementProjec
 
     [HttpDelete("{id}")]
     [Permission(PermissionCodes.ProjectManagementProjectDelete)]
-    public async Task<IActionResult> DeleteAsync(string id, [FromQuery] long versionNo, CancellationToken cancellationToken)
+    public async Task<IActionResult> DeleteAsync(string id, [FromQuery] long versionNo, [FromQuery] string? clientMutationId, CancellationToken cancellationToken)
     {
         try
         {
-            await service.DeleteAsync(id, versionNo, cancellationToken);
+            await service.DeleteAsync(id, versionNo, clientMutationId, cancellationToken);
             return ApiOk(new { id });
         }
         catch (ProjectManagementProjectVersionConflictException exception)

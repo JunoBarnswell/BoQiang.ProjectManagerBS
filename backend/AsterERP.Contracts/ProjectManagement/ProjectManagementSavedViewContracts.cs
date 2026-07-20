@@ -20,3 +20,8 @@ public sealed record ProjectManagementSavedViewResponse(
     long VersionNo,
     DateTime CreatedTime,
     DateTime? UpdatedTime);
+
+public static class ProjectManagementSavedViewScopes
+{
+    public const string Home = "__home__";
+}

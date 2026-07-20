@@ -28,5 +28,5 @@ public interface IProjectManagementProjectService
         long versionNo,
         CancellationToken cancellationToken = default);
 
-    Task DeleteAsync(string id, long versionNo, CancellationToken cancellationToken = default);
+    Task DeleteAsync(string id, long versionNo, string? clientMutationId = null, CancellationToken cancellationToken = default);
 }

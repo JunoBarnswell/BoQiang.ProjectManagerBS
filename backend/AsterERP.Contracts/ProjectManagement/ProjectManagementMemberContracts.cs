@@ -12,7 +12,8 @@ public sealed record ProjectManagementMemberResponse(
     bool IsActive,
     DateTime JoinedAt,
     DateTime? LeftAt,
-    long VersionNo);
+    long VersionNo,
+    string? DisplayName = null);
 
 public sealed record ProjectManagementMemberUpsertRequest(
     string UserId,

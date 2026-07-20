@@ -35,7 +35,7 @@ export function TaskActivityTimeline({ canView, isError, isLoading, page, query,
         <>
           <div className="mb-3 grid gap-2 md:grid-cols-4">
             <input aria-label="活动类型筛选" className="rounded border border-gray-200 p-2 text-sm" onChange={(event) => updateFilter({ activityType: event.target.value || undefined })} placeholder="活动类型" value={query.activityType ?? ''} />
-            <input aria-label="操作者筛选" className="rounded border border-gray-200 p-2 text-sm" onChange={(event) => updateFilter({ actorUserId: event.target.value || undefined })} placeholder="操作者 UserId" value={query.actorUserId ?? ''} />
+            <input aria-label="操作者筛选" className="rounded border border-gray-200 p-2 text-sm" onChange={(event) => updateFilter({ actorUserId: event.target.value || undefined })} placeholder="操作者名称" value={query.actorUserId ?? ''} />
             <input aria-label="活动开始日期" className="rounded border border-gray-200 p-2 text-sm" onChange={(event) => updateFilter({ from: event.target.value ? `${event.target.value}T00:00:00Z` : undefined })} type="date" value={query.from?.slice(0, 10) ?? ''} />
             <input aria-label="活动结束日期" className="rounded border border-gray-200 p-2 text-sm" onChange={(event) => updateFilter({ to: event.target.value ? `${event.target.value}T23:59:59Z` : undefined })} type="date" value={query.to?.slice(0, 10) ?? ''} />
           </div>
@@ -46,11 +46,11 @@ export function TaskActivityTimeline({ canView, isError, isLoading, page, query,
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div>
                       <div className="text-sm font-medium">{activity.summary ?? activity.activityType}</div>
-                      <div className="text-xs text-gray-500">{activity.activityType} · {activity.actorUserId} · {new Date(activity.createdTime).toLocaleString()}</div>
+                      <div className="text-xs text-gray-500">{activity.activityType} · {activity.actorDisplayName ?? '用户别名暂不可用'} · {new Date(activity.createdTime).toLocaleString()}</div>
                     </div>
                     {activity.isTargetDeleted ? <span className="text-xs text-gray-500">关联已删除</span> : activity.targetRoute ? <Link className="text-xs text-blue-600 underline" to={normalizeProjectManagementTargetRoute(activity.targetRoute)}>查看任务详情</Link> : null}
                   </div>
-                  {activity.batch ? <details className="mt-2 text-xs text-gray-600"><summary>批量明细（{activity.batch.totalCount} 项，成功 {activity.batch.successCount} 项）</summary><ul className="mt-1 space-y-1 pl-4">{(activity.batch.details ?? []).map((detail, index) => <li key={`${detail.aggregateType}-${detail.aggregateId}-${index}`}>{detail.summary ?? `${detail.aggregateType} ${detail.aggregateId}`}</li>)}</ul></details> : null}
+                  {activity.batch ? <details className="mt-2 text-xs text-gray-600"><summary>批量明细（{activity.batch.totalCount} 项，成功 {activity.batch.successCount} 项）</summary><ul className="mt-1 space-y-1 pl-4">{(activity.batch.details ?? []).map((detail, index) => <li key={`${detail.aggregateType}-${detail.aggregateId}-${index}`}>{detail.summary ?? `${detail.aggregateType} 已更新`}</li>)}</ul></details> : null}
                 </li>
               ))}
             </ol>

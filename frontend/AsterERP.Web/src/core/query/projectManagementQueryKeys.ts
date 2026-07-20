@@ -15,7 +15,9 @@ import type {
 import type { ProjectManagementWorkspaceScope } from '../../features/project-management/state/projectManagementWorkspaceScope';
 
 function root(scope: ProjectManagementWorkspaceScope) {
-  return ['astererp', 'project-management', scope.tenantId, scope.appCode] as const;
+  return scope.userId
+    ? ['astererp', 'project-management', scope.tenantId, scope.appCode, scope.userId] as const
+    : ['astererp', 'project-management', scope.tenantId, scope.appCode] as const;
 }
 
 export const projectManagementQueryKeys = {
@@ -63,6 +65,9 @@ export const projectManagementQueryKeys = {
   ] as const,
   members: (scope: ProjectManagementWorkspaceScope, projectId: string) => [...root(scope), 'members', projectId] as const,
   milestones: (scope: ProjectManagementWorkspaceScope, projectId: string) => [...root(scope), 'milestones', projectId] as const,
+  resources: (scope: ProjectManagementWorkspaceScope, projectId: string) => [...root(scope), 'resources', projectId] as const,
+  projectSubscription: (scope: ProjectManagementWorkspaceScope, projectId: string) => [...root(scope), 'project-subscription', projectId] as const,
+  projectReminders: (scope: ProjectManagementWorkspaceScope, projectId: string) => [...root(scope), 'project-reminders', projectId] as const,
   myWork: (scope: ProjectManagementWorkspaceScope, query: ProjectManagementMyWorkQuery) => [
     ...root(scope),
     'my-work',

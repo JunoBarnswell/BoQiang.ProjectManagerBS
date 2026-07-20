@@ -91,7 +91,7 @@ export function ProjectManagementReportsPage() {
       title="项目报表"
       eyebrow="ProjectManagement / Reports"
       description="直接导出以当前授权范围实时生成；后台快照持久化生成过程和下载结果。"
-      toolbar={<span className="text-sm text-gray-500">当前深链项目：{projectId ?? '未指定'} · 导出范围：当前授权工作区</span>}
+      toolbar={<span className="text-sm text-gray-500">当前深链项目范围：{projectId ? '已指定项目' : '未指定'} · 导出范围：当前授权工作区</span>}
     >
       <section className="max-w-5xl rounded-lg border border-gray-200 p-4" aria-labelledby="report-conditions-title">
         <h2 id="report-conditions-title" className="font-semibold">条件设置</h2>

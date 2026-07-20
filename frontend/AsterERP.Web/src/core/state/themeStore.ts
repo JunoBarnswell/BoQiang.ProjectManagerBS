@@ -9,7 +9,7 @@ function normalizeTheme(theme: string | null | undefined): ThemeMode {
 }
 
 function loadInitialTheme(): ThemeMode {
-  const storedTheme = localStorage.getItem('astererp.theme');
+  const storedTheme = getThemeStorage()?.getItem('astererp.theme');
   return normalizeTheme(storedTheme ?? appEnv.defaultTheme);
 }
 
@@ -17,9 +17,20 @@ export const useThemeStore = create<ThemeStoreState>((set) => ({
   setTheme: (theme) => {
     const nextTheme = normalizeTheme(theme);
     set({ theme: nextTheme });
-    localStorage.setItem('astererp.theme', nextTheme);
-    document.documentElement.dataset.theme = nextTheme;
+    getThemeStorage()?.setItem('astererp.theme', nextTheme);
+    if (typeof document !== 'undefined') {
+      document.documentElement.dataset.theme = nextTheme;
+    }
   },
   theme: loadInitialTheme()
 }));
 
+function getThemeStorage(): Storage | null {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}

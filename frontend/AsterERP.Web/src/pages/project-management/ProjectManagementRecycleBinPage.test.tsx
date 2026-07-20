@@ -11,11 +11,11 @@ vi.mock('@tanstack/react-query', () => ({
       data: {
         projects: {
           total: 1,
-          items: [{ id: 'project-1', projectCode: 'P-1', projectName: '已删除项目', status: 'Archived', versionNo: 2, deletedBy: 'operator', affectedTaskCount: 3, canRestore: true, canPurge: false }]
+          items: [{ id: 'project-1', projectCode: 'P-1', projectName: '已删除项目', status: 'Archived', versionNo: 2, deletedBy: 'operator', deletedByDisplayName: 'operator', affectedTaskCount: 3, canRestore: true, canPurge: false }]
         },
         tasks: {
           total: 1,
-          items: [{ id: 'task-1', projectId: 'project-1', taskCode: 'T-1', title: '已删除任务', status: 'Todo', versionNo: 2, deletedBy: 'operator', affectedDescendantCount: 2, canRestore: true, canPurge: false }]
+          items: [{ id: 'task-1', projectId: 'project-1', taskCode: 'T-1', title: '已删除任务', status: 'Todo', versionNo: 2, deletedBy: 'operator', deletedByDisplayName: 'operator', affectedDescendantCount: 2, canRestore: true, canPurge: false }]
         }
       }
     },

@@ -16,6 +16,9 @@ import type {
   ProjectManagementRecycleResponse,
   ProjectManagementOverviewItem,
   ProjectManagementOverviewQuery,
+  ProjectManagementProjectUpdateRequest,
+  ProjectManagementResource,
+  ProjectManagementResourceUpsertRequest,
   ProjectManagementMyWorkItem,
   ProjectManagementMyWorkQuery,
   ProjectManagementMyWorkProjectOption,
@@ -48,6 +51,10 @@ import type {
   ProjectManagementTaskReminder,
   ProjectManagementTaskReminderCreateRequest,
   ProjectManagementTaskReminderUpdateRequest,
+  ProjectManagementProjectSubscription,
+  ProjectManagementProjectSubscriptionUpsertRequest,
+  ProjectManagementProjectReminder,
+  ProjectManagementProjectReminderCreateRequest,
   ProjectManagementNotificationQuery,
   ProjectManagementNotificationPage,
   ProjectManagementNotificationOpenResult,
@@ -71,6 +78,7 @@ import type {
   ProjectManagementTaskLabelFilter,
   ProjectManagementTaskLabelSetRequest,
   ProjectManagementActivityPage,
+  ProjectManagementActivity,
   ProjectManagementActivityQuery,
   ProjectManagementReportQuery,
   ProjectManagementReportSnapshotRequest,
@@ -160,7 +168,7 @@ export function createProjectManagementProject(
 ): Promise<ApiEnvelope<ProjectManagementProject>> {
   return httpClient.post<ProjectManagementProject, ProjectManagementProjectUpsertRequest>(
     "/project-management/projects",
-    request,
+    withClientMutationId(request),
   );
 }
 
@@ -170,16 +178,24 @@ export function updateProjectManagementProject(
 ): Promise<ApiEnvelope<ProjectManagementProject>> {
   return httpClient.put<ProjectManagementProject, ProjectManagementProjectUpsertRequest>(
     `/project-management/projects/${id}`,
-    request,
+    withClientMutationId(request),
   );
 }
 
-export function deleteProjectManagementProject(id: string, versionNo: number): Promise<ApiEnvelope<{ id: string }>> {
-  return httpClient.delete<{ id: string }>(`/project-management/projects/${id}${buildQueryString({ versionNo })}`);
+export function deleteProjectManagementProject(id: string, versionNo: number, clientMutationId?: string): Promise<ApiEnvelope<{ id: string }>> {
+  return httpClient.delete<{ id: string }>(`/project-management/projects/${id}${buildQueryString({ versionNo, clientMutationId: clientMutationId ?? createClientMutationId() })}`);
 }
 
-export function archiveProjectManagementProject(id: string, versionNo: number): Promise<ApiEnvelope<ProjectManagementProject>> {
-  return httpClient.post<ProjectManagementProject, { versionNo: number }>(`/project-management/projects/${id}/archive`, { versionNo });
+export function archiveProjectManagementProject(id: string, versionNo: number, clientMutationId?: string): Promise<ApiEnvelope<ProjectManagementProject>> {
+  return httpClient.post<ProjectManagementProject, { versionNo: number; clientMutationId?: string }>(`/project-management/projects/${id}/archive`, { versionNo, clientMutationId: clientMutationId ?? createClientMutationId() });
+}
+
+function withClientMutationId(request: ProjectManagementProjectUpsertRequest): ProjectManagementProjectUpsertRequest {
+  return { ...request, clientMutationId: request.clientMutationId ?? createClientMutationId() };
+}
+
+function createClientMutationId(): string {
+  return typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 export function getProjectManagementRecycle(
@@ -443,6 +459,44 @@ export function getProjectManagementActivities(
   );
 }
 
+export function getProjectManagementProjectUpdates(
+  projectId: string,
+  query: ProjectManagementActivityQuery,
+  signal?: AbortSignal,
+): Promise<ApiEnvelope<ProjectManagementActivityPage>> {
+  return httpClient.get<ProjectManagementActivityPage>(
+    `/project-management/projects/${projectId}/updates${buildQueryString(query)}`,
+    undefined,
+    signal,
+  );
+}
+
+export function createProjectManagementProjectUpdate(
+  projectId: string,
+  request: ProjectManagementProjectUpdateRequest,
+): Promise<ApiEnvelope<ProjectManagementActivity>> {
+  return httpClient.post<ProjectManagementActivity, ProjectManagementProjectUpdateRequest>(
+    `/project-management/projects/${projectId}/updates`,
+    request,
+  );
+}
+
+export function getProjectManagementProjectResources(projectId: string, signal?: AbortSignal): Promise<ApiEnvelope<ProjectManagementResource[]>> {
+  return httpClient.get<ProjectManagementResource[]>(`/project-management/projects/${projectId}/resources`, undefined, signal);
+}
+
+export function createProjectManagementProjectResource(projectId: string, request: ProjectManagementResourceUpsertRequest): Promise<ApiEnvelope<ProjectManagementResource>> {
+  return httpClient.post<ProjectManagementResource, ProjectManagementResourceUpsertRequest>(`/project-management/projects/${projectId}/resources`, request);
+}
+
+export function updateProjectManagementProjectResource(projectId: string, id: string, request: ProjectManagementResourceUpsertRequest): Promise<ApiEnvelope<ProjectManagementResource>> {
+  return httpClient.patch<ProjectManagementResource, ProjectManagementResourceUpsertRequest>(`/project-management/projects/${projectId}/resources/${id}`, request);
+}
+
+export function deleteProjectManagementProjectResource(projectId: string, id: string, versionNo: number): Promise<ApiEnvelope<{ id: string }>> {
+  return httpClient.delete<{ id: string }>(`/project-management/projects/${projectId}/resources/${id}?versionNo=${encodeURIComponent(versionNo)}`);
+}
+
 export function getProjectManagementTasks(
   query: ProjectManagementTaskQuery,
   signal?: AbortSignal,
@@ -642,6 +696,30 @@ export function deleteProjectManagementTaskReminder(
   return httpClient.delete<{ id: string }>(
     `/project-management/tasks/${taskId}/reminders/${id}${buildQueryString({ versionNo })}`,
   );
+}
+
+export function getProjectManagementProjectSubscription(projectId: string, signal?: AbortSignal): Promise<ApiEnvelope<ProjectManagementProjectSubscription | null>> {
+  return httpClient.get<ProjectManagementProjectSubscription | null>(`/project-management/projects/${projectId}/subscription`, undefined, signal);
+}
+
+export function saveProjectManagementProjectSubscription(projectId: string, request: ProjectManagementProjectSubscriptionUpsertRequest): Promise<ApiEnvelope<ProjectManagementProjectSubscription>> {
+  return httpClient.put<ProjectManagementProjectSubscription, ProjectManagementProjectSubscriptionUpsertRequest>(`/project-management/projects/${projectId}/subscription`, request);
+}
+
+export function deleteProjectManagementProjectSubscription(projectId: string, versionNo?: number): Promise<ApiEnvelope<{ projectId: string }>> {
+  return httpClient.delete<{ projectId: string }>(`/project-management/projects/${projectId}/subscription${buildQueryString({ versionNo })}`);
+}
+
+export function getProjectManagementProjectReminders(projectId: string, signal?: AbortSignal): Promise<ApiEnvelope<ProjectManagementProjectReminder[]>> {
+  return httpClient.get<ProjectManagementProjectReminder[]>(`/project-management/projects/${projectId}/reminders`, undefined, signal);
+}
+
+export function createProjectManagementProjectReminder(projectId: string, request: ProjectManagementProjectReminderCreateRequest): Promise<ApiEnvelope<ProjectManagementProjectReminder>> {
+  return httpClient.post<ProjectManagementProjectReminder, ProjectManagementProjectReminderCreateRequest>(`/project-management/projects/${projectId}/reminders`, request);
+}
+
+export function cancelProjectManagementProjectReminder(projectId: string, id: string, versionNo: number): Promise<ApiEnvelope<{ id: string }>> {
+  return httpClient.post<{ id: string }, undefined>(`/project-management/projects/${projectId}/reminders/${id}/cancel${buildQueryString({ versionNo })}`, undefined);
 }
 
 export function getProjectManagementTaskAttachments(

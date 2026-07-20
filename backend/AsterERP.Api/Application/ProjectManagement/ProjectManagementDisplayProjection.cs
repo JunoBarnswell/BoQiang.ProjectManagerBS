@@ -18,7 +18,7 @@ public sealed class ProjectManagementDisplayProjection
 
     public string Project(string? id) => Resolve(projects, id, "项目已删除或无权查看");
     public string Aggregate(string aggregateType, string? id) => Resolve(aggregates, Key(aggregateType, id), "对象已删除或无权查看");
-    public string User(string? id) => Resolve(users, id, "用户已删除或无权查看");
+    public string? User(string? id) => string.IsNullOrWhiteSpace(id) ? null : Resolve(users, id, "用户别名暂不可用");
     public static string Key(string aggregateType, string? id) => $"{aggregateType}\u001f{id}";
 
     private static string Resolve(IReadOnlyDictionary<string, string> values, string? id, string unavailable) =>

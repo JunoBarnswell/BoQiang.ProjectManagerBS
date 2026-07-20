@@ -1,7 +1,11 @@
 export { ProjectManagementThemeProvider, projectManagementTheme } from './theme/projectManagementTheme';
 export { projectManagementTokens } from './theme/tokens';
-export { PmPage, PmPane, PmStack, PmInline, PmBox, PmContent, PmMobileTrigger } from './layout/PmLayout';
-export { PmNavigation, PmNavigationItem } from './components/PmNavigation';
+export { PmPage, PmPane, PmStack, PmInline, PmBox, PmContent, PmWorkbenchBody, PmMobileTrigger } from './layout/PmLayout';
+export { PmNavigation, PmNavigationBrand, PmNavigationDisclosure, PmNavigationDrawer, PmNavigationItem, PmNavigationSectionLabel } from './components/PmNavigation';
 export { PmSurface, PmSection, PmRow, PmHeading, PmDivider, PmSkeletonRows, PmText, PmHelperText } from './components/PmSurface';
-export { PmButton, PmIconButton, PmInput, PmSelect, PmMenuItem, PmChip, PmTabs, PmTab, PmTooltip, PmDialog, PmPopover, PmFormInput, PmFormSelect } from './components/PmControls';
+export { PmBreadcrumbs, type PmBreadcrumbItem } from './components/PmBreadcrumbs';
+export { PmActiveFilterBar, PmButton, PmIconButton, PmInput, PmSelect, PmMenuItem, PmChip, PmMenuShortcut, PmTabs, PmTab, PmTooltip, PmNotice, PmDialog, PmPopover, PmDrawer, PmFormInput, PmFormSelect, PmLink } from './components/PmControls';
 export { PmIcon, type PmIconName } from './components/PmIcon';
+export { PmEntityContextMenu, type PmContextMenuItem } from './components/PmEntityContextMenu';
+export { PmProjectTable, type PmProjectTableColumn, type PmProjectTableRow, type PmProjectTableSort } from './components/PmProjectTable';
+export { usePmMediaQuery } from './hooks/usePmMediaQuery';

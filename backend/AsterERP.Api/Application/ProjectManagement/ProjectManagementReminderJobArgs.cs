@@ -8,4 +8,5 @@ public sealed record ProjectManagementReminderJobArgs(
     string TenantId,
     string AppCode,
     string RecipientUserId,
-    long VersionNo);
+    long VersionNo,
+    string TargetType = "Task");

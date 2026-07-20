@@ -18,7 +18,8 @@ public sealed record ProjectManagementOverviewPersonSummary(
     string UserId,
     int TaskCount,
     int CompletedTaskCount,
-    int OverdueTaskCount);
+    int OverdueTaskCount,
+    string? DisplayName = null);
 
 /// <summary>
 /// 项目列表与详情共用的轻量风险摘要；仅基于有效叶子任务计算，避免父子任务重复计数。
@@ -45,4 +46,5 @@ public sealed record ProjectManagementOverviewItem(
     int MemberCount,
     IReadOnlyList<ProjectManagementOverviewMilestoneSummary> Milestones,
     IReadOnlyList<ProjectManagementOverviewPersonSummary> People,
-    ProjectManagementProjectRiskSummary RiskSummary);
+    ProjectManagementProjectRiskSummary RiskSummary,
+    string Health = "Unknown");

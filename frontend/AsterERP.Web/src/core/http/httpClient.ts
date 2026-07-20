@@ -208,6 +208,15 @@ export class HttpClient {
     return this.request<TResponse, TBody>({ ...normalizeRequestOptions(timeoutMs, signal), body, method: 'PUT', path });
   }
 
+  public patch<TResponse, TBody>(
+    path: string,
+    body: TBody,
+    timeoutMs?: number | HttpRequestOptions,
+    signal?: AbortSignal
+  ): Promise<ApiEnvelope<TResponse>> {
+    return this.request<TResponse, TBody>({ ...normalizeRequestOptions(timeoutMs, signal), body, method: 'PATCH', path });
+  }
+
   public delete<TResponse>(
     path: string,
     timeoutMs?: number | HttpRequestOptions,

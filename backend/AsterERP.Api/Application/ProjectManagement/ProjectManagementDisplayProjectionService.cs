@@ -30,10 +30,12 @@ public sealed class ProjectManagementDisplayProjectionService(IWorkspaceDatabase
         foreach (var project in projects) aggregateValues[ProjectManagementDisplayProjection.Key("Project", project.Id)] = ProjectLabel(project.ProjectCode, project.ProjectName);
         await AddMilestonesAsync(projectDb, referenceList, aggregateValues, cancellationToken);
         await AddTasksAsync(projectDb, referenceList, aggregateValues, cancellationToken);
-        var users = userIdList.Length == 0 ? [] : await databaseAccessor.GetCurrentDb().Queryable<SystemUserEntity>()
-            .Where(item => userIdList.Contains(item.Id) && !item.IsDeleted)
-            .Select(item => new { item.Id, item.UserName, item.DisplayName })
-            .ToListAsync(cancellationToken);
+        var users = userIdList.Length == 0 || !HasSystemUsersTable()
+            ? []
+            : await databaseAccessor.GetCurrentDb().Queryable<SystemUserEntity>()
+                .Where(item => userIdList.Contains(item.Id) && !item.IsDeleted)
+                .Select(item => new { item.Id, item.UserName, item.DisplayName })
+                .ToListAsync(cancellationToken);
         return new ProjectManagementDisplayProjection(
             projects.ToDictionary(item => item.Id, item => ProjectLabel(item.ProjectCode, item.ProjectName), StringComparer.Ordinal),
             aggregateValues,
@@ -44,7 +46,9 @@ public sealed class ProjectManagementDisplayProjectionService(IWorkspaceDatabase
     {
         var normalized = keyword.Trim();
         if (string.IsNullOrWhiteSpace(normalized)) return [];
-        return await databaseAccessor.GetCurrentDb().Queryable<SystemUserEntity>()
+        var db = databaseAccessor.GetCurrentDb();
+        if (!HasSystemUsersTable()) return [];
+        return await db.Queryable<SystemUserEntity>()
             .Where(item => !item.IsDeleted && (item.UserName.Contains(normalized) || item.DisplayName.Contains(normalized)))
             .Select(item => item.Id)
             .ToListAsync(cancellationToken);
@@ -55,7 +59,7 @@ public sealed class ProjectManagementDisplayProjectionService(IWorkspaceDatabase
         var normalized = keyword.Trim();
         if (string.IsNullOrWhiteSpace(normalized)) return [];
         return await databaseAccessor.GetProjectManagementDb().Queryable<ProjectManagementProjectEntity>()
-            .Where(item => !item.IsDeleted && (item.ProjectCode.Contains(normalized) || item.ProjectName.Contains(normalized)))
+            .Where(item => !item.IsDeleted && (item.Id == normalized || item.ProjectCode.Contains(normalized) || item.ProjectName.Contains(normalized)))
             .Select(item => item.Id)
             .ToListAsync(cancellationToken);
     }
@@ -77,6 +81,7 @@ public sealed class ProjectManagementDisplayProjectionService(IWorkspaceDatabase
     }
 
     private static bool HasValue(string? value) => !string.IsNullOrWhiteSpace(value);
+    private bool HasSystemUsersTable() => databaseAccessor.GetCurrentDb().DbMaintenance.IsAnyTable("system_users", false);
     private static string Normalize(string value) => value.Trim();
     private static string ProjectLabel(string code, string name) => string.IsNullOrWhiteSpace(code) ? name : $"{code} · {name}";
 }

@@ -148,7 +148,7 @@ public sealed class ProjectManagementReversibleCommandHandler(
     {
         var selected = Deserialize<ProjectManagementProjectDeleteCommand>(replay.CommandJson);
         var forward = Deserialize<ProjectManagementProjectDeleteCommand>(replay.ForwardCommandJson);
-        await projectService.DeleteAsync(selected.ProjectId, selected.VersionNo, cancellationToken);
+        await projectService.DeleteAsync(selected.ProjectId, selected.VersionNo, cancellationToken: cancellationToken);
         var deleted = (await recycleService.QueryAsync(new ProjectManagementRecycleQuery(PageSize: 200), cancellationToken)).Projects.Items
             .FirstOrDefault(item => item.Id == selected.ProjectId) ?? throw new ValidationException("删除项目后无法读取回收站版本");
         return Result(replay, deleted.VersionNo,
@@ -172,7 +172,7 @@ public sealed class ProjectManagementReversibleCommandHandler(
     {
         var selected = Deserialize<ProjectManagementProjectDeleteCommand>(replay.CommandJson);
         var forward = Deserialize<ProjectManagementProjectRestoreCommand>(replay.ForwardCommandJson);
-        await projectService.DeleteAsync(selected.ProjectId, selected.VersionNo, cancellationToken);
+        await projectService.DeleteAsync(selected.ProjectId, selected.VersionNo, cancellationToken: cancellationToken);
         var deleted = (await recycleService.QueryAsync(new ProjectManagementRecycleQuery(PageSize: 200), cancellationToken)).Projects.Items
             .FirstOrDefault(item => item.Id == selected.ProjectId) ?? throw new ValidationException("删除项目后无法读取回收站版本");
         return Result(replay, deleted.VersionNo,

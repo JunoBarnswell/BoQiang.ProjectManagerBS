@@ -25,7 +25,7 @@ export function TaskWorkspaceBatchResultPanel({ onClose, onDownload, result }: T
       <div className="pm-batch-result__items" role="list">
         {result.items.map((item) => (
           <div className="pm-batch-result__item" key={item.taskId} role="listitem">
-            <strong>{item.taskCode || item.taskId}</strong>
+            <strong>{item.taskCode || '任务名称暂不可用'}</strong>
             <span>{taskBatchResultStatusLabel(item.status)}</span>
             <span>{item.message || '已完成'}</span>
           </div>

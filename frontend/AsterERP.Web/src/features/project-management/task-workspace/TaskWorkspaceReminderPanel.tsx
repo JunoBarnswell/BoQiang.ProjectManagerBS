@@ -61,7 +61,7 @@ export function TaskWorkspaceReminderPanel({
       {!loading && !error && reminders.length === 0 ? <div className="mb-2 text-sm text-gray-500">暂无提醒</div> : null}
       {!loading && !error && reminders.length > 0 ? <div className="mb-3 space-y-2">{reminders.map((reminder) => (
         <article className="rounded border border-gray-100 p-2" key={reminder.id}>
-          <div className="flex items-center justify-between gap-2 text-sm"><span>{new Date(reminder.reminderAtUtc).toLocaleString()} · {reminder.recipientUserId}</span><span className="text-xs text-gray-500">{reminder.status}</span></div>
+          <div className="flex items-center justify-between gap-2 text-sm"><span>{new Date(reminder.reminderAtUtc).toLocaleString()} · {members.find((member) => member.userId === reminder.recipientUserId)?.displayName || '用户别名暂不可用'}</span><span className="text-xs text-gray-500">{reminder.status}</span></div>
           {reminder.note ? <div className="mt-1 text-sm text-gray-700">{reminder.note}</div> : null}
           {reminder.lastError ? <div className="mt-1 text-xs text-red-600">{reminder.lastError}</div> : null}
           <PermissionGuard code="project-management:reminder:manage" fallback={null}>
@@ -78,7 +78,7 @@ export function TaskWorkspaceReminderPanel({
           <select aria-label="提醒对象" onChange={(event) => setScope(event.target.value as ProjectManagementTaskReminderCreateRequest['recipientScope'])} value={scope}>
             <option value="Self">提醒自己</option><option value="Assignee">提醒负责人</option><option value="Participants">提醒参与人</option><option value="Members">指定成员</option>
           </select>
-          {scope === 'Members' ? <select aria-label="指定提醒成员" multiple onChange={(event) => setMemberIds(Array.from(event.currentTarget.selectedOptions, (option) => option.value))} value={memberIds}>{members.map((member) => <option key={member.id} value={member.userId}>{member.userId} · {member.roleCode}</option>)}</select> : null}
+          {scope === 'Members' ? <select aria-label="指定提醒成员" multiple onChange={(event) => setMemberIds(Array.from(event.currentTarget.selectedOptions, (option) => option.value))} value={memberIds}>{members.map((member) => <option key={member.id} value={member.userId}>{member.displayName || '用户别名暂不可用'} · {member.roleCode}</option>)}</select> : null}
           <input aria-label="提醒备注" maxLength={1000} onChange={(event) => setNote(event.target.value)} placeholder="提醒备注（可选）" value={note} />
         </div>
         <div className="mt-2"><PermissionButton code="project-management:reminder:manage" disabled={creating || !reminderAt || (scope === 'Members' && memberIds.length === 0)} onClick={submit}>{creating ? '创建中…' : '新增提醒'}</PermissionButton></div>

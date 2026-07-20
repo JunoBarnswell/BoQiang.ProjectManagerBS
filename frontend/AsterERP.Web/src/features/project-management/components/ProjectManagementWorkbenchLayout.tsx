@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
 
 import { useI18n } from '../../../core/i18n/I18nProvider';
-import { PmContent, PmMobileTrigger, PmPage, ProjectManagementThemeProvider } from '../../../ui/project-management';
+import { PmContent, PmMobileTrigger, PmPage, PmWorkbenchBody, ProjectManagementThemeProvider } from '../../../ui/project-management';
 import { ProjectManagementWorkbenchProvider, useProjectManagementWorkbenchContext } from '../state/ProjectManagementWorkbenchContext';
 import { parseProjectManagementWorkbenchRoute } from '../state/projectManagementWorkbenchNavigation';
 
@@ -22,13 +22,11 @@ function ProjectManagementWorkbenchLayoutContent({ children }: { children: React
     markPanelVisited(`${route.area}:${route.projectId ?? ''}:${route.projectSection ?? ''}`);
   }, [markPanelVisited, route.area, route.projectId, route.projectSection]);
 
-  return <section aria-label={translate('projectManagement.sidebar.ariaLabel')} className="responsive-page">
-    <PmPage>
+  return <PmPage aria-label={translate('projectManagement.sidebar.ariaLabel')}>
       <ProjectManagementWorkbenchSidebar activeArea={route.area} mobileOpen={mobileMenuOpen} onCloseMobile={() => setMobileMenuOpen(false)} />
       <PmContent>
         <PmMobileTrigger aria-label={translate('projectManagement.sidebar.openMobile')} onClick={() => setMobileMenuOpen(true)} type="button">☰</PmMobileTrigger>
-        <div className="responsive-page-content">{children}</div>
+        <PmWorkbenchBody>{children}</PmWorkbenchBody>
       </PmContent>
-    </PmPage>
-  </section>;
+    </PmPage>;
 }

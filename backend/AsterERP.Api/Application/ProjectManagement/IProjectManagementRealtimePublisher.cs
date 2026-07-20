@@ -11,5 +11,6 @@ public interface IProjectManagementRealtimePublisher
         string appCode,
         string projectId,
         string userId,
+        long aggregateVersion = 0,
         CancellationToken cancellationToken = default) => Task.CompletedTask;
 }

@@ -48,11 +48,13 @@ export function acquireProjectManagementHubConnection(
   scope: ProjectManagementWorkspaceScope,
 ): ProjectManagementHubConnectionLease | undefined {
   if (!scope.isAvailable) return undefined;
+  const resolvedSignalRUrl = resolveSignalRUrl(signalRUrl);
+  if (!resolvedSignalRUrl) return undefined;
 
-  const key = `${signalRUrl}|${scope.tenantId}|${scope.appCode}`;
+  const key = `${resolvedSignalRUrl}|${scope.tenantId}|${scope.appCode}|${scope.userId ?? ''}`;
   let entry = hubs.get(key);
   if (!entry) {
-    entry = createHubEntry(key, signalRUrl);
+    entry = createHubEntry(key, resolvedSignalRUrl);
     hubs.set(key, entry);
   }
   if (entry.stopTimer) {
@@ -110,6 +112,16 @@ export function acquireProjectManagementHubConnection(
       releaseHubEntry(entry);
     },
   };
+}
+
+function resolveSignalRUrl(signalRUrl: string): string | undefined {
+  if (/^https?:\/\//i.test(signalRUrl)) return signalRUrl;
+  try {
+    const origin = typeof window === 'undefined' ? 'http://localhost' : window.location.origin;
+    return new URL(signalRUrl, origin).toString();
+  } catch {
+    return undefined;
+  }
 }
 
 function createHubEntry(key: string, signalRUrl: string): HubEntry {
