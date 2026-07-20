@@ -568,14 +568,9 @@
 /* Board cards: tighter density */
 .pm-board-column .pm-requirement-card {
   gap: 3px;
-  padding: 7px 7px 7px 10px;
+  padding: 7px 8px;
   border-radius: var(--app-radius-md);
   box-shadow: none;
-}
-
-.pm-board-column .pm-requirement-card::before {
-  inset: 6px auto 6px 0;
-  width: 2px;
 }
 
 .pm-board-column .pm-requirement-card:hover {
@@ -645,33 +640,21 @@
   position: relative;
   display: grid;
   gap: 8px;
-  padding: 12px 12px 12px 14px;
-  border: 1px solid var(--pm-border);
+  padding: 12px;
+  border: 2px solid var(--pm-card-urgency-color, var(--pm-border));
   border-radius: var(--app-radius-lg);
   background: var(--pm-surface);
   box-shadow: var(--app-shadow-xs);
   cursor: pointer;
-  transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+  transition: border-color 180ms ease, box-shadow 140ms ease, transform 140ms ease;
 }
 
-.pm-requirement-card::before {
-  position: absolute;
-  inset: 10px auto 10px 0;
-  width: 3px;
-  border-radius: 0 var(--app-radius-sm) var(--app-radius-sm) 0;
-  background: var(--pm-status-todo);
-  content: '';
+.pm-requirement-card.is-urgency-none {
+  --pm-card-urgency-color: var(--pm-border);
 }
-
-.pm-requirement-card[data-status='Backlog']::before { background: var(--pm-status-backlog); }
-.pm-requirement-card[data-status='Todo']::before { background: var(--pm-status-todo); }
-.pm-requirement-card[data-status='InProgress']::before { background: var(--pm-status-in-progress); }
-.pm-requirement-card[data-status='Blocked']::before { background: var(--pm-status-blocked); }
-.pm-requirement-card[data-status='Done']::before { background: var(--pm-status-done); }
-.pm-requirement-card[data-status='Cancelled']::before { background: var(--pm-status-cancelled); }
 
 .pm-requirement-card:hover {
-  border-color: color-mix(in srgb, var(--pm-accent) 35%, var(--pm-border));
+  border-color: var(--pm-card-urgency-color, var(--pm-border));
   box-shadow: var(--app-shadow-sm);
   transform: translateY(-1px);
 }

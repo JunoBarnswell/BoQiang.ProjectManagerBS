@@ -1,6 +1,6 @@
 ﻿import { Box, Stack, Typography } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useMemo, useState, type DragEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState, type CSSProperties, type DragEvent } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import {
@@ -32,6 +32,7 @@ import {
   getAllowedProjectManagementTaskStatuses,
   PROJECT_MANAGEMENT_TASK_STATUSES,
 } from '../state/projectManagementStatusTransitions';
+import { computeScheduleUrgencyMetrics } from '../state/projectManagementScheduleUrgency';
 import { isTaskStatusRevisionConflict, patchTaskListCaches, patchTaskListCachesFromDetail } from '../state/projectManagementTaskStatusCache';
 import { useProjectManagementWorkspaceScope } from '../state/projectManagementWorkspaceScope';
 
@@ -603,9 +604,14 @@ function RequirementTaskCard({
   t: (key: string) => string;
   task: ProjectManagementTaskListItem;
 }) {
+  const urgency = useMemo(
+    () => computeScheduleUrgencyMetrics(task.startDate, task.dueDate, task.status),
+    [task.dueDate, task.startDate, task.status],
+  );
+
   return (
     <Box
-      className="pm-requirement-card"
+      className={`pm-requirement-card is-urgency-${urgency.tone}`}
       data-status={task.status}
       draggable={draggable}
       onDoubleClick={onDoubleClick}
@@ -614,6 +620,7 @@ function RequirementTaskCard({
         onDragEnd?.(event);
       }}
       onDragStart={onDragStart}
+      style={{ '--pm-card-urgency-color': urgency.urgencyColor } as CSSProperties}
     >
       <Typography className="pm-requirement-card__code" component="div" variant="caption">{task.taskCode}</Typography>
       <Typography className="pm-requirement-card__title" component="div" variant="body2">{task.title}</Typography>
