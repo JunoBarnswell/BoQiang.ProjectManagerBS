@@ -68,7 +68,7 @@ export function ProjectWorkItemEditor({
   projectId: string;
   taskId?: string;
 }) {
-  const { dateTime, format, t } = useProjectManagementI18n();
+  const { commentDateTime, dateTime, format, t } = useProjectManagementI18n();
   const message = useMessage();
   const confirm = useConfirm();
   const queryClient = useQueryClient();
@@ -99,7 +99,7 @@ export function ProjectWorkItemEditor({
   const members = useQuery({ enabled: open, queryKey: ['pm', 'editor-members', projectId], queryFn: ({ signal }) => getProjectManagementMemberCandidates({ projectId, pageIndex: 1, pageSize: 100 }, signal) });
   const milestones = useQuery({ enabled: open, queryKey: ['pm', 'editor-milestones', projectId], queryFn: ({ signal }) => getProjectManagementMilestones(projectId, signal) });
   const parents = useQuery({ enabled: open, queryKey: ['pm', 'editor-parents', projectId], queryFn: ({ signal }) => getProjectManagementTasks({ projectId, pageIndex: 1, pageSize: 200, viewKey: 'list', workItemType: 'Requirement', includeCompleted: true }, signal) });
-  const comments = useQuery({ enabled: open && Boolean(taskId), queryKey: ['pm', 'editor-comments', taskId], queryFn: ({ signal }) => getProjectManagementTaskComments(taskId!, { pageIndex: 1, pageSize: 20 }, signal) });
+  const comments = useQuery({ enabled: open && Boolean(taskId), queryKey: ['pm', 'editor-comments', taskId], queryFn: ({ signal }) => getProjectManagementTaskComments(taskId!, { pageIndex: 1, pageSize: 20, sort: 'desc' }, signal) });
   const followers = useQuery({ enabled: open && Boolean(taskId), queryKey: ['pm', 'editor-followers', taskId], queryFn: ({ signal }) => getProjectManagementTaskFollowers(taskId!, signal) });
   const reminders = useQuery({ enabled: open && Boolean(taskId) && canViewReminder && remindersOpen, queryKey: ['pm', 'editor-reminders', taskId], queryFn: ({ signal }) => getProjectManagementTaskReminders(taskId!, signal) });
   const timeLogs = useQuery({ enabled: open && Boolean(taskId) && timeLogsOpen, queryKey: ['pm', 'editor-time-logs', taskId], queryFn: ({ signal }) => getProjectManagementTaskTimeLogs(taskId!, signal) });
@@ -280,19 +280,19 @@ export function ProjectWorkItemEditor({
     <ResponsiveModal bodyClassName="pm-work-item-editor-body" className="pm-work-item-editor" closeOnEscape={!preview.open} footer={footer} maxWidth="96vw" mode="modal" onClose={requestClose} open={open} title={taskId ? t('projectManagement.editor.edit') : t('projectManagement.editor.create')}>
       {conflict ? <ConflictPanel conflict={conflict} onKeepLocal={() => setConflict(undefined)} onOverwrite={() => save.mutate({ overwriteVersionNo: conflict.serverValues.versionNo })} onReload={() => { const next = taskDetailToForm(conflict.serverValues); setForm(next); setBaseline(JSON.stringify(next)); setConflict(undefined); }} t={t} /> : null}
       <Box className="pm-editor-grid">
-        <Stack className="pm-editor-main" spacing={1.25}>
+        <Box className="pm-editor-main">
           <div className="pm-editor-title-field">
             <input aria-label={t('projectManagement.editor.titleAria')} className="pm-editor-title" maxLength={256} onChange={(event) => update({ title: event.target.value })} placeholder={t('projectManagement.editor.titlePlaceholder')} value={form.title} />
             <span aria-live="polite" className={`pm-editor-counter${form.title.length >= 256 ? ' is-at-limit' : form.title.length >= 230 ? ' is-near-limit' : ''}`}>{form.title.length}/256</span>
           </div>
-          <ProjectManagementMarkdownEditor ariaLabel={t('projectManagement.editor.descriptionAria')} contentJson={form.contentJson} mentionCandidates={candidateItems} onChange={(value) => update({ description: value, markdown: value })} onContentJsonChange={(value) => update({ contentJson: value })} onMentionUserIdsChange={(value) => update({ mentionUserIds: value })} placeholder={t('projectManagement.editor.descriptionPlaceholder')} rows={10} value={form.description ?? ''} />
           {taskId ? <CollaborationPanel
             canManageAttachment={canManageAttachment}
+            commentDateTime={commentDateTime}
             comments={comments.data?.data.items ?? []}
             comment={comment}
             commentContentJson={commentContentJson}
             commentFiles={commentFiles}
-            dateTime={dateTime}
+            format={format}
             isPublishing={addComment.isPending}
             onCommentChange={setComment}
             onCommentContentJsonChange={setCommentContentJson}
@@ -304,7 +304,7 @@ export function ProjectWorkItemEditor({
             mentionCandidates={candidateItems}
             t={t}
           /> : <Typography color="text.secondary" variant="caption">{t('projectManagement.editor.saveFirst')}</Typography>}
-        </Stack>
+        </Box>
         <Stack className="pm-editor-properties" spacing={0}>
           <Box className="pm-editor-property-group">
             <Typography className="pm-editor-property-group__title" component="h3">{t('projectManagement.editor.group.basic')}</Typography>
@@ -367,11 +367,12 @@ export function ProjectWorkItemEditor({
 
 function CollaborationPanel({
   canManageAttachment,
+  commentDateTime,
   comments,
   comment,
   commentContentJson,
   commentFiles,
-  dateTime,
+  format,
   isPublishing,
   mentionCandidates,
   onCommentChange,
@@ -384,11 +385,12 @@ function CollaborationPanel({
   t,
 }: {
   canManageAttachment: boolean;
+  commentDateTime: (value?: string | Date | null) => string;
   comments: ProjectManagementTaskComment[];
   comment: string;
   commentContentJson?: string;
   commentFiles: File[];
-  dateTime: (value?: string | Date | null) => string;
+  format: (key: string, values?: Record<string, string | number>) => string;
   isPublishing: boolean;
   mentionCandidates: ProjectManagementMemberCandidate[];
   onCommentChange: (value: string) => void;
@@ -413,7 +415,7 @@ function CollaborationPanel({
     <Box className="pm-collaboration">
       <Typography className="pm-collaboration__title" component="h3" fontWeight={700}>{t('projectManagement.editor.comment')}</Typography>
       <Stack className="pm-comment-composer" spacing={0.75}>
-        <ProjectManagementMarkdownEditor ariaLabel={t('projectManagement.editor.commentAria')} contentJson={commentContentJson} mentionCandidates={mentionCandidates} onChange={onCommentChange} onContentJsonChange={onCommentContentJsonChange} onMentionUserIdsChange={onCommentMentionsChange} placeholder={t('projectManagement.editor.commentPlaceholder')} rows={3} value={comment} />
+        <ProjectManagementMarkdownEditor ariaLabel={t('projectManagement.editor.commentAria')} contentJson={commentContentJson} density="compact" mentionCandidates={mentionCandidates} onChange={onCommentChange} onContentJsonChange={onCommentContentJsonChange} onMentionUserIdsChange={onCommentMentionsChange} placeholder={t('projectManagement.editor.commentPlaceholder')} rows={2} showToolbar={false} value={comment} />
         {commentFiles.length > 0 ? (
           <div className="pm-comment-composer__pending-files">
             {commentFiles.map((file, index) => (
@@ -448,7 +450,10 @@ function CollaborationPanel({
                 <CommentAvatar name={authorName} />
                 <Stack className="pm-comment__meta" spacing={0.25}>
                   <Typography className="pm-comment__author" fontWeight={650} variant="body2">{authorName}</Typography>
-                  <Typography className="pm-comment__time" color="text.secondary" variant="caption">{dateTime(item.createdTime)}</Typography>
+                  <Typography className="pm-comment__time" color="text.secondary" component="time" dateTime={item.createdTime} variant="caption">
+                    {commentDateTime(item.createdTime)}
+                    {item.editedTime ? ` · ${format('projectManagement.editor.comment.editedAt', { time: commentDateTime(item.editedTime) })}` : ''}
+                  </Typography>
                 </Stack>
               </Stack>
               <ProjectManagementMarkdownContent className="pm-comment__body" mentions={item.mentions} value={item.markdown} />

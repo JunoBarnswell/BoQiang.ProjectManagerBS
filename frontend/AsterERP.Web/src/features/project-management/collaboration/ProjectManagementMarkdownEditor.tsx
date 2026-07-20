@@ -13,9 +13,11 @@ import { normalizeProjectManagementMarkdown, ProjectManagementMarkdownContent } 
 
 interface ProjectManagementMarkdownEditorProps {
   ariaLabel: string;
+  density?: 'compact' | 'default';
   onChange: (value: string) => void;
   placeholder?: string;
   rows?: number;
+  showToolbar?: boolean;
   value: string;
   contentJson?: string;
   mentionCandidates?: ProjectManagementMemberCandidate[];
@@ -146,7 +148,14 @@ function createProjectMentionSuggestion(candidatesRef: { current: ProjectManagem
   });
 }
 
-export function ProjectManagementMarkdownEditor({ ariaLabel, contentJson, mentionCandidates = [], onChange, onContentJsonChange, onMentionUserIdsChange, placeholder, value }: ProjectManagementMarkdownEditorProps) {
+function resolveEditorDensity(density: ProjectManagementMarkdownEditorProps['density'], rows?: number): 'compact' | 'default' {
+  if (density) return density;
+  if (rows !== undefined && rows <= 3) return 'compact';
+  return 'default';
+}
+
+export function ProjectManagementMarkdownEditor({ ariaLabel, contentJson, density, mentionCandidates = [], onChange, onContentJsonChange, onMentionUserIdsChange, placeholder, rows, showToolbar = true, value }: ProjectManagementMarkdownEditorProps) {
+  const editorDensity = resolveEditorDensity(density, rows);
   const { t } = useProjectManagementI18n();
   const candidatesRef = useRef(mentionCandidates);
   const onChangeRef = useRef(onChange);
@@ -192,8 +201,8 @@ export function ProjectManagementMarkdownEditor({ ariaLabel, contentJson, mentio
   }, [contentJson, editor, value]);
 
   if (!editor) return <div aria-label={ariaLabel} className="min-h-24 rounded border border-gray-200 p-3 text-sm text-gray-500">{t('projectManagement.richEditor.loading')}</div>;
-  return <div className="pm-rich-editor rounded border border-gray-200">
-    <div aria-label={t('projectManagement.richEditor.toolbar')} className="pm-rich-editor-toolbar">
+  return <div className={`pm-rich-editor pm-rich-editor--${editorDensity}${showToolbar ? '' : ' pm-rich-editor--toolbarless'}`}>
+    {showToolbar ? <div aria-label={t('projectManagement.richEditor.toolbar')} className="pm-rich-editor-toolbar">
       <button type="button" aria-label={t('projectManagement.richEditor.paragraph')} onClick={() => editor.chain().focus().setParagraph().run()}>{t('projectManagement.richEditor.paragraph')}</button>
       <button type="button" aria-label={t('projectManagement.richEditor.heading')} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}>{t('projectManagement.richEditor.heading')}</button>
       <button type="button" aria-label={t('projectManagement.richEditor.bold')} onClick={() => editor.chain().focus().toggleBold().run()}>{t('projectManagement.richEditor.bold')}</button>
@@ -206,7 +215,7 @@ export function ProjectManagementMarkdownEditor({ ariaLabel, contentJson, mentio
       <button type="button" aria-label={t('projectManagement.richEditor.mention')} onClick={() => editor.chain().focus().insertContent('@').run()}>{t('projectManagement.richEditor.mention')}</button>
       <button type="button" aria-label={t('projectManagement.richEditor.undo')} onClick={() => editor.chain().focus().undo().run()}>{t('projectManagement.richEditor.undo')}</button>
       <button type="button" aria-label={t('projectManagement.richEditor.redo')} onClick={() => editor.chain().focus().redo().run()}>{t('projectManagement.richEditor.redo')}</button>
-    </div>
+    </div> : null}
     <EditorContent editor={editor} className="pm-rich-editor-content" />
   </div>;
 }
