@@ -33,6 +33,7 @@ export const projectManagementWorkItemsMessagesZhCN = {
   'projectManagement.workItems.saveFailed': '保存视图失败',
   'projectManagement.workItems.savedInvalid': '视图配置损坏',
   'projectManagement.workItems.statusRollback': '状态更新失败，已回滚',
+  'projectManagement.workItems.conflictRefresh': '任务已被更新，列表已刷新，请重新拖拽',
   'projectManagement.workItems.loadFailed': '任务列表加载失败',
   'projectManagement.workItems.retry': '重试',
   'projectManagement.workItems.empty': '暂无任务',

@@ -262,6 +262,49 @@ public sealed class ProjectManagementTaskServiceTests
     }
 
     [Fact]
+    public async Task ChangeStatus_preserves_requirement_work_item_type_for_board_queries()
+    {
+        using var db = CreateDb("task-status-preserves-requirement-type");
+        await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
+        await db.Insertable(new ProjectManagementProjectEntity
+        {
+            Id = "project-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectCode = "A",
+            ProjectName = "A", OwnerUserId = "operator"
+        }).ExecuteCommandAsync();
+        var service = new ProjectManagementTaskService(new TestWorkspaceDatabaseAccessor(db), CreateUser());
+
+        var created = await service.CreateAsync(
+            "project-a",
+            new ProjectManagementTaskUpsertRequest(
+                string.Empty,
+                "看板需求",
+                Status: "Backlog",
+                WorkItemType: "Requirement",
+                RequirementType: "Functional",
+                RequirementSource: "Customer",
+                RiskLevel: "Medium",
+                StoryPoints: 5));
+        Assert.Equal("Requirement", created.WorkItemType);
+
+        var changed = await service.ChangeStatusAsync(
+            created.Id,
+            new ProjectManagementTaskStatusChangeRequest("Todo", created.VersionNo));
+        Assert.Equal(ProjectManagementDomainRules.TaskTodo, changed.Status);
+        Assert.Equal("Requirement", changed.WorkItemType);
+        Assert.Equal("Functional", changed.RequirementType);
+        Assert.Equal("Customer", changed.RequirementSource);
+        Assert.Equal("Medium", changed.RiskLevel);
+        Assert.Equal(5, changed.StoryPoints);
+
+        var entity = await db.Queryable<ProjectManagementTaskEntity>().Where(item => item.Id == created.Id).FirstAsync();
+        Assert.Equal("Requirement", entity.WorkItemType);
+
+        var visible = await service.QueryAsync(new ProjectManagementTaskQuery("project-a", WorkItemType: "Requirement", ViewKey: "board"));
+        Assert.Equal(1, visible.Total);
+        Assert.Contains(visible.Items, item => item.Id == created.Id && item.WorkItemType == "Requirement" && item.Status == "Todo");
+    }
+
+    [Fact]
     public void Task_controller_separates_view_add_edit_move_and_delete_permissions()
     {
         Assert.Contains(typeof(ProjectManagementTasksController).GetCustomAttributes(typeof(PermissionAttribute), true), attribute => ((PermissionAttribute)attribute).Code == PermissionCodes.ProjectManagementTaskView);

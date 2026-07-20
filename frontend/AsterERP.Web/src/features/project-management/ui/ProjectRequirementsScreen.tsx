@@ -1,6 +1,6 @@
 ﻿import { Box, Chip, Stack, Typography } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useState, type DragEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState, type DragEvent } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import {
@@ -31,6 +31,7 @@ import {
   getAllowedProjectManagementTaskStatuses,
   PROJECT_MANAGEMENT_TASK_STATUSES,
 } from '../state/projectManagementStatusTransitions';
+import { isTaskStatusRevisionConflict, patchTaskListCaches, patchTaskListCachesFromDetail } from '../state/projectManagementTaskStatusCache';
 import { useProjectManagementWorkspaceScope } from '../state/projectManagementWorkspaceScope';
 
 import { ProjectScreenHeader, ProjectWorkbenchFrame } from './ProjectWorkbenchFrame';
@@ -141,16 +142,28 @@ export function ProjectRequirementsScreen() {
       return changeProjectManagementTaskStatus(task.id, { status: nextStatus, versionNo: task.versionNo });
     },
     onMutate: async ({ task, nextStatus }) => {
-      await queryClient.cancelQueries({ queryKey: projectManagementQueryKeys.tasksProject(scope, projectId) });
-      const snapshot = queryClient.getQueriesData<{ data: { total: number; items: ProjectManagementTaskListItem[] } }>({ queryKey: projectManagementQueryKeys.tasksProject(scope, projectId) });
-      queryClient.setQueriesData<{ data: { total: number; items: ProjectManagementTaskListItem[] } }>({ queryKey: projectManagementQueryKeys.tasksProject(scope, projectId) }, (current) => current ? { ...current, data: { ...current.data, items: current.data.items.map((item) => item.id === task.id ? { ...item, status: nextStatus } : item) } } : current);
+      const tasksKey = projectManagementQueryKeys.tasksProject(scope, projectId);
+      const snapshot = queryClient.getQueriesData<{ data: { total: number; items: ProjectManagementTaskListItem[] } }>({ queryKey: tasksKey });
+      patchTaskListCaches(queryClient, tasksKey, task.id, { status: nextStatus });
       return { snapshot };
     },
-    onError: (_error, _variables, context) => {
+    onSuccess: (response, { task }) => {
+      patchTaskListCachesFromDetail(queryClient, projectManagementQueryKeys.tasksProject(scope, projectId), {
+        id: task.id,
+        status: response.data.status,
+        progressPercent: response.data.progressPercent,
+        versionNo: response.data.versionNo,
+      });
+    },
+    onError: (error, _variables, context) => {
       context?.snapshot.forEach(([key, value]) => queryClient.setQueryData(key, value));
+      if (isTaskStatusRevisionConflict(error)) {
+        void invalidate();
+        message.info(t('projectManagement.workItems.conflictRefresh'));
+        return;
+      }
       message.error(t('projectManagement.workItems.statusRollback'));
     },
-    onSettled: () => { void invalidate(); },
   });
   const scheduleMutation = useMutation({
     mutationFn: ({ task, startDate, dueDate }: { task: ProjectManagementTaskListItem; startDate?: string; dueDate?: string }) =>
@@ -161,7 +174,10 @@ export function ProjectRequirementsScreen() {
     onSuccess: () => { void invalidate(); },
     onError: () => message.error(t('projectManagement.workItems.statusRollback')),
   });
-  useProjectManagementProjectRealtime({ enabled: scope.isAvailable && Boolean(projectId), onAccessRevoked: () => navigate(toProjectManagementPlatformRoute()), projectId, scope, signalRUrl: '/hubs/system-notification' });
+  const handleAccessRevoked = useCallback(() => {
+    navigate(toProjectManagementPlatformRoute());
+  }, [navigate]);
+  useProjectManagementProjectRealtime({ enabled: scope.isAvailable && Boolean(projectId), onAccessRevoked: handleAccessRevoked, projectId, scope, signalRUrl: '/hubs/system-notification' });
   useProjectManagementGlobalShortcuts(
     {
       newTask: () => openEditor(),
@@ -198,7 +214,7 @@ export function ProjectRequirementsScreen() {
     ['InProgress', t('projectManagement.workItems.segment.inProgress')],
     ['Todo', t('projectManagement.workItems.segment.todo')],
     ['Done', t('projectManagement.workItems.segment.done')],
-    ['Closed', t('projectManagement.workItems.segment.closed')],
+    ['Cancelled', t('projectManagement.workItems.segment.closed')],
   ];
 
   return (

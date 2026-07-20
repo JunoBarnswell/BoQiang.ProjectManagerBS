@@ -1,6 +1,6 @@
 import { Box, LinearProgress, Stack, Typography } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
-import { useState, type ReactNode } from 'react';
+import { useCallback, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import { getProjectManagementActivities, getProjectManagementOverview } from '../../../api/project-management/projectManagement.api';
@@ -22,7 +22,10 @@ export function ProjectOverviewScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const overview = useQuery({ enabled: scope.isAvailable && Boolean(projectId), queryKey: projectManagementQueryKeys.overview(scope, { projectId, pageIndex: 1, pageSize: 1 }), queryFn: ({ signal }) => getProjectManagementOverview({ projectId, pageIndex: 1, pageSize: 1 }, signal) });
   const activities = useQuery({ enabled: scope.isAvailable && Boolean(projectId), queryKey: projectManagementQueryKeys.activities(scope, projectId, { pageIndex: 1, pageSize: 4 }), queryFn: ({ signal }) => getProjectManagementActivities(projectId, { pageIndex: 1, pageSize: 4 }, signal) });
-  useProjectManagementProjectRealtime({ enabled: scope.isAvailable && Boolean(projectId), onAccessRevoked: () => navigate(toProjectManagementPlatformRoute()), projectId, scope, signalRUrl: '/hubs/system-notification' });
+  const handleAccessRevoked = useCallback(() => {
+    navigate(toProjectManagementPlatformRoute());
+  }, [navigate]);
+  useProjectManagementProjectRealtime({ enabled: scope.isAvailable && Boolean(projectId), onAccessRevoked: handleAccessRevoked, projectId, scope, signalRUrl: '/hubs/system-notification' });
   const item = overview.data?.data.items[0];
 
   const refresh = async () => {

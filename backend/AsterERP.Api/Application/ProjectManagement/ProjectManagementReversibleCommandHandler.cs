@@ -195,7 +195,33 @@ public sealed class ProjectManagementReversibleCommandHandler(
     private static ProjectManagementReversibleCommandReplayResult Result(ProjectManagementReversibleCommandReplayRequest replay, long versionNo, string forward, string inverse) =>
         new(replay.ProjectId, replay.AggregateType, replay.AggregateId, versionNo, NextForwardCommandJson: forward, NextInverseCommandJson: inverse);
 
-    internal static ProjectManagementTaskUpsertRequest ToUpsert(ProjectManagementTaskDetailResponse task) => new(task.TaskCode, task.Title, task.Description, task.Status, task.Priority, task.MilestoneId, task.ParentTaskId, task.AssigneeUserId, task.AssigneeEmploymentId, task.StartDate, task.DueDate, task.ProgressPercent, task.Weight, task.EstimateMinutes, task.VersionNo, Markdown: task.Markdown, Summary: task.Summary);
+    internal static ProjectManagementTaskUpsertRequest ToUpsert(ProjectManagementTaskDetailResponse task) => new(
+        task.TaskCode,
+        task.Title,
+        task.Description,
+        task.Status,
+        task.Priority,
+        task.MilestoneId,
+        task.ParentTaskId,
+        task.AssigneeUserId,
+        task.AssigneeEmploymentId,
+        task.StartDate,
+        task.DueDate,
+        task.ProgressPercent,
+        task.Weight,
+        task.EstimateMinutes,
+        task.VersionNo,
+        Markdown: task.Markdown,
+        Summary: task.Summary,
+        WorkItemType: task.WorkItemType,
+        ContentJson: task.ContentJson,
+        ContentText: task.ContentText,
+        RiskLevel: task.RiskLevel,
+        RequirementType: task.RequirementType,
+        RequirementSource: task.RequirementSource,
+        StoryPoints: task.StoryPoints,
+        MentionUserIds: task.MentionUserIds,
+        FollowerUserIds: task.FollowerUserIds);
     internal static ProjectManagementProjectUpsertRequest ToUpsert(ProjectManagementProjectResponse project) => new(project.ProjectCode, project.ProjectName, project.Description, project.Status, project.Priority, project.OwnerUserId, project.StartDate, project.DueDate, project.WipLimit, project.ProgressPercent, project.VersionNo);
     internal static string Serialize<T>(T value) => JsonSerializer.Serialize(value, JsonOptions);
     private static T Deserialize<T>(string json) => JsonSerializer.Deserialize<T>(json, JsonOptions) ?? throw new ValidationException("可逆命令载荷无效");

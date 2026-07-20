@@ -64,10 +64,10 @@ export function AppLayout() {
   const menuRefreshAttempt = useRef('');
 
   useEffect(() => {
-    if (!isAuthenticated || !isProjectManagementWorkbenchPath(location.pathname) || menus.length > 0 || menuRefreshAttempt.current === menuRefreshKey) return;
+    if (!isAuthenticated || !currentWorkspace || menus.length > 0 || menuRefreshAttempt.current === menuRefreshKey) return;
     menuRefreshAttempt.current = menuRefreshKey;
     void refreshSession({ preserveTabs: true });
-  }, [isAuthenticated, location.pathname, menuRefreshKey, menus.length, refreshSession]);
+  }, [isAuthenticated, currentWorkspace, menuRefreshKey, menus.length, refreshSession]);
 
   useEffect(() => {
     if (!isAuthenticated) {
