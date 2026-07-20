@@ -1312,6 +1312,45 @@
   background: var(--pm-surface);
 }
 
+.pm-editor-participant-list {
+  width: 100%;
+}
+
+.pm-editor-participant-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 2px 8px;
+  border: 1px solid var(--pm-control-border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--pm-surface) 90%, var(--app-white));
+  color: var(--pm-text);
+  font-size: var(--app-text-xs);
+  line-height: 1.4;
+}
+
+.pm-editor-participant-chip__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--pm-muted);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.pm-editor-participant-chip__remove:hover {
+  color: var(--pm-text);
+  background: color-mix(in srgb, var(--pm-control-border) 40%, transparent);
+}
+
 .pm-editor-counter {
   justify-self: end;
   padding: 0 2px;

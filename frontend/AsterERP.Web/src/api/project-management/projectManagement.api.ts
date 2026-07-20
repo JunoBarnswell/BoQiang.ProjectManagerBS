@@ -66,6 +66,10 @@ import type {
   ProjectManagementTaskWorkloadQuery,
   ProjectManagementTaskFollower,
   ProjectManagementTaskFollowerUpsertRequest,
+  ProjectManagementTaskParticipant,
+  ProjectManagementTaskParticipantCandidate,
+  ProjectManagementTaskParticipantCandidateQuery,
+  ProjectManagementTaskParticipantUpsertRequest,
   ProjectManagementTaskDraft,
   ProjectManagementTaskDraftAttachment,
   ProjectManagementSavedView,
@@ -624,6 +628,36 @@ export function addProjectManagementTaskFollower(taskId: string, request: Projec
 
 export function removeProjectManagementTaskFollower(taskId: string, userId: string, versionNo: number): Promise<ApiEnvelope<{ userId: string }>> {
   return httpClient.delete<{ userId: string }>(`/project-management/work-items/${taskId}/followers/${encodeURIComponent(userId)}${buildQueryString({ versionNo })}`);
+}
+
+export function getProjectManagementTaskParticipants(taskId: string, signal?: AbortSignal): Promise<ApiEnvelope<ProjectManagementTaskParticipant[]>> {
+  return httpClient.get<ProjectManagementTaskParticipant[]>(`/project-management/tasks/${taskId}/participants`, undefined, signal);
+}
+
+export function getProjectManagementTaskParticipantCandidates(
+  taskId: string,
+  query: ProjectManagementTaskParticipantCandidateQuery = {},
+  signal?: AbortSignal,
+): Promise<ApiEnvelope<GridPageResult<ProjectManagementTaskParticipantCandidate>>> {
+  return httpClient.get<GridPageResult<ProjectManagementTaskParticipantCandidate>>(
+    `/project-management/tasks/${taskId}/participants/candidates${buildQueryString(query)}`,
+    undefined,
+    signal,
+  );
+}
+
+export function addProjectManagementTaskParticipant(
+  taskId: string,
+  request: ProjectManagementTaskParticipantUpsertRequest,
+): Promise<ApiEnvelope<ProjectManagementTaskParticipant>> {
+  return httpClient.post<ProjectManagementTaskParticipant, ProjectManagementTaskParticipantUpsertRequest>(
+    `/project-management/tasks/${taskId}/participants`,
+    request,
+  );
+}
+
+export function removeProjectManagementTaskParticipant(taskId: string, id: string, versionNo: number): Promise<ApiEnvelope<{ id: string }>> {
+  return httpClient.delete<{ id: string }>(`/project-management/tasks/${taskId}/participants/${encodeURIComponent(id)}${buildQueryString({ versionNo })}`);
 }
 
 export function createProjectManagementTaskDraft(projectId: string, payloadJson = '{}'): Promise<ApiEnvelope<ProjectManagementTaskDraft>> {

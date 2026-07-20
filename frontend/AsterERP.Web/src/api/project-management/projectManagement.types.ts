@@ -626,6 +626,39 @@ export interface ProjectManagementTaskFollowerUpsertRequest {
   versionNo?: number;
 }
 
+export interface ProjectManagementTaskParticipant {
+  id: string;
+  taskId: string;
+  userId: string;
+  employmentId?: string;
+  roleCode: string;
+  versionNo: number;
+  isCurrentAssignment?: boolean;
+  isProjectMemberActive?: boolean;
+}
+
+export interface ProjectManagementTaskParticipantUpsertRequest {
+  userId: string;
+  employmentId?: string;
+  roleCode?: string;
+  versionNo?: number;
+}
+
+export interface ProjectManagementTaskParticipantCandidate {
+  userId: string;
+  employmentId?: string;
+  roleCode: string;
+  scopeRootTaskId?: string;
+  userName: string;
+  displayName: string;
+}
+
+export interface ProjectManagementTaskParticipantCandidateQuery {
+  pageIndex?: number;
+  pageSize?: number;
+  keyword?: string;
+}
+
 export interface ProjectManagementTaskDraft {
   id: string;
   projectId: string;

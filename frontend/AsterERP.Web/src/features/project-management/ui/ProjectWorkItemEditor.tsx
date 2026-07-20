@@ -1,9 +1,9 @@
 import { Box, Stack, Typography } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import {
-  addProjectManagementTaskFollower,
+  addProjectManagementTaskParticipant,
   cancelProjectManagementTaskReminder,
   createProjectManagementTask,
   createProjectManagementTaskComment,
@@ -16,15 +16,17 @@ import {
   getProjectManagementMilestones,
   getProjectManagementTask,
   getProjectManagementTaskComments,
-  getProjectManagementTaskFollowers,
+  getProjectManagementTaskParticipantCandidates,
+  getProjectManagementTaskParticipants,
   getProjectManagementTaskReminders,
   getProjectManagementTasks,
   getProjectManagementTaskTimeLogs,
   previewProjectManagementTaskAttachment,
+  removeProjectManagementTaskParticipant,
   updateProjectManagementTask,
   uploadProjectManagementTaskAttachment,
 } from '../../../api/project-management/projectManagement.api';
-import type { ProjectManagementMemberCandidate, ProjectManagementTaskAttachment, ProjectManagementTaskComment, ProjectManagementTaskUpsertRequest } from '../../../api/project-management/projectManagement.types';
+import type { ProjectManagementMemberCandidate, ProjectManagementTaskAttachment, ProjectManagementTaskComment, ProjectManagementTaskParticipant, ProjectManagementTaskUpsertRequest } from '../../../api/project-management/projectManagement.types';
 import { usePermission } from '../../../core/auth/usePermission';
 import { isHttpError } from '../../../core/http/httpError';
 import { useConfirm } from '../../../shared/feedback/useConfirm';
@@ -32,7 +34,6 @@ import { useMessage } from '../../../shared/feedback/useMessage';
 import { FilePreviewDialog } from '../../../shared/file-preview/FilePreviewDialog';
 import { ResponsiveModal } from '../../../shared/responsive/ResponsiveModal';
 import { ProjectManagementMarkdownEditor, ProjectManagementMarkdownContent } from '../collaboration/ProjectManagementMarkdownEditor';
-import { ProjectManagementProgressBar } from '../components/ProjectManagementProgressBar';
 import { ProjectManagementCountdown } from '../components/ProjectManagementCountdown';
 import { projectManagementEnumLabel, useProjectManagementI18n } from '../projectManagementI18n';
 import { getAllowedProjectManagementTaskStatuses } from '../state/projectManagementStatusTransitions';
@@ -73,6 +74,7 @@ export function ProjectWorkItemEditor({
   const confirm = useConfirm();
   const queryClient = useQueryClient();
   const { hasPermission: canEditTask } = usePermission('project-management:task:edit');
+  const { hasPermission: canAssignTask } = usePermission('project-management:task:assign');
   const { hasPermission: canManageAttachment } = usePermission('project-management:attachment:manage');
   const { hasPermission: canManageReminder } = usePermission('project-management:reminder:manage');
   const { hasPermission: canViewReminder } = usePermission('project-management:reminder:view');
@@ -86,6 +88,7 @@ export function ProjectWorkItemEditor({
   const [commentMentionIds, setCommentMentionIds] = useState<string[]>([]);
   const [commentFiles, setCommentFiles] = useState<File[]>([]);
   const [continueCreating, setContinueCreating] = useState(false);
+  const [participantPicker, setParticipantPicker] = useState('');
   const [conflict, setConflict] = useState<ReturnType<typeof readProjectManagementTaskConflict>>();
   const [reminderAt, setReminderAt] = useState('');
   const [reminderScope, setReminderScope] = useState<'Self' | 'Assignee' | 'Participants' | 'Members'>('Self');
@@ -100,7 +103,12 @@ export function ProjectWorkItemEditor({
   const milestones = useQuery({ enabled: open, queryKey: ['pm', 'editor-milestones', projectId], queryFn: ({ signal }) => getProjectManagementMilestones(projectId, signal) });
   const parents = useQuery({ enabled: open, queryKey: ['pm', 'editor-parents', projectId], queryFn: ({ signal }) => getProjectManagementTasks({ projectId, pageIndex: 1, pageSize: 200, viewKey: 'list', workItemType: 'Requirement', includeCompleted: true }, signal) });
   const comments = useQuery({ enabled: open && Boolean(taskId), queryKey: ['pm', 'editor-comments', taskId], queryFn: ({ signal }) => getProjectManagementTaskComments(taskId!, { pageIndex: 1, pageSize: 20, sort: 'desc' }, signal) });
-  const followers = useQuery({ enabled: open && Boolean(taskId), queryKey: ['pm', 'editor-followers', taskId], queryFn: ({ signal }) => getProjectManagementTaskFollowers(taskId!, signal) });
+  const participants = useQuery({ enabled: open && Boolean(taskId), queryKey: ['pm', 'editor-participants', taskId], queryFn: ({ signal }) => getProjectManagementTaskParticipants(taskId!, signal) });
+  const participantCandidates = useQuery({
+    enabled: open && Boolean(taskId),
+    queryKey: ['pm', 'editor-participant-candidates', taskId],
+    queryFn: ({ signal }) => getProjectManagementTaskParticipantCandidates(taskId!, { pageIndex: 1, pageSize: 100 }, signal),
+  });
   const reminders = useQuery({ enabled: open && Boolean(taskId) && canViewReminder && remindersOpen, queryKey: ['pm', 'editor-reminders', taskId], queryFn: ({ signal }) => getProjectManagementTaskReminders(taskId!, signal) });
   const timeLogs = useQuery({ enabled: open && Boolean(taskId) && timeLogsOpen, queryKey: ['pm', 'editor-time-logs', taskId], queryFn: ({ signal }) => getProjectManagementTaskTimeLogs(taskId!, signal) });
 
@@ -114,6 +122,7 @@ export function ProjectWorkItemEditor({
     setDraftId(undefined);
     setConflict(undefined);
     setCommentFiles([]);
+    setParticipantPicker('');
   }, [initialStartDate, open, task.data]);
 
   const save = useMutation({
@@ -171,9 +180,38 @@ export function ProjectWorkItemEditor({
     onError: (error) => message.error(error instanceof Error ? error.message : t('projectManagement.editor.commentPublishFailed')),
   });
 
-  const follow = useMutation({
-    mutationFn: (userId: string) => (taskId ? addProjectManagementTaskFollower(taskId, { userId }) : Promise.resolve(undefined)),
-    onSuccess: () => { if (taskId) void followers.refetch(); },
+  const resolveTaskVersionNo = useCallback(() => {
+    const cached = queryClient.getQueryData<{ data: { versionNo: number } }>(['pm', 'editor', projectId, taskId]);
+    return cached?.data.versionNo ?? task.data?.data.versionNo ?? form.versionNo ?? 0;
+  }, [form.versionNo, projectId, queryClient, task.data?.data.versionNo, taskId]);
+
+  const addParticipant = useMutation({
+    mutationFn: (userId: string) => {
+      if (!taskId) return Promise.reject(new Error(t('projectManagement.editor.saveFirst')));
+      return addProjectManagementTaskParticipant(taskId, {
+        userId,
+        roleCode: 'Participant',
+        versionNo: resolveTaskVersionNo(),
+      });
+    },
+    onSuccess: async () => {
+      setParticipantPicker('');
+      await Promise.all([participants.refetch(), task.refetch()]);
+      message.success(t('projectManagement.editor.participantAdded'));
+    },
+    onError: (error) => message.error(error instanceof Error ? error.message : t('projectManagement.editor.participantFailed')),
+  });
+
+  const removeParticipant = useMutation({
+    mutationFn: (participant: ProjectManagementTaskParticipant) => {
+      if (!taskId) return Promise.reject(new Error(t('projectManagement.editor.saveFirst')));
+      return removeProjectManagementTaskParticipant(taskId, participant.id, resolveTaskVersionNo());
+    },
+    onSuccess: async () => {
+      await Promise.all([participants.refetch(), task.refetch()]);
+      message.success(t('projectManagement.editor.participantRemoved'));
+    },
+    onError: (error) => message.error(error instanceof Error ? error.message : t('projectManagement.editor.participantFailed')),
   });
 
   const addReminder = useMutation({
@@ -237,9 +275,19 @@ export function ProjectWorkItemEditor({
     confirm({ title: t('projectManagement.editor.closeTitle'), content: t('projectManagement.editor.closeDescription'), confirmText: t('projectManagement.editor.discard'), onConfirm: onClose });
   };
   const candidateItems = useMemo(() => members.data?.data.items.filter((item) => item.isSelectable) ?? [], [members.data?.data.items]);
+  const participantItems = participants.data?.data ?? [];
+  const participantCandidateItems = participantCandidates.data?.data.items ?? [];
+  const participantLabels = useMemo(
+    () => Object.fromEntries(participantCandidateItems.map((item) => [item.userId, item.displayName || item.userName])),
+    [participantCandidateItems],
+  );
+  const participantIds = useMemo(() => new Set(participantItems.map((item) => item.userId)), [participantItems]);
+  const availableParticipantCandidates = useMemo(
+    () => participantCandidateItems.filter((item) => !participantIds.has(item.userId)),
+    [participantCandidateItems, participantIds],
+  );
   const parentItems = parents.data?.data.items.filter((item) => item.id !== taskId) ?? [];
   const milestoneItems = milestones.data?.data.items ?? [];
-  const followerIds = followers.data?.data.map((item) => item.userId) ?? form.followerUserIds ?? [];
   const labels = useMemo(() => Object.fromEntries(candidateItems.map((item) => [item.userId, item.displayName])), [candidateItems]);
   const enumLabels = (group: 'priority' | 'status' | 'workItemType' | 'risk' | 'requirementType' | 'requirementSource', values: string[]) =>
     Object.fromEntries(values.map((value) => [value, projectManagementEnumLabel(t, group, value)]));
@@ -308,7 +356,6 @@ export function ProjectWorkItemEditor({
         <Stack className="pm-editor-properties" spacing={0}>
           <Box className="pm-editor-property-group">
             <Typography className="pm-editor-property-group__title" component="h3">{t('projectManagement.editor.group.basic')}</Typography>
-            <Field label={t('projectManagement.editor.field.project')} value={t('projectManagement.editor.currentProject')} />
             <SelectField label={t('projectManagement.editor.field.workItemType')} labels={enumLabels('workItemType', ['Requirement', 'UserStory', 'Task', 'Bug'])} onChange={(value) => update({ workItemType: value })} options={['Requirement', 'UserStory', 'Task', 'Bug']} value={form.workItemType ?? 'Requirement'} t={t} />
             <SelectField label={t('projectManagement.editor.field.status')} labels={enumLabels('status', statusOptions)} onChange={(value) => update({ status: value })} options={statusOptions} value={form.status ?? 'Todo'} t={t} />
             <Stack spacing={0.25}>
@@ -317,10 +364,21 @@ export function ProjectWorkItemEditor({
                 <input max={100} min={0} onChange={(event) => update({ progressPercent: Number(event.target.value) })} style={{ flex: 1 }} type="range" value={form.progressPercent ?? 0} />
                 <Typography variant="caption">{form.progressPercent ?? 0}%</Typography>
               </Stack>
-              <ProjectManagementProgressBar dueDate={form.dueDate} progressPercent={form.progressPercent ?? 0} status={form.status} />
             </Stack>
             <SelectField label={t('projectManagement.editor.field.assignee')} labels={labels} onChange={(value) => update({ assigneeUserId: value || undefined })} options={['', ...candidateItems.map((item) => item.userId)]} value={form.assigneeUserId ?? ''} t={t} />
-            <SelectField label={t('projectManagement.editor.field.followers')} labels={labels} onChange={(value) => { if (value && !followerIds.includes(value)) { follow.mutate(value); update({ followerUserIds: [...followerIds, value] }); } }} options={['', ...candidateItems.map((item) => item.userId)]} value="" t={t} />
+            <ParticipantsField
+              canManage={Boolean(taskId) && canAssignTask}
+              candidates={availableParticipantCandidates}
+              isAdding={addParticipant.isPending}
+              labels={participantLabels}
+              onAdd={(userId) => addParticipant.mutate(userId)}
+              onRemove={(participant) => removeParticipant.mutate(participant)}
+              participants={participantItems}
+              pickerValue={participantPicker}
+              onPickerChange={setParticipantPicker}
+              showSaveHint={!taskId}
+              t={t}
+            />
           </Box>
           <Box className="pm-editor-property-group">
             <Typography className="pm-editor-property-group__title" component="h3">{t('projectManagement.editor.group.schedule')}</Typography>
@@ -555,6 +613,73 @@ function ConflictPanel({ conflict, onKeepLocal, onOverwrite, onReload, t }: { co
 }
 
 function Field({ label, value }: { label: string; value: string }) { return <Stack spacing={0.25}><Typography className="pm-editor-field-label" component="span">{label}</Typography><Typography className="pm-editor-readonly" variant="body2">{value || '—'}</Typography></Stack>; }
+
+function ParticipantsField({
+  canManage,
+  candidates,
+  isAdding,
+  labels,
+  onAdd,
+  onPickerChange,
+  onRemove,
+  participants,
+  pickerValue,
+  showSaveHint,
+  t,
+}: {
+  canManage: boolean;
+  candidates: Array<{ displayName: string; userId: string; userName: string }>;
+  isAdding: boolean;
+  labels: Record<string, string>;
+  onAdd: (userId: string) => void;
+  onPickerChange: (value: string) => void;
+  onRemove: (participant: ProjectManagementTaskParticipant) => void;
+  participants: ProjectManagementTaskParticipant[];
+  pickerValue: string;
+  showSaveHint: boolean;
+  t: (key: string) => string;
+}) {
+  return (
+    <Stack spacing={0.5}>
+      <Typography className="pm-editor-field-label" component="span">{t('projectManagement.editor.field.followers')}</Typography>
+      {participants.length > 0 ? (
+        <Stack className="pm-editor-participant-list" direction="row" flexWrap="wrap" useFlexGap spacing={0.5}>
+          {participants.map((participant) => (
+            <span className="pm-editor-participant-chip" key={participant.id}>
+              <span>{labels[participant.userId] ?? participant.userId}</span>
+              {canManage ? (
+                <button aria-label={t('projectManagement.editor.participantRemoved')} className="pm-editor-participant-chip__remove" onClick={() => onRemove(participant)} type="button">×</button>
+              ) : null}
+            </span>
+          ))}
+        </Stack>
+      ) : (
+        <Typography className="pm-editor-readonly" variant="body2">—</Typography>
+      )}
+      {showSaveHint ? <Typography color="text.secondary" variant="caption">{t('projectManagement.editor.afterSaveHint')}</Typography> : null}
+      {canManage ? (
+        <select
+          className="pm-editor-select"
+          disabled={isAdding || candidates.length === 0}
+          onChange={(event) => {
+            const value = event.target.value;
+            onPickerChange(value);
+            if (!value) return;
+            onAdd(value);
+            onPickerChange('');
+          }}
+          value={pickerValue}
+        >
+          <option value="">{t('projectManagement.editor.addParticipant')}</option>
+          {candidates.map((candidate) => (
+            <option key={candidate.userId} value={candidate.userId}>{candidate.displayName || candidate.userName}</option>
+          ))}
+        </select>
+      ) : null}
+    </Stack>
+  );
+}
+
 function SelectField({ label, labels = {}, onChange, options, value, t }: { label: string; labels?: Record<string, string>; onChange: (value: string) => void; options: string[]; value: string; t: (key: string) => string }) { return <Stack spacing={0.25}><Typography className="pm-editor-field-label" component="span">{label}</Typography><select className="pm-editor-select" onChange={(event) => onChange(event.target.value)} value={value}>{options.map((option) => <option key={option} value={option}>{option ? labels[option] ?? option : t('projectManagement.workbench.unknown')}</option>)}</select></Stack>; }
 function DateField({ label, onChange, value }: { label: string; onChange: (value: string) => void; value?: string }) { return <Stack spacing={0.25}><Typography className="pm-editor-field-label" component="span">{label}</Typography><input className="pm-editor-select" onChange={(event) => onChange(event.target.value)} type="date" value={value ? value.slice(0, 10) : ''} /></Stack>; }
 function NumberField({ label, onChange, value }: { label: string; onChange: (value: number | undefined) => void; value?: number }) {
