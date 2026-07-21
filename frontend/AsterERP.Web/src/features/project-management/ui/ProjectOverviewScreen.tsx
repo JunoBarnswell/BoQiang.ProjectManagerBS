@@ -138,21 +138,6 @@ export function ProjectOverviewScreen() {
               </Box>
             ))}
           </Panel>
-          <Panel className="pm-overview-panel--workload" title={t('projectManagement.workbench.overview.workload')}>
-            {item.people.slice(0, 5).map((person) => (
-              <Box className="pm-overview-milestone" key={person.userId}>
-                <Box className="pm-overview-milestone__head">
-                  <Typography className="pm-overview-milestone__name" component="span">{person.displayName ?? person.userId}</Typography>
-                  <Typography className="pm-overview-milestone__percent" component="span">
-                    {format('projectManagement.workbench.workloadValue', { estimated: person.estimatedMinutes ?? 0, capacity: person.capacityMinutes ?? 2400 })}
-                  </Typography>
-                </Box>
-                <Box aria-hidden className="pm-overview-progress">
-                  <span style={{ width: `${person.workloadPercent ?? 0}%`, background: 'var(--app-accent)' }} />
-                </Box>
-              </Box>
-            ))}
-          </Panel>
           <Panel className="pm-overview-panel--activity" title={t('projectManagement.workbench.overview.timeline')}>
             {activities.data?.data.items.length ? activities.data.data.items.map((activity) => (
               <Box className="pm-overview-activity-row" key={activity.id}>

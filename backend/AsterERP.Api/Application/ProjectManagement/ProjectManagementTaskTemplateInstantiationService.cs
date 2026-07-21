@@ -27,7 +27,7 @@ public sealed class ProjectManagementTaskTemplateInstantiationService(
             var start = request.StartDate;
             DateTime? due = start.HasValue && node.DefaultDurationDays.HasValue ? start.Value.AddDays(node.DefaultDurationDays.Value) : null;
             commands.Add(new ProjectManagementTaskTemplateNodeCreateCommand(node.NodeKey,
-                new ProjectManagementTaskUpsertRequest(AllocateCode(node.TaskCode), node.Title, node.Description, node.Status, node.Priority, milestoneId, node.ParentNodeKey, assignee?.UserId, assignee?.EmploymentId, start, due, 0, node.Weight, node.EstimateMinutes), labelIds));
+                new ProjectManagementTaskUpsertRequest(AllocateCode(node.TaskCode), node.Title, node.Description, node.Status, node.Priority, milestoneId, node.ParentNodeKey, assignee?.UserId, assignee?.EmploymentId, start, due, 0, node.Weight), labelIds));
         }
         var dependencies = definition.Dependencies.Select(item => new ProjectManagementTaskTemplateDependencyCreateCommand(item.PredecessorNodeKey, item.SuccessorNodeKey, item.DependencyType, item.LagMinutes)).ToList();
         var created = await taskCommand.CreateTemplateAsync(ProjectManagementTaskTemplateCapability.Instance, request.ProjectId, commands, dependencies, cancellationToken);

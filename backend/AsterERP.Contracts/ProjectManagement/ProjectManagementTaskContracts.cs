@@ -38,11 +38,8 @@ public sealed record ProjectManagementTaskUpsertRequest(
     DateTime? StartDate = null,
     DateTime? DueDate = null,
     decimal ProgressPercent = 0,
-    /// <summary>
-    /// 显式进度权重。未提供时服务端使用正的 <see cref="EstimateMinutes"/>，否则回退为 1。
-    /// </summary>
+    /// <summary>显式进度权重；未提供时回退为 1。</summary>
     decimal? Weight = null,
-    int? EstimateMinutes = null,
     long VersionNo = 0,
     bool OverrideWip = false,
     string? OverrideWipReason = null,
@@ -59,6 +56,7 @@ public sealed record ProjectManagementTaskUpsertRequest(
     int? StoryPoints = null,
     IReadOnlyList<string>? MentionUserIds = null,
     IReadOnlyList<string>? FollowerUserIds = null,
+    IReadOnlyList<string>? ParticipantUserIds = null,
     string? DraftId = null);
 
 /// <summary>
@@ -145,8 +143,6 @@ public sealed record ProjectManagementTaskDetailResponse(
     DateTime? DueDate,
     decimal ProgressPercent,
     decimal Weight,
-    int? EstimateMinutes,
-    int ActualMinutes,
     int SortOrder,
     int Depth,
     long VersionNo,
@@ -199,7 +195,6 @@ public sealed record ProjectManagementTaskConflictLocalValues(
     DateTime? DueDate,
     decimal ProgressPercent,
     decimal? Weight,
-    int? EstimateMinutes,
     bool OverrideWip,
     bool ForceComplete,
     string? Markdown,
@@ -211,7 +206,7 @@ public sealed record ProjectManagementTaskConflictLocalValues(
         [
             "VersionNo", "TaskCode", "Title", "Description", "Status", "Priority", "MilestoneId", "ParentTaskId",
             "AssigneeUserId", "AssigneeEmploymentId", "StartDate", "DueDate", "ProgressPercent", "Weight",
-            "EstimateMinutes", "OverrideWip", "ForceComplete", "Markdown", "Summary"
+            "OverrideWip", "ForceComplete", "Markdown", "Summary"
         ],
         request.TaskCode,
         request.Title,
@@ -226,7 +221,6 @@ public sealed record ProjectManagementTaskConflictLocalValues(
         request.DueDate,
         request.ProgressPercent,
         request.Weight,
-        request.EstimateMinutes,
         request.OverrideWip,
         request.ForceComplete,
         request.Markdown,
@@ -262,8 +256,6 @@ public sealed record ProjectManagementTaskResponse(
     DateTime? DueDate,
     decimal ProgressPercent,
     decimal Weight,
-    int? EstimateMinutes,
-    int ActualMinutes,
     int SortOrder,
     int Depth,
     long VersionNo,

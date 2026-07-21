@@ -10,6 +10,14 @@
     <NoWarn>$(NoWarn);AD0001</NoWarn>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(PublishSingleFile)' == 'true'">
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(PublishSingleFile)' == 'true'">
+    <ExcludeFromSingleFile Include="e_sqlite3.dll" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\AsterERP.Shared\AsterERP.Shared.csproj" />
     <ProjectReference Include="..\AsterERP.Contracts\AsterERP.Contracts.csproj" />

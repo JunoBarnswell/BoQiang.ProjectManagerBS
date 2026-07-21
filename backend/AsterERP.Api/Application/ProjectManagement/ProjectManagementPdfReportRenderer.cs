@@ -57,7 +57,6 @@ internal static class ProjectManagementPdfReportRenderer
             $"生成时间：{document.GeneratedAt.ToUniversalTime():yyyy-MM-dd HH:mm:ss} UTC",
             $"租户：{document.TenantId}  应用：{document.AppCode}  生成用户：{document.UserId}",
             $"项目数：{document.Projects.Count}  任务数：{document.Tasks.Count}  已删除选项：{(document.IncludeDeleted ? "包含" : "排除")}",
-            $"工作量：预计 {document.EstimatedMinutes.ToString(CultureInfo.InvariantCulture)} 分钟 / 实际 {document.ActualMinutes.ToString(CultureInfo.InvariantCulture)} 分钟",
             $"未来到期：{document.FutureDueCount}  逾期：{document.OverdueCount}  阻塞：{document.BlockedCount}",
             "任务状态分布："
         };
@@ -81,7 +80,7 @@ internal static class ProjectManagementPdfReportRenderer
         lines.Add(document.IncludeGanttSnapshot ? "甘特快照（任务明细）：" : "任务明细：");
         lines.AddRange(document.Tasks.Count == 0
             ? ["  无任务"]
-            : document.Tasks.Select(item => $"  {new string(' ', Math.Min(item.Depth, 8) * 2)}{item.TaskCode} | {item.Title} | {item.Status} | {item.StartDate?.ToString("MM-dd", CultureInfo.InvariantCulture) ?? "-"} ~ {item.DueDate?.ToString("MM-dd", CultureInfo.InvariantCulture) ?? "-"} | 预计 {item.EstimateMinutes} / 实际 {item.ActualMinutes}{(item.IsBlocked ? " | 阻塞" : string.Empty)}"));
+            : document.Tasks.Select(item => $"  {new string(' ', Math.Min(item.Depth, 8) * 2)}{item.TaskCode} | {item.Title} | {item.Status} | {item.StartDate?.ToString("MM-dd", CultureInfo.InvariantCulture) ?? "-"} ~ {item.DueDate?.ToString("MM-dd", CultureInfo.InvariantCulture) ?? "-"}{(item.IsBlocked ? " | 阻塞" : string.Empty)}"));
 
         if (document.CommentSummaries.Count > 0)
         {

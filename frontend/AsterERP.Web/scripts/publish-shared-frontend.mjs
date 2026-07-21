@@ -27,6 +27,7 @@ function runBuild(outDir) {
         ...process.env,
         VITE_APP_OUT_DIR: outDir,
         VITE_APP_BASE_PATH: '/',
+        VITE_APP_API_BASE_URL: '/api',
         VITE_APP_TARGET_APP_CODE: ''
       },
       stdio: 'inherit'
@@ -65,6 +66,7 @@ async function validateBuildOutput(outDir) {
 
 async function syncPublishedFiles(outDir) {
   await mkdir(publishRoot, { recursive: true });
+  await removeLegacyAppDirectories();
   const previousFiles = await readManifest();
   for (const file of previousFiles) {
     const target = resolve(publishRoot, file);
@@ -117,5 +119,28 @@ function assertInsidePublishRoot(target) {
   const pathRelativeToRoot = relative(publishRoot, target);
   if (isAbsolute(pathRelativeToRoot) || pathRelativeToRoot.startsWith(`..${sep}`) || pathRelativeToRoot === '..') {
     throw new Error(`Refusing to write outside frontend publish root: ${target}`);
+  }
+}
+
+async function removeLegacyAppDirectories() {
+  const allowedRootEntries = new Set([
+    'index.html',
+    'assets',
+    'vendor',
+    'wasm',
+    'flyfish-viewer-assets.json',
+    'uploads',
+    '.astererp-frontend-manifest.json'
+  ]);
+  const entries = await readdir(publishRoot, { withFileTypes: true });
+  for (const entry of entries) {
+    if (!entry.isDirectory() || allowedRootEntries.has(entry.name)) {
+      continue;
+    }
+
+    const legacyPath = join(publishRoot, entry.name);
+    assertInsidePublishRoot(legacyPath);
+    await rm(legacyPath, { recursive: true, force: true });
+    console.log(`Removed legacy per-app frontend directory: ${entry.name}`);
   }
 }

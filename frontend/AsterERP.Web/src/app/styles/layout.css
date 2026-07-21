@@ -19,12 +19,27 @@
   min-height: var(--app-shell-status-height);
 }
 
-.app-sidebar--expanded {
-  width: var(--app-shell-sidebar-width);
+.app-sidebar--expanded,
+.app-sidebar--collapsed {
+  flex: 0 0 var(--app-shell-sidebar-collapsed-width);
+  width: var(--app-shell-sidebar-collapsed-width);
 }
 
-.app-sidebar--collapsed {
-  width: var(--app-shell-sidebar-collapsed-width);
+.app-sidebar--expanded {
+  flex-basis: var(--app-shell-sidebar-width);
+  width: var(--app-shell-sidebar-width);
+  overflow: hidden;
+}
+
+.app-sidebar--expanded .app-sidebar__workspace,
+.app-sidebar--expanded nav,
+.app-sidebar--expanded .app-sidebar__toggle {
+  width: 100%;
+}
+
+.app-sidebar--expanded .app-sidebar__workspace,
+.app-sidebar--expanded nav {
+  background: white;
 }
 
 .app-sidebar__workspace {

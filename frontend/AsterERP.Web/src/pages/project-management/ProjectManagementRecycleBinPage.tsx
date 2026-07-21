@@ -138,5 +138,5 @@ function formatDate(value?: string) {
 }
 
 function PurgeImpactSummary({ impact }: { impact: ProjectManagementRecyclePurgeImpact }) {
-  return <p className="mt-2">影响范围：项目 {impact.projectCount}、任务 {impact.taskCount}（后代 {impact.descendantTaskCount}）、成员 {impact.memberCount}、里程碑 {impact.milestoneCount}、依赖 {impact.dependencyCount}、参与人 {impact.participantCount}、标签关系 {impact.labelRelationCount}、工时 {impact.timeLogCount}、评论 {impact.commentCount}、附件 {impact.attachmentCount}、提醒 {impact.reminderCount}、通知 {impact.notificationCount}、排期 {impact.recurrenceCount + impact.occurrenceCount}、会话关系 {impact.conversationLinkCount}、保存视图 {impact.savedViewCount}、同步记录 {impact.syncJournalCount}。附件会经文件存储生命周期删除。</p>;
+  return <p className="mt-2">影响范围：项目 {impact.projectCount}、任务 {impact.taskCount}（后代 {impact.descendantTaskCount}）、成员 {impact.memberCount}、里程碑 {impact.milestoneCount}、依赖 {impact.dependencyCount}、参与人 {impact.participantCount}、标签关系 {impact.labelRelationCount}、评论 {impact.commentCount}、附件 {impact.attachmentCount}、提醒 {impact.reminderCount}、通知 {impact.notificationCount}、排期 {impact.recurrenceCount + impact.occurrenceCount}、会话关系 {impact.conversationLinkCount}、保存视图 {impact.savedViewCount}、同步记录 {impact.syncJournalCount}。附件会经文件存储生命周期删除。</p>;
 }

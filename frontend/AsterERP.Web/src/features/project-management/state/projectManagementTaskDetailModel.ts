@@ -23,7 +23,6 @@ export function taskDetailToForm(task: ProjectManagementTaskDetail, versionNo = 
     assigneeUserId: task.assigneeUserId,
     description: task.markdown ?? task.description,
     dueDate: task.dueDate,
-    estimateMinutes: task.estimateMinutes,
     markdown: task.markdown,
     milestoneId: task.milestoneId,
     parentTaskId: task.parentTaskId,

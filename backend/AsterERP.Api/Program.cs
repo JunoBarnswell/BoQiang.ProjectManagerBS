@@ -10,6 +10,7 @@ using AsterERP.Api.Infrastructure.SignalR;
 using AsterERP.Api.Infrastructure.Workflows;
 using FluentValidation;
 using FluentValidation.AspNetCore;
+using Microsoft.AspNetCore.HostFiltering;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Localization;
 using Microsoft.Extensions.FileProviders;
@@ -31,6 +32,7 @@ try
 {
     var builder = WebApplication.CreateBuilder(args);
     builder.Host.UseSerilog();
+    ConfigureStandaloneHostFiltering(builder);
 
     var supportedCultures = new[] { new CultureInfo("zh-CN"), new CultureInfo("en-US") };
     builder.Services.Configure<RequestLocalizationOptions>(options =>
@@ -215,4 +217,18 @@ try
 finally
 {
     Log.CloseAndFlush();
+}
+
+static void ConfigureStandaloneHostFiltering(WebApplicationBuilder builder)
+{
+    if (!string.Equals(builder.Configuration["Deployment:Profile"], "Standalone", StringComparison.OrdinalIgnoreCase))
+    {
+        return;
+    }
+
+    builder.Services.Configure<HostFilteringOptions>(options =>
+    {
+        options.AllowedHosts.Clear();
+        options.AllowedHosts.Add("*");
+    });
 }

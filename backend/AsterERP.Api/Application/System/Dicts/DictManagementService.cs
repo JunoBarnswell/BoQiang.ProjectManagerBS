@@ -7,6 +7,7 @@ using AsterERP.Api.Infrastructure.Repositories;
 using AsterERP.Api.Infrastructure.UnitOfWork;
 using AsterERP.Api.Modules.System.Dicts;
 using SqlSugar;
+using Microsoft.Extensions.Caching.Distributed;
 
 namespace AsterERP.Api.Application.System.Dicts;
 
@@ -14,7 +15,8 @@ public sealed class DictManagementService(
     IRepository<SystemDictTypeEntity> dictTypeRepository,
     IRepository<SystemDictItemEntity> dictItemRepository,
     ICurrentUser currentUser,
-    IUnitOfWork unitOfWork) : IDictManagementService
+    IUnitOfWork unitOfWork,
+    IDistributedCache cache) : IDictManagementService
 {
     private static readonly IReadOnlyDictionary<string, Func<ISugarQueryable<SystemDictTypeEntity>, OrderByType, ISugarQueryable<SystemDictTypeEntity>>> TypeSorters =
         new Dictionary<string, Func<ISugarQueryable<SystemDictTypeEntity>, OrderByType, ISugarQueryable<SystemDictTypeEntity>>>(StringComparer.OrdinalIgnoreCase)
@@ -162,6 +164,7 @@ public sealed class DictManagementService(
         };
 
         await dictTypeRepository.InsertAsync(entity, cancellationToken);
+        await InvalidateOptionsAsync(entity.DictCode, cancellationToken);
         return MapType(entity);
     }
 
@@ -178,6 +181,7 @@ public sealed class DictManagementService(
         entity.Remark = request.Remark?.Trim();
 
         await dictTypeRepository.UpdateAsync(entity, cancellationToken);
+        await InvalidateOptionsAsync(entity.DictCode, cancellationToken);
         return MapType(entity);
     }
 
@@ -204,6 +208,7 @@ public sealed class DictManagementService(
 
             await dictTypeRepository.DeleteAsync(entity.Id, cancellationToken);
         }, cancellationToken);
+        await InvalidateOptionsAsync(entity.DictCode, cancellationToken);
     }
 
     public async Task<DictItemListItemResponse> CreateItemAsync(string dictTypeId, DictItemUpsertRequest request, CancellationToken cancellationToken = default)
@@ -223,6 +228,7 @@ public sealed class DictManagementService(
         };
 
         await dictItemRepository.InsertAsync(entity, cancellationToken);
+        await InvalidateTypeOptionsAsync(dictTypeId, cancellationToken);
         return MapItem(entity);
     }
 
@@ -240,6 +246,7 @@ public sealed class DictManagementService(
         entity.SortOrder = request.SortOrder;
 
         await dictItemRepository.UpdateAsync(entity, cancellationToken);
+        await InvalidateTypeOptionsAsync(entity.DictTypeId, cancellationToken);
         return MapItem(entity);
     }
 
@@ -247,6 +254,7 @@ public sealed class DictManagementService(
     {
         var entity = await EnsureItemExistsAsync(id, cancellationToken);
         await dictItemRepository.DeleteAsync(entity.Id, cancellationToken);
+        await InvalidateTypeOptionsAsync(entity.DictTypeId, cancellationToken);
     }
 
     private async Task<SystemDictTypeEntity> EnsureTypeExistsAsync(string id, CancellationToken cancellationToken)
@@ -291,6 +299,15 @@ public sealed class DictManagementService(
     {
         var normalized = value?.Trim();
         return string.IsNullOrWhiteSpace(normalized) ? null : normalized;
+    }
+
+    private Task InvalidateOptionsAsync(string dictCode, CancellationToken cancellationToken) =>
+        cache.RemoveAsync($"dict-options::{dictCode.ToLowerInvariant()}", cancellationToken);
+
+    private async Task InvalidateTypeOptionsAsync(string dictTypeId, CancellationToken cancellationToken)
+    {
+        var type = await EnsureTypeExistsAsync(dictTypeId, cancellationToken);
+        await InvalidateOptionsAsync(type.DictCode, cancellationToken);
     }
 
     private static DictTypeListItemResponse MapType(SystemDictTypeEntity entity)

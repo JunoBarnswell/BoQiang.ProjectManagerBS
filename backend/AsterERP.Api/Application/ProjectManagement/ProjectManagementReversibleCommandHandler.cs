@@ -209,7 +209,6 @@ public sealed class ProjectManagementReversibleCommandHandler(
         task.DueDate,
         task.ProgressPercent,
         task.Weight,
-        task.EstimateMinutes,
         task.VersionNo,
         Markdown: task.Markdown,
         Summary: task.Summary,

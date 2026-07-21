@@ -20,11 +20,11 @@ import {
 import { useProjectManagementI18n } from '../projectManagementI18n';
 import { useProjectManagementWorkspaceScope } from '../state/projectManagementWorkspaceScope';
 
-import { ProjectMemberCandidateAutocomplete } from './ProjectMemberCandidateAutocomplete';
 import {
   filterEmploymentsForUser,
   resolveAutoEmploymentId,
 } from './memberCandidateUtils';
+import { ProjectMemberCandidateAutocomplete } from './ProjectMemberCandidateAutocomplete';
 
 const projectMemberRoles = ['Owner', 'Manager', 'Lead', 'Member', 'Viewer'] as const;
 
@@ -208,7 +208,7 @@ export function ProjectMemberFormPanel({
           >
             {projectMemberRoles.map((roleCode) => (
               <PmMenuItem key={roleCode} value={roleCode}>
-                {roleCode}
+                {t(`projectManagement.memberRole.${roleCode}`)}
               </PmMenuItem>
             ))}
           </PmFormSelect>

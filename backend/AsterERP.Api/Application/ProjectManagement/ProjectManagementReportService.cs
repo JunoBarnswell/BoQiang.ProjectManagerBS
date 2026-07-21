@@ -37,7 +37,6 @@ public sealed class ProjectManagementReportService(
     [
         "ProjectCode", "ProjectName", "Status", "Priority", "OwnerUserId",
         "ProgressPercent", "TaskCount", "StartDate", "DueDate", "CreatedTime",
-        "EstimatedMinutes", "ActualMinutes"
     ];
 
     private static readonly string[] TaskHeaders =
@@ -156,7 +155,6 @@ public sealed class ProjectManagementReportService(
         var taskTagRows = new List<string[]>();
         var dependencyRows = new List<string[]>();
         var commentRows = new List<string[]>();
-        var progressRows = new List<string[]>();
         var attachmentRows = new List<string[]>();
         var reminderRows = new List<string[]>();
         var activityRows = new List<string[]>();
@@ -189,8 +187,6 @@ public sealed class ProjectManagementReportService(
                 .Where(item => projectIds.Contains(item.ProjectId)).OrderBy(item => item.ProjectId).OrderBy(item => item.PredecessorTaskId).OrderBy(item => item.SuccessorTaskId).OrderBy(item => item.Id).ToListAsync(cancellationToken);
             var comments = await db.Queryable<ProjectManagementTaskCommentEntity>()
                 .Where(item => projectIds.Contains(item.ProjectId)).OrderBy(item => item.ProjectId).OrderBy(item => item.TaskId).OrderBy(item => item.CreatedTime).OrderBy(item => item.Id).ToListAsync(cancellationToken);
-            var progressLogs = await db.Queryable<ProjectManagementTaskTimeLogEntity>()
-                .Where(item => projectIds.Contains(item.ProjectId)).OrderBy(item => item.ProjectId).OrderBy(item => item.TaskId).OrderBy(item => item.StartedAt).OrderBy(item => item.Id).ToListAsync(cancellationToken);
             var attachments = await db.Queryable<ProjectManagementTaskAttachmentEntity>()
                 .Where(item => projectIds.Contains(item.ProjectId)).OrderBy(item => item.ProjectId).OrderBy(item => item.TaskId).OrderBy(item => item.CreatedTime).OrderBy(item => item.Id).ToListAsync(cancellationToken);
             var reminders = await db.Queryable<ProjectManagementTaskReminderEntity>()
@@ -204,14 +200,13 @@ public sealed class ProjectManagementReportService(
             var taskNames = tasks.ToDictionary(item => item.Id, item => item.Title, StringComparer.Ordinal);
             var tagNames = tags.ToDictionary(item => item.Id, item => item.LabelName, StringComparer.Ordinal);
             milestoneRows.AddRange(milestones.Select(item => Values(item.Id, item.ProjectId, NameOf(projectNames, item.ProjectId), item.MilestoneName, item.Status, item.HealthStatus, item.OwnerUserId, item.Description, FormatDate(item.StartDate), FormatDate(item.DueDate), FormatDate(item.CompletedAt), item.ProgressPercent, item.SortOrder, item.VersionNo, FormatDate(item.CreatedTime), FormatDate(item.UpdatedTime), item.IsDeleted)));
-            taskRows.AddRange(tasks.Select(item => Values(item.Id, item.ProjectId, NameOf(projectNames, item.ProjectId), item.MilestoneId, NameOf(milestoneNames, item.MilestoneId), item.ParentTaskId, NameOf(taskNames, item.ParentTaskId), item.TaskCode, item.Title, item.Summary, item.Description, item.Status, item.Priority, item.AssigneeUserId, item.AssigneeEmploymentId, item.OccurrenceKey, FormatDate(item.StartDate), FormatDate(item.DueDate), FormatDate(item.ActualStartAt), FormatDate(item.ActualEndAt), item.ProgressPercent, item.Weight, item.EstimateMinutes, item.ActualMinutes, item.SortOrder, item.Depth, item.VersionNo, item.BlockedReason, FormatDate(item.CreatedTime), FormatDate(item.UpdatedTime), item.IsDeleted)));
+            taskRows.AddRange(tasks.Select(item => Values(item.Id, item.ProjectId, NameOf(projectNames, item.ProjectId), item.MilestoneId, NameOf(milestoneNames, item.MilestoneId), item.ParentTaskId, NameOf(taskNames, item.ParentTaskId), item.TaskCode, item.Title, item.Summary, item.Description, item.Status, item.Priority, item.AssigneeUserId, item.AssigneeEmploymentId, item.OccurrenceKey, FormatDate(item.StartDate), FormatDate(item.DueDate), FormatDate(item.ActualStartAt), FormatDate(item.ActualEndAt), item.ProgressPercent, item.Weight, item.SortOrder, item.Depth, item.VersionNo, item.BlockedReason, FormatDate(item.CreatedTime), FormatDate(item.UpdatedTime), item.IsDeleted)));
             memberRows.AddRange(members.Select(item => Values(item.Id, item.ProjectId, NameOf(projectNames, item.ProjectId), item.UserId, item.EmploymentId, item.RoleCode, item.ScopeRootTaskId, NameOf(taskNames, item.ScopeRootTaskId), item.IsActive, FormatDate(item.JoinedAt), FormatDate(item.LeftAt), item.VersionNo, FormatDate(item.CreatedTime), FormatDate(item.UpdatedTime), item.IsDeleted)));
             participantRows.AddRange(participants.Select(item => Values(item.Id, item.ProjectId, NameOf(projectNames, item.ProjectId), item.TaskId, NameOf(taskNames, item.TaskId), item.UserId, item.EmploymentId, item.RoleCode, item.VersionNo, FormatDate(item.CreatedTime), FormatDate(item.UpdatedTime), item.IsDeleted)));
             tagRows.AddRange(tags.Select(item => Values(item.Id, item.ProjectId, NameOf(projectNames, item.ProjectId), item.LabelName, item.Color, item.VersionNo, FormatDate(item.CreatedTime), FormatDate(item.UpdatedTime), item.IsDeleted)));
             taskTagRows.AddRange(taskTags.Select(item => Values(item.Id, item.ProjectId, NameOf(projectNames, item.ProjectId), item.TaskId, NameOf(taskNames, item.TaskId), item.LabelId, NameOf(tagNames, item.LabelId), item.VersionNo, FormatDate(item.CreatedTime), FormatDate(item.UpdatedTime), item.IsDeleted)));
             dependencyRows.AddRange(dependencies.Select(item => Values(item.Id, item.ProjectId, NameOf(projectNames, item.ProjectId), item.PredecessorTaskId, NameOf(taskNames, item.PredecessorTaskId), item.SuccessorTaskId, NameOf(taskNames, item.SuccessorTaskId), item.DependencyType, item.LagMinutes, item.VersionNo, FormatDate(item.CreatedTime), FormatDate(item.UpdatedTime), item.IsDeleted)));
             commentRows.AddRange(comments.Select(item => Values(item.Id, item.ProjectId, NameOf(projectNames, item.ProjectId), item.TaskId, NameOf(taskNames, item.TaskId), item.ParentCommentId, item.AuthorUserId, item.Markdown, item.MentionUserIdsJson, item.VersionNo, FormatDate(item.EditedTime), FormatDate(item.CreatedTime), FormatDate(item.UpdatedTime), item.IsDeleted)));
-            progressRows.AddRange(progressLogs.Select(item => Values(item.Id, item.ProjectId, NameOf(projectNames, item.ProjectId), item.TaskId, NameOf(taskNames, item.TaskId), item.UserId, FormatDate(item.StartedAt), FormatDate(item.EndedAt), item.Minutes, item.Note, item.VersionNo, FormatDate(item.CreatedTime), FormatDate(item.UpdatedTime), item.IsDeleted)));
             attachmentRows.AddRange(attachments.Select(item => Values(item.Id, item.ProjectId, NameOf(projectNames, item.ProjectId), item.TaskId, NameOf(taskNames, item.TaskId), item.FileId, item.FileName, item.ContentType, item.FileSize, item.UploadedByUserId, item.VersionNo, FormatDate(item.CreatedTime), FormatDate(item.UpdatedTime), item.IsDeleted)));
             reminderRows.AddRange(reminders.Select(item => Values(item.Id, item.ProjectId, NameOf(projectNames, item.ProjectId), item.TaskId, NameOf(taskNames, item.TaskId), item.RecipientUserId, FormatDate(item.ReminderAtUtc), item.TimeZoneId, item.Note, item.Status, item.IdempotencyKey, item.HangfireJobId, item.AttemptCount, item.MaxAttempts, FormatDate(item.LastAttemptAt), FormatDate(item.TriggeredAt), item.LastError, item.VersionNo, FormatDate(item.CreatedTime), FormatDate(item.UpdatedTime), item.IsDeleted)));
             activityRows.AddRange(activities.Select(item => Values(item.Id, item.ProjectId, NameOf(projectNames, item.ProjectId), item.AggregateType, item.AggregateId, item.ActivityType, item.Summary, item.TraceId, item.ActorUserId, item.Remark, FormatDate(item.CreatedTime), FormatDate(item.UpdatedTime), item.IsDeleted)));
@@ -220,14 +215,13 @@ public sealed class ProjectManagementReportService(
         }
 
         WriteWorksheet(workbook, "Milestones", ["MilestoneId", "ProjectId", "ProjectName", "MilestoneName", "Status", "HealthStatus", "OwnerUserId", "Description", "StartDateUtc", "DueDateUtc", "CompletedAtUtc", "ProgressPercent", "SortOrder", "VersionNo", "CreatedTimeUtc", "UpdatedTimeUtc", "IsDeleted"], milestoneRows);
-        WriteWorksheet(workbook, "Tasks", ["TaskId", "ProjectId", "ProjectName", "MilestoneId", "MilestoneName", "ParentTaskId", "ParentTaskTitle", "TaskCode", "Title", "Summary", "Description", "Status", "Priority", "AssigneeUserId", "AssigneeEmploymentId", "OccurrenceKey", "StartDateUtc", "DueDateUtc", "ActualStartAtUtc", "ActualEndAtUtc", "ProgressPercent", "Weight", "EstimateMinutes", "ActualMinutes", "SortOrder", "Depth", "VersionNo", "BlockedReason", "CreatedTimeUtc", "UpdatedTimeUtc", "IsDeleted"], taskRows);
+        WriteWorksheet(workbook, "Tasks", ["TaskId", "ProjectId", "ProjectName", "MilestoneId", "MilestoneName", "ParentTaskId", "ParentTaskTitle", "TaskCode", "Title", "Summary", "Description", "Status", "Priority", "AssigneeUserId", "AssigneeEmploymentId", "OccurrenceKey", "StartDateUtc", "DueDateUtc", "ActualStartAtUtc", "ActualEndAtUtc", "ProgressPercent", "Weight", "SortOrder", "Depth", "VersionNo", "BlockedReason", "CreatedTimeUtc", "UpdatedTimeUtc", "IsDeleted"], taskRows);
         WriteWorksheet(workbook, "ProjectMembers", ["MemberId", "ProjectId", "ProjectName", "UserId", "EmploymentId", "RoleCode", "ScopeRootTaskId", "ScopeRootTaskTitle", "IsActive", "JoinedAtUtc", "LeftAtUtc", "VersionNo", "CreatedTimeUtc", "UpdatedTimeUtc", "IsDeleted"], memberRows);
         WriteWorksheet(workbook, "Participants", ["ParticipantId", "ProjectId", "ProjectName", "TaskId", "TaskTitle", "UserId", "EmploymentId", "RoleCode", "VersionNo", "CreatedTimeUtc", "UpdatedTimeUtc", "IsDeleted"], participantRows);
         WriteWorksheet(workbook, "Tags", ["TagId", "ProjectId", "ProjectName", "TagName", "Color", "VersionNo", "CreatedTimeUtc", "UpdatedTimeUtc", "IsDeleted"], tagRows);
         WriteWorksheet(workbook, "TaskTags", ["TaskTagId", "ProjectId", "ProjectName", "TaskId", "TaskTitle", "TagId", "TagName", "VersionNo", "CreatedTimeUtc", "UpdatedTimeUtc", "IsDeleted"], taskTagRows);
         WriteWorksheet(workbook, "Dependencies", ["DependencyId", "ProjectId", "ProjectName", "PredecessorTaskId", "PredecessorTaskTitle", "SuccessorTaskId", "SuccessorTaskTitle", "DependencyType", "LagMinutes", "VersionNo", "CreatedTimeUtc", "UpdatedTimeUtc", "IsDeleted"], dependencyRows);
         WriteWorksheet(workbook, "Comments", ["CommentId", "ProjectId", "ProjectName", "TaskId", "TaskTitle", "ParentCommentId", "AuthorUserId", "Markdown", "MentionUserIdsJson", "VersionNo", "EditedTimeUtc", "CreatedTimeUtc", "UpdatedTimeUtc", "IsDeleted"], commentRows);
-        WriteWorksheet(workbook, "ProgressLogs", ["ProgressLogId", "ProjectId", "ProjectName", "TaskId", "TaskTitle", "UserId", "StartedAtUtc", "EndedAtUtc", "Minutes", "Note", "VersionNo", "CreatedTimeUtc", "UpdatedTimeUtc", "IsDeleted"], progressRows);
         WriteWorksheet(workbook, "Attachments", ["AttachmentId", "ProjectId", "ProjectName", "TaskId", "TaskTitle", "FileId", "FileName", "ContentType", "FileSize", "UploadedByUserId", "VersionNo", "CreatedTimeUtc", "UpdatedTimeUtc", "IsDeleted"], attachmentRows);
         WriteWorksheet(workbook, "Reminders", ["ReminderId", "ProjectId", "ProjectName", "TaskId", "TaskTitle", "RecipientUserId", "ReminderAtUtc", "TimeZoneId", "Note", "Status", "IdempotencyKey", "HangfireJobId", "AttemptCount", "MaxAttempts", "LastAttemptAtUtc", "TriggeredAtUtc", "LastError", "VersionNo", "CreatedTimeUtc", "UpdatedTimeUtc", "IsDeleted"], reminderRows);
         WriteWorksheet(workbook, "Activities", ["ActivityId", "ProjectId", "ProjectName", "AggregateType", "AggregateId", "ActivityType", "Summary", "TraceId", "ActorUserId", "PayloadJson", "CreatedTimeUtc", "UpdatedTimeUtc", "IsDeleted"], activityRows);
@@ -690,8 +684,6 @@ public sealed class ProjectManagementReportService(
             {
                 ProjectId = item.ProjectId,
                 TaskCount = SqlFunc.AggregateCount(item.Id),
-                EstimatedMinutes = SqlFunc.AggregateSum(item.EstimateMinutes ?? 0),
-                ActualMinutes = SqlFunc.AggregateSum(item.ActualMinutes)
             })
             .ToListAsync(cancellationToken);
         var summariesByProject = taskSummaries.ToDictionary(item => item.ProjectId, StringComparer.Ordinal);
@@ -709,9 +701,7 @@ public sealed class ProjectManagementReportService(
                 summary?.TaskCount ?? 0,
                 item.StartDate,
                 item.DueDate,
-                item.CreatedTime,
-                summary?.EstimatedMinutes ?? 0,
-                summary?.ActualMinutes ?? 0);
+                item.CreatedTime);
         }).ToList();
     }
 
@@ -758,13 +748,13 @@ public sealed class ProjectManagementReportService(
         var dependencies = taskIds.Length == 0 ? [] : await db.Queryable<ProjectManagementTaskDependencyEntity>()
             .Where(item => taskIds.Contains(item.PredecessorTaskId) && taskIds.Contains(item.SuccessorTaskId) && !item.IsDeleted)
             .ToListAsync(cancellationToken);
-        var taskRows = tasks.Select(item => new ProjectManagementReportPdfTask(item.Id, item.ProjectId, item.TaskCode, item.Title, item.Status, item.Priority, item.AssigneeUserId, item.StartDate, item.DueDate, item.ProgressPercent, item.EstimateMinutes ?? 0, item.ActualMinutes, item.Depth, !string.IsNullOrWhiteSpace(item.BlockedReason) || item.Status == "Blocked", item.IsDeleted)).ToList();
+        var taskRows = tasks.Select(item => new ProjectManagementReportPdfTask(item.Id, item.ProjectId, item.TaskCode, item.Title, item.Status, item.Priority, item.AssigneeUserId, item.StartDate, item.DueDate, item.ProgressPercent, item.Depth, !string.IsNullOrWhiteSpace(item.BlockedReason) || item.Status == "Blocked", item.IsDeleted)).ToList();
         var taskById = taskRows.ToDictionary(item => item.Id, StringComparer.Ordinal);
-        var summaryByProject = taskRows.GroupBy(item => item.ProjectId, StringComparer.Ordinal).ToDictionary(group => group.Key, group => new ProjectTaskSummary { ProjectId = group.Key, TaskCount = group.Count(), EstimatedMinutes = group.Sum(item => item.EstimateMinutes), ActualMinutes = group.Sum(item => item.ActualMinutes) }, StringComparer.Ordinal);
+        var summaryByProject = taskRows.GroupBy(item => item.ProjectId, StringComparer.Ordinal).ToDictionary(group => group.Key, group => new ProjectTaskSummary { ProjectId = group.Key, TaskCount = group.Count() }, StringComparer.Ordinal);
         var projectRows = projects.Select(item =>
         {
             summaryByProject.TryGetValue(item.Id, out var summary);
-            return new ProjectManagementReportRow(item.ProjectCode, item.ProjectName, item.Status, item.Priority, item.OwnerUserId, item.ProgressPercent, summary?.TaskCount ?? 0, item.StartDate, item.DueDate, item.CreatedTime, summary?.EstimatedMinutes ?? 0, summary?.ActualMinutes ?? 0);
+            return new ProjectManagementReportRow(item.ProjectCode, item.ProjectName, item.Status, item.Priority, item.OwnerUserId, item.ProgressPercent, summary?.TaskCount ?? 0, item.StartDate, item.DueDate, item.CreatedTime);
         }).ToList();
 
         var comments = new List<string>();
@@ -787,7 +777,6 @@ public sealed class ProjectManagementReportService(
             milestones.Select(item => new ProjectManagementReportPdfMilestone(item.ProjectId, item.MilestoneName, item.Status, item.ProgressPercent, item.DueDate)).ToList(),
             taskRows,
             taskRows.GroupBy(item => item.Status, StringComparer.Ordinal).ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal),
-            taskRows.Sum(item => item.EstimateMinutes), taskRows.Sum(item => item.ActualMinutes),
             taskRows.Count(item => item.DueDate.HasValue && item.DueDate.Value >= now),
             taskRows.Count(item => item.DueDate.HasValue && item.DueDate.Value < now && item.Status != ProjectManagementDomainRules.TaskDone && item.Status != ProjectManagementDomainRules.TaskCancelled),
             taskRows.Count(item => item.IsBlocked), criticalPath, comments, attachments, options.IncludeGanttSnapshot, options.IncludeDeleted);
@@ -817,7 +806,7 @@ public sealed class ProjectManagementReportService(
             return best;
         }
 
-        return tasks.Count == 0 ? [] : tasks.Select(item => Path(item.Id)).OrderByDescending(item => item.Count).ThenByDescending(item => item.Sum(task => task.EstimateMinutes)).First();
+        return tasks.Count == 0 ? [] : tasks.Select(item => Path(item.Id)).OrderByDescending(item => item.Count).First();
     }
 
     private string RequireTenantId() => currentUser.GetAsterErpTenantId()?.Trim() ?? throw new ValidationException("当前会话缺少租户");
@@ -954,8 +943,7 @@ public sealed class ProjectManagementReportService(
     [
         row.ProjectCode, row.ProjectName, row.Status, row.Priority, row.OwnerUserId,
         row.ProgressPercent.ToString(CultureInfo.InvariantCulture), row.TaskCount.ToString(CultureInfo.InvariantCulture),
-        FormatDate(row.StartDate), FormatDate(row.DueDate), FormatDate(row.CreatedTime),
-        row.EstimatedMinutes.ToString(CultureInfo.InvariantCulture), row.ActualMinutes.ToString(CultureInfo.InvariantCulture)
+        FormatDate(row.StartDate), FormatDate(row.DueDate), FormatDate(row.CreatedTime)
     ];
 
     private static string[] ToTaskValues(ProjectManagementTaskListItemResponse row) =>
@@ -1006,8 +994,6 @@ public sealed class ProjectManagementReportService(
     {
         public string ProjectId { get; set; } = string.Empty;
         public int TaskCount { get; set; }
-        public int EstimatedMinutes { get; set; }
-        public int ActualMinutes { get; set; }
     }
 
     private sealed record SnapshotImpact(

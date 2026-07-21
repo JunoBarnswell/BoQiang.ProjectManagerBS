@@ -359,7 +359,7 @@ public sealed class ProjectManagementExcelImportConfirmService(
     {
         entity.ProjectId = projectId; entity.MilestoneId = Optional(Value(row, "MilestoneId")); entity.ParentTaskId = Optional(Value(row, "ParentTaskId")); entity.TaskCode = RequiredValue(row, "TaskCode"); entity.Title = RequiredValue(row, "Title");
         entity.Summary = Optional(Value(row, "Summary")); entity.Description = Optional(Value(row, "Description")); entity.Status = RequiredValue(row, "Status"); entity.Priority = RequiredValue(row, "Priority"); entity.AssigneeUserId = Optional(Value(row, "AssigneeUserId")); entity.AssigneeEmploymentId = Optional(Value(row, "AssigneeEmploymentId"));
-        entity.StartDate = Date(Value(row, "StartDate")); entity.DueDate = Date(Value(row, "DueDate")); entity.ProgressPercent = Decimal(Value(row, "ProgressPercent")); entity.Weight = Decimal(Value(row, "Weight"), 1); entity.EstimateMinutes = Int(Value(row, "EstimateMinutes")); entity.ActualMinutes = Int(Value(row, "ActualMinutes")) ?? 0; entity.SortOrder = Int(Value(row, "SortOrder")) ?? 0; entity.Depth = 0; entity.UpdatedBy = user; entity.UpdatedTime = now;
+        entity.StartDate = Date(Value(row, "StartDate")); entity.DueDate = Date(Value(row, "DueDate")); entity.ProgressPercent = Decimal(Value(row, "ProgressPercent")); entity.Weight = Decimal(Value(row, "Weight"), 1); entity.SortOrder = Int(Value(row, "SortOrder")) ?? 0; entity.Depth = 0; entity.UpdatedBy = user; entity.UpdatedTime = now;
     }
 
     private static ProjectManagementProjectMemberEntity NewMember(ProjectManagementExcelImportSnapshotRow row, string id, string projectId, string tenant, string app, string user, DateTime now)

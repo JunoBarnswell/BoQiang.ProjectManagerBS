@@ -35,8 +35,6 @@ public sealed class ProjectManagementTaskEntity : EntityBase
     [SugarColumn(IsNullable = true)] public DateTime? ActualEndAt { get; set; }
     public decimal ProgressPercent { get; set; }
     public decimal Weight { get; set; } = 1;
-    [SugarColumn(IsNullable = true)] public int? EstimateMinutes { get; set; }
-    public int ActualMinutes { get; set; }
     public int SortOrder { get; set; }
     public int Depth { get; set; }
     public long VersionNo { get; set; } = 1;

@@ -23,7 +23,6 @@ function toRequest(item: ProjectManagementMyWorkItem): ProjectManagementTaskUpse
     assigneeUserId: task.assigneeUserId,
     description: task.description,
     dueDate: task.dueDate,
-    estimateMinutes: task.estimateMinutes,
     milestoneId: task.milestoneId,
     parentTaskId: task.parentTaskId,
     priority: task.priority,

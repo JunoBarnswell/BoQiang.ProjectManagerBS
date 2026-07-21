@@ -97,14 +97,20 @@ public static class AsterErpAbpServiceCollectionExtensions
             return;
         }
 
-        if (!environmentName.Equals(Environments.Development, StringComparison.OrdinalIgnoreCase))
+        var lockPath = configuration["DistributedLock:FilePath"] ??
+            configuration["DistributedLock:DevelopmentFilePath"];
+        if (string.IsNullOrWhiteSpace(lockPath))
         {
-            throw new InvalidOperationException(
-                "生产环境必须配置 AsterERP.Cache.Redis.Configuration（或 Cache:Redis:Configuration），禁止使用单机锁。");
+            if (!environmentName.Equals(Environments.Development, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    "生产环境必须配置 AsterERP.Cache.Redis.Configuration（或 Cache:Redis:Configuration），" +
+                    "或显式配置 DistributedLock:FilePath 以启用同机文件锁。");
+            }
+
+            lockPath = Path.Combine(AppContext.BaseDirectory, "data", "development-locks");
         }
 
-        var lockPath = configuration["DistributedLock:DevelopmentFilePath"] ??
-            Path.Combine(AppContext.BaseDirectory, "data", "development-locks");
         var fullLockPath = Path.GetFullPath(lockPath);
         Directory.CreateDirectory(fullLockPath);
         services.AddSingleton<IDistributedLockProvider>(_ =>

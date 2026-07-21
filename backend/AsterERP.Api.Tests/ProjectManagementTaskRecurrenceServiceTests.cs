@@ -31,7 +31,7 @@ public sealed class ProjectManagementTaskRecurrenceServiceTests
             accessor, user, taskService, scheduler,
             Options.Create(new ProjectManagementTaskRecurrenceOptions { DefaultGenerationWindowDays = 2, MaximumOccurrencesPerGeneration = 20 }),
             taskService);
-        var source = await taskService.CreateAsync("project-a", new ProjectManagementTaskUpsertRequest("SOURCE", "源任务", Description: "保留说明", EstimateMinutes: 30));
+        var source = await taskService.CreateAsync("project-a", new ProjectManagementTaskUpsertRequest("SOURCE", "源任务", Description: "保留说明"));
         var recurrence = await recurrenceService.CreateAsync("project-a", new ProjectManagementTaskRecurrenceCreateRequest(source.Id,
             new ProjectManagementTaskRecurrenceRuleRequest(ProjectManagementTaskRecurrenceFrequencies.Daily, DateTime.UtcNow, "UTC", GenerationWindowDays: 1)));
         var args = new ProjectManagementTaskRecurrenceGenerationJobArgs(recurrence.Id, "tenant-a", "SYSTEM", "operator");
@@ -48,7 +48,6 @@ public sealed class ProjectManagementTaskRecurrenceServiceTests
         var generatedTaskIds = occurrences.Select(item => item.TaskId).ToList();
         Assert.Empty(await db.Queryable<ProjectManagementTaskCommentEntity>().Where(item => generatedTaskIds.Contains(item.TaskId) && !item.IsDeleted).ToListAsync());
         Assert.Empty(await db.Queryable<ProjectManagementTaskAttachmentEntity>().Where(item => generatedTaskIds.Contains(item.TaskId) && !item.IsDeleted).ToListAsync());
-        Assert.Empty(await db.Queryable<ProjectManagementTaskTimeLogEntity>().Where(item => generatedTaskIds.Contains(item.TaskId) && !item.IsDeleted).ToListAsync());
         Assert.Empty(await db.Queryable<ProjectManagementTaskReminderEntity>().Where(item => generatedTaskIds.Contains(item.TaskId) && !item.IsDeleted).ToListAsync());
 
         var first = occurrences[0];

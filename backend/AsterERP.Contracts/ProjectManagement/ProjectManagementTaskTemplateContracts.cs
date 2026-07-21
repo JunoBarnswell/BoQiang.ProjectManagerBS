@@ -53,7 +53,6 @@ public sealed record ProjectManagementTaskTemplateNodeDefinition(
     string Priority,
     string? DefaultRoleCode,
     IReadOnlyList<ProjectManagementTaskTemplateLabelDefinition> Labels,
-    int? EstimateMinutes,
     int? DefaultDurationDays,
     string? MilestoneKey,
     string? ParentNodeKey,

@@ -19,7 +19,7 @@ export function ProjectWorkbenchFrame({ children, active }: { children: ReactNod
 
   return (
     <Box className="pm-workbench" sx={{ display: 'flex', flex: '1 1 auto', minHeight: 0, width: '100%', bgcolor: 'var(--app-bg-subtle)' }}>
-      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, width: 48, py: 1.5, bgcolor: 'var(--app-white)', borderRight: '1px solid var(--app-border-subtle)' }}>
+      <Box sx={{ display: 'flex', flex: '0 0 48px', flexDirection: 'column', alignItems: 'center', gap: 1, minWidth: 48, width: 48, py: 1.5, bgcolor: 'var(--app-white)', borderRight: '1px solid var(--app-border-subtle)' }}>
         <TooltipButton label={t('projectManagement.workbench.back')} onClick={() => navigate(toProjectManagementPlatformRoute())}><PmIcon name="briefcase" /></TooltipButton>
         <TooltipButton active={active === 'overview'} label={t('projectManagement.workbench.overview')} onClick={() => navigate(overviewPath)}><PmIcon name="layers" /></TooltipButton>
         <TooltipButton active={active === 'requirements'} label={t('projectManagement.workbench.requirementsNav')} onClick={() => navigate(requirementsPath)}><PmIcon name="folder" /></TooltipButton>

@@ -99,7 +99,6 @@ public sealed class AsterErpProjectManagementModule : AbpModule
         context.Services.AddScoped<IProjectManagementTaskParticipantService, ProjectManagementTaskParticipantService>();
         context.Services.AddScoped<IProjectManagementTaskFollowerService, ProjectManagementTaskFollowerService>();
         context.Services.AddScoped<IProjectManagementTaskDraftService, ProjectManagementTaskDraftService>();
-        context.Services.AddScoped<IProjectManagementTaskTimeLogService, ProjectManagementTaskTimeLogService>();
         context.Services.AddScoped<IProjectManagementTaskTemplateService, ProjectManagementTaskTemplateService>();
         context.Services.AddScoped<IProjectManagementTaskTemplateInstantiationService, ProjectManagementTaskTemplateInstantiationService>();
         context.Services.AddScoped<IProjectManagementRecycleService, ProjectManagementRecycleService>();
@@ -126,7 +125,6 @@ public sealed class AsterErpProjectManagementModule : AbpModule
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementTaskDraftAttachmentEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementLabelEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementTaskLabelEntity));
-        registry.RegisterProjectManagementFilter(typeof(ProjectManagementTaskTimeLogEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementTaskTemplateEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementTaskOccurrenceEntity));
         registry.RegisterProjectManagementFilter(typeof(ProjectManagementTaskRecurrenceEntity));

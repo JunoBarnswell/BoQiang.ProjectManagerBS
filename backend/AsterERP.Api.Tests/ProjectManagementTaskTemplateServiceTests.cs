@@ -24,7 +24,7 @@ public sealed class ProjectManagementTaskTemplateServiceTests
         await db.Insertable(new ProjectManagementLabelEntity { Id = "label-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", LabelName = "关键", Color = "#FF0000" }).ExecuteCommandAsync();
         await db.Insertable(new[]
         {
-            new ProjectManagementTaskEntity { Id = "task-root", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", TaskCode = "ROOT", Title = "主题", Description = "模板描述", Status = "InProgress", Priority = "High", AssigneeUserId = "source-lead", MilestoneId = "milestone-a", StartDate = new DateTime(2026, 7, 1), DueDate = new DateTime(2026, 7, 4), EstimateMinutes = 180, ActualMinutes = 99, ProgressPercent = 55, Depth = 0, SortOrder = 1024 },
+            new ProjectManagementTaskEntity { Id = "task-root", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", TaskCode = "ROOT", Title = "主题", Description = "模板描述", Status = "InProgress", Priority = "High", AssigneeUserId = "source-lead", MilestoneId = "milestone-a", StartDate = new DateTime(2026, 7, 1), DueDate = new DateTime(2026, 7, 4), ProgressPercent = 55, Depth = 0, SortOrder = 1024 },
             new ProjectManagementTaskEntity { Id = "task-child", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", ParentTaskId = "task-root", TaskCode = "CHILD", Title = "子任务", Status = "Todo", Priority = "Medium", Depth = 1, SortOrder = 1024 }
         }).ExecuteCommandAsync();
         await db.Insertable(new ProjectManagementTaskLabelEntity { Id = "task-label-a", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-a", TaskId = "task-root", LabelId = "label-a" }).ExecuteCommandAsync();
@@ -41,7 +41,6 @@ public sealed class ProjectManagementTaskTemplateServiceTests
         var child = definition.Nodes.Single(item => item.TaskCode == "CHILD");
         Assert.Equal("Lead", root.DefaultRoleCode);
         Assert.Equal(3, root.DefaultDurationDays);
-        Assert.Equal(180, root.EstimateMinutes);
         Assert.Equal("模板描述", root.Description);
         Assert.Single(root.Labels);
         Assert.Equal(root.NodeKey, child.ParentNodeKey);
@@ -65,7 +64,7 @@ public sealed class ProjectManagementTaskTemplateServiceTests
         var service = new ProjectManagementTaskTemplateService(new TestWorkspaceDatabaseAccessor(db), CreateUser(), instantiationService: executor);
         var template = await service.CreateAsync("project-a", new ProjectManagementTaskTemplateUpsertRequest(
             "role-template", "Role template", Json(new ProjectManagementTaskTemplateDefinition(1,
-                [new ProjectManagementTaskTemplateNodeDefinition("node-1", "ROOT", "主题", null, "Todo", "Medium", "Lead", [], 60, 2, null, null, 1, 1024)], [], []))));
+                [new ProjectManagementTaskTemplateNodeDefinition("node-1", "ROOT", "主题", null, "Todo", "Medium", "Lead", [], 2, null, null, 1, 1024)], [], []))));
 
         var result = await service.InstantiateAsync(template.Id, new ProjectManagementTaskTemplateInstantiateRequest("project-a", RoleAssigneeMappings: new Dictionary<string, string> { ["Lead"] = "target-lead" }));
 
@@ -86,8 +85,8 @@ public sealed class ProjectManagementTaskTemplateServiceTests
         await db.Insertable(new ProjectManagementMilestoneEntity { Id = "milestone-b", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-b", MilestoneName = "目标里程碑" }).ExecuteCommandAsync();
         await db.Insertable(new ProjectManagementLabelEntity { Id = "label-b", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-b", LabelName = "关键", Color = "#FF0000" }).ExecuteCommandAsync();
         var definition = new ProjectManagementTaskTemplateDefinition(1,
-            [new ProjectManagementTaskTemplateNodeDefinition("root", "ROOT", "Root", null, "Todo", "High", "Lead", [new ProjectManagementTaskTemplateLabelDefinition("label:关键:#FF0000", "关键", "#FF0000")], 60, 2, "m1", null, 1, 1024),
-             new ProjectManagementTaskTemplateNodeDefinition("child", "CHILD", "Child", null, "Todo", "Medium", null, [], null, null, null, "root", 1, 1024)],
+            [new ProjectManagementTaskTemplateNodeDefinition("root", "ROOT", "Root", null, "Todo", "High", "Lead", [new ProjectManagementTaskTemplateLabelDefinition("label:关键:#FF0000", "关键", "#FF0000")], 2, "m1", null, 1, 1024),
+             new ProjectManagementTaskTemplateNodeDefinition("child", "CHILD", "Child", null, "Todo", "Medium", null, [], null, null, "root", 1, 1024)],
             [new ProjectManagementTaskTemplateMilestoneDefinition("m1", "源里程碑")],
             [new ProjectManagementTaskTemplateDependencyDefinition("root", "child", "FinishToStart", 0)]);
         var accessor = new TestWorkspaceDatabaseAccessor(db);
@@ -131,7 +130,7 @@ public sealed class ProjectManagementTaskTemplateServiceTests
         await SeedProjectAsync(db);
         var service = new ProjectManagementTaskTemplateService(new TestWorkspaceDatabaseAccessor(db), CreateUser());
         var definition = Json(new ProjectManagementTaskTemplateDefinition(1,
-            [new ProjectManagementTaskTemplateNodeDefinition("node-1", "ROOT", "旧标题", null, "Todo", "Medium", null, [], null, null, null, null, 1, 1024)], [], []));
+            [new ProjectManagementTaskTemplateNodeDefinition("node-1", "ROOT", "旧标题", null, "Todo", "Medium", null, [], null, null, null, 1, 1024)], [], []));
         var template = await service.CreateAsync("project-a", new ProjectManagementTaskTemplateUpsertRequest("versioned", "Versioned", definition));
 
         await Assert.ThrowsAsync<ValidationException>(() => service.UpdateAsync("project-a", template.Id,

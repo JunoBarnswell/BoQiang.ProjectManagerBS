@@ -135,14 +135,6 @@ public static class ProjectManagementDataPermissionFilterRegistrar
             return true;
         }
 
-        if (entityType == typeof(ProjectManagementTaskTimeLogEntity))
-        {
-            db.QueryFilter.AddTableFilter<ProjectManagementTaskTimeLogEntity>(log =>
-                log.TenantId == tenantId && log.AppCode == appCode &&
-                (!restrictToMembership || SqlFunc.Subqueryable<ProjectManagementTaskEntity>().Where(taskScopePredicate).Where(task => task.Id == log.TaskId).Any()));
-            return true;
-        }
-
         if (entityType == typeof(ProjectManagementTaskTemplateEntity))
         {
             db.QueryFilter.AddTableFilter<ProjectManagementTaskTemplateEntity>(template => template.TenantId == tenantId && template.AppCode == appCode && (!restrictToMembership || template.ProjectId == null || SqlFunc.Subqueryable<ProjectManagementProjectEntity>().Where(project => project.Id == template.ProjectId && (project.OwnerUserId == userId || SqlFunc.Subqueryable<ProjectManagementProjectMemberEntity>().Where(member => member.ProjectId == project.Id && member.UserId == userId && member.IsActive && !member.IsDeleted).Any())).Any()));

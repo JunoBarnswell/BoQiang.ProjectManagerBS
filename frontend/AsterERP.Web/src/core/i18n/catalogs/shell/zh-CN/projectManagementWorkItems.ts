@@ -20,7 +20,7 @@ export const projectManagementWorkItemsMessagesZhCN = {
   'projectManagement.workItems.searchPlaceholder': '搜索任务（编号/标题）',
   'projectManagement.workItems.filter': '筛选',
   'projectManagement.workItems.view': '视图',
-  'projectManagement.workItems.type': '任务类型',
+  'projectManagement.workItems.type': '任务分类',
   'projectManagement.workItems.risk': '风险',
   'projectManagement.workItems.all': '全部',
   'projectManagement.workItems.type.feature': '功能',

@@ -25,7 +25,6 @@ export const projectManagementWorkbenchMessagesZhCN = {
   'projectManagement.workbench.overview.metric.storyPoints': '故事点',
   'projectManagement.workbench.overview.milestones': '里程碑进度',
   'projectManagement.workbench.overview.risk': '风险概览',
-  'projectManagement.workbench.overview.workload': '工作负载（预计）',
   'projectManagement.workbench.overview.activity': '最近动态',
   'projectManagement.workbench.overview.noActivity': '暂无项目动态',
   'projectManagement.workbench.overview.distribution': '任务类型分布',
@@ -34,7 +33,6 @@ export const projectManagementWorkbenchMessagesZhCN = {
   'projectManagement.workbench.risk.low': '低风险',
   'projectManagement.workbench.risk.closed': '已关闭',
   'projectManagement.workbench.unit.minutes': '分钟',
-  'projectManagement.workbench.workloadValue': '{estimated} / {capacity} 分钟',
   'projectManagement.workbench.unknown': '未设置'
   ,'projectManagement.workbench.back': '返回项目'
   ,'projectManagement.workbench.overview': '概览'

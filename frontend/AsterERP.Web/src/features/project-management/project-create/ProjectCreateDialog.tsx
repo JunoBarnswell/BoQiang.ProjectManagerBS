@@ -40,7 +40,7 @@ export function ProjectCreateDialog({ open, initialValue, editing, pending, conf
     queryKey: projectManagementQueryKeys.memberCandidates(scope, { pageIndex: 1, pageSize: 100 }),
     queryFn: ({ signal }) => getProjectManagementMemberCandidates({ pageIndex: 1, pageSize: 100 }, signal),
   });
-  const candidates = candidatesQuery.data?.data.items ?? [];
+  const candidates = useMemo(() => candidatesQuery.data?.data.items ?? [], [candidatesQuery.data?.data.items]);
   const [memberKeyword, setMemberKeyword] = useState('');
   const [initialMembers, setInitialMembers] = useState<ProjectManagementProjectInitialMemberUpsertRequest[]>([]);
   const ownerUserId = form.watch('ownerUserId') ?? '';
@@ -114,7 +114,7 @@ export function ProjectCreateDialog({ open, initialValue, editing, pending, conf
                 const roleCode = event.target.value as ProjectManagementProjectInitialMemberUpsertRequest['roleCode'];
                 setInitialMembers((current) => current.map((item) => item.userId === member.userId ? { ...item, roleCode, scopeRootTaskId: undefined } : item));
               }}>
-                {projectMemberRoles.map((roleCode) => <PmMenuItem key={roleCode} value={roleCode}>{roleCode}</PmMenuItem>)}
+                {projectMemberRoles.map((roleCode) => <PmMenuItem key={roleCode} value={roleCode}>{translate(`projectManagement.memberRole.${roleCode}`)}</PmMenuItem>)}
               </PmFormSelect>
               <PmButton color="inherit" onClick={() => setInitialMembers((current) => current.filter((item) => item.userId !== member.userId))}>{translate('projectManagement.home.members.remove')}</PmButton>
               {member.roleCode === 'Lead' ? <PmText color="text.secondary" fontSize=".7rem" sx={{ gridColumn: { sm: '1 / -1' } }}>{translate('projectManagement.home.members.leadScopeAfterCreate')}</PmText> : null}

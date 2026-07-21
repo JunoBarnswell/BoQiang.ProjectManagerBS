@@ -38,6 +38,21 @@ public sealed class ProductionSecurityConfigurationValidatorTests
         ProductionSecurityConfigurationValidator.Validate(configuration, CreateProductionEnvironment());
     }
 
+    [Fact]
+    public void Production_skips_validation_for_standalone_profile()
+    {
+        var configuration = CreateConfiguration(new Dictionary<string, string?>
+        {
+            ["Deployment:Profile"] = "Standalone",
+            ["AllowedHosts"] = "*",
+            ["Cors:FrontendOrigin"] = "http://localhost:5173",
+            ["DataProtection:KeysPath"] = "./data/data-protection-keys",
+            ["SqlSugar:LogSql"] = "true"
+        });
+
+        ProductionSecurityConfigurationValidator.Validate(configuration, CreateProductionEnvironment());
+    }
+
     private static IConfiguration CreateConfiguration(Dictionary<string, string?> values) =>
         new ConfigurationBuilder().AddInMemoryCollection(values).Build();
 

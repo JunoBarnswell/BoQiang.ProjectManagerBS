@@ -59,11 +59,6 @@ import type {
   ProjectManagementNotificationPage,
   ProjectManagementNotificationOpenResult,
   ProjectManagementTaskAttachment,
-  ProjectManagementTaskTimeLog,
-  ProjectManagementTaskTimeLogUpsertRequest,
-  ProjectManagementTaskTimeLogUpdateRequest,
-  ProjectManagementTaskWorkload,
-  ProjectManagementTaskWorkloadQuery,
   ProjectManagementTaskFollower,
   ProjectManagementTaskFollowerUpsertRequest,
   ProjectManagementTaskParticipant,
@@ -851,58 +846,6 @@ export function deleteProjectManagementTaskAttachment(
   );
 }
 
-export function getProjectManagementTaskTimeLogs(
-  taskId: string,
-  signal?: AbortSignal,
-): Promise<ApiEnvelope<ProjectManagementTaskTimeLog[]>> {
-  return httpClient.get<ProjectManagementTaskTimeLog[]>(
-    `/project-management/tasks/${taskId}/time-logs`,
-    undefined,
-    signal,
-  );
-}
-
-export function createProjectManagementTaskTimeLog(
-  taskId: string,
-  request: ProjectManagementTaskTimeLogUpsertRequest,
-): Promise<ApiEnvelope<ProjectManagementTaskTimeLog>> {
-  return httpClient.post<ProjectManagementTaskTimeLog, ProjectManagementTaskTimeLogUpsertRequest>(
-    `/project-management/tasks/${taskId}/time-logs`,
-    request,
-  );
-}
-
-export function updateProjectManagementTaskTimeLog(
-  taskId: string,
-  id: string,
-  request: ProjectManagementTaskTimeLogUpdateRequest,
-): Promise<ApiEnvelope<ProjectManagementTaskTimeLog>> {
-  return httpClient.put<ProjectManagementTaskTimeLog, ProjectManagementTaskTimeLogUpdateRequest>(
-    `/project-management/tasks/${taskId}/time-logs/${id}`,
-    request,
-  );
-}
-
-export function deleteProjectManagementTaskTimeLog(
-  taskId: string,
-  id: string,
-  versionNo: number,
-): Promise<ApiEnvelope<{ id: string }>> {
-  return httpClient.delete<{ id: string }>(
-    `/project-management/tasks/${taskId}/time-logs/${id}${buildQueryString({ versionNo })}`,
-  );
-}
-
-export function getProjectManagementWorkloads(
-  query: ProjectManagementTaskWorkloadQuery,
-  signal?: AbortSignal,
-): Promise<ApiEnvelope<ProjectManagementTaskWorkload[]>> {
-  return httpClient.get<ProjectManagementTaskWorkload[]>(
-    `/project-management/workloads${buildQueryString(query)}`,
-    undefined,
-    signal,
-  );
-}
 
 export function searchProjectManagement(
   query: ProjectManagementSearchQuery,

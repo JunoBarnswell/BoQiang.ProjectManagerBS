@@ -346,7 +346,7 @@ public sealed class ProjectManagementExcelImportService(
                 case ProjectManagementExcelImportTemplate.TasksSheet:
                     Required(row, "StableId"); Required(row, "ProjectId"); Required(row, "TaskCode"); Required(row, "Title");
                     Allowed(row, "Status", ProjectManagementDomainRules.TaskStatuses); Allowed(row, "Priority", ["Low", "Medium", "High", "Urgent"]);
-                    Date(row, "StartDate"); Date(row, "DueDate"); Percent(row, "ProgressPercent"); PositiveDecimal(row, "Weight"); NonNegativeInt(row, "EstimateMinutes"); NonNegativeInt(row, "ActualMinutes"); NonNegativeInt(row, "SortOrder"); PositiveLong(row, "VersionNo");
+                    Date(row, "StartDate"); Date(row, "DueDate"); Percent(row, "ProgressPercent"); PositiveDecimal(row, "Weight"); NonNegativeInt(row, "SortOrder"); PositiveLong(row, "VersionNo");
                     DateOrder(row, "StartDate", "DueDate", "任务开始日期不能晚于截止日期");
                     break;
                 case ProjectManagementExcelImportTemplate.MembersSheet:

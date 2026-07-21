@@ -1,4 +1,9 @@
 export const projectManagementMessagesZhCN = {
+  'projectManagement.memberRole.Owner': '所有者',
+  'projectManagement.memberRole.Manager': '经理',
+  'projectManagement.memberRole.Lead': '负责人',
+  'projectManagement.memberRole.Member': '成员',
+  'projectManagement.memberRole.Viewer': '查看者',
   'projectManagement.sidebar.inbox': '收件箱',
   'projectManagement.sidebar.myIssues': '我的问题',
   'projectManagement.sidebar.reviews': '评审',

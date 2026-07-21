@@ -81,7 +81,6 @@ public sealed record ProjectManagementRecyclePurgeImpact(
     int DependencyCount,
     int ParticipantCount,
     int LabelRelationCount,
-    int TimeLogCount,
     int CommentCount,
     int AttachmentCount,
     int ReminderCount,

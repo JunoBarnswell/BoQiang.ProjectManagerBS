@@ -344,7 +344,6 @@ export interface ProjectManagementRecyclePurgeImpact {
   dependencyCount: number;
   participantCount: number;
   labelRelationCount: number;
-  timeLogCount: number;
   commentCount: number;
   attachmentCount: number;
   reminderCount: number;
@@ -399,9 +398,6 @@ export interface ProjectManagementOverviewPerson {
   completedTaskCount: number;
   overdueTaskCount: number;
   displayName?: string;
-  estimatedMinutes?: number;
-  capacityMinutes?: number;
-  workloadPercent?: number;
 }
 
 export interface ProjectManagementOverviewDistribution {
@@ -610,8 +606,6 @@ export interface ProjectManagementTaskDetail extends ProjectManagementTaskListIt
   markdown?: string;
   assigneeEmploymentId?: string;
   weight: number;
-  estimateMinutes?: number;
-  actualMinutes: number;
   createdTime: string;
   updatedTime?: string;
   contentJson?: string;
@@ -739,7 +733,7 @@ export interface ProjectManagementTaskUpsertRequest {
   dueDate?: string;
   progressPercent?: number;
   weight?: number;
-  estimateMinutes?: number;
+  participantUserIds?: string[];
   versionNo?: number;
   overrideWip?: boolean;
   overrideWipReason?: string;
@@ -898,48 +892,6 @@ export interface ProjectManagementTaskReminderCreateRequest {
   clientRequestId: string;
 }
 
-export interface ProjectManagementTaskTimeLog {
-  id: string;
-  taskId: string;
-  userId: string;
-  startedAt: string;
-  endedAt: string;
-  minutes: number;
-  note?: string;
-  versionNo: number;
-}
-
-export interface ProjectManagementTaskTimeLogUpsertRequest {
-  startedAt: string;
-  endedAt: string;
-  note?: string;
-  versionNo?: number;
-}
-
-export interface ProjectManagementTaskTimeLogUpdateRequest {
-  startedAt: string;
-  endedAt: string;
-  note?: string;
-  versionNo: number;
-  taskVersionNo: number;
-}
-
-export interface ProjectManagementTaskWorkloadQuery {
-  projectId: string;
-  timeLogStartedFrom?: string;
-  timeLogStartedTo?: string;
-}
-
-export interface ProjectManagementTaskWorkload {
-  userId: string;
-  todoTaskCount: number;
-  inProgressTaskCount: number;
-  completedTaskCount: number;
-  overdueTaskCount: number;
-  estimatedMinutes: number;
-  loggedMinutes: number;
-  displayName?: string;
-}
 
 export interface ProjectManagementTaskReminderUpdateRequest {
   reminderAt: string;

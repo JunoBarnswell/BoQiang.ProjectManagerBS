@@ -22,10 +22,12 @@ export interface ProjectManagementRecentPosition {
 export interface ProjectManagementInteractionPreferences {
   preferredView?: ProjectManagementPreferredView;
   recentPosition?: ProjectManagementRecentPosition;
+  recentRequirementTypes?: string[];
 }
 
 const emptyPreferences: ProjectManagementInteractionPreferences = {};
 const views: readonly ProjectManagementPreferredView[] = ['tree', 'list', 'card', 'board', 'gantt', 'calendar'];
+const MAX_RECENT_REQUIREMENT_TYPES = 5;
 
 export function projectManagementInteractionPreferenceKey(scope: ProjectManagementInteractionScope): string {
   return `project-management:interactions:v1:${encode(scope.tenantId)}:${encode(scope.appCode)}:${encode(scope.userId)}`;
@@ -52,6 +54,18 @@ export function writeProjectManagementInteractionPreferences(
   } catch {
     // 禁用浏览器存储时，交互功能仍应可用，只是不跨刷新保存偏好。
   }
+}
+
+export function rememberRecentRequirementType(
+  preferences: ProjectManagementInteractionPreferences,
+  requirementType: string,
+): ProjectManagementInteractionPreferences {
+  const normalized = requirementType.trim();
+  if (!normalized) return normalizePreferences(preferences);
+  return normalizePreferences({
+    ...preferences,
+    recentRequirementTypes: [normalized, ...(preferences.recentRequirementTypes ?? []).filter((value) => value !== normalized)],
+  });
 }
 
 export function restoreProjectManagementRecentPosition(
@@ -92,9 +106,16 @@ export function useProjectManagementInteractionPreferences() {
     update((current) => ({ ...current, preferredView }));
   }, [update]);
 
+  const rememberRequirementType = useCallback((requirementType: string) => {
+    const normalized = requirementType.trim();
+    if (!normalized) return;
+    update((current) => rememberRecentRequirementType(current, normalized));
+  }, [update]);
+
   return {
     isAvailable: Boolean(scope),
     preferences,
+    rememberRequirementType,
     rememberPosition,
     restoreRecentPosition: (isAllowed: (position: ProjectManagementRecentPosition) => boolean) => restoreProjectManagementRecentPosition(preferences, isAllowed),
     scope,
@@ -108,7 +129,17 @@ function normalizePreferences(value: unknown): ProjectManagementInteractionPrefe
     ? value.preferredView as ProjectManagementPreferredView
     : undefined;
   const recentPosition = normalizePosition(value.recentPosition);
-  return { ...(preferredView ? { preferredView } : {}), ...(recentPosition ? { recentPosition } : {}) };
+  const recentRequirementTypes = normalizeRecentRequirementTypes(value.recentRequirementTypes);
+  return {
+    ...(preferredView ? { preferredView } : {}),
+    ...(recentPosition ? { recentPosition } : {}),
+    ...(recentRequirementTypes.length > 0 ? { recentRequirementTypes } : {}),
+  };
+}
+
+function normalizeRecentRequirementTypes(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.filter((item): item is string => typeof item === 'string').map((item) => item.trim()).filter(Boolean))].slice(0, MAX_RECENT_REQUIREMENT_TYPES);
 }
 
 function normalizePosition(value: unknown): ProjectManagementRecentPosition | undefined {

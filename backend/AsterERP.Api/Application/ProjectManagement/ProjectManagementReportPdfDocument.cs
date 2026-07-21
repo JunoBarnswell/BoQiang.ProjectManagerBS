@@ -11,8 +11,6 @@ internal sealed record ProjectManagementReportPdfDocument(
     IReadOnlyList<ProjectManagementReportPdfMilestone> Milestones,
     IReadOnlyList<ProjectManagementReportPdfTask> Tasks,
     IReadOnlyDictionary<string, int> TaskStatusDistribution,
-    int EstimatedMinutes,
-    int ActualMinutes,
     int FutureDueCount,
     int OverdueCount,
     int BlockedCount,
@@ -40,8 +38,6 @@ internal sealed record ProjectManagementReportPdfTask(
     DateTime? StartDate,
     DateTime? DueDate,
     decimal ProgressPercent,
-    int EstimateMinutes,
-    int ActualMinutes,
     int Depth,
     bool IsBlocked,
     bool IsDeleted);

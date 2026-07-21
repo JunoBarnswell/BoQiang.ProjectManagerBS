@@ -129,8 +129,6 @@ CREATE TABLE IF NOT EXISTS pm_tasks (
     ActualEndAt TEXT NULL,
     ProgressPercent REAL NOT NULL DEFAULT 0,
     Weight REAL NOT NULL DEFAULT 1,
-    EstimateMinutes INTEGER NULL,
-    ActualMinutes INTEGER NOT NULL DEFAULT 0,
     SortOrder INTEGER NOT NULL DEFAULT 0,
     Depth INTEGER NOT NULL DEFAULT 0,
     VersionNo INTEGER NOT NULL DEFAULT 1,
@@ -224,6 +222,9 @@ CREATE TABLE IF NOT EXISTS pm_task_grants (
         schema.EnsureColumn("pm_tasks", "RequirementType", "TEXT NULL");
         schema.EnsureColumn("pm_tasks", "RequirementSource", "TEXT NULL");
         schema.EnsureColumn("pm_tasks", "StoryPoints", "INTEGER NULL");
+        schema.Execute("DROP TABLE IF EXISTS pm_task_time_logs;");
+        try { schema.Execute("ALTER TABLE pm_tasks DROP COLUMN EstimateMinutes;"); } catch (Exception) { }
+        try { schema.Execute("ALTER TABLE pm_tasks DROP COLUMN ActualMinutes;"); } catch (Exception) { }
         schema.Execute("""
 CREATE TABLE IF NOT EXISTS pm_labels (
     Id TEXT NOT NULL PRIMARY KEY,
@@ -245,23 +246,6 @@ CREATE TABLE IF NOT EXISTS pm_task_labels (
     ProjectId TEXT NOT NULL,
     TaskId TEXT NOT NULL,
     LabelId TEXT NOT NULL,
-    VersionNo INTEGER NOT NULL DEFAULT 1,
-    CreatedBy TEXT NULL, CreatedTime TEXT NOT NULL, UpdatedBy TEXT NULL, UpdatedTime TEXT NULL,
-    DeletedBy TEXT NULL, DeletedTime TEXT NULL, IsDeleted INTEGER NOT NULL DEFAULT 0, Remark TEXT NULL
-);
-""");
-        schema.Execute("""
-CREATE TABLE IF NOT EXISTS pm_task_time_logs (
-    Id TEXT NOT NULL PRIMARY KEY,
-    TenantId TEXT NOT NULL,
-    AppCode TEXT NOT NULL,
-    ProjectId TEXT NOT NULL,
-    TaskId TEXT NOT NULL,
-    UserId TEXT NOT NULL,
-    StartedAt TEXT NOT NULL,
-    EndedAt TEXT NOT NULL,
-    Minutes INTEGER NOT NULL,
-    Note TEXT NULL,
     VersionNo INTEGER NOT NULL DEFAULT 1,
     CreatedBy TEXT NULL, CreatedTime TEXT NOT NULL, UpdatedBy TEXT NULL, UpdatedTime TEXT NULL,
     DeletedBy TEXT NULL, DeletedTime TEXT NULL, IsDeleted INTEGER NOT NULL DEFAULT 0, Remark TEXT NULL
@@ -549,7 +533,6 @@ CREATE TABLE IF NOT EXISTS pm_reversible_commands (
         schema.Execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_pm_labels_project_name ON pm_labels(TenantId, AppCode, COALESCE(ProjectId, ''), LabelName) WHERE IsDeleted = 0;");
         schema.Execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_pm_task_labels_pair ON pm_task_labels(TenantId, AppCode, TaskId, LabelId) WHERE IsDeleted = 0;");
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_task_labels_project ON pm_task_labels(TenantId, AppCode, ProjectId, TaskId, IsDeleted);");
-        schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_task_time_logs_task ON pm_task_time_logs(TenantId, AppCode, ProjectId, TaskId, StartedAt, IsDeleted);");
         schema.Execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_pm_task_templates_code ON pm_task_templates(TenantId, AppCode, COALESCE(ProjectId, ''), TemplateCode) WHERE IsDeleted = 0;");
         schema.Execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_pm_task_occurrences_key ON pm_task_occurrences(TenantId, AppCode, TemplateId, ProjectId, OccurrenceKey) WHERE IsDeleted = 0;");
         schema.Execute("CREATE INDEX IF NOT EXISTS ix_pm_task_recurrences_project_active ON pm_task_recurrences(TenantId, AppCode, ProjectId, IsActive, IsDeleted);");

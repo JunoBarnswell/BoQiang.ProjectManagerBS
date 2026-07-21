@@ -14,6 +14,7 @@ import {
 } from '../../../api/project-management/projectManagement.api';
 import type { ProjectManagementSavedViewUpsertRequest, ProjectManagementTaskListItem } from '../../../api/project-management/projectManagement.types';
 import { projectManagementQueryKeys } from '../../../core/query/projectManagementQueryKeys';
+import { useDict } from '../../../shared/dict/useDict';
 import { useMessage } from '../../../shared/feedback/useMessage';
 import { DataTable } from '../../../shared/table/DataTable';
 import { PmIcon } from '../../../ui/project-management';
@@ -61,6 +62,7 @@ export function ProjectRequirementsScreen() {
   const queryClient = useQueryClient();
   const { projectId = '' } = useParams<{ projectId: string }>();
   const [params, setParams] = useSearchParams();
+  const requirementTypeOptions = useDict('pm_task_requirement_type');
   const view = (viewOptions.includes((params.get('view') ?? '') as RequirementView) ? params.get('view') : 'tree') as RequirementView;
   const keyword = params.get('keyword') ?? '';
   const status = params.get('status') ?? '';
@@ -94,6 +96,11 @@ export function ProjectRequirementsScreen() {
     sortBy: view === 'tree' ? 'tree' as const : 'updated' as const,
     sortDirection: view === 'tree' ? 'asc' as const : 'desc' as const,
   }), [keyword, largePage, pageIndex, projectId, requirementType, risk, scope.userId, status, view]);
+  const requirementFilterOptions = useMemo(() => {
+    const options = requirementTypeOptions.options.filter((option) => !option.disabled);
+    if (!requirementType || options.some((option) => option.value === requirementType)) return options;
+    return [{ label: requirementType, value: requirementType, disabled: true }, ...options];
+  }, [requirementType, requirementTypeOptions.options]);
   const query = useQuery({ enabled: scope.isAvailable && Boolean(projectId), queryKey: projectManagementQueryKeys.tasks(scope, request), queryFn: ({ signal }) => getProjectManagementTasks(request, signal) });
   const project = useQuery({ enabled: scope.isAvailable && Boolean(projectId), queryKey: projectManagementQueryKeys.overview(scope, { projectId, pageIndex: 1, pageSize: 1 }), queryFn: ({ signal }) => getProjectManagementOverview({ projectId, pageIndex: 1, pageSize: 1 }, signal) });
   const milestones = useQuery({ enabled: scope.isAvailable && Boolean(projectId) && (view === 'calendar' || view === 'gantt'), queryKey: projectManagementQueryKeys.milestones(scope, projectId), queryFn: ({ signal }) => getProjectManagementMilestones(projectId, signal) });
@@ -259,9 +266,7 @@ export function ProjectRequirementsScreen() {
             <label>{t('projectManagement.workItems.type')}
               <select className="pm-editor-select" onChange={(event) => updateUrl('type', event.target.value)} value={requirementType}>
                 <option value="">{t('projectManagement.workItems.all')}</option>
-                <option value="Feature">{t('projectManagement.workItems.type.feature')}</option>
-                <option value="NonFunctional">{t('projectManagement.workItems.type.nonFunctional')}</option>
-                <option value="Other">{t('projectManagement.workItems.type.other')}</option>
+                {requirementFilterOptions.map((option) => <option disabled={option.disabled} key={option.value} value={option.value}>{option.label}</option>)}
               </select>
             </label>
             <label>{t('projectManagement.workItems.risk')}
@@ -696,4 +701,3 @@ function isRequestCancelled(error: unknown): boolean {
   const name = 'name' in error ? String((error as { name?: unknown }).name ?? '') : '';
   return name === 'AbortError' || name === 'CancelledError' || name === 'CanceledError';
 }
-

@@ -18,7 +18,6 @@ const baseTask = {
   priority: 'Medium',
   progressPercent: 0,
   weight: 1,
-  actualMinutes: 0,
   sortOrder: 1,
   depth: 0,
   versionNo: 3,

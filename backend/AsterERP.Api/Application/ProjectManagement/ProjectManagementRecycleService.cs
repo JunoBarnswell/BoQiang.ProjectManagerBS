@@ -303,7 +303,6 @@ public sealed class ProjectManagementRecycleService(
             : await db.Queryable<ProjectManagementTaskDependencyEntity>().Where(item => item.ProjectId == projectId && (ids.Contains(item.PredecessorTaskId) || ids.Contains(item.SuccessorTaskId))).CountAsync(cancellationToken);
         var participantCount = taskScoped ? await db.Queryable<ProjectManagementTaskParticipantEntity>().Where(item => item.ProjectId == projectId && ids.Contains(item.TaskId)).CountAsync(cancellationToken) : 0;
         var labelRelationCount = taskScoped ? await db.Queryable<ProjectManagementTaskLabelEntity>().Where(item => item.ProjectId == projectId && ids.Contains(item.TaskId)).CountAsync(cancellationToken) : 0;
-        var timeLogCount = taskScoped ? await db.Queryable<ProjectManagementTaskTimeLogEntity>().Where(item => item.ProjectId == projectId && ids.Contains(item.TaskId)).CountAsync(cancellationToken) : 0;
         var commentCount = taskScoped ? await db.Queryable<ProjectManagementTaskCommentEntity>().Where(item => item.ProjectId == projectId && ids.Contains(item.TaskId)).CountAsync(cancellationToken) : 0;
         var attachmentCount = taskScoped ? await db.Queryable<ProjectManagementTaskAttachmentEntity>().Where(item => item.ProjectId == projectId && ids.Contains(item.TaskId)).CountAsync(cancellationToken) : 0;
         var reminderCount = taskScoped ? await db.Queryable<ProjectManagementTaskReminderEntity>().Where(item => item.ProjectId == projectId && ids.Contains(item.TaskId)).CountAsync(cancellationToken) : 0;
@@ -319,7 +318,6 @@ public sealed class ProjectManagementRecycleService(
         {
             participantCount = await db.Queryable<ProjectManagementTaskParticipantEntity>().Where(item => item.ProjectId == projectId).CountAsync(cancellationToken);
             labelRelationCount = await db.Queryable<ProjectManagementTaskLabelEntity>().Where(item => item.ProjectId == projectId).CountAsync(cancellationToken);
-            timeLogCount = await db.Queryable<ProjectManagementTaskTimeLogEntity>().Where(item => item.ProjectId == projectId).CountAsync(cancellationToken);
             commentCount = await db.Queryable<ProjectManagementTaskCommentEntity>().Where(item => item.ProjectId == projectId).CountAsync(cancellationToken);
             attachmentCount = await db.Queryable<ProjectManagementTaskAttachmentEntity>().Where(item => item.ProjectId == projectId).CountAsync(cancellationToken);
             reminderCount = await db.Queryable<ProjectManagementTaskReminderEntity>().Where(item => item.ProjectId == projectId).CountAsync(cancellationToken);
@@ -328,7 +326,7 @@ public sealed class ProjectManagementRecycleService(
             occurrenceCount = await db.Queryable<ProjectManagementTaskRecurrenceOccurrenceEntity>().Where(item => item.ProjectId == projectId).CountAsync(cancellationToken) + await db.Queryable<ProjectManagementTaskOccurrenceEntity>().Where(item => item.ProjectId == projectId).CountAsync(cancellationToken);
             conversationLinkCount = await db.Queryable<ProjectManagementImConversationLinkEntity>().Where(item => item.ProjectId == projectId).CountAsync(cancellationToken);
         }
-        return new ProjectManagementRecyclePurgeImpact(allProjectData ? 1 : 0, taskCount, Math.Max(0, taskCount - 1), memberCount, milestoneCount, dependencyCount, participantCount, labelRelationCount, timeLogCount, commentCount, attachmentCount, reminderCount, notificationCount, recurrenceCount, occurrenceCount, conversationLinkCount, savedViewCount, syncJournalCount);
+        return new ProjectManagementRecyclePurgeImpact(allProjectData ? 1 : 0, taskCount, Math.Max(0, taskCount - 1), memberCount, milestoneCount, dependencyCount, participantCount, labelRelationCount, commentCount, attachmentCount, reminderCount, notificationCount, recurrenceCount, occurrenceCount, conversationLinkCount, savedViewCount, syncJournalCount);
     }
 
     private async Task<List<ProjectManagementTaskAttachmentEntity>> LoadAttachmentsAsync(string projectId, IReadOnlyCollection<string>? taskIds, CancellationToken cancellationToken)
@@ -359,7 +357,6 @@ public sealed class ProjectManagementRecycleService(
         await db.Deleteable<ProjectManagementTaskAttachmentEntity>().Where(item => item.ProjectId == projectId && ids.Contains(item.TaskId)).ExecuteCommandAsync(cancellationToken);
         await db.Deleteable<ProjectManagementTaskParticipantEntity>().Where(item => item.ProjectId == projectId && ids.Contains(item.TaskId)).ExecuteCommandAsync(cancellationToken);
         await db.Deleteable<ProjectManagementTaskLabelEntity>().Where(item => item.ProjectId == projectId && ids.Contains(item.TaskId)).ExecuteCommandAsync(cancellationToken);
-        await db.Deleteable<ProjectManagementTaskTimeLogEntity>().Where(item => item.ProjectId == projectId && ids.Contains(item.TaskId)).ExecuteCommandAsync(cancellationToken);
         await db.Deleteable<ProjectManagementTaskReminderEntity>().Where(item => item.ProjectId == projectId && ids.Contains(item.TaskId)).ExecuteCommandAsync(cancellationToken);
         await db.Deleteable<ProjectManagementNotificationEntity>().Where(item => item.ProjectId == projectId && ids.Contains(item.TaskId!)).ExecuteCommandAsync(cancellationToken);
         await db.Deleteable<ProjectManagementTaskRecurrenceOccurrenceEntity>().Where(item => item.ProjectId == projectId && ids.Contains(item.TaskId)).ExecuteCommandAsync(cancellationToken);
@@ -398,7 +395,6 @@ public sealed class ProjectManagementRecycleService(
         await db.Deleteable<ProjectManagementProjectReminderEntity>().Where(item => item.ProjectId == projectId && item.TenantId == RequireTenantId() && item.AppCode == RequireAppCode()).ExecuteCommandAsync(cancellationToken);
         await db.Deleteable<ProjectManagementProjectSubscriptionEntity>().Where(item => item.ProjectId == projectId && item.TenantId == RequireTenantId() && item.AppCode == RequireAppCode()).ExecuteCommandAsync(cancellationToken);
         await db.Deleteable<ProjectManagementTaskParticipantEntity>().Where(item => item.ProjectId == projectId).ExecuteCommandAsync(cancellationToken);
-        await db.Deleteable<ProjectManagementTaskTimeLogEntity>().Where(item => item.ProjectId == projectId).ExecuteCommandAsync(cancellationToken);
         await db.Deleteable<ProjectManagementTaskCommentEntity>().Where(item => item.ProjectId == projectId).ExecuteCommandAsync(cancellationToken);
         await db.Deleteable<ProjectManagementTaskAttachmentEntity>().Where(item => item.ProjectId == projectId).ExecuteCommandAsync(cancellationToken);
         await db.Deleteable<ProjectManagementTaskDependencyEntity>().Where(item => item.ProjectId == projectId).ExecuteCommandAsync(cancellationToken);
@@ -435,13 +431,12 @@ public sealed class ProjectManagementRecycleService(
         var hasOperationalReferences =
             await db.Queryable<ProjectManagementTaskParticipantEntity>().AnyAsync(item => item.ProjectId == projectId && taskIds.Contains(item.TaskId), cancellationToken) ||
             await db.Queryable<ProjectManagementTaskLabelEntity>().AnyAsync(item => item.ProjectId == projectId && taskIds.Contains(item.TaskId), cancellationToken) ||
-            await db.Queryable<ProjectManagementTaskTimeLogEntity>().AnyAsync(item => item.ProjectId == projectId && taskIds.Contains(item.TaskId), cancellationToken) ||
             await db.Queryable<ProjectManagementTaskCommentEntity>().AnyAsync(item => item.ProjectId == projectId && taskIds.Contains(item.TaskId), cancellationToken) ||
             await db.Queryable<ProjectManagementTaskAttachmentEntity>().AnyAsync(item => item.ProjectId == projectId && taskIds.Contains(item.TaskId), cancellationToken) ||
             await db.Queryable<ProjectManagementNotificationEntity>().AnyAsync(item => item.ProjectId == projectId && taskIds.Contains(item.TaskId), cancellationToken) ||
             await db.Queryable<ProjectManagementTaskReminderEntity>().AnyAsync(item => item.ProjectId == projectId && taskIds.Contains(item.TaskId), cancellationToken) ||
             await db.Queryable<ProjectManagementTaskOccurrenceEntity>().AnyAsync(item => item.ProjectId == projectId && taskIds.Contains(item.RootTaskId), cancellationToken);
-        return hasOperationalReferences ? "任务仍存在参与人、标签、工时、评论、附件、通知、提醒或排期等业务关联，必须先处理这些关联后才能永久删除" : null;
+        return hasOperationalReferences ? "任务仍存在参与人、标签、评论、附件、通知、提醒或排期等业务关联，必须先处理这些关联后才能永久删除" : null;
     }
 
     private async Task<HashSet<string>> GetManageableProjectIdsAsync(

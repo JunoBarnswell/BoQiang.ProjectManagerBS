@@ -150,7 +150,7 @@ public sealed class ProjectManagementMyWorkService(
         };
     }
 
-    private static ProjectManagementTaskResponse Map(ProjectManagementTaskEntity task) => new(task.Id, task.ProjectId, task.MilestoneId, task.ParentTaskId, task.TaskCode, task.Title, task.Description, task.Status, task.Priority, task.AssigneeUserId, task.AssigneeEmploymentId, task.StartDate, task.DueDate, task.ProgressPercent, task.Weight, task.EstimateMinutes, task.ActualMinutes, task.SortOrder, task.Depth, task.VersionNo, task.CreatedTime, task.UpdatedTime, 0, task.Status != ProjectManagementDomainRules.TaskBlocked, task.BlockedReason);
+    private static ProjectManagementTaskResponse Map(ProjectManagementTaskEntity task) => new(task.Id, task.ProjectId, task.MilestoneId, task.ParentTaskId, task.TaskCode, task.Title, task.Description, task.Status, task.Priority, task.AssigneeUserId, task.AssigneeEmploymentId, task.StartDate, task.DueDate, task.ProgressPercent, task.Weight, task.SortOrder, task.Depth, task.VersionNo, task.CreatedTime, task.UpdatedTime, 0, task.Status != ProjectManagementDomainRules.TaskBlocked, task.BlockedReason);
 
     private ProjectManagementAccessPolicy Policy() => accessPolicy ?? new ProjectManagementAccessPolicy(databaseAccessor, currentUser);
 

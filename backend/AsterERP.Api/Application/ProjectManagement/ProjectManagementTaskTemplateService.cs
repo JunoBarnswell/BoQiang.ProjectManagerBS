@@ -87,7 +87,6 @@ public sealed class ProjectManagementTaskTemplateService(
             task.Priority,
             ResolveRoleCode(task, memberRoles),
             labelsByTask.GetValueOrDefault(task.Id, []),
-            task.EstimateMinutes,
             DefaultDurationDays(task.StartDate, task.DueDate),
             task.MilestoneId is null ? null : MilestoneKey(task.MilestoneId),
             task.ParentTaskId is not null && nodeKeys.TryGetValue(task.ParentTaskId, out var parentKey) ? parentKey : null,
@@ -318,7 +317,7 @@ public static class ProjectManagementTaskTemplateDefinitionSerializer
             var legacyNodes = JsonSerializer.Deserialize<List<LegacyTemplateNode>>(json) ?? throw new ValidationException("模板定义不能为空");
             var definition = new ProjectManagementTaskTemplateDefinition(1,
                 legacyNodes.Select((node, index) => new ProjectManagementTaskTemplateNodeDefinition(
-                    $"node-{index + 1}", node.TaskCode, node.Title, null, "Todo", node.Priority, null, [], null,
+                    $"node-{index + 1}", node.TaskCode, node.Title, null, "Todo", node.Priority, null, [],
                     node.DueDays, null, string.IsNullOrWhiteSpace(node.ParentCode) ? null : ResolveLegacyParentKey(legacyNodes, node.ParentCode), node.Weight, (index + 1) * 1024)).ToList(),
                 [], []);
             Validate(definition);
@@ -350,8 +349,8 @@ public static class ProjectManagementTaskTemplateDefinitionSerializer
             _ = ProjectManagementDomainRules.RequireTaskStatus(node.Status);
             if (!new[] { "Low", "Medium", "High", "Urgent" }.Contains(node.Priority, StringComparer.Ordinal))
                 throw new ValidationException("模板任务优先级不受支持");
-            if (node.Weight <= 0 || node.EstimateMinutes < 0 || node.DefaultDurationDays < 0 || node.SortOrder < 0)
-                throw new ValidationException("模板任务权重、预计工时、默认工期或排序无效");
+            if (node.Weight <= 0 || node.DefaultDurationDays < 0 || node.SortOrder < 0)
+                throw new ValidationException("模板任务权重、默认工期或排序无效");
             if (node.Labels is null || node.Labels.Any(label => string.IsNullOrWhiteSpace(label.LabelKey) || string.IsNullOrWhiteSpace(label.LabelName) || string.IsNullOrWhiteSpace(label.Color)))
                 throw new ValidationException("模板标签无效");
             if (node.Labels.Select(label => label.LabelKey).Distinct(StringComparer.Ordinal).Count() != node.Labels.Count)

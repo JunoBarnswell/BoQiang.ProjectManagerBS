@@ -19,10 +19,7 @@ public sealed record ProjectManagementOverviewPersonSummary(
     int TaskCount,
     int CompletedTaskCount,
     int OverdueTaskCount,
-    string? DisplayName = null,
-    int EstimatedMinutes = 0,
-    int CapacityMinutes = 2400,
-    decimal WorkloadPercent = 0);
+    string? DisplayName = null);
 
 /// <summary>
 /// 项目列表与详情共用的轻量风险摘要；仅基于有效叶子任务计算，避免父子任务重复计数。

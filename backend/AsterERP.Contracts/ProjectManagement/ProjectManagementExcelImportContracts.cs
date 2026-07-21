@@ -12,7 +12,7 @@ public static class ProjectManagementExcelImportTemplate
         new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal)
         {
             [ProjectsSheet] = ["StableId", "ProjectCode", "ProjectName", "Description", "Status", "Priority", "OwnerUserId", "StartDate", "DueDate", "WipLimit", "ProgressPercent", "VersionNo"],
-            [TasksSheet] = ["StableId", "ProjectId", "MilestoneId", "ParentTaskId", "TaskCode", "Title", "Summary", "Description", "Status", "Priority", "AssigneeUserId", "AssigneeEmploymentId", "StartDate", "DueDate", "ProgressPercent", "Weight", "EstimateMinutes", "ActualMinutes", "SortOrder", "VersionNo", "Labels", "DependencyIds"],
+            [TasksSheet] = ["StableId", "ProjectId", "MilestoneId", "ParentTaskId", "TaskCode", "Title", "Summary", "Description", "Status", "Priority", "AssigneeUserId", "AssigneeEmploymentId", "StartDate", "DueDate", "ProgressPercent", "Weight", "SortOrder", "VersionNo", "Labels", "DependencyIds"],
             [MembersSheet] = ["StableId", "ProjectId", "UserId", "EmploymentId", "RoleCode", "ScopeRootTaskId", "IsActive", "JoinedAt", "LeftAt", "VersionNo"]
         };
 }

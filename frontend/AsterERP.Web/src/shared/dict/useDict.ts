@@ -57,9 +57,11 @@ export function useDict(dictType: string) {
   );
 
   return {
+    isError: query.isError,
     isFetching: query.isFetching,
     isLoading: query.isLoading,
     options,
+    refetch: query.refetch,
     revision
   };
 }

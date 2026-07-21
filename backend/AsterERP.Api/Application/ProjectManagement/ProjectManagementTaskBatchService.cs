@@ -335,6 +335,6 @@ public sealed class ProjectManagementTaskBatchService(
     {
         public static TaskActivitySnapshot From(ProjectManagementTaskEntity entity) => new(entity.Status, entity.Priority, entity.AssigneeUserId, entity.MilestoneId, entity.StartDate, entity.DueDate, null);
     }
-    private static ProjectManagementTaskResponse Map(ProjectManagementTaskEntity entity) => new(entity.Id, entity.ProjectId, entity.MilestoneId, entity.ParentTaskId, entity.TaskCode, entity.Title, entity.Description, entity.Status, entity.Priority, entity.AssigneeUserId, entity.AssigneeEmploymentId, entity.StartDate, entity.DueDate, entity.ProgressPercent, entity.Weight, entity.EstimateMinutes, entity.ActualMinutes, entity.SortOrder, entity.Depth, entity.VersionNo, entity.CreatedTime, entity.UpdatedTime);
+    private static ProjectManagementTaskResponse Map(ProjectManagementTaskEntity entity) => new(entity.Id, entity.ProjectId, entity.MilestoneId, entity.ParentTaskId, entity.TaskCode, entity.Title, entity.Description, entity.Status, entity.Priority, entity.AssigneeUserId, entity.AssigneeEmploymentId, entity.StartDate, entity.DueDate, entity.ProgressPercent, entity.Weight, entity.SortOrder, entity.Depth, entity.VersionNo, entity.CreatedTime, entity.UpdatedTime);
     private sealed record ProjectManagementWipOverrideDecision(int Limit, int InProgressCount, string Reason, int AddingCount);
 }

@@ -9,6 +9,11 @@ public static class ProductionSecurityConfigurationValidator
             return;
         }
 
+        if (IsStandaloneDeployment(configuration))
+        {
+            return;
+        }
+
         var allowedHosts = configuration["AllowedHosts"];
         if (string.IsNullOrWhiteSpace(allowedHosts) || allowedHosts == "*" || ContainsPlaceholder(allowedHosts))
         {
@@ -35,6 +40,12 @@ public static class ProductionSecurityConfigurationValidator
             throw new InvalidOperationException("Production requires an explicit absolute DataProtection:KeysPath.");
         }
     }
+
+    private static bool IsStandaloneDeployment(IConfiguration configuration) =>
+        string.Equals(
+            configuration["Deployment:Profile"],
+            "Standalone",
+            StringComparison.OrdinalIgnoreCase);
 
     private static bool IsLoopback(string host) =>
         string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase) ||

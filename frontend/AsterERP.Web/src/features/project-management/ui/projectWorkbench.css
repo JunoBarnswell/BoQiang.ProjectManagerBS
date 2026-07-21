@@ -491,7 +491,9 @@
   display: flex;
   flex: 1;
   min-height: 0;
+  min-width: 0;
   padding: 8px 12px;
+  overflow: hidden;
   background: var(--pm-surface-subtle);
 }
 
@@ -1152,7 +1154,6 @@
 
 .pm-overview-panel--milestones { grid-column: span 4; }
 .pm-overview-panel--risk { grid-column: span 3; }
-.pm-overview-panel--workload { grid-column: span 5; }
 .pm-overview-panel--activity { grid-column: span 8; }
 .pm-overview-panel--distribution { grid-column: span 4; }
 
@@ -1167,7 +1168,6 @@
 
   .pm-overview-panel--milestones,
   .pm-overview-panel--risk,
-  .pm-overview-panel--workload,
   .pm-overview-panel--activity,
   .pm-overview-panel--distribution {
     grid-column: 1 / -1;
@@ -1350,7 +1350,7 @@
 
 .pm-editor-grid {
   display: grid;
-  grid-template-columns: minmax(0, 70fr) minmax(260px, 30fr);
+  grid-template-columns: minmax(0, 1fr) 400px;
   height: 100%;
   min-height: 0;
   max-height: none;
@@ -1373,6 +1373,8 @@
 .pm-editor-properties {
   overflow: auto;
   background: var(--pm-surface-subtle);
+  padding-right: 24px;
+  scrollbar-gutter: stable;
 }
 
 .pm-editor-property-group {

@@ -968,6 +968,10 @@ public sealed class DevelopmentSeedDataService(
                 ("是", "Y"),
                 ("否", "N")
             });
+
+        EnsureDictType("pm_task_requirement_type", "任务分类", new[] { ("功能", "Feature"), ("非功能", "NonFunctional"), ("其他", "Other") });
+        EnsureDictType("pm_task_requirement_source", "任务来源", new[] { ("产品规划", "ProductPlan"), ("客户反馈", "Customer"), ("内部提出", "Internal"), ("缺陷转任务", "BugConversion"), ("其他", "Other") });
+        EnsureDictType("pm_task_work_item_type", "工作项类型", new[] { ("任务", "Requirement"), ("用户故事", "UserStory"), ("子任务", "Task"), ("缺陷", "Bug") });
     }
 
     private void SeedCodeRules()
@@ -1028,6 +1032,11 @@ public sealed class DevelopmentSeedDataService(
         {
             dictType = new SystemDictTypeEntity { DictName = dictName, DictCode = dictCode, IsEnabled = true };
             db.Insertable(dictType).ExecuteCommand();
+        }
+        else if (dictCode == "pm_task_requirement_type" && dictType.DictName == "任务类型")
+        {
+            dictType.DictName = dictName;
+            db.Updateable(dictType).ExecuteCommand();
         }
 
         var existingValues = db.Queryable<SystemDictItemEntity>()

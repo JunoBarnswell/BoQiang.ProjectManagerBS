@@ -1,6 +1,7 @@
 using System.Reflection;
 using AsterERP.Api.Infrastructure.Abp.DevelopmentSeed;
 using AsterERP.Api.Modules.System.Menus;
+using AsterERP.Api.Modules.System.Dicts;
 using AsterERP.Api.Modules.System.Permissions;
 using AsterERP.Api.Modules.System.Roles;
 using AsterERP.Api.Modules.Workflows;
@@ -109,6 +110,26 @@ public sealed class DevelopmentSeedDataServiceTests : IDisposable
         Assert.All(models, model => Assert.Equal("runtime.menu", model.ModelCode));
         Assert.All(models, model => Assert.Equal("system.menus", model.ProviderKey));
         Assert.DoesNotContain(models, model => model.ProviderKey == "system.page-schemas");
+    }
+
+    [Fact]
+    public void SeedDicts_renames_only_the_legacy_requirement_type_name()
+    {
+        using var db = CreateDb();
+        db.CodeFirst.InitTables<SystemDictTypeEntity, SystemDictItemEntity>();
+        db.Insertable(new SystemDictTypeEntity { DictCode = "pm_task_requirement_type", DictName = "任务类型", IsEnabled = true }).ExecuteCommand();
+        var service = CreateService(db);
+
+        InvokePrivateSeedStep(service, "SeedDicts");
+
+        var requirementType = db.Queryable<SystemDictTypeEntity>().First(item => item.DictCode == "pm_task_requirement_type");
+        Assert.Equal("任务分类", requirementType.DictName);
+
+        requirementType.DictName = "自定义分类";
+        db.Updateable(requirementType).ExecuteCommand();
+        InvokePrivateSeedStep(service, "SeedDicts");
+
+        Assert.Equal("自定义分类", db.Queryable<SystemDictTypeEntity>().First(item => item.DictCode == "pm_task_requirement_type").DictName);
     }
 
     [Fact]

@@ -37,7 +37,7 @@ public sealed class ProjectManagementReportTests
             new ProjectManagementProjectEntity { Id = "other-tenant", TenantId = "tenant-b", AppCode = "SYSTEM", ProjectCode = "OTHER", ProjectName = "Other tenant", OwnerUserId = "operator" },
             new ProjectManagementProjectEntity { Id = "other-app", TenantId = "tenant-a", AppCode = "CRM", ProjectCode = "OTHER-APP", ProjectName = "Other app", OwnerUserId = "operator" }
         }).ExecuteCommandAsync();
-        await db.Insertable(new ProjectManagementTaskEntity { TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "visible", TaskCode = "T-001", Title = "Task", EstimateMinutes = 120, ActualMinutes = 45 }).ExecuteCommandAsync();
+        await db.Insertable(new ProjectManagementTaskEntity { TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "visible", TaskCode = "T-001", Title = "Task" }).ExecuteCommandAsync();
 
         var user = CreateUser("operator", "tenant-a", "SYSTEM");
         Assert.True(ProjectManagementDataPermissionFilterRegistrar.TryRegister(db, typeof(ProjectManagementProjectEntity), user, "tenant-a", "SYSTEM"));
@@ -49,9 +49,8 @@ public sealed class ProjectManagementReportTests
         Assert.Equal(1, csv.RowCount);
         Assert.Contains("'=VISIBLE", csvText);
         Assert.Contains("\"1\"", csvText);
-        Assert.Contains("\"EstimatedMinutes\"", csvText);
-        Assert.Contains("\"ActualMinutes\"", csvText);
-        Assert.Contains("\"120\",\"45\"", csvText);
+        Assert.DoesNotContain("EstimateMinutes", csvText);
+        Assert.DoesNotContain("ActualMinutes", csvText);
         Assert.DoesNotContain("Other tenant", csvText);
         Assert.DoesNotContain("Other app", csvText);
 
@@ -62,7 +61,7 @@ public sealed class ProjectManagementReportTests
         Assert.Equal("visible", workbook.Worksheet("Projects").Cell(2, 1).GetString());
         Assert.Equal("Visible", workbook.Worksheet("Tasks").Cell(2, 3).GetString());
         Assert.Equal("Task", workbook.Worksheet("Tasks").Cell(2, 9).GetString());
-        foreach (var worksheet in new[] { "Milestones", "Tasks", "ProjectMembers", "Participants", "Tags", "TaskTags", "Dependencies", "Comments", "ProgressLogs", "Attachments", "Reminders", "Activities", "ChangeJournal" })
+        foreach (var worksheet in new[] { "Milestones", "Tasks", "ProjectMembers", "Participants", "Tags", "TaskTags", "Dependencies", "Comments", "Attachments", "Reminders", "Activities", "ChangeJournal" })
             Assert.NotNull(workbook.Worksheet(worksheet));
     }
 

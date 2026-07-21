@@ -1,4 +1,9 @@
 export const projectManagementMessagesEnUS = {
+  'projectManagement.memberRole.Owner': 'Owner',
+  'projectManagement.memberRole.Manager': 'Manager',
+  'projectManagement.memberRole.Lead': 'Lead',
+  'projectManagement.memberRole.Member': 'Member',
+  'projectManagement.memberRole.Viewer': 'Viewer',
   'projectManagement.sidebar.inbox': 'Inbox',
   'projectManagement.sidebar.myIssues': 'My issues',
   'projectManagement.sidebar.reviews': 'Reviews',

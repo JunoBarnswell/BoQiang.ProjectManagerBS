@@ -117,7 +117,7 @@ public sealed class ProjectManagementTaskServiceTests
         }).ExecuteCommandAsync();
         var service = new ProjectManagementTaskService(new TestWorkspaceDatabaseAccessor(db), CreateUser());
 
-        var created = await service.CreateAsync("project-a", new ProjectManagementTaskUpsertRequest("T-1", "任务", AssigneeUserId: "member-a", EstimateMinutes: 120, Weight: 2, Summary: "列表摘要", Markdown: "## 完整详情 <img src=x onerror=alert(1)> [bad](javascript:alert(1)) [good](https://example.com)"));
+        var created = await service.CreateAsync("project-a", new ProjectManagementTaskUpsertRequest("T-1", "任务", AssigneeUserId: "member-a", Weight: 2, Summary: "列表摘要", Markdown: "## 完整详情 <img src=x onerror=alert(1)> [bad](javascript:alert(1)) [good](https://example.com)"));
         var page = await service.QueryAsync(new ProjectManagementTaskQuery("project-a", PageIndex: 1, PageSize: 20));
         var listItem = Assert.Single(page.Items);
         Assert.Equal(created.Id, listItem.Id);
@@ -129,7 +129,6 @@ public sealed class ProjectManagementTaskServiceTests
         Assert.Equal("列表摘要", detail.Summary);
         Assert.Equal("## 完整详情  bad [good](https://example.com)", detail.Markdown);
         Assert.Equal(detail.Markdown, detail.Description);
-        Assert.Equal(120, detail.EstimateMinutes);
         await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() =>
             service.CreateAsync("project-a", new ProjectManagementTaskUpsertRequest("T-2", "无效负责人", AssigneeUserId: "outside-user")));
         await Assert.ThrowsAsync<AsterERP.Shared.Exceptions.ValidationException>(() =>
@@ -148,7 +147,7 @@ public sealed class ProjectManagementTaskServiceTests
     }
 
     [Fact]
-    public async Task Task_estimate_is_the_default_progress_weight_and_explicit_weight_wins_in_parent_and_project_projection()
+    public async Task Task_weight_defaults_to_one_and_explicit_weight_is_preserved()
     {
         using var db = CreateDb("task-estimate-progress-weight");
         await new ProjectManagementSchemaMigrator().MigrateAsync(db, CancellationToken.None);
@@ -159,13 +158,11 @@ public sealed class ProjectManagementTaskServiceTests
         var service = new ProjectManagementTaskService(new TestWorkspaceDatabaseAccessor(db), CreateUser());
 
         var root = await service.CreateAsync("project-a", new ProjectManagementTaskUpsertRequest("ROOT", "Root"));
-        var estimateDefault = await service.CreateAsync("project-a", new ProjectManagementTaskUpsertRequest("ESTIMATE", "Estimated", ParentTaskId: root.Id, EstimateMinutes: 100, ProgressPercent: 10));
-        var explicitWeight = await service.CreateAsync("project-a", new ProjectManagementTaskUpsertRequest("EXPLICIT", "Explicit", ParentTaskId: root.Id, EstimateMinutes: 100, Weight: 1, ProgressPercent: 90));
+        var weightDefault = await service.CreateAsync("project-a", new ProjectManagementTaskUpsertRequest("DEFAULT", "Default", ParentTaskId: root.Id, ProgressPercent: 10));
+        var explicitWeight = await service.CreateAsync("project-a", new ProjectManagementTaskUpsertRequest("EXPLICIT", "Explicit", ParentTaskId: root.Id, Weight: 2, ProgressPercent: 90));
 
-        Assert.Equal(100m, estimateDefault.Weight);
-        Assert.Equal(1m, explicitWeight.Weight);
-        Assert.Equal(10.79m, (await service.GetAsync(root.Id)).ProgressPercent);
-        Assert.Equal(10.79m, (await db.Queryable<ProjectManagementProjectEntity>().Where(item => item.Id == "project-a").FirstAsync()).ProgressPercent);
+        Assert.Equal(1m, weightDefault.Weight);
+        Assert.Equal(2m, explicitWeight.Weight);
     }
 
     [Fact]

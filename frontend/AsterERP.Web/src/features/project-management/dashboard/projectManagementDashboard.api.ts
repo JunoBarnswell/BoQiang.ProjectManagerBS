@@ -18,16 +18,6 @@ export type ProjectManagementDashboardOverview = ProjectManagementOverviewItem &
   riskSummary: ProjectManagementDashboardRiskSummary;
 };
 
-export interface ProjectManagementDashboardWorkload {
-  userId: string;
-  displayName?: string;
-  todoTaskCount: number;
-  inProgressTaskCount: number;
-  completedTaskCount: number;
-  overdueTaskCount: number;
-  estimatedMinutes: number;
-  loggedMinutes: number;
-}
 
 export function getProjectManagementDashboardOverview(
   query: ProjectManagementOverviewQuery,
@@ -35,17 +25,6 @@ export function getProjectManagementDashboardOverview(
 ): Promise<ApiEnvelope<{ total: number; items: ProjectManagementDashboardOverview[] }>> {
   return httpClient.get<{ total: number; items: ProjectManagementDashboardOverview[] }>(
     `/project-management/overview${buildQueryString(query)}`,
-    undefined,
-    signal,
-  );
-}
-
-export function getProjectManagementDashboardWorkload(
-  projectId: string,
-  signal?: AbortSignal,
-): Promise<ApiEnvelope<ProjectManagementDashboardWorkload[]>> {
-  return httpClient.get<ProjectManagementDashboardWorkload[]>(
-    `/project-management/workloads${buildQueryString({ projectId })}`,
     undefined,
     signal,
   );

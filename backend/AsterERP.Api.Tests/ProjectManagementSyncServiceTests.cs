@@ -36,7 +36,7 @@ public sealed class ProjectManagementSyncServiceTests
         }).ExecuteCommandAsync();
         await db.Insertable(new ProjectManagementTaskEntity
         {
-            Id = "task-sync", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-sync", TaskCode = "T-1", Title = "Task", EstimateMinutes = 120, ActualMinutes = 45, CreatedBy = "operator", CreatedTime = DateTime.UtcNow
+            Id = "task-sync", TenantId = "tenant-a", AppCode = "SYSTEM", ProjectId = "project-sync", TaskCode = "T-1", Title = "Task", CreatedBy = "operator", CreatedTime = DateTime.UtcNow
         }).ExecuteCommandAsync();
         await db.Insertable(new ProjectManagementTaskAttachmentEntity
         {
@@ -55,8 +55,8 @@ public sealed class ProjectManagementSyncServiceTests
         using (var reader = new StreamReader(archive.GetEntry("data.json")!.Open()))
         {
             var dataJson = await reader.ReadToEndAsync();
-            Assert.Contains("\"estimateMinutes\":120", dataJson, StringComparison.Ordinal);
-            Assert.Contains("\"actualMinutes\":45", dataJson, StringComparison.Ordinal);
+            Assert.DoesNotContain("estimateMinutes", dataJson, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("actualMinutes", dataJson, StringComparison.OrdinalIgnoreCase);
         }
 
         await using var package = new MemoryStream(exported.Content);

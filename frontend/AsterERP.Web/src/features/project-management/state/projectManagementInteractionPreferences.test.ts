@@ -4,8 +4,11 @@ import { describe, expect, it } from 'vitest';
 
 import {
   projectManagementInteractionPreferenceKey,
+  readProjectManagementInteractionPreferences,
+  rememberRecentRequirementType,
   restoreProjectManagementRecentPosition,
   type ProjectManagementInteractionPreferences,
+  writeProjectManagementInteractionPreferences,
 } from './projectManagementInteractionPreferences';
 
 describe('projectManagementInteractionPreferences', () => {
@@ -26,5 +29,24 @@ describe('projectManagementInteractionPreferences', () => {
     expect(restoreProjectManagementRecentPosition(preferences, () => false)).toBeUndefined();
     expect(restoreProjectManagementRecentPosition(preferences, (position) => position.pathname.includes('project-a')))
       .toEqual(preferences.recentPosition);
+  });
+
+  it('remembers the five most recent requirement types without duplicates', () => {
+    const preferences = ['A', 'B', 'C', 'D', 'E', 'F'].reduce(
+      (current, value) => rememberRecentRequirementType(current, value),
+      {} as ProjectManagementInteractionPreferences,
+    );
+
+    expect(preferences.recentRequirementTypes).toEqual(['F', 'E', 'D', 'C', 'B']);
+    expect(rememberRecentRequirementType(preferences, 'D').recentRequirementTypes).toEqual(['D', 'F', 'E', 'C', 'B']);
+  });
+
+  it('ignores malformed persisted recent requirement types', () => {
+    const key = 'project-management:test-preferences';
+    localStorage.setItem(key, JSON.stringify({ recentRequirementTypes: [' Feature ', '', 1, 'Feature', null] }));
+
+    expect(readProjectManagementInteractionPreferences(key).recentRequirementTypes).toEqual(['Feature']);
+    writeProjectManagementInteractionPreferences(key, { recentRequirementTypes: ['A', 'A', 'B'] });
+    expect(readProjectManagementInteractionPreferences(key).recentRequirementTypes).toEqual(['A', 'B']);
   });
 });

@@ -320,7 +320,6 @@ public sealed class ProjectManagementSyncService(
             inserted += await UpsertStageAsync("Labels", snapshot.Labels, strategy, snapshot.Journal, db, cancellationToken, () => skipped++, () => updated++, operationId);
             inserted += await UpsertStageAsync("TaskLabels", snapshot.TaskLabels, strategy, snapshot.Journal, db, cancellationToken, () => skipped++, () => updated++, operationId);
             inserted += await UpsertStageAsync("Participants", snapshot.Participants, strategy, snapshot.Journal, db, cancellationToken, () => skipped++, () => updated++, operationId);
-            inserted += await UpsertStageAsync("TimeLogs", snapshot.TimeLogs, strategy, snapshot.Journal, db, cancellationToken, () => skipped++, () => updated++, operationId);
             inserted += await UpsertStageAsync("Templates", snapshot.Templates, strategy, snapshot.Journal, db, cancellationToken, () => skipped++, () => updated++, operationId);
             inserted += await UpsertStageAsync("Occurrences", snapshot.Occurrences, strategy, snapshot.Journal, db, cancellationToken, () => skipped++, () => updated++, operationId);
             inserted += await UpsertStageAsync("Activities", snapshot.Activities, strategy, snapshot.Journal, db, cancellationToken, () => skipped++, () => updated++, operationId);
@@ -415,7 +414,6 @@ public sealed class ProjectManagementSyncService(
         var labels = await db.Queryable<ProjectManagementLabelEntity>().Where(item => !item.IsDeleted && (item.ProjectId == null || projectIds.Contains(item.ProjectId))).ToListAsync(cancellationToken);
         var taskLabels = await db.Queryable<ProjectManagementTaskLabelEntity>().Where(item => projectIds.Contains(item.ProjectId) && taskIds.Contains(item.TaskId) && !item.IsDeleted).ToListAsync(cancellationToken);
         var participants = await db.Queryable<ProjectManagementTaskParticipantEntity>().Where(item => projectIds.Contains(item.ProjectId) && taskIds.Contains(item.TaskId) && !item.IsDeleted).ToListAsync(cancellationToken);
-        var timeLogs = await db.Queryable<ProjectManagementTaskTimeLogEntity>().Where(item => projectIds.Contains(item.ProjectId) && taskIds.Contains(item.TaskId) && !item.IsDeleted).ToListAsync(cancellationToken);
         var templates = await db.Queryable<ProjectManagementTaskTemplateEntity>().Where(item => !item.IsDeleted && (item.ProjectId == null || projectIds.Contains(item.ProjectId))).ToListAsync(cancellationToken);
         var occurrences = await db.Queryable<ProjectManagementTaskOccurrenceEntity>().Where(item => projectIds.Contains(item.ProjectId) && !item.IsDeleted).ToListAsync(cancellationToken);
         var activities = await db.Queryable<ProjectManagementActivityEntity>().Where(item => projectIds.Contains(item.ProjectId) && !item.IsDeleted).ToListAsync(cancellationToken);
@@ -424,7 +422,7 @@ public sealed class ProjectManagementSyncService(
         return new SyncSnapshot
         {
             Projects = projects, Members = members, Milestones = milestones, Tasks = tasks, Dependencies = dependencies,
-            Labels = labels, TaskLabels = taskLabels, Participants = participants, TimeLogs = timeLogs,
+            Labels = labels, TaskLabels = taskLabels, Participants = participants,
             Templates = templates, Occurrences = occurrences, Activities = activities, Comments = comments, Attachments = attachments
         };
     }
@@ -464,7 +462,6 @@ public sealed class ProjectManagementSyncService(
                 case "Label": AddUnique(snapshot.Labels, DeserializePayload<ProjectManagementLabelEntity>(journal.PayloadJson)); break;
                 case "TaskLabel": AddUnique(snapshot.TaskLabels, DeserializePayload<ProjectManagementTaskLabelEntity>(journal.PayloadJson)); break;
                 case "Participant": AddUnique(snapshot.Participants, DeserializePayload<ProjectManagementTaskParticipantEntity>(journal.PayloadJson)); break;
-                case "TimeLog": AddUnique(snapshot.TimeLogs, DeserializePayload<ProjectManagementTaskTimeLogEntity>(journal.PayloadJson)); break;
                 case "TaskTemplate": AddUnique(snapshot.Templates, DeserializePayload<ProjectManagementTaskTemplateEntity>(journal.PayloadJson)); break;
                 case "TaskOccurrence": AddUnique(snapshot.Occurrences, DeserializePayload<ProjectManagementTaskOccurrenceEntity>(journal.PayloadJson)); break;
                 case "Activity": AddUnique(snapshot.Activities, DeserializePayload<ProjectManagementActivityEntity>(journal.PayloadJson)); break;
@@ -668,7 +665,6 @@ public sealed class ProjectManagementSyncService(
         await AppendEntityConflictsAsync(snapshot.Labels, "Label", projectIds, snapshot.Journal, db, conflicts, cancellationToken);
         await AppendEntityConflictsAsync(snapshot.TaskLabels, "TaskLabel", projectIds, snapshot.Journal, db, conflicts, cancellationToken);
         await AppendEntityConflictsAsync(snapshot.Participants, "Participant", projectIds, snapshot.Journal, db, conflicts, cancellationToken);
-        await AppendEntityConflictsAsync(snapshot.TimeLogs, "TimeLog", projectIds, snapshot.Journal, db, conflicts, cancellationToken);
         await AppendEntityConflictsAsync(snapshot.Templates, "TaskTemplate", projectIds, snapshot.Journal, db, conflicts, cancellationToken);
         await AppendEntityConflictsAsync(snapshot.Occurrences, "TaskOccurrence", projectIds, snapshot.Journal, db, conflicts, cancellationToken);
         await AppendEntityConflictsAsync(snapshot.Activities, "Activity", projectIds, snapshot.Journal, db, conflicts, cancellationToken);
@@ -838,7 +834,6 @@ public sealed class ProjectManagementSyncService(
             snapshot.Labels.Select(item => (item.TenantId, item.AppCode)),
             snapshot.TaskLabels.Select(item => (item.TenantId, item.AppCode)),
             snapshot.Participants.Select(item => (item.TenantId, item.AppCode)),
-            snapshot.TimeLogs.Select(item => (item.TenantId, item.AppCode)),
             snapshot.Templates.Select(item => (item.TenantId, item.AppCode)),
             snapshot.Occurrences.Select(item => (item.TenantId, item.AppCode)),
             snapshot.Activities.Select(item => (item.TenantId, item.AppCode)),
@@ -855,7 +850,6 @@ public sealed class ProjectManagementSyncService(
             .Concat(snapshot.Dependencies.Select(item => item.ProjectId))
             .Concat(snapshot.TaskLabels.Select(item => item.ProjectId))
             .Concat(snapshot.Participants.Select(item => item.ProjectId))
-            .Concat(snapshot.TimeLogs.Select(item => item.ProjectId))
             .Concat(snapshot.Occurrences.Select(item => item.ProjectId))
             .Concat(snapshot.Activities.Select(item => item.ProjectId))
             .Concat(snapshot.Comments.Select(item => item.ProjectId))
@@ -874,7 +868,6 @@ public sealed class ProjectManagementSyncService(
         ValidateUniqueIds(snapshot.Labels, "标签");
         ValidateUniqueIds(snapshot.TaskLabels, "任务标签关联");
         ValidateUniqueIds(snapshot.Participants, "任务参与人");
-        ValidateUniqueIds(snapshot.TimeLogs, "工时记录");
         ValidateUniqueIds(snapshot.Templates, "任务模板");
         ValidateUniqueIds(snapshot.Occurrences, "任务实例");
         ValidateUniqueIds(snapshot.Activities, "活动记录");
@@ -999,7 +992,6 @@ public sealed class ProjectManagementSyncService(
         "Labels" => 51,
         "TaskLabels" => 56,
         "Participants" => 61,
-        "TimeLogs" => 66,
         "Templates" => 71,
         "Occurrences" => 76,
         "Activities" => 81,
@@ -1017,7 +1009,6 @@ public sealed class ProjectManagementSyncService(
         "Labels" => "Label",
         "TaskLabels" => "TaskLabel",
         "Participants" => "Participant",
-        "TimeLogs" => "TimeLog",
         "Templates" => "TaskTemplate",
         "Occurrences" => "TaskOccurrence",
         "Activities" => "Activity",
@@ -1327,7 +1318,6 @@ public sealed class ProjectManagementSyncService(
         public List<ProjectManagementLabelEntity> Labels { get; set; } = [];
         public List<ProjectManagementTaskLabelEntity> TaskLabels { get; set; } = [];
         public List<ProjectManagementTaskParticipantEntity> Participants { get; set; } = [];
-        public List<ProjectManagementTaskTimeLogEntity> TimeLogs { get; set; } = [];
         public List<ProjectManagementTaskTemplateEntity> Templates { get; set; } = [];
         public List<ProjectManagementTaskOccurrenceEntity> Occurrences { get; set; } = [];
         public List<ProjectManagementActivityEntity> Activities { get; set; } = [];

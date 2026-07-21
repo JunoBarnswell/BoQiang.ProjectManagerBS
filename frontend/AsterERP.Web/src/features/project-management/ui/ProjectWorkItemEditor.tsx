@@ -1,16 +1,13 @@
-import { Box, Stack, Typography } from '@mui/material';
+import { Autocomplete, Box, createFilterOptions, Stack, TextField, Typography } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 
 import {
   addProjectManagementTaskParticipant,
-  cancelProjectManagementTaskReminder,
   createProjectManagementTask,
   createProjectManagementTaskComment,
   createProjectManagementTaskReminders,
-  createProjectManagementTaskTimeLog,
   deleteProjectManagementTaskReminder,
-  deleteProjectManagementTaskTimeLog,
   downloadProjectManagementTaskAttachment,
   getProjectManagementMemberCandidates,
   getProjectManagementMilestones,
@@ -20,7 +17,6 @@ import {
   getProjectManagementTaskParticipants,
   getProjectManagementTaskReminders,
   getProjectManagementTasks,
-  getProjectManagementTaskTimeLogs,
   previewProjectManagementTaskAttachment,
   removeProjectManagementTaskParticipant,
   updateProjectManagementTask,
@@ -29,6 +25,8 @@ import {
 import type { ProjectManagementMemberCandidate, ProjectManagementTaskAttachment, ProjectManagementTaskComment, ProjectManagementTaskParticipant, ProjectManagementTaskUpsertRequest } from '../../../api/project-management/projectManagement.types';
 import { usePermission } from '../../../core/auth/usePermission';
 import { isHttpError } from '../../../core/http/httpError';
+import type { DictOption } from '../../../shared/dict/dictTypes';
+import { useDict } from '../../../shared/dict/useDict';
 import { useConfirm } from '../../../shared/feedback/useConfirm';
 import { useMessage } from '../../../shared/feedback/useMessage';
 import { FilePreviewDialog } from '../../../shared/file-preview/FilePreviewDialog';
@@ -36,6 +34,7 @@ import { ResponsiveModal } from '../../../shared/responsive/ResponsiveModal';
 import { ProjectManagementMarkdownEditor, ProjectManagementMarkdownContent } from '../collaboration/ProjectManagementMarkdownEditor';
 import { ProjectManagementCountdown } from '../components/ProjectManagementCountdown';
 import { projectManagementEnumLabel, useProjectManagementI18n } from '../projectManagementI18n';
+import { useProjectManagementInteractionPreferences } from '../state/projectManagementInteractionPreferences';
 import { getAllowedProjectManagementTaskStatuses } from '../state/projectManagementStatusTransitions';
 import { readProjectManagementTaskConflict, taskDetailToForm } from '../state/projectManagementTaskDetailModel';
 
@@ -47,7 +46,6 @@ const blank: ProjectManagementTaskUpsertRequest = {
   progressPercent: 0,
   weight: 1,
   workItemType: 'Requirement',
-  requirementType: 'Feature',
   requirementSource: 'ProductPlan',
   riskLevel: 'None',
   mentionUserIds: [],
@@ -82,8 +80,8 @@ export function ProjectWorkItemEditor({
   const { hasPermission: canManageAttachment } = usePermission('project-management:attachment:manage');
   const { hasPermission: canManageReminder } = usePermission('project-management:reminder:manage');
   const { hasPermission: canViewReminder } = usePermission('project-management:reminder:view');
+  const { preferences, rememberRequirementType } = useProjectManagementInteractionPreferences();
   const [remindersOpen, setRemindersOpen] = useState(false);
-  const [timeLogsOpen, setTimeLogsOpen] = useState(false);
   const [form, setForm] = useState(blank);
   const [baseline, setBaseline] = useState(JSON.stringify(blank));
   const [draftId, setDraftId] = useState<string>();
@@ -98,9 +96,7 @@ export function ProjectWorkItemEditor({
   const [reminderAt, setReminderAt] = useState('');
   const [reminderScope, setReminderScope] = useState<'Self' | 'Assignee' | 'Participants' | 'Members'>('Self');
   const [reminderNote, setReminderNote] = useState('');
-  const [timeStartedAt, setTimeStartedAt] = useState('');
-  const [timeEndedAt, setTimeEndedAt] = useState('');
-  const [timeNote, setTimeNote] = useState('');
+  const [initialParticipantIds, setInitialParticipantIds] = useState<string[]>([]);
   const [preview, setPreview] = useState<{ error?: string; file?: { fileName: string; extension: string }; loading: boolean; open: boolean; previewFile?: File }>({ loading: false, open: false });
 
   const task = useQuery({ enabled: open && Boolean(taskId), queryKey: ['pm', 'editor', projectId, taskId], queryFn: ({ signal }) => getProjectManagementTask(taskId!, signal) });
@@ -115,7 +111,9 @@ export function ProjectWorkItemEditor({
     queryFn: ({ signal }) => getProjectManagementTaskParticipantCandidates(taskId!, { pageIndex: 1, pageSize: 100 }, signal),
   });
   const reminders = useQuery({ enabled: open && Boolean(taskId) && canViewReminder && remindersOpen, queryKey: ['pm', 'editor-reminders', taskId], queryFn: ({ signal }) => getProjectManagementTaskReminders(taskId!, signal) });
-  const timeLogs = useQuery({ enabled: open && Boolean(taskId) && timeLogsOpen, queryKey: ['pm', 'editor-time-logs', taskId], queryFn: ({ signal }) => getProjectManagementTaskTimeLogs(taskId!, signal) });
+  const workItemTypes = useDict('pm_task_work_item_type');
+  const requirementTypes = useDict('pm_task_requirement_type');
+  const requirementSources = useDict('pm_task_requirement_source');
 
   useEffect(() => {
     if (!open) return;
@@ -128,22 +126,35 @@ export function ProjectWorkItemEditor({
     setConflict(undefined);
     setCommentFiles([]);
     setParticipantPicker('');
+    setInitialParticipantIds([]);
   }, [initialStartDate, open, task.data]);
+
+  useEffect(() => {
+    if (!open || taskId || task.data?.data || form.requirementType || JSON.stringify(form) !== baseline || requirementTypes.isLoading) return;
+    const recentRequirementType = preferences.recentRequirementTypes?.find((value) => requirementTypes.options.some((option) => option.value === value && !option.disabled));
+    if (!recentRequirementType) return;
+    const next = { ...form, requirementType: recentRequirementType };
+    setForm(next);
+    setBaseline(JSON.stringify(next));
+  }, [baseline, form, open, preferences.recentRequirementTypes, requirementTypes.isLoading, requirementTypes.options, task.data, taskId]);
 
   const save = useMutation({
     mutationFn: ({ overwriteVersionNo }: { overwriteVersionNo?: number } = {}) => {
       const request = overwriteVersionNo === undefined ? form : { ...form, versionNo: overwriteVersionNo };
-      return taskId ? updateProjectManagementTask(taskId, request) : createProjectManagementTask(projectId, { ...request, workItemType: 'Requirement', draftId });
+      return taskId ? updateProjectManagementTask(taskId, request) : createProjectManagementTask(projectId, { ...request, workItemType: 'Requirement', draftId, participantUserIds: initialParticipantIds });
     },
     onSuccess: (result) => {
       const next = taskDetailToForm(result.data);
+      const savedRequirementType = result.data.requirementType?.trim();
+      if (!taskId && savedRequirementType) rememberRequirementType(savedRequirementType);
       message.success(taskId ? t('projectManagement.editor.savedUpdate') : t('projectManagement.editor.savedCreate'));
       setConflict(undefined);
       void queryClient.invalidateQueries({ queryKey: ['pm', 'editor'] });
       onSaved();
       if (continueCreating && !taskId) {
-        setForm({ ...blank });
-        setBaseline(JSON.stringify(blank));
+        const nextBlank = { ...blank, requirementType: savedRequirementType };
+        setForm(nextBlank);
+        setBaseline(JSON.stringify(nextBlank));
         setDraftId(undefined);
         return;
       }
@@ -238,42 +249,12 @@ export function ProjectWorkItemEditor({
     onError: () => message.error(t('projectManagement.editor.reminder.failed')),
   });
 
-  const cancelReminder = useMutation({
-    mutationFn: (item: { id: string; versionNo: number }) => cancelProjectManagementTaskReminder(taskId!, item.id, item.versionNo),
-    onSuccess: () => { void reminders.refetch(); message.success(t('projectManagement.editor.reminder.canceled')); },
-    onError: () => message.error(t('projectManagement.editor.reminder.failed')),
-  });
-
   const removeReminder = useMutation({
     mutationFn: (item: { id: string; versionNo: number }) => deleteProjectManagementTaskReminder(taskId!, item.id, item.versionNo),
     onSuccess: () => { void reminders.refetch(); message.success(t('projectManagement.editor.reminder.deleted')); },
     onError: () => message.error(t('projectManagement.editor.reminder.failed')),
   });
 
-  const addTimeLog = useMutation({
-    mutationFn: () => createProjectManagementTaskTimeLog(taskId!, {
-      startedAt: new Date(timeStartedAt).toISOString(),
-      endedAt: new Date(timeEndedAt).toISOString(),
-      note: timeNote || undefined,
-    }),
-    onSuccess: () => {
-      setTimeNote('');
-      void timeLogs.refetch();
-      void task.refetch();
-      message.success(t('projectManagement.editor.timeLog.created'));
-    },
-    onError: () => message.error(t('projectManagement.editor.timeLog.failed')),
-  });
-
-  const removeTimeLog = useMutation({
-    mutationFn: (item: { id: string; versionNo: number }) => deleteProjectManagementTaskTimeLog(taskId!, item.id, item.versionNo),
-    onSuccess: () => {
-      void timeLogs.refetch();
-      void task.refetch();
-      message.success(t('projectManagement.editor.timeLog.deleted'));
-    },
-    onError: () => message.error(t('projectManagement.editor.timeLog.failed')),
-  });
 
   const dirty = JSON.stringify(form) !== baseline || Boolean(draftId);
   const update = (patch: Partial<ProjectManagementTaskUpsertRequest>) => setForm((current) => ({ ...current, ...patch }));
@@ -291,8 +272,8 @@ export function ProjectWorkItemEditor({
     const frame = window.requestAnimationFrame(() => collaborationRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
     return () => window.cancelAnimationFrame(frame);
   }, [focusComments, open, taskId]);
-  const participantItems = participants.data?.data ?? [];
-  const participantCandidateItems = participantCandidates.data?.data.items ?? [];
+  const participantItems = useMemo(() => participants.data?.data ?? [], [participants.data?.data]);
+  const participantCandidateItems = useMemo(() => participantCandidates.data?.data.items ?? [], [participantCandidates.data?.data.items]);
   const participantLabels = useMemo(
     () => Object.fromEntries(participantCandidateItems.map((item) => [item.userId, item.displayName || item.userName])),
     [participantCandidateItems],
@@ -305,6 +286,15 @@ export function ProjectWorkItemEditor({
   const parentItems = parents.data?.data.items.filter((item) => item.id !== taskId) ?? [];
   const milestoneItems = milestones.data?.data.items ?? [];
   const labels = useMemo(() => Object.fromEntries(candidateItems.map((item) => [item.userId, item.displayName])), [candidateItems]);
+  const workItemTypeOptions = useMemo(() => {
+    const values = workItemTypes.options.map((item) => item.value);
+    const currentValue = form.workItemType?.trim();
+    return currentValue && !values.includes(currentValue) ? [currentValue, ...values] : values;
+  }, [form.workItemType, workItemTypes.options]);
+  const workItemTypeLabels = useMemo(
+    () => Object.fromEntries(workItemTypes.options.map((item) => [item.value, item.label])),
+    [workItemTypes.options]
+  );
   const enumLabels = (group: 'priority' | 'status' | 'workItemType' | 'risk' | 'requirementType' | 'requirementSource', values: string[]) =>
     Object.fromEntries(values.map((value) => [value, projectManagementEnumLabel(t, group, value)]));
   const statusOptions = getAllowedProjectManagementTaskStatuses(form.status ?? 'Todo');
@@ -380,7 +370,7 @@ export function ProjectWorkItemEditor({
         <Stack spacing={0}>
           <Box className="pm-editor-property-group">
             <Typography className="pm-editor-property-group__title" component="h3">{t('projectManagement.editor.group.basic')}</Typography>
-            <SelectField label={t('projectManagement.editor.field.workItemType')} labels={enumLabels('workItemType', ['Requirement', 'UserStory', 'Task', 'Bug'])} onChange={(value) => update({ workItemType: value })} options={['Requirement', 'UserStory', 'Task', 'Bug']} value={form.workItemType ?? 'Requirement'} t={t} />
+            <SelectField label={t('projectManagement.editor.field.workItemType')} labels={workItemTypeLabels} onChange={(value) => update({ workItemType: value })} options={workItemTypeOptions} value={form.workItemType ?? 'Requirement'} t={t} />
             <SelectField label={t('projectManagement.editor.field.status')} labels={enumLabels('status', statusOptions)} onChange={(value) => update({ status: value })} options={statusOptions} value={form.status ?? 'Todo'} t={t} />
             <Stack spacing={0.25}>
               <Typography className="pm-editor-field-label" component="span">{t('projectManagement.editor.field.progress')}</Typography>
@@ -403,11 +393,10 @@ export function ProjectWorkItemEditor({
               showSaveHint={!taskId}
               t={t}
             />
+            {!taskId ? <select aria-label={t('projectManagement.editor.field.followers')} className="pm-editor-select" multiple onChange={(event) => setInitialParticipantIds(Array.from(event.target.selectedOptions, option => option.value))} value={initialParticipantIds}>{candidateItems.map((item) => <option key={item.userId} value={item.userId}>{item.displayName || item.userName}</option>)}</select> : null}
           </Box>
           <Box className="pm-editor-property-group">
             <Typography className="pm-editor-property-group__title" component="h3">{t('projectManagement.editor.group.schedule')}</Typography>
-            <NumberField label={t('projectManagement.editor.field.estimateMinutes')} onChange={(value) => update({ estimateMinutes: value })} value={form.estimateMinutes} />
-            {taskId ? <Field label={t('projectManagement.editor.field.actualMinutes')} value={String(task.data?.data.actualMinutes ?? 0)} /> : null}
             <DateField label={t('projectManagement.editor.field.startDate')} onChange={(value) => update({ startDate: value || undefined })} value={form.startDate} />
             <DateField label={t('projectManagement.editor.field.dueDate')} onChange={(value) => update({ dueDate: value || undefined })} value={form.dueDate} />
             <ProjectManagementCountdown dueDate={form.dueDate} status={form.status} />
@@ -418,19 +407,19 @@ export function ProjectWorkItemEditor({
             <Typography className="pm-editor-property-group__title" component="h3">{t('projectManagement.editor.group.classification')}</Typography>
             <SelectField label={t('projectManagement.editor.field.priority')} labels={enumLabels('priority', ['Low', 'Medium', 'High', 'Urgent'])} onChange={(value) => update({ priority: value })} options={['Low', 'Medium', 'High', 'Urgent']} value={form.priority ?? 'Medium'} t={t} />
             <SelectField label={t('projectManagement.editor.field.risk')} labels={enumLabels('risk', ['None', 'Low', 'Medium', 'High'])} onChange={(value) => update({ riskLevel: value })} options={['None', 'Low', 'Medium', 'High']} value={form.riskLevel ?? 'None'} t={t} />
-            <SelectField label={t('projectManagement.editor.field.requirementType')} labels={enumLabels('requirementType', ['Feature', 'NonFunctional', 'Other'])} onChange={(value) => update({ requirementType: value || undefined })} options={['', 'Feature', 'NonFunctional', 'Other']} value={form.requirementType ?? ''} t={t} />
-            <SelectField label={t('projectManagement.editor.field.requirementSource')} labels={enumLabels('requirementSource', ['ProductPlan', 'Customer', 'Internal', 'BugConversion', 'Other'])} onChange={(value) => update({ requirementSource: value || undefined })} options={['', 'ProductPlan', 'Customer', 'Internal', 'BugConversion', 'Other']} value={form.requirementSource ?? ''} t={t} />
+            <DictionaryAutocompleteField
+              error={requirementTypes.isError}
+              label={t('projectManagement.editor.field.requirementType')}
+              loading={requirementTypes.isLoading || requirementTypes.isFetching}
+              onChange={(value) => update({ requirementType: value || undefined })}
+              onRetry={() => { void requirementTypes.refetch(); }}
+              options={requirementTypes.options}
+              recentValues={preferences.recentRequirementTypes ?? []}
+              t={t}
+              value={form.requirementType}
+            />
+            <SelectField label={t('projectManagement.editor.field.requirementSource')} labels={Object.fromEntries(requirementSources.options.map(item => [item.value, item.label]))} onChange={(value) => update({ requirementSource: value || undefined })} options={['', ...requirementSources.options.map(item => item.value)]} value={form.requirementSource ?? ''} t={t} />
           </Box>
-          {taskId ? <CollapsibleEditorGroup open={timeLogsOpen} onToggle={() => setTimeLogsOpen((value) => !value)} title={t('projectManagement.editor.timeLog.title')}>
-            <Typography fontWeight={700} variant="body2">{format('projectManagement.editor.timeLog.summary', { estimate: form.estimateMinutes ?? 0, actual: task.data?.data.actualMinutes ?? 0 })}</Typography>
-            {canEditTask ? <Stack spacing={0.75}>
-              <input className="pm-editor-select" onChange={(event) => setTimeStartedAt(event.target.value)} type="datetime-local" value={timeStartedAt} />
-              <input className="pm-editor-select" onChange={(event) => setTimeEndedAt(event.target.value)} type="datetime-local" value={timeEndedAt} />
-              <input className="pm-editor-select" onChange={(event) => setTimeNote(event.target.value)} placeholder={t('projectManagement.editor.timeLog.note')} value={timeNote} />
-              <button className="pm-primary-button" disabled={!timeStartedAt || !timeEndedAt || addTimeLog.isPending} onClick={() => addTimeLog.mutate()} type="button">{t('projectManagement.editor.timeLog.add')}</button>
-            </Stack> : null}
-            {timeLogs.data?.data.map((item) => <Stack alignItems="center" className="pm-editor-list-item" direction="row" justifyContent="space-between" key={item.id}><Typography variant="caption">{item.minutes} {t('projectManagement.editor.timeLog.minutes')} · {dateTime(item.startedAt)}</Typography>{canEditTask ? <button className="pm-workbench-command" onClick={() => removeTimeLog.mutate(item)} type="button">{t('projectManagement.editor.timeLog.delete')}</button> : null}</Stack>)}
-          </CollapsibleEditorGroup> : null}
           {taskId && canViewReminder ? <CollapsibleEditorGroup open={remindersOpen} onToggle={() => setRemindersOpen((value) => !value)} title={t('projectManagement.editor.reminder.title')}>
             {canManageReminder ? <Stack spacing={0.75}>
               <input className="pm-editor-select" onChange={(event) => setReminderAt(event.target.value)} type="datetime-local" value={reminderAt} />
@@ -656,8 +645,6 @@ function ConflictPanel({ conflict, onKeepLocal, onOverwrite, onReload, t }: { co
   return <Box className="pm-task-conflict" role="alert"><Typography fontWeight={700}>{t('projectManagement.editor.conflictDetected')}</Typography>{conflict.fieldConflicts.map((field) => <Typography key={field.field} variant="caption">{field.displayName}: {t('projectManagement.editor.server')} {String(field.serverValue ?? '—')} / {t('projectManagement.editor.local')} {String(field.localValue ?? '—')}</Typography>)}<Stack direction="row" spacing={1}><button className="pm-workbench-command" onClick={onReload} type="button">{t('projectManagement.editor.reload')}</button><button className="pm-workbench-command" onClick={onKeepLocal} type="button">{t('projectManagement.editor.keepLocal')}</button><button className="pm-primary-button" onClick={onOverwrite} type="button">{t('projectManagement.editor.overwrite')}</button></Stack></Box>;
 }
 
-function Field({ label, value }: { label: string; value: string }) { return <Stack spacing={0.25}><Typography className="pm-editor-field-label" component="span">{label}</Typography><Typography className="pm-editor-readonly" variant="body2">{value || '—'}</Typography></Stack>; }
-
 function ParticipantsField({
   canManage,
   candidates,
@@ -724,13 +711,48 @@ function ParticipantsField({
   );
 }
 
-function SelectField({ label, labels = {}, onChange, options, value, t }: { label: string; labels?: Record<string, string>; onChange: (value: string) => void; options: string[]; value: string; t: (key: string) => string }) { return <Stack spacing={0.25}><Typography className="pm-editor-field-label" component="span">{label}</Typography><select className="pm-editor-select" onChange={(event) => onChange(event.target.value)} value={value}>{options.map((option) => <option key={option} value={option}>{option ? labels[option] ?? option : t('projectManagement.workbench.unknown')}</option>)}</select></Stack>; }
-function DateField({ label, onChange, value }: { label: string; onChange: (value: string) => void; value?: string }) { return <Stack spacing={0.25}><Typography className="pm-editor-field-label" component="span">{label}</Typography><input className="pm-editor-select" onChange={(event) => onChange(event.target.value)} type="date" value={value ? value.slice(0, 10) : ''} /></Stack>; }
-function NumberField({ label, onChange, value }: { label: string; onChange: (value: number | undefined) => void; value?: number }) {
+function DictionaryAutocompleteField({ error, label, loading, onChange, onRetry, options, recentValues, t, value }: {
+  error: boolean;
+  label: string;
+  loading: boolean;
+  onChange: (value: string) => void;
+  onRetry: () => void;
+  options: DictOption[];
+  recentValues: string[];
+  t: (key: string) => string;
+  value?: string;
+}) {
+  const optionMap = new Map(options.map((option) => [option.value, option]));
+  const recentOptions = recentValues.map((recentValue) => optionMap.get(recentValue)).filter((option): option is DictOption => Boolean(option && !option.disabled));
+  const currentOption = value ? optionMap.get(value) ?? { label: value, value, disabled: true } : null;
+  const recentValueSet = new Set(recentOptions.map((option) => option.value));
+  const orderedOptions = [
+    ...recentOptions,
+    ...(currentOption && !recentValueSet.has(currentOption.value) ? [currentOption] : []),
+    ...options.filter((option) => !recentValueSet.has(option.value) && option.value !== currentOption?.value),
+  ];
+  const filterOptions = createFilterOptions<DictOption>({ stringify: (option) => `${option.label} ${option.value}` });
+
   return (
     <Stack spacing={0.25}>
       <Typography className="pm-editor-field-label" component="span">{label}</Typography>
-      <input className="pm-editor-select" min={0} onChange={(event) => onChange(event.target.value === '' ? undefined : Number(event.target.value))} type="number" value={value ?? ''} />
+      <Autocomplete<DictOption>
+        clearOnEscape
+        filterOptions={filterOptions}
+        getOptionDisabled={(option) => Boolean(option.disabled)}
+        getOptionLabel={(option) => option.label}
+        loading={loading}
+        noOptionsText={error ? t('projectManagement.editor.dictLoadFailed') : loading ? t('projectManagement.editor.dictLoading') : t('projectManagement.editor.dictEmpty')}
+        onChange={(_event, option) => onChange(option?.value ?? '')}
+        options={orderedOptions}
+        renderInput={(params) => <TextField {...params} aria-label={label} className="pm-editor-select" size="small" />}
+        value={currentOption}
+        isOptionEqualToValue={(option, selected) => option.value === selected.value}
+      />
+      {error ? <button className="pm-workbench-command" onClick={onRetry} type="button">{t('projectManagement.editor.retryDict')}</button> : null}
     </Stack>
   );
 }
+
+function SelectField({ label, labels = {}, onChange, options, value, t }: { label: string; labels?: Record<string, string>; onChange: (value: string) => void; options: string[]; value: string; t: (key: string) => string }) { return <Stack spacing={0.25}><Typography className="pm-editor-field-label" component="span">{label}</Typography><select className="pm-editor-select" onChange={(event) => onChange(event.target.value)} value={value}>{options.map((option) => <option key={option} value={option}>{option ? labels[option] ?? option : t('projectManagement.workbench.unknown')}</option>)}</select></Stack>; }
+function DateField({ label, onChange, value }: { label: string; onChange: (value: string) => void; value?: string }) { return <Stack spacing={0.25}><Typography className="pm-editor-field-label" component="span">{label}</Typography><input className="pm-editor-select" onChange={(event) => onChange(event.target.value)} type="date" value={value ? value.slice(0, 10) : ''} /></Stack>; }
