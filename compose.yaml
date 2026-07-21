@@ -1,5 +1,35 @@
 services:
-  web:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: backend
+      args:
+        NODE_IMAGE: "${NODE_IMAGE:-docker.m.daocloud.io/library/node:22-bookworm-slim}"
+        DOTNET_SDK_IMAGE: "${DOTNET_SDK_IMAGE:-docker.m.daocloud.io/mcr.microsoft.com/dotnet/sdk:10.0}"
+        DOTNET_ASPNET_IMAGE: "${DOTNET_ASPNET_IMAGE:-docker.m.daocloud.io/mcr.microsoft.com/dotnet/aspnet:10.0}"
+        NGINX_IMAGE: "${NGINX_IMAGE:-docker.m.daocloud.io/library/nginx:1.29-alpine}"
+        NPM_REGISTRY: "${NPM_REGISTRY:-https://registry.npmmirror.com}"
+        NUGET_SOURCE: "${NUGET_SOURCE:-https://repo.huaweicloud.com/repository/nuget/v3/index.json}"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      AllowedHosts: "*"
+      ConnectionStrings__Default: "${ASTERERP_CONNECTION_STRING:-Data Source=/app/data/astererp.db}"
+      Cors__FrontendOrigin: "${FRONTEND_ORIGIN:-http://localhost:8080}"
+      DataProtection__KeysPath: /app/data/data-protection-keys
+      ObjectStorage__Provider: FileSystem
+      ObjectStorage__FileSystem__BasePath: /app/data/uploads
+      ObjectStorage__FileSystem__AppendContainerNameToBasePath: "false"
+      DistributedLock__FilePath: /app/data/distributed-locks
+      Scheduler__HangfireStoragePath: /app/data/astererp-hangfire.db
+    volumes:
+      - "${ASTERERP_DATA_DIR:-./deploy-data}:/app/data"
+    expose:
+      - "8080"
+    restart: unless-stopped
+
+  frontend:
     build:
       context: .
       dockerfile: Dockerfile
@@ -11,9 +41,9 @@ services:
         NGINX_IMAGE: "${NGINX_IMAGE:-docker.m.daocloud.io/library/nginx:1.29-alpine}"
         NPM_REGISTRY: "${NPM_REGISTRY:-https://registry.npmmirror.com}"
         NUGET_SOURCE: "${NUGET_SOURCE:-https://repo.huaweicloud.com/repository/nuget/v3/index.json}"
-        FRONTEND_API_BASE_URL: "${FRONTEND_API_BASE_URL:-https://api.astererp.example/api}"
-    image: "${WEB_IMAGE:-boqiang.projectmanagerbs.fixed:latest}"
-    container_name: "${WEB_CONTAINER_NAME:-boqiang.projectmanagerbs}"
+        FRONTEND_API_BASE_URL: /api
+    depends_on:
+      - backend
     ports:
-      - "${HTTP_PORT:-8080}:80"
-    restart: always
+      - "8080:80"
+    restart: unless-stopped

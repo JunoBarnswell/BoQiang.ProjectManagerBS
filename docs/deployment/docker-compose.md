@@ -1,8 +1,10 @@
 # Docker Compose 部署
 
-本配置部署一个纯静态 `web` 服务：保留镜像内的前端静态资源，只覆盖 Nginx 配置，不启动后端容器，也不代理后端接口。
+本配置部署 `backend` 和 `frontend` 两个服务。浏览器只访问 Nginx，后端通过 Compose 内网服务名 `backend:8080` 提供 API。
 
-后端必须独立部署，并通过 `FRONTEND_API_BASE_URL` 提供给浏览器访问。
+前端构建使用 `/api`，Nginx 将 `/api`、`/hubs` 和 `/uploads` 转发到后端。
+
+后端容器默认只暴露 Compose 内网端口 `8080`，不映射到宿主机；如需诊断，可临时使用 Compose override 映射宿主机端口。
 
 默认从国内镜像和包源构建：
 
@@ -23,13 +25,13 @@ docker compose up -d --build
 docker compose ps
 ```
 
-默认访问地址：`http://localhost:8080`。
+固定访问地址：`http://localhost:8080`，Compose 映射为 `8080:80`。
 
-后端健康检查需要直接访问 `FRONTEND_API_BASE_URL` 对应的后端地址。
+健康检查地址：`http://localhost:8080/api/health`。
 
 ## 数据库和持久化目录
 
-数据库、上传目录和 DataProtection keys 不由这个纯静态 Compose 管理，应由独立后端部署配置管理。
+数据库、上传目录、Hangfire、DataProtection keys 和分布式锁统一持久化到 `ASTERERP_DATA_DIR`。
 
 ## 镜像和依赖源
 
@@ -52,13 +54,14 @@ NUGET_SOURCE=https://repo.huaweicloud.com/repository/nuget/v3/index.json
 
 Dockerfile 使用独立的 `ARG` 接收这些值，因此不会把仓库地址固定在代码中。
 
-Nginx 仅处理静态资源和 SPA 路由回退，不处理 `/api`、`/hubs`、`/uploads` 反向代理。
+Nginx 处理静态资源和 SPA 路由回退，并代理 `/api`、`/hubs`、`/uploads` 到 `backend:8080`。
 
 ## 日志与排查
 
 ```powershell
-docker compose logs -f web
-docker compose exec web nginx -t
+docker compose logs -f backend
+docker compose logs -f frontend
+docker compose exec frontend nginx -t
 ```
 
 修改 `.env` 后重新构建并启动：
