@@ -10,6 +10,7 @@ artifacts/
 /backend/AsterERP.Api/logs/
 /backend/AsterERP.Api/data/uploads/
 /backend/AsterERP.Api/wwwroot/
+/backend/AsterERP.Api/__SET_ABSOLUTE_DATA_PROTECTION_KEYS_PATH__/
 *.log
 *.dev.err.log
 *.dev.out.log
