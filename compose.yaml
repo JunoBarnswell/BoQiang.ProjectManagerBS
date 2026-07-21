@@ -1,0 +1,34 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: backend
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      AllowedHosts: "*"
+      ConnectionStrings__Default: "${ASTERERP_CONNECTION_STRING:-Data Source=/app/data/astererp.db}"
+      Cors__FrontendOrigin: "${FRONTEND_ORIGIN:-http://localhost:8080}"
+      DataProtection__KeysPath: /app/data/data-protection-keys
+      ObjectStorage__Provider: FileSystem
+      ObjectStorage__FileSystem__BasePath: /app/data/uploads
+      ObjectStorage__FileSystem__AppendContainerNameToBasePath: "false"
+      DistributedLock__FilePath: /app/data/distributed-locks
+      Scheduler__HangfireStoragePath: /app/data/astererp-hangfire.db
+    volumes:
+      - "${ASTERERP_DATA_DIR:-./deploy-data}:/app/data"
+    expose:
+      - "8080"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: frontend
+    depends_on:
+      - backend
+    ports:
+      - "${HTTP_PORT:-8080}:80"
+    restart: unless-stopped
