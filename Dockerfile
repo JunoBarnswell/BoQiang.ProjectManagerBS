@@ -7,15 +7,16 @@ FROM ${NODE_IMAGE} AS frontend-build
 
 WORKDIR /src/frontend/AsterERP.Web
 
+ARG FRONTEND_API_BASE_URL=https://api.astererp.example/api
 ARG NPM_REGISTRY=https://registry.npmmirror.com
 
 COPY frontend/AsterERP.Web/package.json frontend/AsterERP.Web/package-lock.json ./
 RUN npm config set registry "${NPM_REGISTRY}" && npm ci
 
 COPY frontend/AsterERP.Web/ ./
-ENV VITE_APP_API_BASE_URL=/api
 ENV VITE_APP_BASE_PATH=/
 ENV VITE_APP_TARGET_APP_CODE=
+ENV VITE_APP_API_BASE_URL=${FRONTEND_API_BASE_URL}
 RUN npm run build
 
 FROM ${DOTNET_SDK_IMAGE} AS backend-build

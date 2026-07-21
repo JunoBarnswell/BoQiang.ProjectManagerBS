@@ -1,9 +1,8 @@
 # Docker Compose 部署
 
-本项目使用根目录 `Dockerfile` 构建两个镜像目标：
+本配置部署一个纯静态 `web` 服务：保留镜像内的前端静态资源，只覆盖 Nginx 配置，不启动后端容器，也不代理后端接口。
 
-- `backend`：.NET 10 Linux 单文件后端；
-- `frontend`：Nginx 静态前端，并代理后端接口。
+后端必须独立部署，并通过 `FRONTEND_API_BASE_URL` 提供给浏览器访问。
 
 默认从国内镜像和包源构建：
 
@@ -26,27 +25,11 @@ docker compose ps
 
 默认访问地址：`http://localhost:8080`。
 
-后端健康检查地址：`http://localhost:8080/api/health`。
+后端健康检查需要直接访问 `FRONTEND_API_BASE_URL` 对应的后端地址。
 
 ## 数据库和持久化目录
 
-`.env` 中的 `ASTERERP_DATA_DIR` 是宿主机目录，容器内固定挂载为 `/app/data`。
-
-`ASTERERP_CONNECTION_STRING` 是后端容器内实际使用的 SQLite 连接串：
-
-```env
-ASTERERP_DATA_DIR=./deploy-data
-ASTERERP_CONNECTION_STRING=Data Source=/app/data/astererp.db
-```
-
-修改数据库文件名时，连接串仍然必须使用容器内路径，例如：
-
-```env
-ASTERERP_DATA_DIR=/srv/project-manager/data
-ASTERERP_CONNECTION_STRING=Data Source=/app/data/project-manager.db
-```
-
-后端通过 Compose 的 `ConnectionStrings__Default` 环境变量读取该配置，优先级高于 `appsettings.json`。
+数据库、上传目录和 DataProtection keys 不由这个纯静态 Compose 管理，应由独立后端部署配置管理。
 
 ## 镜像和依赖源
 
@@ -69,20 +52,13 @@ NUGET_SOURCE=https://repo.huaweicloud.com/repository/nuget/v3/index.json
 
 Dockerfile 使用独立的 `ARG` 接收这些值，因此不会把仓库地址固定在代码中。
 
-以下内容都会保存到 `ASTERERP_DATA_DIR`：
-
-- 主数据库和 Hangfire 数据库；
-- `application-databases/{tenantId}/{appCode}` 应用数据库；
-- 文件上传目录；
-- DataProtection keys；
-- 分布式锁目录。
+Nginx 仅处理静态资源和 SPA 路由回退，不处理 `/api`、`/hubs`、`/uploads` 反向代理。
 
 ## 日志与排查
 
 ```powershell
-docker compose logs -f backend
-docker compose logs -f frontend
-docker compose exec backend printenv ConnectionStrings__Default
+docker compose logs -f web
+docker compose exec web nginx -t
 ```
 
 修改 `.env` 后重新构建并启动：
