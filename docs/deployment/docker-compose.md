@@ -5,6 +5,14 @@
 - `backend`：.NET 10 Linux 单文件后端；
 - `frontend`：Nginx 静态前端，并代理后端接口。
 
+默认从国内镜像和包源构建：
+
+- Docker 基础镜像：`docker.m.daocloud.io`；
+- npm：`https://registry.npmmirror.com`；
+- NuGet：`https://repo.huaweicloud.com/repository/nuget/v3/index.json`。
+
+所有地址都可以在 `.env` 中替换为企业 Harbor、ACR 或内部 npm/NuGet 源。
+
 ## 启动
 
 在仓库根目录执行：
@@ -39,6 +47,27 @@ ASTERERP_CONNECTION_STRING=Data Source=/app/data/project-manager.db
 ```
 
 后端通过 Compose 的 `ConnectionStrings__Default` 环境变量读取该配置，优先级高于 `appsettings.json`。
+
+## 镜像和依赖源
+
+执行完整无缓存构建：
+
+```powershell
+docker compose build --no-cache
+```
+
+如需切换镜像仓库，修改 `.env` 中的以下变量：
+
+```env
+NODE_IMAGE=docker.m.daocloud.io/library/node:22-bookworm-slim
+DOTNET_SDK_IMAGE=docker.m.daocloud.io/mcr.microsoft.com/dotnet/sdk:10.0
+DOTNET_ASPNET_IMAGE=docker.m.daocloud.io/mcr.microsoft.com/dotnet/aspnet:10.0
+NGINX_IMAGE=docker.m.daocloud.io/library/nginx:1.29-alpine
+NPM_REGISTRY=https://registry.npmmirror.com
+NUGET_SOURCE=https://repo.huaweicloud.com/repository/nuget/v3/index.json
+```
+
+Dockerfile 使用独立的 `ARG` 接收这些值，因此不会把仓库地址固定在代码中。
 
 以下内容都会保存到 `ASTERERP_DATA_DIR`：
 
