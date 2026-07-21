@@ -21,11 +21,14 @@
 ```powershell
 Copy-Item .env.example .env
 docker compose config
-docker compose up -d --build
+docker compose down --remove-orphans
+docker compose up -d --build --force-recreate
 docker compose ps
 ```
 
 固定访问地址：`http://localhost:8080`，Compose 映射为 `8080:80`。
+
+两个服务固定加入 `boqiang-projectmanagerbs-network`，Nginx 使用 Compose DNS 将 `backend:8080` 解析到后端容器。部署时必须从包含本 `compose.yaml` 的目录执行命令，不能混用旧的纯静态 `docker-compose.yml`。
 
 健康检查地址：`http://localhost:8080/api/health`。
 
