@@ -30,6 +30,7 @@ outputs/
 # Codex runtime artifacts
 .codex-tmp/
 .playwright-mcp/
+.env.deploy
 # Invalid generated asset staging path
 /frontend/AsterERP.Web/dummy-non-existing-folder/
 /frontend/AsterERP.Web/test-results/

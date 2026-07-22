@@ -1,18 +1,8 @@
-name: boqiang-projectmanagerbs
+name: boqiang-projectmanagerbs-production
 
 services:
   backend:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: backend
-      args:
-        NODE_IMAGE: "${NODE_IMAGE:-docker.m.daocloud.io/library/node:22-bookworm-slim}"
-        DOTNET_SDK_IMAGE: "${DOTNET_SDK_IMAGE:-docker.m.daocloud.io/mcr.microsoft.com/dotnet/sdk:10.0}"
-        DOTNET_ASPNET_IMAGE: "${DOTNET_ASPNET_IMAGE:-docker.m.daocloud.io/mcr.microsoft.com/dotnet/aspnet:10.0}"
-        NGINX_IMAGE: "${NGINX_IMAGE:-docker.m.daocloud.io/library/nginx:1.29-alpine}"
-        NPM_REGISTRY: "${NPM_REGISTRY:-https://registry.npmmirror.com}"
-        NUGET_SOURCE: "${NUGET_SOURCE:-https://repo.huaweicloud.com/repository/nuget/v3/index.json}"
+    image: "${BACKEND_IMAGE:?BACKEND_IMAGE must be set}"
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://+:8080
@@ -36,18 +26,7 @@ services:
     restart: unless-stopped
 
   frontend:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: frontend
-      args:
-        NODE_IMAGE: "${NODE_IMAGE:-docker.m.daocloud.io/library/node:22-bookworm-slim}"
-        DOTNET_SDK_IMAGE: "${DOTNET_SDK_IMAGE:-docker.m.daocloud.io/mcr.microsoft.com/dotnet/sdk:10.0}"
-        DOTNET_ASPNET_IMAGE: "${DOTNET_ASPNET_IMAGE:-docker.m.daocloud.io/mcr.microsoft.com/dotnet/aspnet:10.0}"
-        NGINX_IMAGE: "${NGINX_IMAGE:-docker.m.daocloud.io/library/nginx:1.29-alpine}"
-        NPM_REGISTRY: "${NPM_REGISTRY:-https://registry.npmmirror.com}"
-        NUGET_SOURCE: "${NUGET_SOURCE:-https://repo.huaweicloud.com/repository/nuget/v3/index.json}"
-        FRONTEND_API_BASE_URL: /api
+    image: "${FRONTEND_IMAGE:?FRONTEND_IMAGE must be set}"
     depends_on:
       - backend
     ports:
@@ -58,5 +37,5 @@ services:
 
 networks:
   app-network:
-    name: boqiang-projectmanagerbs-network
+    name: boqiang-projectmanagerbs-production-network
     driver: bridge

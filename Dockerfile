@@ -7,7 +7,7 @@ FROM ${NODE_IMAGE} AS frontend-build
 
 WORKDIR /src/frontend/AsterERP.Web
 
-ARG FRONTEND_API_BASE_URL=https://api.astererp.example/api
+ARG FRONTEND_API_BASE_URL=/api
 ARG NPM_REGISTRY=https://registry.npmmirror.com
 
 COPY frontend/AsterERP.Web/package.json frontend/AsterERP.Web/package-lock.json ./
